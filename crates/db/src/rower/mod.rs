@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::{RowerId, RowerWeightClass, Side, Skill, Strength};
+use types::{RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength};
 
 use crate::types::IntBool;
 
@@ -26,8 +26,9 @@ pub struct Rower {
     pub skill: Skill,
     pub strength: Strength,
     pub side: Side,
-    /// 0 = hard constraint, 1..5 = soft preference strength.
-    pub side_strength: i32,
+    /// Side preference strength. `SideStrength::HARD` (= 0) means the
+    /// rower is side-locked; 1..=5 are soft scales for the S4 penalty.
+    pub side_strength: SideStrength,
     /// Eligible to be "pushed" to the scullers team as overflow. Does NOT
     /// affect sweep seating — this solver only assigns sweep seats.
     pub can_scull: IntBool,
@@ -48,7 +49,7 @@ pub struct NewRower {
     pub skill: Skill,
     pub strength: Strength,
     pub side: Side,
-    pub side_strength: i32,
+    pub side_strength: SideStrength,
     pub can_scull: IntBool,
     pub can_cox: IntBool,
     pub is_designated_cox: IntBool,
@@ -73,7 +74,7 @@ impl NewRower {
             skill,
             strength,
             side,
-            side_strength: 3,
+            side_strength: SideStrength::default(),
             can_scull: IntBool::FALSE,
             can_cox: IntBool::FALSE,
             is_designated_cox: IntBool::FALSE,

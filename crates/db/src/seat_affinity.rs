@@ -6,6 +6,7 @@
 
 use crate::rower::types::RowerId;
 use crate::schema::rower_seat_affinity;
+use crate::types::AffinityWeight;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 
@@ -23,7 +24,7 @@ use diesel::SqliteConnection;
 pub struct SeatAffinity {
     pub rower_id: RowerId,
     pub seat_position: i32,
-    pub weight: i32,
+    pub weight: AffinityWeight,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -31,7 +32,7 @@ pub struct SeatAffinity {
 pub struct NewSeatAffinity {
     pub rower_id: RowerId,
     pub seat_position: i32,
-    pub weight: i32,
+    pub weight: AffinityWeight,
 }
 
 impl SeatAffinity {

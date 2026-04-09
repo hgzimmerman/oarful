@@ -17,7 +17,9 @@ CREATE TABLE rower (
     skill TEXT CHECK( skill IN ('Novice','Intermediate','Master','Expert') ) NOT NULL,
     strength TEXT CHECK( strength IN ('Weak','Intermediate','Strong','VeryStrong') ) NOT NULL,
     side TEXT CHECK( side IN ('Port','Starboard','Either') ) NOT NULL DEFAULT 'Either',
-    side_strength INTEGER NOT NULL DEFAULT 3,     -- 0 = hard constraint, 1..5 = soft preference
+    -- 0 = hard side-lock (cannot row the opposite side at all);
+    -- 1..5 = soft preference, scales the S4 wrong-side penalty.
+    side_strength INTEGER CHECK( side_strength BETWEEN 0 AND 5 ) NOT NULL DEFAULT 3,
     can_scull INTEGER CHECK( can_scull IN (0,1) ) NOT NULL DEFAULT 0,
     can_cox INTEGER CHECK( can_cox IN (0,1) ) NOT NULL DEFAULT 0,
     is_designated_cox INTEGER CHECK( is_designated_cox IN (0,1) ) NOT NULL DEFAULT 0,
@@ -44,20 +46,24 @@ CREATE TABLE boat (
 
 -- How much a rower likes a particular seat position (0 = cox, 1 = bow, n = stroke).
 -- Positive weight = wants the seat; negative = avoid.
+-- Weight is bounded ±5 and must be nonzero. A zero weight is meaningless
+-- ("no preference") and equivalent to the row not existing; forbidding it
+-- at the SQL level lets the solver skip a defensive Pumpkin-scaled(0) check.
 CREATE TABLE rower_seat_affinity (
     rower_id INTEGER NOT NULL,
     seat_position INTEGER NOT NULL,
-    weight INTEGER NOT NULL,
+    weight INTEGER CHECK( weight BETWEEN -5 AND 5 AND weight != 0 ) NOT NULL,
     PRIMARY KEY (rower_id, seat_position),
     FOREIGN KEY (rower_id) REFERENCES rower(id) ON DELETE CASCADE
 );
 
 -- Pair affinities / anti-affinities. Canonicalised so rower_a_id < rower_b_id
--- to avoid double-storing the symmetric relationship.
+-- to avoid double-storing the symmetric relationship. Weight is bounded ±5
+-- and must be nonzero — same reasoning as rower_seat_affinity.
 CREATE TABLE pair_affinity (
     rower_a_id INTEGER NOT NULL,
     rower_b_id INTEGER NOT NULL,
-    weight INTEGER NOT NULL,                      -- positive = prefer together, negative = avoid
+    weight INTEGER CHECK( weight BETWEEN -5 AND 5 AND weight != 0 ) NOT NULL,
     PRIMARY KEY (rower_a_id, rower_b_id),
     CHECK (rower_a_id < rower_b_id),
     FOREIGN KEY (rower_a_id) REFERENCES rower(id) ON DELETE CASCADE,

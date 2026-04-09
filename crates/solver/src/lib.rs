@@ -553,7 +553,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // still fires if both rowers land in the same 2-seat partition,
     // but the "one-port-one-starboard" expectation doesn't hold.
     for aff in &snapshot.pair_affinities {
-        if aff.weight == 0 {
+        // AffinityWeight forbids 0 at construction, but keep the guard
+        // so a manually-crafted zero (e.g. from a future DB patch path
+        // that bypassed the constructor) doesn't panic in Pumpkin.
+        if aff.weight.as_int() == 0 {
             continue;
         }
         let a_idx = match available.iter().position(|r| r.id == aff.rower_a_id) {
@@ -636,7 +639,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                     .post()
                     .map_err(|e| anyhow!("pair reif lower: {e:?}"))?;
 
-                obj_terms.push(together.scaled(-aff.weight));
+                obj_terms.push(together.scaled(-aff.weight.as_int()));
 
                 s_lo += 2;
             }
@@ -656,8 +659,11 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // every boat where seat 4 exists (so a stroke-4 preference applies
     // to 4-boats but not 8-boats, and vice versa).
     for aff in &snapshot.seat_affinities {
-        if aff.weight == 0 {
-            continue; // scaled(0) panics in Pumpkin
+        // AffinityWeight forbids 0 at construction and at the SQL
+        // CHECK, so this guard is belt-and-braces to keep a future
+        // malformed row from panicking Pumpkin via `.scaled(0)`.
+        if aff.weight.as_int() == 0 {
+            continue;
         }
         let r_idx = match available.iter().position(|r| r.id == aff.rower_id) {
             Some(i) => i,
@@ -668,7 +674,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 continue; // this boat doesn't have that seat
             }
             if let Some(&var) = x.get(&(r_idx, b_idx, aff.seat_position)) {
-                obj_terms.push(var.scaled(-aff.weight));
+                obj_terms.push(var.scaled(-aff.weight.as_int()));
             }
         }
     }
@@ -913,10 +919,11 @@ fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> bool {
         return false;
     }
     // Rowing seats: the rower's side must match the seat's side, UNLESS
-    // they're `Either` (matches anything) OR they have `side_strength > 0`
-    // which makes wrong-side placement a soft preference rather than a
-    // hard rule. `side_strength == 0` is the hard-lock escape hatch —
-    // those rowers can only row their preferred side.
+    // they're `Either` (matches anything) OR their side preference is
+    // soft (`SideStrength` > 0), which makes wrong-side placement a
+    // soft preference rather than a hard rule. `SideStrength::HARD` is
+    // the hard-lock escape hatch — those rowers can only row their
+    // preferred side.
     let seat_side = match boat.seat_side(seat) {
         Some(s) => s,
         None => return false, // out-of-range seat; shouldn't happen
@@ -924,7 +931,7 @@ fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> bool {
     match rower.side {
         Side::Either => true,
         r_side if r_side == seat_side => true,
-        _ => rower.side_strength > 0,
+        _ => !rower.side_strength.is_hard(),
     }
 }
 
@@ -932,7 +939,7 @@ fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> bool {
 /// the S4 soft-side objective. Returns 0 for the cox seat, for `Either`
 /// rowers, and for correct-side placements; otherwise returns the rower's
 /// `side_strength` (which is guaranteed ≥ 1 here because the eligibility
-/// filter already rejected `side_strength == 0` mismatches).
+/// filter already rejected `SideStrength::HARD` mismatches).
 fn wrong_side_penalty(rower: &Rower, boat: &Boat, seat: i32) -> i32 {
     if seat == 0 {
         return 0;
@@ -944,7 +951,7 @@ fn wrong_side_penalty(rower: &Rower, boat: &Boat, seat: i32) -> i32 {
     if rower.side == Side::Either || rower.side == seat_side {
         return 0;
     }
-    rower.side_strength
+    rower.side_strength.as_int()
 }
 
 fn decode_solution(

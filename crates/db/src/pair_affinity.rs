@@ -13,6 +13,7 @@
 
 use crate::rower::types::RowerId;
 use crate::schema::pair_affinity;
+use crate::types::AffinityWeight;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 
@@ -30,7 +31,7 @@ use diesel::SqliteConnection;
 pub struct PairAffinity {
     pub rower_a_id: RowerId,
     pub rower_b_id: RowerId,
-    pub weight: i32,
+    pub weight: AffinityWeight,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -38,14 +39,14 @@ pub struct PairAffinity {
 pub struct NewPairAffinity {
     pub rower_a_id: RowerId,
     pub rower_b_id: RowerId,
-    pub weight: i32,
+    pub weight: AffinityWeight,
 }
 
 impl NewPairAffinity {
     /// Canonicalise the ordering so `rower_a_id < rower_b_id`, matching
     /// the SQL `CHECK` constraint. Panics on self-pairs since those are
     /// meaningless.
-    pub fn canonical(a: RowerId, b: RowerId, weight: i32) -> Self {
+    pub fn canonical(a: RowerId, b: RowerId, weight: AffinityWeight) -> Self {
         assert!(a != b, "pair affinity cannot reference the same rower twice");
         let (rower_a_id, rower_b_id) = if a.as_int() < b.as_int() {
             (a, b)

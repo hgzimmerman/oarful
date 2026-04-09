@@ -10,7 +10,7 @@ use crate::practice::Practice;
 use crate::rower::types::{RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
 use crate::seat_affinity::{NewSeatAffinity, SeatAffinity};
-use crate::types::IntBool;
+use crate::types::{AffinityWeight, IntBool};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -87,7 +87,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             NewSeatAffinity {
                 rower_id: rower_ids[idx],
                 seat_position: seat,
-                weight,
+                weight: AffinityWeight::new(weight),
             },
         )?;
     }
@@ -104,7 +104,11 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     for (idx_a, idx_b, weight) in [(0usize, 4usize, 4), (2, 3, 2)] {
         PairAffinity::insert(
             conn,
-            NewPairAffinity::canonical(rower_ids[idx_a], rower_ids[idx_b], weight),
+            NewPairAffinity::canonical(
+                rower_ids[idx_a],
+                rower_ids[idx_b],
+                AffinityWeight::new(weight),
+            ),
         )?;
     }
     Ok(())

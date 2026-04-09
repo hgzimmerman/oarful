@@ -175,6 +175,68 @@ impl std::fmt::Display for Strength {
     }
 }
 
+/// Strength of a rower's side preference. 0 is a hard lock — they can
+/// only row their preferred side. 1..=5 is a soft preference scaling
+/// the S4 wrong-side objective penalty: higher strength = bigger
+/// penalty when the solver seats them on the wrong side. Enforced at
+/// the SQL level via `CHECK( side_strength BETWEEN 0 AND 5 )`.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct SideStrength(i32);
+
+impl SideStrength {
+    /// Hard side lock — the rower cannot be placed on the opposite
+    /// side at all. The solver's eligibility filter rejects mismatched
+    /// placements outright, so no `x` variable is ever created.
+    pub const HARD: Self = Self(0);
+
+    /// Construct a soft-preference strength, clamped to the 1..=5
+    /// range. Use [`SideStrength::HARD`] for the hard-lock case.
+    pub fn soft(n: i32) -> Self {
+        Self(n.clamp(1, 5))
+    }
+
+    /// Construct from a raw integer, clamping to the full 0..=5 range.
+    /// Useful for fixture / admin UI code that already has a validated
+    /// value in the right range.
+    pub fn new(n: i32) -> Self {
+        Self(n.clamp(0, 5))
+    }
+
+    /// Raw value for use as a scale factor in the S4 objective term.
+    pub fn as_int(self) -> i32 {
+        self.0
+    }
+
+    /// True for [`SideStrength::HARD`] — the rower is side-locked.
+    pub fn is_hard(self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl Default for SideStrength {
+    fn default() -> Self {
+        Self(3)
+    }
+}
+
+impl std::fmt::Display for SideStrength {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// Which side of the boat a rower rows on (in sweep).
 #[derive(
     Clone,
