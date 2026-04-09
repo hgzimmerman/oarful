@@ -30,7 +30,7 @@ use pumpkin_core::optimisation::linear_sat_unsat::LinearSatUnsat;
 use pumpkin_core::optimisation::solution_callback::SolutionCallback;
 use pumpkin_core::optimisation::OptimisationDirection;
 use pumpkin_core::results::{OptimisationResult, ProblemSolution, SolutionReference};
-use pumpkin_core::termination::Indefinite;
+use pumpkin_core::termination::{Indefinite, TimeBudget};
 use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
 use std::collections::BTreeMap;
@@ -54,6 +54,14 @@ pub struct SolveRequest {
     /// fielded). Default `Strict`: no partial fills, every seat of every
     /// fielded boat must be filled. See `PartialFillPolicy` for details.
     pub partial_fill: PartialFillPolicy,
+    /// Wall-clock budget the solver may spend looking for an optimal
+    /// assignment. `None` lets the solver run to proven optimality
+    /// (`Indefinite`), which is fine for small instances but can take
+    /// minutes on a full club fleet. For interactive use, set this to
+    /// a few seconds — the solver returns best-found-so-far with
+    /// `SolveStatus::Timeout` if the budget expires before optimality
+    /// is proven.
+    pub time_budget: Option<std::time::Duration>,
 }
 
 /// Policy for how aggressively the solver may leave designated "optional"
@@ -216,13 +224,19 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     //   - seat 0 (cox): only rowers with `can_cox`
     //   - rowing seats: designated coxes rejected outright; other rowers
     //     are eligible if their side matches the seat's side, is
-    //     `Either`, OR `side_strength > 0` (wrong-side becomes a soft
-    //     preference rather than a hard rule — see S4 below).
+    //     `Either`, OR their `side_strength` is soft (non-hard), in which
+    //     case wrong-side placement is a soft preference rather than a
+    //     hard rule — see S4 aggregation below.
     //
-    // S4 side-preference penalty is emitted at the moment of variable
-    // creation: mismatched placements get a `side_strength`-scaled term
-    // pushed into `obj_terms`. On-side placements and `Either` rowers
-    // pay zero.
+    // While creating variables we also collect every wrong-side x per
+    // rower into `wrong_side_by_rower`. S4 aggregation (below) turns
+    // those into a single per-rower `wrong_count[r] ∈ {0,1}` aux var,
+    // so the obj_terms count for S4 is O(rowers) rather than
+    // O(rowers × seats). This matters: the S8 experiment taught us
+    // that linear scan of the objective-link equality scales poorly
+    // with term count, and a 40-rower club would otherwise push ~1000
+    // terms into obj_terms just from S4.
+    let mut wrong_side_by_rower: BTreeMap<usize, Vec<DomainId>> = BTreeMap::new();
     for (b_idx, boat) in boats.iter().enumerate() {
         for seat in seat_positions(boat) {
             for (r_idx, rower) in available.iter().enumerate() {
@@ -232,13 +246,45 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 let var = solver.new_bounded_integer(0, 1);
                 x.insert((r_idx, b_idx, seat), var);
 
-                // S4: soft side-preference penalty.
-                let penalty = wrong_side_penalty(rower, boat, seat);
-                if penalty > 0 {
-                    obj_terms.push(var.scaled(penalty));
+                // S4: collect wrong-side placements for per-rower
+                // aggregation rather than pushing a term per variable.
+                if wrong_side_penalty(rower, boat, seat) > 0 {
+                    wrong_side_by_rower.entry(r_idx).or_default().push(var);
                 }
             }
         }
+    }
+
+    // --- S4: aggregate wrong-side placements per rower ---
+    //
+    // For each rower with any wrong-side candidate variable, create
+    // `wrong_count[r] ∈ {0,1}` and post
+    //    Σ wrong_side_x[r] - wrong_count[r] = 0
+    // Because H2 guarantees the rower is in at most one seat total,
+    // the sum is at most 1, so the [0,1] domain on wrong_count is
+    // tight. Then push exactly one term into `obj_terms` per rower:
+    //    wrong_count[r].scaled(rower.side_strength)
+    // That's O(rowers) S4 terms instead of O(rowers × seats). Same
+    // objective value, dramatically fewer terms in the final
+    // objective-link equality. See crates/solver/README.md §S4 for
+    // the detailed rationale and the performance note that motivated
+    // this encoding.
+    for (&r_idx, wrong_vars) in &wrong_side_by_rower {
+        if wrong_vars.is_empty() {
+            continue;
+        }
+        let rower = available[r_idx];
+        let wrong_count = solver.new_bounded_integer(0, 1);
+        let mut link_terms: Vec<AffineView<DomainId>> =
+            wrong_vars.iter().map(|v| v.scaled(1)).collect();
+        link_terms.push(wrong_count.scaled(-1));
+        let tag = solver.new_constraint_tag();
+        solver
+            .add_constraint(pumpkin_constraints::equals(link_terms, 0, tag))
+            .post()
+            .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
+
+        obj_terms.push(wrong_count.scaled(rower.side_strength.as_int()));
     }
 
     // --- Hard constraint 1: seat fill conditional on `use[b]`. ---
@@ -348,6 +394,45 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .add_constraint(pumpkin_constraints::less_than_or_equals(terms, 1, tag))
             .post()
             .map_err(|e| anyhow!("posting rower-at-most-one constraint: {e:?}"))?;
+    }
+
+    // --- Hard constraint 6: fleet capacity bound ---
+    //
+    // The total number of seats across all fielded boats cannot exceed
+    // the number of available rowers. This is a direct global bound on
+    // the fleet-selection search space:
+    //
+    //   Σ_b (seats_total[b] · use[b])  ≤  num_available
+    //
+    // Without this, the solver explores many infeasible fleet
+    // configurations (e.g. "field 6 eights = 54 seats" with only 20
+    // rowers available) before the individual H1/H2 constraints prune
+    // them. The explicit global bound collapses the search drastically
+    // and is the difference between "30s timeout at 5+ candidate boats"
+    // and "sub-second solve at 10 candidate boats" on the benchmark.
+    //
+    // The bound is necessary but not sufficient — side, cox, and
+    // weight-class constraints still apply on top. It's a cheap prune,
+    // not a complete feasibility check.
+    {
+        let capacity_terms: Vec<_> = boats
+            .iter()
+            .enumerate()
+            .map(|(b_idx, boat)| {
+                let seats_total =
+                    boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+                use_b[b_idx].scaled(seats_total)
+            })
+            .collect();
+        let tag = solver.new_constraint_tag();
+        solver
+            .add_constraint(pumpkin_constraints::less_than_or_equals(
+                capacity_terms,
+                available.len() as i32,
+                tag,
+            ))
+            .post()
+            .map_err(|e| anyhow!("posting fleet-capacity bound: {e:?}"))?;
     }
 
     // --- H5 + S5: weight-class hard wall (upper only) + soft target ---
@@ -820,15 +905,27 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // --- Solve (optimisation) ---
     let mut brancher = solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
-    let mut termination = Indefinite;
-    let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
 
-    let result: SolveResult = match solver.optimise(
-        &mut brancher,
-        &mut termination,
-        &mut resolver,
-        procedure,
-    ) {
+    // The termination type depends on whether the caller set a time
+    // budget. Both branches return the same `OptimisationResult<()>`
+    // (NoCallback fixes `Callback::Stop = ()`), so we can unify the
+    // result before the outer match.
+    let opt_result = match request.time_budget {
+        None => {
+            let mut termination = Indefinite;
+            let procedure =
+                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+            solver.optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+        }
+        Some(budget) => {
+            let mut termination = TimeBudget::starting_now(budget);
+            let procedure =
+                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+            solver.optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+        }
+    };
+
+    let result: SolveResult = match opt_result {
         OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
             // Both branches return a concrete `Solution` rather than a
             // reference, so we can decode without borrow gymnastics.

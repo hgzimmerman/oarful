@@ -11,6 +11,8 @@
 //!                                               # solve AND persist the chosen lineups
 //!   cargo run -p lineup_cli -- history [date]   # show committed lineups for a date
 
+mod bench;
+
 use anyhow::Result;
 use chrono::NaiveDate;
 use lineup_db::{
@@ -44,6 +46,7 @@ async fn main() -> Result<()> {
             cmd_solve(&db, opts).await
         }
         Some("history") => cmd_history(&db, parse_date(args.get(1))?).await,
+        Some("bench") => bench::run(),
         Some(other) if other != "dump" => {
             cmd_dump(&db, parse_date(Some(&other.to_string()))?).await
         }
@@ -150,11 +153,15 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
 
     // Empty boat list = "consider every in-service sweep boat"; the
     // solver now picks which to field via its own `use[b]` decision
-    // variables (see S8).
+    // variables (see S8). Default to a 10-second time budget so real
+    // fleets don't hang the coach UI — the bench shows the solver
+    // finds near-optimal solutions within the first ~second; the
+    // remaining budget is proof-of-optimality / marginal redistribution.
     let request = SolveRequest {
         date,
         boats: vec![],
         partial_fill: partial,
+        time_budget: Some(std::time::Duration::from_secs(10)),
     };
     let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;
