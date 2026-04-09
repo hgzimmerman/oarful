@@ -441,6 +441,63 @@ fn s6_cox_cooldown_picks_the_cold_cox() {
 }
 
 #[test]
+fn s6_cox_cooldown_prefers_least_recently_coxed() {
+    // Two cox-capable rowers, **both** inside the cooldown window
+    // but at different days_since: Alice coxed 2 days ago, Bob
+    // coxed 12 days ago. Under the old flat penalty both pay the
+    // same `cox_cooldown_penalty` so the solver is indifferent.
+    // Under the linear decay Alice's effective penalty is ~4
+    // (ceil of 5 × 12/14) and Bob's is ~1 (ceil of 5 × 2/14), so
+    // Bob is the cheaper cox and the solver must pick him.
+    //
+    // Every other rower has `can_cox = false` so the cox slot
+    // has exactly these two candidates — keeps the assertion
+    // unambiguous.
+    let rowers = vec![
+        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
+        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
+        {
+            let mut r = rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            r.can_cox = IntBool::FALSE;
+            r
+        },
+        {
+            let mut r = rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            r.can_cox = IntBool::FALSE;
+            r
+        },
+        {
+            let mut r = rower(5, "Erin", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            r.can_cox = IntBool::FALSE;
+            r
+        },
+    ];
+    let mut snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+    // Alice coxed 2 days ago, Bob coxed 12 days ago. Both inside
+    // the 14-day window, so both incur S6 penalty — but at
+    // different magnitudes under linear decay.
+    snap.last_coxed
+        .insert(RowerId::new(1), test_date() - chrono::Duration::days(2));
+    snap.last_coxed
+        .insert(RowerId::new(2), test_date() - chrono::Duration::days(12));
+
+    let mut cfg = silent_config();
+    cfg.cox_cooldown_penalty = 5;
+
+    let result = solve(&snap, &request(cfg)).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    let lineup = single_used(&result.lineups);
+
+    let cox = rower_in_seat(lineup, 0);
+    assert_eq!(
+        cox,
+        RowerId::new(2),
+        "Bob (12 days out) should be preferred over Alice (2 days out) \
+         under linear cooldown decay; got {cox:?}"
+    );
+}
+
+#[test]
 fn s9_pair_strength_matches_strengths_per_partition() {
     // Four rowers, two Port / two Starboard, two Strong / two
     // Weak. S9 should group them so each partition contains

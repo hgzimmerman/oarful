@@ -318,16 +318,44 @@ S1–S8 arrive they all feed into the same objective sum.
 `snapshot.last_coxed` gives us the most recent cox appearance per rower,
 derived from `lineup_seat` history via `Rower::last_coxed_dates`. For
 non-designated rowers who coxed within the cooldown window, the solver
-pays a flat penalty if it tries to seat them as cox again. Designated
-coxswains are exempt — they're meant to cox often.
+pays a penalty if it tries to seat them as cox again. The penalty
+**decays linearly** with `days_since_last_cox` so "cold" rowers are
+strictly preferred over "hot" ones even when both are inside the
+window. Designated coxswains are exempt — they're meant to cox often.
 
 **Constants** (in `crates/solver/src/lib.rs`):
 - `COX_COOLDOWN_DAYS = 14` — roughly two weeks of practice, the
   rotation horizon most clubs care about ("don't have the same person
   cox two weeks running"). Long enough to matter, short enough not to
   effectively lock out anyone who ever coxes.
-- `COX_COOLDOWN_PENALTY = 5` — same ballpark as S4 wrong-side penalty
-  for a strongly side-locked rower.
+- `SolverConfig::cox_cooldown_penalty = 5` — the *maximum* per-rower
+  penalty (applied when `days_since = 0`). Same ballpark as S4
+  wrong-side penalty for a strongly side-locked rower.
+
+**Linear decay formula.** The effective penalty for a rower who
+coxed `days_since` days ago is
+
+```
+effective = ceil(cox_cooldown_penalty × (COX_COOLDOWN_DAYS − days_since) / COX_COOLDOWN_DAYS)
+```
+
+Ceiling division keeps every day inside the window at effective ≥ 1
+(otherwise days 12–13 at the default penalty of 5 would round down
+to 0 and contribute no pressure). Example with defaults:
+
+| `days_since` | `effective` |
+|---|---|
+| 0  | 5 |
+| 1  | 5 (ceil of 4.64) |
+| 3  | 4 |
+| 7  | 3 (ceil of 2.5) |
+| 10 | 2 |
+| 13 | 1 |
+| 14+ | 0 (outside the window, block skipped) |
+
+The curve is smooth end-to-end: a rower 13 days out still costs
+something, but *much* less than a rower 1 day out, and the solver
+picks the coldest candidate when given the choice.
 
 **Encoding** mirrors the S4 per-rower aggregation:
 
@@ -337,27 +365,22 @@ for each rower r where
   AND last_coxed[r] exists
   AND (request.date - last_coxed[r]) ∈ [0, COX_COOLDOWN_DAYS):
 
-    cox_vars[r] = [x[r, b, 0] for each boat b]   (cox-seat x vars only)
-    cox_use[r] ∈ {0, 1}                          (by H2)
+    effective[r] = ceil(cox_cooldown_penalty * (COX_COOLDOWN_DAYS - days_since) / COX_COOLDOWN_DAYS)
+    cox_vars[r]  = [x[r, b, 0] for each boat b]   (cox-seat x vars only)
+    cox_use[r]   ∈ {0, 1}                          (by H2)
     Σ cox_vars[r] - cox_use[r] = 0
-    obj_terms.push(cox_use[r].scaled(COX_COOLDOWN_PENALTY))
+    obj_terms.push(cox_use[r].scaled(effective[r]))
 ```
 
-One aux var + one linking equality + one obj term per penalized rower.
-O(rowers in cooldown) cost.
+One aux var + one linking equality + one obj term per penalized
+rower, same as before — the linear decay only changes the scalar
+coefficient, not the constraint shape. O(rowers in cooldown) cost.
 
 **Naturally inert cases**:
 - Designated coxes: skipped outright (exempt).
 - Rowers who've never coxed: no history entry, no penalty.
 - Coxes outside the cooldown window: skipped.
 - Coxless candidate fleet: no cox-seat x vars exist, `cox_vars` is empty, skipped.
-
-**Decay**: currently a flat penalty within the window. A linear decay
-like `penalty * (cooldown - days_since) / cooldown` would reward
-waiting longer before re-coxing, but the constant form is simpler and
-sufficient for the "don't cox two days in a row" signal that matters
-most. The constants can migrate into `SolverConfig` when per-team
-tuning arrives.
 
 **Demonstration note**: in the toy fixture, Lena is the only
 designated cox and the only high-value cox candidate — she wins the

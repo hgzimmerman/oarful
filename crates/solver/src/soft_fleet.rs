@@ -99,16 +99,31 @@ impl<'a> ModelBuilder<'a> {
     }
 
     /// S6 — cox cooldown. Non-designated rowers who coxed inside
-    /// the rolling `COX_COOLDOWN_DAYS` window incur a flat penalty
-    /// if the solver tries to seat them as cox again. Designated
+    /// the rolling `COX_COOLDOWN_DAYS` window incur a penalty if
+    /// the solver tries to seat them as cox again. Designated
     /// coxes are exempt.
     ///
-    /// Encoding mirrors S4's per-rower aggregation: gather the
-    /// rower's cox-seat x vars across all coxed candidate boats
-    /// (coxless boats don't create a seat-0 x), sum them into a
-    /// `cox_use[r] ∈ {0, 1}` aux var via a link equality (by H2 the
-    /// sum is ≤ 1), and push exactly one obj term per penalised
-    /// rower. Cost: `O(rowers in cooldown)`.
+    /// **Linear decay by days-since.** The effective penalty is
+    ///
+    ///   `effective = ceil(cox_cooldown_penalty × (COX_COOLDOWN_DAYS − days_since) / COX_COOLDOWN_DAYS)`
+    ///
+    /// so a rower who coxed yesterday pays close to the full
+    /// configured penalty, a rower 13 days out pays 1, and a
+    /// rower ≥ 14 days out drops out of the window and pays 0.
+    /// This removes the cliff at the cooldown boundary and gives
+    /// the solver a smooth preference for "least recently coxed"
+    /// among multiple cooldown candidates (see [`S6 design
+    /// note`](#s6-design-note) in the README). `ceil` rounds each
+    /// rower up to at least 1 inside the window so no cooldown
+    /// rower is silently free.
+    ///
+    /// **Encoding** mirrors S4's per-rower aggregation: gather
+    /// the rower's cox-seat x vars across all coxed candidate
+    /// boats (coxless boats don't create a seat-0 x), sum them
+    /// into a `cox_use[r] ∈ {0, 1}` aux var via a link equality
+    /// (by H2 the sum is ≤ 1), and push exactly one obj term per
+    /// penalised rower scaled by their personal `effective`
+    /// coefficient. Cost: `O(rowers in cooldown)`.
     pub(crate) fn post_s6_cox_cooldown(
         &mut self,
         snapshot: &DbSnapshot,
@@ -138,6 +153,25 @@ impl<'a> ModelBuilder<'a> {
                 continue; // outside cooldown window (or in the future; ignore)
             }
 
+            // Linear decay. Uses ceiling division so any rower
+            // inside the window incurs at least 1 unit of penalty —
+            // otherwise days 12-13 (for the default penalty of 5)
+            // would produce 0 under floor division and Pumpkin's
+            // `.scaled(0)` would panic anyway. Computed in i64 to
+            // avoid overflow on exotic penalty values, then cast
+            // back to i32 for the Pumpkin API.
+            let numerator = cfg.cox_cooldown_penalty as i64
+                * (COX_COOLDOWN_DAYS - days_since);
+            let effective = ((numerator + COX_COOLDOWN_DAYS - 1) / COX_COOLDOWN_DAYS) as i32;
+            if effective <= 0 {
+                // Defensive: only reachable if `cox_cooldown_penalty`
+                // itself is zero or negative and the ceiling rounds
+                // to <= 0. `.scaled(0)` panics in Pumpkin and a
+                // negative penalty would invert the constraint, so
+                // skip the push entirely.
+                continue;
+            }
+
             // Gather this rower's cox-seat x variables. Each coxed boat
             // contributes one; coxless boats don't create a seat-0 x var
             // in the first place, so there's nothing to collect there.
@@ -161,7 +195,7 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
 
-            obj_terms.push(cox_use.scaled(cfg.cox_cooldown_penalty));
+            obj_terms.push(cox_use.scaled(effective));
         }
         Ok(())
     }
