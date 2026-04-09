@@ -3,6 +3,7 @@
 use crate::availability::{types::AvailabilityStatus, Availability};
 use crate::boat::Boat;
 use crate::rower::{types::RowerId, Rower};
+use crate::seat_affinity::SeatAffinity;
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
@@ -20,6 +21,8 @@ pub struct DbSnapshot {
     pub sweep_boats: Vec<Boat>,
     /// Derived from `lineup_seat` history.
     pub last_coxed: HashMap<RowerId, NaiveDate>,
+    /// Per-rower seat preferences (boat-agnostic position). Drives S3.
+    pub seat_affinities: Vec<SeatAffinity>,
 }
 
 impl DbSnapshot {
@@ -34,6 +37,7 @@ impl DbSnapshot {
             availability: Availability::map_for_date(conn, date)?,
             sweep_boats: Boat::list_sweep(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
+            seat_affinities: SeatAffinity::list_all(conn)?,
         })
     }
 

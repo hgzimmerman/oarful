@@ -133,7 +133,7 @@ of 1.
 |------|--------------|-------|
 | S1   | **enabled**  | skill variance within a boat (max − min) |
 | S2   | planned      | pair affinities / anti-affinities |
-| S3   | planned      | seat affinities |
+| S3   | **enabled**  | seat affinities (stored in `rower_seat_affinity`) |
 | S4   | **enabled**  | soft side preference, weighted by `side_strength` |
 | S5   | **enabled**  | weight-class soft target via slack variables |
 | S6   | planned      | cox cooldown |
@@ -163,10 +163,22 @@ From the `pair_affinity` table. For each stored pair with weight `w`, add
 rewards keeping them together; negative `w` penalises it. Reified via a
 per-pair-per-boat "both present" boolean.
 
-### S3. Seat affinities
-From the `rower_seat_affinity` table. For each `(rower, seat, weight)`,
-add `weight · x[rower, b, seat]` across all boats — rewards matching a
-rower's preferred seat.
+### S3. Seat affinities — **enabled**
+From the `rower_seat_affinity` table. For each `(rower, seat, weight)`
+stored, the solver pushes `x[r,b,seat].scaled(-weight)` into `obj_terms`
+for every boat where that seat position exists. Positive weights become
+negative contributions (rewards); negative weights become positive
+contributions (penalties).
+
+`seat_position` is boat-agnostic — a preference for seat 8 only applies
+to 8-boats, and a preference for seat 4 applies to 4-boats *and* to
+seat 4 of 8-boats. Loaded into `DbSnapshot::seat_affinities` in one
+shot from the full table (there aren't enough rows to bother filtering
+per-date).
+
+Because positive affinities contribute negative values, the objective
+variable's domain is widened to `[-10_000, 10_000]`. Pumpkin happily
+propagates tighter bounds from the term domains during search.
 
 ### S4. Side-preference strength — **enabled**
 Rowers with `side_strength = 0` remain hard-locked — the eligibility

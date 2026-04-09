@@ -413,15 +413,47 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         obj_terms.push(spread.scaled(1));
     }
 
+    // --- S3: seat affinities ---
+    //
+    // For each stored (rower, seat_position, weight) entry, push a
+    // `x[r,b,seat_position].scaled(-weight)` term into `obj_terms` for
+    // every boat that has a matching seat position. The negation flips
+    // "reward for being there" into "negative contribution to a
+    // minimised objective". Negative stored weights (dislike / avoid)
+    // become positive contributions and act as penalties.
+    //
+    // seat_position is boat-agnostic: a preference for seat 4 applies to
+    // every boat where seat 4 exists (so a stroke-4 preference applies
+    // to 4-boats but not 8-boats, and vice versa).
+    for aff in &snapshot.seat_affinities {
+        if aff.weight == 0 {
+            continue; // scaled(0) panics in Pumpkin
+        }
+        let r_idx = match available.iter().position(|r| r.id == aff.rower_id) {
+            Some(i) => i,
+            None => continue, // unavailable today or filtered out
+        };
+        for (b_idx, boat) in boats.iter().enumerate() {
+            if aff.seat_position < 1 || aff.seat_position > boat.seat_count {
+                continue; // this boat doesn't have that seat
+            }
+            if let Some(&var) = x.get(&(r_idx, b_idx, aff.seat_position)) {
+                obj_terms.push(var.scaled(-aff.weight));
+            }
+        }
+    }
+
     // --- Objective variable ---
     // The objective is the sum of every weighted term pushed into
     // `obj_terms`: S5 weight deviation, S1 skill spread, S4 side-pref
     // penalty. Later soft constraints (S2, S3, S6, S7, S8) append to the
     // same vec with their own per-term weights.
     //
-    // A generous constant upper bound is fine here — Pumpkin will
-    // propagate tighter bounds from the term domains during search.
-    let objective = solver.new_bounded_integer(0, 10_000);
+    // A generous range is fine here — Pumpkin will propagate tighter
+    // bounds from the term domains during search. The lower bound must
+    // be negative because S3 affinity rewards contribute negative terms
+    // to the sum.
+    let objective = solver.new_bounded_integer(-10_000, 10_000);
     if !obj_terms.is_empty() {
         let mut link_terms = obj_terms.clone();
         link_terms.push(objective.scaled(-1));

@@ -8,6 +8,7 @@ use crate::boat::{Boat, NewBoat};
 use crate::practice::Practice;
 use crate::rower::types::{RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
+use crate::seat_affinity::{NewSeatAffinity, SeatAffinity};
 use crate::types::IntBool;
 use chrono::NaiveDate;
 use diesel::prelude::*;
@@ -59,13 +60,33 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
         AvailabilityStatus::ScullingOnly,
         AvailabilityStatus::No,
     ];
-    for (rower_id, status) in rower_ids.into_iter().zip(statuses) {
+    for (rower_id, status) in rower_ids.iter().copied().zip(statuses) {
         Availability::upsert(
             conn,
             NewAvailability {
                 rower_id,
                 date,
                 status,
+            },
+        )?;
+    }
+
+    // Seat affinities. Indices correspond to `toy_rowers()`:
+    //   0 Alice, 1 Bob, 2 Carla, 3 Diego, 4 Erin, 5 Finn, 6 Grace,
+    //   7 Hana, 8 Ivan, 9 Juno, 10 Kai, 11 Lena, 12 Mika, 13 Nico
+    //
+    // - Alice (Port, Expert) likes seat 4: she loves being at stroke of a
+    //   4-boat. Weight +3.
+    // - Hana (Port, Master) likes seat 2. Weight +3.
+    // - Ivan (Starboard, Novice) avoids seat 1 (the exposed bow seat).
+    //   Weight -2.
+    for (idx, seat, weight) in [(0usize, 4, 3), (7, 2, 3), (8, 1, -2)] {
+        SeatAffinity::insert(
+            conn,
+            NewSeatAffinity {
+                rower_id: rower_ids[idx],
+                seat_position: seat,
+                weight,
             },
         )?;
     }
