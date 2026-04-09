@@ -31,7 +31,7 @@ use pumpkin_core::optimisation::solution_callback::SolutionCallback;
 use pumpkin_core::optimisation::OptimisationDirection;
 use pumpkin_core::results::{OptimisationResult, ProblemSolution, SolutionReference};
 use pumpkin_core::termination::Indefinite;
-use pumpkin_core::variables::{DomainId, TransformableVariable};
+use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
 use std::collections::BTreeMap;
 use std::ops::ControlFlow;
@@ -156,13 +156,25 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // x[(rower_idx, boat_idx, seat_position)] ∈ {0,1}
     let mut x: BTreeMap<(usize, usize, i32), DomainId> = BTreeMap::new();
 
+    // Weighted objective terms. Each soft constraint appends one or more
+    // pre-scaled `AffineView` terms here; at the end we link the objective
+    // variable to their sum. Replaces the earlier unit-coefficient
+    // `slack_vars: Vec<DomainId>` pattern and enables per-term weighting.
+    let mut obj_terms: Vec<AffineView<DomainId>> = Vec::new();
+
     // --- Variables ---
     // A variable x[(r,b,s)] ∈ {0,1} is created only when rower r is eligible
-    // for seat s of boat b — cox seat requires `can_cox`, rowing seats
-    // require that the rower's side matches the seat's side (or that the
-    // rower is `Side::Either`). Ineligible combinations don't exist in the
-    // model at all, which is both faster and a little easier to read than
-    // fixing their domain to {0}.
+    // for seat s of boat b. Eligibility rules:
+    //   - seat 0 (cox): only rowers with `can_cox`
+    //   - rowing seats: designated coxes rejected outright; other rowers
+    //     are eligible if their side matches the seat's side, is
+    //     `Either`, OR `side_strength > 0` (wrong-side becomes a soft
+    //     preference rather than a hard rule — see S4 below).
+    //
+    // S4 side-preference penalty is emitted at the moment of variable
+    // creation: mismatched placements get a `side_strength`-scaled term
+    // pushed into `obj_terms`. On-side placements and `Either` rowers
+    // pay zero.
     for (b_idx, boat) in boats.iter().enumerate() {
         for seat in seat_positions(boat) {
             for (r_idx, rower) in available.iter().enumerate() {
@@ -171,6 +183,12 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 }
                 let var = solver.new_bounded_integer(0, 1);
                 x.insert((r_idx, b_idx, seat), var);
+
+                // S4: soft side-preference penalty.
+                let penalty = wrong_side_penalty(rower, boat, seat);
+                if penalty > 0 {
+                    obj_terms.push(var.scaled(penalty));
+                }
             }
         }
     }
@@ -227,11 +245,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     //           sum(ordinal * x) - over[b] + under[b] = target_sum
     //      where over[b], under[b] ≥ 0. At optimum only one is nonzero and
     //      together they equal `|sum - target_sum|`. Both are summed into
-    //      the single objective variable and minimised below.
+    //      the objective via `obj_terms` and minimised below.
     //
     // The wall is two linear inequalities with positive / negated
     // coefficients. The slack equality is one linear equality per boat.
-    let mut slack_vars: Vec<DomainId> = Vec::new();
     for (b_idx, boat) in boats.iter().enumerate() {
         let n_rowing = boat.seat_count;
         if n_rowing == 0 {
@@ -303,8 +320,8 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .post()
             .map_err(|e| anyhow!("weight-class slack equality: {e:?}"))?;
 
-        slack_vars.push(over);
-        slack_vars.push(under);
+        obj_terms.push(over.scaled(1));
+        obj_terms.push(under.scaled(1));
     }
 
     // --- S1: skill variance per boat ---
@@ -393,22 +410,24 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .post()
             .map_err(|e| anyhow!("spread link: {e:?}"))?;
 
-        slack_vars.push(spread);
+        obj_terms.push(spread.scaled(1));
     }
 
     // --- Objective variable ---
-    // The objective is the sum of all slack / penalty terms: S5 weight
-    // deviation + S1 skill spread so far. Later soft constraints append
-    // into the same `slack_vars` vec and ride the same minimisation.
-    let objective_upper: i32 = slack_vars.len() as i32 * 3 * 8; // loose: 3N per slack, N ≤ 8
-    let objective = solver.new_bounded_integer(0, objective_upper.max(1));
-    if !slack_vars.is_empty() {
-        // objective - sum(slacks) = 0
-        let mut obj_terms: Vec<_> = slack_vars.iter().map(|v| v.scaled(1)).collect();
-        obj_terms.push(objective.scaled(-1));
+    // The objective is the sum of every weighted term pushed into
+    // `obj_terms`: S5 weight deviation, S1 skill spread, S4 side-pref
+    // penalty. Later soft constraints (S2, S3, S6, S7, S8) append to the
+    // same vec with their own per-term weights.
+    //
+    // A generous constant upper bound is fine here — Pumpkin will
+    // propagate tighter bounds from the term domains during search.
+    let objective = solver.new_bounded_integer(0, 10_000);
+    if !obj_terms.is_empty() {
+        let mut link_terms = obj_terms.clone();
+        link_terms.push(objective.scaled(-1));
         let tag = solver.new_constraint_tag();
         solver
-            .add_constraint(pumpkin_constraints::equals(obj_terms, 0, tag))
+            .add_constraint(pumpkin_constraints::equals(link_terms, 0, tag))
             .post()
             .map_err(|e| anyhow!("objective link: {e:?}"))?;
     }
@@ -512,24 +531,43 @@ fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> bool {
         return rower.can_cox.as_bool();
     }
     // Designated coxswains *only* cox — they never row a rowing seat,
-    // regardless of side, weight class, or availability. Rejecting them
-    // here keeps the constraint implicit in the eligibility filter rather
-    // than requiring a separate posted constraint.
+    // regardless of side, weight class, or availability.
     if rower.is_designated_cox.as_bool() {
         return false;
     }
-    // Rowing seats: the rower's side must match the seat's side, unless the
-    // rower is `Either`. This is a HARD constraint regardless of
-    // `side_strength` — the soft-preference path will arrive with the
-    // objective function in a later milestone.
+    // Rowing seats: the rower's side must match the seat's side, UNLESS
+    // they're `Either` (matches anything) OR they have `side_strength > 0`
+    // which makes wrong-side placement a soft preference rather than a
+    // hard rule. `side_strength == 0` is the hard-lock escape hatch —
+    // those rowers can only row their preferred side.
     let seat_side = match boat.seat_side(seat) {
         Some(s) => s,
         None => return false, // out-of-range seat; shouldn't happen
     };
     match rower.side {
         Side::Either => true,
-        r_side => r_side == seat_side,
+        r_side if r_side == seat_side => true,
+        _ => rower.side_strength > 0,
     }
+}
+
+/// How many penalty points a (rower, boat, seat) placement contributes to
+/// the S4 soft-side objective. Returns 0 for the cox seat, for `Either`
+/// rowers, and for correct-side placements; otherwise returns the rower's
+/// `side_strength` (which is guaranteed ≥ 1 here because the eligibility
+/// filter already rejected `side_strength == 0` mismatches).
+fn wrong_side_penalty(rower: &Rower, boat: &Boat, seat: i32) -> i32 {
+    if seat == 0 {
+        return 0;
+    }
+    let seat_side = match boat.seat_side(seat) {
+        Some(s) => s,
+        None => return 0,
+    };
+    if rower.side == Side::Either || rower.side == seat_side {
+        return 0;
+    }
+    rower.side_strength
 }
 
 fn decode_solution(

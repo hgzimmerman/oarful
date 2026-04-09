@@ -134,7 +134,7 @@ of 1.
 | S1   | **enabled**  | skill variance within a boat (max − min) |
 | S2   | planned      | pair affinities / anti-affinities |
 | S3   | planned      | seat affinities |
-| S4   | planned      | soft side preference (side_strength > 0) |
+| S4   | **enabled**  | soft side preference, weighted by `side_strength` |
 | S5   | **enabled**  | weight-class soft target via slack variables |
 | S6   | planned      | cox cooldown |
 | S7   | planned      | novelty vs recent lineups |
@@ -168,12 +168,22 @@ From the `rower_seat_affinity` table. For each `(rower, seat, weight)`,
 add `weight · x[rower, b, seat]` across all boats — rewards matching a
 rower's preferred seat.
 
-### S4. Side-preference strength
-Rowers with `side_strength = 0` remain hard (they can't row the other
-side at all). Rowers with `side_strength > 0` become candidates for either
-side of the boat, but sitting on their non-preferred side incurs a penalty
-proportional to `side_strength`. This replaces the current blanket-hard
-side rule.
+### S4. Side-preference strength — **enabled**
+Rowers with `side_strength = 0` remain hard-locked — the eligibility
+filter rejects wrong-side placements entirely, so no variable is created.
+Rowers with `side_strength > 0` become candidates for either side of the
+boat, and wrong-side placements add a `side_strength`-scaled term to
+`obj_terms` at variable-creation time:
+
+```
+obj_terms.push(x[r,b,s].scaled(rower.side_strength))
+```
+
+`Either`-sided rowers and on-side placements contribute zero. The
+default fixture uses `side_strength = 3` for everyone, so the solver
+strongly prefers correct sides but will accept a wrong-side placement if
+the alternative (benching a critical rower, failing to field a boat)
+costs more.
 
 ### S5. Weight-class fit (soft target) — **enabled**
 Complements the hard wall in H5 with a soft target that prefers the exact
