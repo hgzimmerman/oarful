@@ -175,6 +175,51 @@ impl std::fmt::Display for Strength {
     }
 }
 
+/// Rower height, bucketed. Used by the S10 pair-height-balance soft
+/// constraint. Ordinal starts at 1 rather than 0 to keep Pumpkin
+/// happy (`.scaled(0)` panics); differences are shift-invariant.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    diesel_derive_enum::DbEnum,
+)]
+#[DbValueStyle = "verbatim"]
+pub enum Height {
+    Short,
+    Medium,
+    Tall,
+    VeryTall,
+}
+
+impl Height {
+    pub fn ordinal(self) -> i32 {
+        match self {
+            Self::Short => 1,
+            Self::Medium => 2,
+            Self::Tall => 3,
+            Self::VeryTall => 4,
+        }
+    }
+}
+
+impl std::fmt::Display for Height {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Short => "Short",
+            Self::Medium => "Medium",
+            Self::Tall => "Tall",
+            Self::VeryTall => "VeryTall",
+        })
+    }
+}
+
 /// Strength of a rower's side preference. 0 is a hard lock — they can
 /// only row their preferred side. 1..=5 is a soft preference scaling
 /// the S4 wrong-side objective penalty: higher strength = bigger

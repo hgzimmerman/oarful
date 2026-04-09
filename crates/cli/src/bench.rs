@@ -13,7 +13,7 @@ use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::boat::{types::WeightClass as BoatWeightClass, Boat};
 use lineup_db::boat::types::BoatId;
 use lineup_db::rower::{
-    types::{RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
+    types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
     Rower,
 };
 use lineup_db::snapshot::DbSnapshot;
@@ -240,6 +240,12 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
         Strength::Strong,
         Strength::VeryStrong,
     ];
+    let height_cycle = [
+        Height::Short,
+        Height::Medium,
+        Height::Tall,
+        Height::VeryTall,
+    ];
 
     (1..=n as i32)
         .map(|i| Rower {
@@ -249,6 +255,7 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
             weight_class: weight_cycle[(i as usize - 1) % weight_cycle.len()],
             skill: skill_cycle[(i as usize - 1) % skill_cycle.len()],
             strength: strength_cycle[(i as usize - 1) % strength_cycle.len()],
+            height: height_cycle[(i as usize - 1) % height_cycle.len()],
             side: side_cycle[(i as usize - 1) % side_cycle.len()],
             side_strength: SideStrength::default(),
             can_scull: IntBool::FALSE,

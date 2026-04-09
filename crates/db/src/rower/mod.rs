@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::{RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength};
+use types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength};
 
 use crate::types::IntBool;
 
@@ -30,6 +30,9 @@ pub struct Rower {
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
+    /// Coarse height bucket, used by the S10 pair-height-balance soft
+    /// constraint. Defaults to `Medium` for new/imported rowers.
+    pub height: Height,
     pub side: Side,
     /// Side preference strength. `SideStrength::HARD` (= 0) means the
     /// rower is side-locked; 1..=5 are soft scales for the S4 penalty.
@@ -54,6 +57,7 @@ pub struct NewRower {
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
+    pub height: Height,
     pub side: Side,
     pub side_strength: SideStrength,
     pub can_scull: IntBool,
@@ -79,6 +83,7 @@ impl NewRower {
         weight_class: RowerWeightClass,
         skill: Skill,
         strength: Strength,
+        height: Height,
         side: Side,
     ) -> Self {
         let now = chrono::Utc::now().naive_utc();
@@ -88,6 +93,7 @@ impl NewRower {
             weight_class,
             skill,
             strength,
+            height,
             side,
             side_strength: SideStrength::default(),
             can_scull: IntBool::FALSE,
@@ -118,6 +124,7 @@ impl NewRower {
             weight_class: RowerWeightClass::Medium,
             skill: Skill::Intermediate,
             strength: Strength::Intermediate,
+            height: Height::Medium,
             side,
             side_strength: SideStrength::default(),
             can_scull: IntBool::new(can_scull),

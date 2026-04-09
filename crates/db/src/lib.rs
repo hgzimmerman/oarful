@@ -30,6 +30,6 @@ pub mod sql_types {
     pub use super::availability::types::AvailabilityStatusMapping;
     pub use super::boat::types::WeightClassMapping;
     pub use super::rower::types::{
-        RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
+        HeightMapping, RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
     };
 }

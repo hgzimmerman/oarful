@@ -11,6 +11,7 @@ diesel::table! {
         weight_class -> RowerWeightClassMapping,
         skill -> SkillMapping,
         strength -> StrengthMapping,
+        height -> HeightMapping,
         side -> SideMapping,
         side_strength -> Integer,
         can_scull -> Integer,

@@ -7,7 +7,7 @@ use crate::boat::types::WeightClass as BoatWeightClass;
 use crate::boat::{Boat, NewBoat};
 use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
-use crate::rower::types::{RowerWeightClass, Side, Skill, Strength};
+use crate::rower::types::{Height, RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
 use crate::seat_affinity::{NewSeatAffinity, SeatAffinity};
 use crate::types::{AffinityWeight, IntBool};
@@ -156,44 +156,46 @@ fn toy_boats() -> Vec<NewBoat> {
 fn toy_rowers() -> Vec<NewRower> {
     // `Intermediate` exists on both Skill and Strength, so we avoid glob
     // imports and reference each enum explicitly.
+    use Height as H;
     use RowerWeightClass::{Heavy, Light, Medium};
     use Side::{Either, Port, Starboard};
     use Skill as Sk;
     use Strength as St;
     vec![
-        NewRower::sweep("Alice", Medium, Sk::Expert, St::Strong, Port),
-        NewRower::sweep("Bob", Heavy, Sk::Master, St::VeryStrong, Starboard),
-        NewRower::sweep("Carla", Light, Sk::Intermediate, St::Intermediate, Port),
-        NewRower::sweep("Diego", Medium, Sk::Master, St::Strong, Starboard),
-        NewRower::sweep("Erin", Medium, Sk::Expert, St::Strong, Either),
-        NewRower::sweep("Finn", Heavy, Sk::Intermediate, St::Strong, Port),
-        NewRower::sweep("Grace", Light, Sk::Expert, St::Intermediate, Starboard),
-        NewRower::sweep("Hana", Medium, Sk::Master, St::VeryStrong, Port),
+        NewRower::sweep("Alice", Medium, Sk::Expert, St::Strong, H::Tall, Port),
+        NewRower::sweep("Bob", Heavy, Sk::Master, St::VeryStrong, H::VeryTall, Starboard),
+        NewRower::sweep("Carla", Light, Sk::Intermediate, St::Intermediate, H::Short, Port),
+        NewRower::sweep("Diego", Medium, Sk::Master, St::Strong, H::Tall, Starboard),
+        NewRower::sweep("Erin", Medium, Sk::Expert, St::Strong, H::Medium, Either),
+        NewRower::sweep("Finn", Heavy, Sk::Intermediate, St::Strong, H::VeryTall, Port),
+        NewRower::sweep("Grace", Light, Sk::Expert, St::Intermediate, H::Short, Starboard),
+        NewRower::sweep("Hana", Medium, Sk::Master, St::VeryStrong, H::Tall, Port),
         {
             // Ivan is a brand-new novice and hasn't learned to cox
             // yet — the realistic case where `can_cox = false` makes
             // sense. Most other rowers default to can_cox = true.
-            let mut r = NewRower::sweep("Ivan", Heavy, Sk::Novice, St::Weak, Starboard);
+            let mut r = NewRower::sweep("Ivan", Heavy, Sk::Novice, St::Weak, H::Tall, Starboard);
             r.can_cox = IntBool::FALSE;
             r
         },
-        NewRower::sweep("Juno", Medium, Sk::Intermediate, St::Intermediate, Either),
-        NewRower::sweep("Kai", Light, Sk::Master, St::Strong, Port),
+        NewRower::sweep("Juno", Medium, Sk::Intermediate, St::Intermediate, H::Medium, Either),
+        NewRower::sweep("Kai", Light, Sk::Master, St::Strong, H::Medium, Port),
         {
             // Lena is the designated cox — she's Light, Expert, and
             // Weak which makes her a natural fit for seat 0 rather
             // than a rowing seat. `can_cox` is already true by
             // default; we only need to flip the designated flag.
-            let mut r = NewRower::sweep("Lena", Light, Sk::Expert, St::Weak, Either);
+            let mut r = NewRower::sweep("Lena", Light, Sk::Expert, St::Weak, H::Short, Either);
             r.is_designated_cox = IntBool::TRUE;
             r
         },
         // Mika rows most of the time but picks up cox duty when Lena
         // is out. `can_cox = true` is the default; nothing to flip.
-        NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, Starboard),
+        NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, H::Medium, Starboard),
         {
             // Nico can be pushed to the scullers as overflow.
-            let mut r = NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, Either);
+            let mut r =
+                NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, H::Tall, Either);
             r.can_scull = IntBool::TRUE;
             r
         },

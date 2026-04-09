@@ -20,6 +20,9 @@ CREATE TABLE rower (
     weight_class TEXT CHECK( weight_class IN ('Light','Medium','Heavy') ) NOT NULL,
     skill TEXT CHECK( skill IN ('Novice','Intermediate','Master','Expert') ) NOT NULL,
     strength TEXT CHECK( strength IN ('Weak','Intermediate','Strong','VeryStrong') ) NOT NULL,
+    -- Coarse height bucket. Used by S10 (pair-height balance) as a soft
+    -- "don't mix very-short with very-tall in a pair" objective.
+    height TEXT CHECK( height IN ('Short','Medium','Tall','VeryTall') ) NOT NULL DEFAULT 'Medium',
     side TEXT CHECK( side IN ('Port','Starboard','Either') ) NOT NULL DEFAULT 'Either',
     -- 0 = hard side-lock (cannot row the opposite side at all);
     -- 1..5 = soft preference, scales the S4 wrong-side penalty.
