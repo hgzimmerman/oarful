@@ -365,3 +365,293 @@ fn parse_side(s: &str) -> Side {
 fn field<'a>(record: &'a csv::StringRecord, idx: usize) -> &'a str {
     record.get(idx).unwrap_or("").trim()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::prelude::*;
+    use lineup_db::availability::types::AvailabilityStatus;
+    use lineup_db::availability::Availability;
+    use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength};
+    use lineup_db::rower::{NewRower, Rower};
+    use lineup_db::schema::availability as availability_schema;
+    use lineup_db::test_support::in_memory_conn;
+    use lineup_db::types::IntBool;
+
+    /// Standard header the real GGRC sheet uses. Tests can prepend
+    /// rower rows and a trailing date column range on top of this.
+    const HEADER: &str = "Sweep/Scull,Last Name,First Name,Pronoun,Email,Can you Scull?,Side/Cox";
+
+    fn header_with_dates(dates: &[&str]) -> String {
+        format!("{HEADER},{}", dates.join(","))
+    }
+
+    /// Year used by every test so date parsing is stable.
+    const YEAR: i32 = 2026;
+
+    /// Fetch the rowers table ordered by id so assertions can rely
+    /// on insertion order.
+    fn all_rowers(conn: &mut SqliteConnection) -> Vec<Rower> {
+        use lineup_db::schema::rower::dsl::*;
+        rower.order(id.asc()).select(Rower::as_select()).load(conn).unwrap()
+    }
+
+    fn all_availabilities(conn: &mut SqliteConnection) -> Vec<Availability> {
+        availability_schema::table
+            .order((availability_schema::rower_id.asc(), availability_schema::date.asc()))
+            .select(Availability::as_select())
+            .load(conn)
+            .unwrap()
+    }
+
+    #[test]
+    fn happy_path_creates_rowers_and_availabilities() {
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending,Not Attending\n\
+             Sweep,Jones,Bob,he/him,bob@example.com,No,Starboard,Attending,Attending\n",
+            header_with_dates(&["4/11", "4/13"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 2);
+        assert_eq!(summary.rowers_created, 2);
+        assert_eq!(summary.rowers_updated, 0);
+        assert_eq!(summary.availabilities_upserted, 4);
+        assert_eq!(summary.sweep_rows, 2);
+        assert_eq!(summary.sculling_rows, 0);
+        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers.len(), 2);
+        assert_eq!(rowers[0].name, "Alice Smith");
+        assert_eq!(rowers[0].email.as_deref(), Some("alice@example.com"));
+        assert_eq!(rowers[0].side, Side::Port);
+        assert_eq!(rowers[1].name, "Bob Jones");
+        assert_eq!(rowers[1].side, Side::Starboard);
+
+        let avails = all_availabilities(&mut conn);
+        assert_eq!(avails.len(), 4);
+        // Alice 4/11 Attending, 4/13 Not Attending
+        assert_eq!(avails[0].status, AvailabilityStatus::Yes);
+        assert_eq!(avails[1].status, AvailabilityStatus::No);
+        // Bob both Attending
+        assert_eq!(avails[2].status, AvailabilityStatus::Yes);
+        assert_eq!(avails[3].status, AvailabilityStatus::Yes);
+    }
+
+    #[test]
+    fn prelude_row_above_header_is_skipped() {
+        // Real sheet has a week-grouping row above the actual header
+        // (`,,,,,,,Session 1 - Week 1,,,Session 1 - Week 2,...`).
+        // The parser scans for "Sweep/Scull" and treats whatever row
+        // matches as the header.
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            ",,,,,,,Session 1 - Week 1,Session 1 - Week 2\n\
+             {}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending,Attending\n",
+            header_with_dates(&["4/11", "4/13"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 1);
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 2);
+        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+    }
+
+    #[test]
+    fn sculling_row_maps_attending_to_scullingonly() {
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sculling,Scully,Nico,they/them,nico@example.com,Yes,Port,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 1);
+        assert_eq!(summary.sculling_rows, 1);
+        assert_eq!(summary.sweep_rows, 0);
+        assert_eq!(summary.rowers_created, 1);
+
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers.len(), 1);
+        // Scullers always get can_scull = true, even when "Can you
+        // Scull?" would have said No — the sheet's team column is
+        // authoritative on this.
+        assert_eq!(rowers[0].can_scull, IntBool::TRUE);
+
+        let avails = all_availabilities(&mut conn);
+        assert_eq!(avails.len(), 1);
+        assert_eq!(avails[0].status, AvailabilityStatus::ScullingOnly);
+    }
+
+    #[test]
+    fn row_with_no_email_is_skipped_with_warning() {
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,NoEmail,Ghost,they/them,,Yes,Port,Attending\n\
+             Sweep,Real,Alice,she/her,alice@example.com,Yes,Port,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 2);
+        assert_eq!(summary.rows_skipped_no_email, 1);
+        assert_eq!(summary.rowers_created, 1); // only Alice
+        assert_eq!(summary.availabilities_upserted, 1);
+        assert_eq!(summary.warnings.len(), 1);
+        assert!(summary.warnings[0].contains("no email"));
+    }
+
+    #[test]
+    fn unknown_status_cell_warns_but_keeps_going() {
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Maybe\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 0); // Maybe isn't upserted
+        assert_eq!(summary.warnings.len(), 1);
+        assert!(
+            summary.warnings[0].contains("Maybe"),
+            "warning should mention the unrecognised status: {:?}",
+            summary.warnings[0]
+        );
+    }
+
+    #[test]
+    fn empty_status_cell_is_silently_ignored() {
+        // "no response yet" — the parser should not upsert anything
+        // and should not produce a warning.
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,,Attending\n",
+            header_with_dates(&["4/11", "4/13"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 1);
+        assert!(summary.warnings.is_empty());
+    }
+
+    #[test]
+    fn promote_specificity_never_demotes_side() {
+        // Existing rower has Side::Starboard set by a coach. The
+        // sheet's Side/Cox value of "Both" (which parses to Either)
+        // must NOT overwrite the specific side.
+        let mut conn = in_memory_conn();
+
+        // Seed a rower with a specific side directly via the db layer.
+        let seeded = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "Alice Smith".into(),
+                email: Some("alice@example.com".into()),
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Expert,
+                strength: Strength::Strong,
+                height: lineup_db::rower::types::Height::Tall,
+                side: Side::Starboard,
+                side_strength: SideStrength::default(),
+                can_scull: IntBool::FALSE,
+                can_cox: IntBool::TRUE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: chrono::Utc::now().naive_utc(),
+                updated_at: chrono::Utc::now().naive_utc(),
+            },
+        )
+        .unwrap();
+        assert_eq!(seeded.side, Side::Starboard);
+
+        // Now re-import from a sheet that says "Both" for this rower.
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,No,Both,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        assert_eq!(summary.rowers_created, 0);
+
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers.len(), 1);
+        // The key assertion: Starboard survived the sync.
+        assert_eq!(rowers[0].side, Side::Starboard);
+    }
+
+    #[test]
+    fn malformed_date_header_fails_fast() {
+        // A header column that doesn't look like `M/D` should
+        // produce a hard error rather than silently dropping the
+        // column — the sheet format changed and the operator should
+        // know before running a bad import.
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n",
+            header_with_dates(&["not-a-date"]),
+        );
+
+        let err = sync_csv(&csv, YEAR, &mut conn).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not-a-date") || msg.contains("M/D"),
+            "error should mention the bad header: {msg}"
+        );
+    }
+
+    #[test]
+    fn missing_sweep_scull_header_is_an_error() {
+        // If the first column isn't "Sweep/Scull" anywhere in the
+        // file, we can't find the header row and should error.
+        let mut conn = in_memory_conn();
+        let csv = "Team,Last,First,Pronoun,Email,Scull,Side,4/11\n\
+                   Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n";
+
+        let err = sync_csv(csv, YEAR, &mut conn).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("header"),
+            "error should mention header row: {msg}"
+        );
+    }
+
+    #[test]
+    fn blank_rows_are_silently_skipped() {
+        let mut conn = in_memory_conn();
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n\
+             ,,,,,,,\n\
+             Sweep,Jones,Bob,he/him,bob@example.com,No,Starboard,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+
+        // The blank row is counted in rows_read but produces no
+        // warning, no rower, and no availability.
+        assert_eq!(summary.rows_read, 3);
+        assert_eq!(summary.rowers_created, 2);
+        assert_eq!(summary.availabilities_upserted, 2);
+        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+    }
+}
+
