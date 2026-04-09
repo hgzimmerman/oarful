@@ -39,8 +39,15 @@ use std::ops::ControlFlow;
 #[derive(Debug, Clone)]
 pub struct SolveRequest {
     pub date: NaiveDate,
-    /// Boats to field today. The solver requires every seat in these boats
-    /// to be filled. IDs must refer to entries in `snapshot.sweep_boats`.
+    /// Fleet the solver may *consider* fielding today. The solver chooses
+    /// which of these to actually use via per-boat `use[b]` binary
+    /// decision variables, driven by S8 (maximise rowers placed) and the
+    /// weight-class / skill trade-offs. IDs must refer to entries in
+    /// `snapshot.sweep_boats`. An empty list means "use every in-service
+    /// sweep boat as a candidate".
+    ///
+    /// Primitive coach-override semantics: to require a specific boat,
+    /// pass it alone; to forbid a boat, just don't include it.
     pub boats: Vec<BoatId>,
 }
 
@@ -61,71 +68,49 @@ pub enum SolveStatus {
 pub struct ProposedLineup {
     pub boat_id: BoatId,
     pub boat_name: String,
-    /// (seat_position, rower_id). `seat_position = 0` is the cox seat on
-    /// coxed boats; `1..=seat_count` are the rowing seats (bow → stroke).
+    /// Did the solver choose to field this boat today? Boats with
+    /// `used = false` have no seat assignments — they were candidates
+    /// the solver rejected as suboptimal.
+    pub used: bool,
+    /// (seat_position, rower_id). Empty when `used = false`.
+    /// `seat_position = 0` is the cox seat on coxed boats; `1..=seat_count`
+    /// are the rowing seats (bow → stroke).
     pub seats: Vec<(i32, RowerId)>,
 }
 
-/// Pick a reasonable set of boats to field today without human input. Used
-/// by the CLI for its demo `solve` command; real requests will come from
-/// the coach via the web UI in a later milestone.
-///
-/// We enumerate every subset of the available sweep fleet (cheap for a
-/// club-sized fleet) and pick the subset that
-///   1. has total seats ≤ `num_available_rowers`,
-///   2. maximises total seats filled,
-///   3. tie-breaks toward fielding *more* boats (more interesting for the
-///      solver to demonstrate, and usually what coaches prefer).
-pub fn greedy_fleet_selection(boats: &[Boat], num_available_rowers: usize) -> Vec<BoatId> {
-    let n = boats.len();
-    if n == 0 {
-        return vec![];
-    }
-    let mut best_total: i32 = 0;
-    let mut best_ids: Vec<BoatId> = vec![];
-    for mask in 1u32..(1u32 << n) {
-        let mut total = 0;
-        let mut ids = Vec::new();
-        for i in 0..n {
-            if (mask >> i) & 1 == 1 {
-                total += boat_seat_total(&boats[i]);
-                ids.push(boats[i].id);
-            }
-        }
-        if (total as usize) <= num_available_rowers
-            && (total > best_total
-                || (total == best_total && ids.len() > best_ids.len()))
-        {
-            best_total = total;
-            best_ids = ids;
-        }
-    }
-    best_ids
-}
+// The former `greedy_fleet_selection` helper was removed when boat
+// selection moved inside the Pumpkin model (see S8). Candidate boats
+// are now passed wholesale to `solve`, and the solver decides which to
+// field via `use[b]` decision variables balanced against S1/S5/S8.
 
 /// Find a feasible seat assignment for the requested boats. Hard constraints
 /// only; no objective function.
 #[tracing::instrument(level = "debug", skip_all, fields(date = %request.date, n_boats = request.boats.len()), err)]
 pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResult> {
-    if request.boats.is_empty() {
+    // Resolve candidate fleet. An empty `request.boats` means "consider
+    // every in-service sweep boat".
+    let boats: Vec<&Boat> = if request.boats.is_empty() {
+        snapshot.sweep_boats.iter().collect()
+    } else {
+        request
+            .boats
+            .iter()
+            .map(|bid| {
+                snapshot
+                    .sweep_boats
+                    .iter()
+                    .find(|b| b.id == *bid)
+                    .ok_or_else(|| anyhow!("boat {} not in snapshot sweep fleet", bid))
+            })
+            .collect::<Result<_>>()?
+    };
+
+    if boats.is_empty() {
         return Ok(SolveResult {
             status: SolveStatus::Satisfied,
             lineups: vec![],
         });
     }
-
-    // Resolve boat IDs → &Boat from the snapshot.
-    let boats: Vec<&Boat> = request
-        .boats
-        .iter()
-        .map(|bid| {
-            snapshot
-                .sweep_boats
-                .iter()
-                .find(|b| b.id == *bid)
-                .ok_or_else(|| anyhow!("boat {} not in snapshot sweep fleet", bid))
-        })
-        .collect::<Result<_>>()?;
 
     let available: Vec<&Rower> = snapshot.available_rowers().collect();
 
@@ -133,34 +118,36 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         bail!("no rowers are available for sweep seating on {}", request.date);
     }
 
-    let total_seats: i32 = boats.iter().map(|b| boat_seat_total(b)).sum();
-    if (available.len() as i32) < total_seats {
-        bail!(
-            "not enough available rowers ({}) to fill requested boats ({} seats)",
-            available.len(),
-            total_seats
-        );
-    }
-
-    let cox_capable = available.iter().filter(|r| r.can_cox.as_bool()).count();
-    let coxed_boats = boats.iter().filter(|b| b.has_cox.as_bool()).count();
-    if cox_capable < coxed_boats {
-        bail!(
-            "not enough cox-capable rowers ({}) for {} coxed boats",
-            cox_capable,
-            coxed_boats
-        );
-    }
-
     let mut solver = Solver::default();
     // x[(rower_idx, boat_idx, seat_position)] ∈ {0,1}
     let mut x: BTreeMap<(usize, usize, i32), DomainId> = BTreeMap::new();
 
+    // use[boat_idx] ∈ {0,1} — whether the solver chose to field this
+    // boat today. Drives boat selection (formerly a CLI-side greedy) and
+    // is referenced by the conditional weight-class wall and S5 slack
+    // equality so that unused boats don't generate phantom penalties.
+    let use_b: Vec<DomainId> = boats
+        .iter()
+        .map(|_| solver.new_bounded_integer(0, 1))
+        .collect();
+
     // Weighted objective terms. Each soft constraint appends one or more
     // pre-scaled `AffineView` terms here; at the end we link the objective
-    // variable to their sum. Replaces the earlier unit-coefficient
-    // `slack_vars: Vec<DomainId>` pattern and enables per-term weighting.
+    // variable to their sum.
     let mut obj_terms: Vec<AffineView<DomainId>> = Vec::new();
+
+    // S8: reward fielding each boat by its total seat count (rowers + cox).
+    //
+    // Because H1 is all-or-nothing per boat (use[b]=1 implies every seat
+    // filled), rewarding "rowers placed" and rewarding "seat_total *
+    // use[b]" are equivalent. The per-boat form pushes only N terms into
+    // the objective-link equality, vs. one term per x variable (which
+    // was ~100+ for our fixture and dramatically slowed Pumpkin's
+    // propagation through the huge linear objective constraint).
+    for (b_idx, boat) in boats.iter().enumerate() {
+        let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+        obj_terms.push(use_b[b_idx].scaled(-seats_total));
+    }
 
     // --- Variables ---
     // A variable x[(r,b,s)] ∈ {0,1} is created only when rower r is eligible
@@ -193,22 +180,44 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         }
     }
 
-    // --- Hard constraint 1: each seat is filled by exactly one rower. ---
+    // --- Hard constraint 1: seat fill conditional on `use[b]`. ---
+    //
+    // For each (boat, seat):   Σ_r x[r,b,s] = use[b]
+    //
+    // If the solver picks the boat (use[b] = 1) every seat is filled
+    // exactly once; if not (use[b] = 0) every seat is empty. There is no
+    // partial-fill: a boat is all-in or all-out. This is what lets
+    // boat selection move inside the model — the solver decides use[b]
+    // based on the objective balance.
     for (b_idx, boat) in boats.iter().enumerate() {
         for seat in seat_positions(boat) {
-            let terms: Vec<DomainId> = (0..available.len())
-                .filter_map(|r_idx| x.get(&(r_idx, b_idx, seat)).copied())
+            let mut terms: Vec<AffineView<DomainId>> = (0..available.len())
+                .filter_map(|r_idx| x.get(&(r_idx, b_idx, seat)).map(|v| v.scaled(1)))
                 .collect();
             if terms.is_empty() {
-                bail!(
-                    "no eligible rower for seat {} of boat {}",
+                // If no rower is eligible for this seat at all, the boat
+                // can never be used. Force use[b] = 0.
+                let tag = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::equals(
+                        vec![use_b[b_idx].scaled(1)],
+                        0,
+                        tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("posting boat-unusable constraint: {e:?}"))?;
+                tracing::debug!(
+                    boat = %boat.name,
                     seat,
-                    boat.name
+                    "no eligible rower for seat; forcing boat unused"
                 );
+                break;
             }
+            // Σ x - use[b] = 0
+            terms.push(use_b[b_idx].scaled(-1));
             let tag = solver.new_constraint_tag();
             solver
-                .add_constraint(pumpkin_constraints::equals(terms, 1, tag))
+                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
                 .post()
                 .map_err(|e| anyhow!("posting seat-fill constraint: {e:?}"))?;
         }
@@ -230,25 +239,25 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .map_err(|e| anyhow!("posting rower-at-most-one constraint: {e:?}"))?;
     }
 
-    // --- H5 + S5: weight-class hard wall + soft target per boat ---
+    // --- H5 + S5: weight-class hard wall (upper only) + soft target ---
     //
-    // The boat's weight class describes the rowers it's rigged for. A
-    // badly-matched crew makes the boat sit wrong in the water: too light
-    // and the hull rides high and becomes unstable in any chop; too heavy
-    // and it sits low and drags.
+    // We keep an UNCONDITIONAL upper bound on the ordinal sum — sum ≤
+    // target_sum + N — which is trivially satisfied when the boat is
+    // unused (sum = 0). No conditioning needed, no big-M. The upper
+    // bound catches "Light-rigged boat full of Heavies" outright.
     //
-    // Encoding (see crates/solver/README.md §S5):
-    //   1. A HARD WALL at `target_sum ± n_rowing` — prevents obviously-wrong
-    //      crews (a full class of drift on average) without pushing the
-    //      problem to the edge of infeasibility.
-    //   2. A SOFT TARGET via slack variables: per boat,
-    //           sum(ordinal * x) - over[b] + under[b] = target_sum
-    //      where over[b], under[b] ≥ 0. At optimum only one is nonzero and
-    //      together they equal `|sum - target_sum|`. Both are summed into
-    //      the objective via `obj_terms` and minimised below.
+    // The LOWER bound ("not too light") is intentionally dropped as a
+    // hard rule. The former big-M-conditioned constraint
+    // (sum ≥ (target - N) * use[b]) caused dramatic propagation slowdown
+    // in Pumpkin — big-M formulations weaken CP propagation and blew
+    // solve time from milliseconds to tens of seconds. S5's soft slack
+    // penalty is sufficient to discourage too-light crews: fielding a
+    // Heavy boat with Lights costs a large `under` slack which almost
+    // always exceeds the S8 placement reward.
     //
-    // The wall is two linear inequalities with positive / negated
-    // coefficients. The slack equality is one linear equality per boat.
+    // S5 SOFT TARGET (conditional on use[b]):
+    //   sum(ordinal*x) - over[b] + under[b] = target_sum * use[b]
+    // At optimum, over = under = 0 when use[b] = 0.
     for (b_idx, boat) in boats.iter().enumerate() {
         let n_rowing = boat.seat_count;
         if n_rowing == 0 {
@@ -256,9 +265,8 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         }
         let target = boat_target_weight_ordinal(boat.weight_class);
         let target_sum = target * n_rowing;
-        let wall = n_rowing; // ±n_rowing ≈ one class of average drift
+        let wall = n_rowing;
 
-        // Rowing-seat variables for this boat, scaled by rower ordinal.
         let positive_terms: Vec<_> = x
             .iter()
             .filter_map(|(&(r_idx, b, seat), &var)| {
@@ -272,7 +280,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue;
         }
 
-        // --- Hard wall: sum ≤ target_sum + wall ---
+        // Hard wall UPPER (unconditional).
         let tag_hi = solver.new_constraint_tag();
         solver
             .add_constraint(pumpkin_constraints::less_than_or_equals(
@@ -283,40 +291,18 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .post()
             .map_err(|e| anyhow!("weight-class hard wall (upper): {e:?}"))?;
 
-        let negative_terms: Vec<_> = x
-            .iter()
-            .filter_map(|(&(r_idx, b, seat), &var)| {
-                if b != b_idx || seat == 0 {
-                    return None;
-                }
-                Some(var.scaled(-available[r_idx].weight_class.ordinal()))
-            })
-            .collect();
-
-        let tag_lo = solver.new_constraint_tag();
-        solver
-            .add_constraint(pumpkin_constraints::less_than_or_equals(
-                negative_terms,
-                -(target_sum - wall),
-                tag_lo,
-            ))
-            .post()
-            .map_err(|e| anyhow!("weight-class hard wall (lower): {e:?}"))?;
-
-        // --- Soft target slack variables ---
-        // Worst case: sum hits the wall → |sum - target_sum| = wall = N.
-        // 3*N gives us generous headroom for search to breathe.
+        // S5 slack: sum(ordinal*x) - over + under - target_sum*use[b] = 0
         let slack_upper = 3 * n_rowing;
         let over = solver.new_bounded_integer(0, slack_upper);
         let under = solver.new_bounded_integer(0, slack_upper);
 
-        // sum(ordinal * x) - over + under = target_sum
         let mut eq_terms: Vec<_> = positive_terms.clone();
         eq_terms.push(over.scaled(-1));
         eq_terms.push(under.scaled(1));
+        eq_terms.push(use_b[b_idx].scaled(-target_sum));
         let tag_eq = solver.new_constraint_tag();
         solver
-            .add_constraint(pumpkin_constraints::equals(eq_terms, target_sum, tag_eq))
+            .add_constraint(pumpkin_constraints::equals(eq_terms, 0, tag_eq))
             .post()
             .map_err(|e| anyhow!("weight-class slack equality: {e:?}"))?;
 
@@ -352,7 +338,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
         let mut seat_skill_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
         for seat in 1..=n_rowing {
-            let s_var = solver.new_bounded_integer(1, 4);
+            let s_var = solver.new_bounded_integer(0, 4);
             let mut terms: Vec<_> = Vec::new();
             for (r_idx, rower) in available.iter().enumerate() {
                 if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
@@ -375,8 +361,8 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue; // single-seat (or empty) boat — no meaningful spread
         }
 
-        let boat_max = solver.new_bounded_integer(1, 4);
-        let boat_min = solver.new_bounded_integer(1, 4);
+        let boat_max = solver.new_bounded_integer(0, 4);
+        let boat_min = solver.new_bounded_integer(0, 4);
 
         let tag_max = solver.new_constraint_tag();
         solver
@@ -591,7 +577,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         // Per-seat strength auxiliary variables, indexed by `seat - 1`.
         let mut seat_strength_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
         for seat in 1..=n_rowing {
-            let s_var = solver.new_bounded_integer(1, 4);
+            let s_var = solver.new_bounded_integer(0, 4);
             let mut terms: Vec<_> = Vec::new();
             for (r_idx, rower) in available.iter().enumerate() {
                 if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
@@ -618,8 +604,8 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             let lo_var = seat_strength_vars[(s_lo - 1) as usize];
             let hi_var = seat_strength_vars[(s_hi - 1) as usize];
 
-            let pair_max = solver.new_bounded_integer(1, 4);
-            let pair_min = solver.new_bounded_integer(1, 4);
+            let pair_max = solver.new_bounded_integer(0, 4);
+            let pair_min = solver.new_bounded_integer(0, 4);
 
             let tag = solver.new_constraint_tag();
             solver
@@ -694,16 +680,18 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
             // Both branches return a concrete `Solution` rather than a
             // reference, so we can decode without borrow gymnastics.
-            let lineups =
-                decode_solution(&x, &boats, &available, |v| sol.get_integer_value(v));
+            let lineups = decode_solution(&x, &use_b, &boats, &available, |v| {
+                sol.get_integer_value(v)
+            });
             SolveResult {
                 status: SolveStatus::Satisfied,
                 lineups,
             }
         }
         OptimisationResult::Stopped(sol, _) => {
-            let lineups =
-                decode_solution(&x, &boats, &available, |v| sol.get_integer_value(v));
+            let lineups = decode_solution(&x, &use_b, &boats, &available, |v| {
+                sol.get_integer_value(v)
+            });
             SolveResult {
                 status: SolveStatus::Satisfied,
                 lineups,
@@ -752,10 +740,6 @@ fn seat_positions(boat: &Boat) -> Vec<i32> {
         seats.push(s);
     }
     seats
-}
-
-fn boat_seat_total(boat: &Boat) -> i32 {
-    boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 }
 }
 
 /// Solver target ordinal for a boat weight class. Matches
@@ -819,6 +803,7 @@ fn wrong_side_penalty(rower: &Rower, boat: &Boat, seat: i32) -> i32 {
 
 fn decode_solution(
     x: &BTreeMap<(usize, usize, i32), DomainId>,
+    use_b: &[DomainId],
     boats: &[&Boat],
     available: &[&Rower],
     mut value_of: impl FnMut(DomainId) -> i32,
@@ -834,6 +819,7 @@ fn decode_solution(
         .iter()
         .enumerate()
         .map(|(b_idx, boat)| {
+            let used = value_of(use_b[b_idx]) == 1;
             let mut seats: Vec<(i32, RowerId)> = by_boat
                 .get(&b_idx)
                 .map(|rows| {
@@ -846,6 +832,7 @@ fn decode_solution(
             ProposedLineup {
                 boat_id: boat.id,
                 boat_name: boat.name.clone(),
+                used,
                 seats,
             }
         })

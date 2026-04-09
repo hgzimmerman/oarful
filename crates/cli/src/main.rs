@@ -9,7 +9,7 @@
 use anyhow::Result;
 use chrono::NaiveDate;
 use lineup_db::{fixture, snapshot::DbSnapshot, state::Db};
-use lineup_solver::{greedy_fleet_selection, solve, SolveRequest, SolveStatus};
+use lineup_solver::{solve, SolveRequest, SolveStatus};
 use tracing_subscriber::EnvFilter;
 
 const DEFAULT_DATE: (i32, u32, u32) = (2026, 4, 11);
@@ -62,34 +62,66 @@ async fn cmd_solve(db: &Db, date: NaiveDate) -> Result<()> {
         .await?;
 
     let num_available = snapshot.available_rowers().count();
-    let boat_ids = greedy_fleet_selection(&snapshot.sweep_boats, num_available);
 
     println!("=== Solving lineup for {date} ===");
     println!("  {num_available} rowers available for sweep");
-    println!("  greedy fleet selection → {} boat(s):", boat_ids.len());
-    for bid in &boat_ids {
-        if let Some(b) = snapshot.sweep_boats.iter().find(|b| b.id == *bid) {
-            println!(
-                "    #{} {} (seats={} cox={})",
-                b.id,
-                b.name,
-                b.seat_count,
-                b.has_cox.as_bool()
-            );
-        }
+    println!("  candidate fleet: {} boat(s)", snapshot.sweep_boats.len());
+    for b in &snapshot.sweep_boats {
+        println!(
+            "    #{} {} (seats={} cox={})",
+            b.id,
+            b.name,
+            b.seat_count,
+            b.has_cox.as_bool()
+        );
     }
     println!();
 
+    // Empty boat list = "consider every in-service sweep boat"; the
+    // solver now picks which to field via its own `use[b]` decision
+    // variables (see S8).
     let request = SolveRequest {
         date,
-        boats: boat_ids,
+        boats: vec![],
     };
+    let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;
+    let elapsed = started.elapsed();
 
     match result.status {
         SolveStatus::Satisfied => {
-            println!("--- Satisfied. Lineup(s): ---");
-            for lineup in &result.lineups {
+            let used: Vec<_> = result.lineups.iter().filter(|l| l.used).collect();
+            let skipped: Vec<_> = result.lineups.iter().filter(|l| !l.used).collect();
+            // `seats` includes the cox slot; subtract it for the "rowers
+            // placed" count so cox isn't double-counted with rowers.
+            let rowers_placed: usize = used
+                .iter()
+                .map(|l| l.seats.iter().filter(|(s, _)| *s != 0).count())
+                .sum();
+            let coxes_placed: usize = used
+                .iter()
+                .map(|l| l.seats.iter().filter(|(s, _)| *s == 0).count())
+                .sum();
+            let benched = num_available.saturating_sub(rowers_placed + coxes_placed);
+            println!(
+                "--- Solved in {:?}. Fielding {}/{} boats, {} rowers placed (+{} cox), {} on the dock. ---",
+                elapsed,
+                used.len(),
+                result.lineups.len(),
+                rowers_placed,
+                coxes_placed,
+                benched,
+            );
+
+            if !skipped.is_empty() {
+                print!("Skipped:");
+                for lineup in &skipped {
+                    print!(" {}", lineup.boat_name);
+                }
+                println!();
+            }
+
+            for lineup in &used {
                 println!("\nBoat #{} {}", lineup.boat_id, lineup.boat_name);
                 for (seat, rower_id) in &lineup.seats {
                     let rower = snapshot

@@ -92,29 +92,36 @@ of `side_strength` at the moment — the per-rower soft-preference path moves
 to the objective function in a later milestone (see "Planned soft
 constraints"). Also implemented via eligibility filtering.
 
-### H5. Weight-class hard wall per boat
+### H5. Weight-class hard wall per boat (upper bound only)
 The boat's weight class describes the rowers it's rigged for. A
 badly-matched crew makes the boat sit wrong in the water — too light and
 the hull rides high and becomes unstable; too heavy and it sits low and
-drags. We enforce a generous hard wall around the sum of rower
+drags. We enforce an UNCONDITIONAL upper bound on the sum of rower
 weight-class ordinals (`Light=1, Medium=2, Heavy=3`):
 
 ```
-target * N - N  ≤  Σ ordinal(rower) · x[r, b, s]  ≤  target * N + N
+Σ ordinal(rower) · x[r, b, s]  ≤  target * N + N
 
 where N      = boat.seat_count (cox excluded)
       target = boat_target_weight_ordinal(boat.weight_class)
 ```
 
 - Cox is excluded from the sum — weight class is about the rowers.
-- `Tubby` boats clamp to target `3` (= Heavy). We don't have a Tubby rower
-  bucket, so Tubby acts as "at least as heavy as Heavy".
-- The wall is `±N` — one full class of average drift. Loose enough that
-  feasibility isn't brittle, tight enough to reject e.g. a Heavy-rigged
-  eight full of Lights.
-- The wall is encoded as two `less_than_or_equals` calls, one with
-  positive coefficients (upper bound) and one with negated coefficients
-  (lower bound).
+- `Tubby` boats clamp to target `3` (= Heavy). We don't have a Tubby
+  rower bucket, so Tubby acts as "at least as heavy as Heavy".
+- The wall is `+N` — one full class of average drift over-target.
+- The upper bound is unconditional (no dependence on `use[b]`): when
+  the boat is unused, sum = 0 which is trivially ≤ anything positive.
+
+**The corresponding *lower* bound is intentionally absent.** A
+conditional lower bound (active only when `use[b] = 1`) would need a
+big-M formulation, and big-M dramatically weakens CP propagation —
+during development it blew solve time from milliseconds to 78 seconds.
+Preventing too-light crews is instead delegated to the S5 soft slack
+penalty, which applies strictly positive cost per unit of underweight
+and is almost always enough to keep the solver from fielding an
+all-Light crew in a Heavy boat (the slack cost per unit exceeds any
+offsetting S8 placement reward).
 
 The preference for hitting the exact target lives in the objective
 function as a slack-variable penalty — see S5 below.
@@ -138,7 +145,7 @@ of 1.
 | S5   | **enabled**  | weight-class soft target via slack variables |
 | S6   | planned      | cox cooldown |
 | S7   | planned      | novelty vs recent lineups |
-| S8   | planned      | maximise rowers placed |
+| S8   | **enabled**  | maximise rowers placed (per-boat seat reward + `use[b]`) |
 | S9   | **enabled**  | pair strength balance (universal, not data-driven) |
 
 ### S1. Skill variance within a boat — **enabled**
@@ -268,10 +275,54 @@ seat)` triple that has appeared in the recent window, add a small
 penalty when the solver places the same rower in the same seat of the
 same boat. Prevents "every Tuesday is the same crew" drift.
 
-### S8. Maximise rowers placed
-Soft bias toward fielding more boats / leaving fewer rowers on the dock.
-Counterbalances weight-class and skill penalties when they'd otherwise
-prefer a smaller-but-tighter crew.
+### S8. Maximise rowers placed — **enabled**
+Soft bias toward fielding more boats / leaving fewer rowers on the
+dock. Counterbalances weight-class and skill penalties when they'd
+otherwise prefer a smaller-but-tighter crew.
+
+**This is also what enables boat selection inside the model.** Before
+S8 the CLI passed a fixed `boats: Vec<BoatId>` and H1 forced every seat
+in those boats filled — the solver had no choice over which boats to
+field. With S8, the solver owns a per-boat `use[b] ∈ {0,1}` decision
+variable that drives a modified H1:
+
+```
+for each (boat b, seat s):    Σ_r x[r,b,s] = use[b]
+```
+
+If the solver picks the boat (`use[b] = 1`), every seat is filled
+exactly once; if not, every seat is empty. Partial-fill is not
+supported yet — see "Adding more soft constraints > Partial fill" for
+the planned extension.
+
+**Encoding trick: per-boat reward, not per-rower.**
+Because H1 is all-or-nothing per boat, rewarding "K rowers placed in
+this boat" is equivalent to rewarding `use[b] * K`. The solver pushes
+one term per boat into `obj_terms`:
+
+```
+obj_terms.push(use[b].scaled(-(boat.seat_count + (1 if cox else 0))))
+```
+
+The naive alternative — `obj_terms.push(x[r,b,s].scaled(-1))` for
+every x variable — was tried first and made the objective-link
+equality a ~100-term monster that Pumpkin took ~78 seconds to solve.
+The compact per-boat form drops that to ~1 second and is
+mathematically identical given H1.
+
+**Boat selection is driven by objective balance.** A boat is fielded
+iff the S8 reward (`seats_total`) exceeds the sum of soft costs
+(weight-class slack, skill spread, pair strength diff, side penalty,
+etc.) of actually using it. In the current fixture, the 8+ Persephone
+has an S8 reward of 9 but paying for the weight-class mismatch (Heavy
+boat, mostly Medium crew) costs more than 9, so the solver correctly
+skips it in favour of the two 4-boats.
+
+**Coach pinning.** Passing a non-empty `SolveRequest.boats` filters
+the candidate fleet — only those boats get `use[b]` variables. This is
+a primitive coach override: "only consider these boats". Forcing a
+specific boat to be fielded (fixing `use[b] = 1`) is not yet exposed
+via the request API but is a one-line addition when needed.
 
 ### S9. Pair strength balance — **enabled**
 Within a single rowing pair (a 2-seat partition), the two rowers should
@@ -330,28 +381,51 @@ Things we deliberately don't model, even if someone asks:
 
 ## Adding more soft constraints
 
-The pipeline is in place; adding a new soft term is now a purely additive
-change:
+The pipeline is in place; adding a new soft term is now a purely
+additive change:
 
 1. Create whatever auxiliary decision / slack variables the term needs.
 2. Post linear constraints linking them to the existing `x[r,b,s]`
-   variables (e.g. "var = 1 iff both rowers of a pair are in the same
-   boat" via reified equality).
-3. Append the new variables to `slack_vars` (or to a separate weighted
-   term list if we start weighting). They'll automatically flow into the
-   objective via the `objective = Σ slack_vars` equality.
+   (or `use[b]`) variables — e.g. "var = 1 iff both rowers of a pair
+   are in the same partition" via reified AND.
+3. Append pre-scaled `AffineView<DomainId>` terms to `obj_terms`.
+   Positive coefficient = penalty (contributes to minimisation), negative
+   coefficient = reward.
 4. No changes to the solve call or result handling.
 
-Weights are still implicit (all 1). When we introduce per-term weighting,
-replace the flat `slack_vars: Vec<DomainId>` with a pair of `Vec`s —
-variables and their coefficients — and scale each term with
-`var.scaled(weight)` before summing into the objective.
+Per-term weights are carried inline via `.scaled(weight)`. When we
+introduce per-constraint tunable weights, they just get multiplied into
+the existing coefficient at push time.
 
-**Top-N alternatives** via tabu re-solve also lands naturally now:
-optimise once, record the solution, add a linear constraint that forces
-the placement of at least K rowers to differ from the recorded solution,
-re-solve. The `NoCallback` stub becomes a real callback that records
-every improving solution during search.
+**Performance note — keep `obj_terms` small.**
+Each term appended to `obj_terms` becomes a coefficient in the single
+linear equality that links the objective variable to the sum of terms.
+Pumpkin's linear propagator scales with that equality's term count, and
+*a few hundred terms is already enough to tank solve time from
+milliseconds to tens of seconds.* When adding a new soft constraint,
+prefer a single per-boat or per-pair term over per-x-variable terms
+whenever they're mathematically equivalent (see S8 for a worked
+example). If you find yourself pushing N × B × S terms, step back and
+see whether an aggregating auxiliary variable would give you the same
+objective value with O(B) terms.
+
+**Top-N alternatives** via tabu re-solve land naturally with the
+optimise pipeline: optimise once, record the solution, add a linear
+constraint that forces the placement of at least K rowers to differ
+from the recorded solution, re-solve. The `NoCallback` stub becomes a
+real callback that records every improving solution during search.
+
+**Partial-fill strategy (planned).**
+Some clubs prefer fielding an 8+ that's missing one seat (typically
+seat 3 or seat 4 — inside middle seats) rather than downsizing to a
+smaller boat and benching more rowers. The rough encoding would be:
+per boat, a designated set of "optional" seats that can be empty even
+when `use[b] = 1`, plus a per-empty-seat penalty in the objective.
+Configurable per boat class — "at most K middle seats missing for an
+8+", typically K=0, sometimes K=1, rarely K=2. Deferred because it
+interacts with H1, S9 pair-strength balance (missing one seat of a
+pair breaks the pair cleanly — easier than breaking both), and the
+coach UI needs a way to surface the trade-off.
 
 ## Why Pumpkin?
 
