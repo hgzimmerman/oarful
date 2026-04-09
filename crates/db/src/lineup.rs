@@ -15,28 +15,69 @@
 //!   needs to detect repeated placements.
 
 use crate::boat::types::BoatId;
+use crate::practice::PracticeId;
 use crate::rower::types::RowerId;
 use crate::schema::{boat, lineup, lineup_seat, practice};
 use crate::types::IntBool;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
+use serde::{Deserialize, Serialize};
+
+/// Newtyped identifier for a `lineup` row. Matches the `BoatId` /
+/// `RowerId` / `PracticeId` pattern.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct LineupId(i32);
+
+impl LineupId {
+    pub fn new(id: i32) -> Self {
+        Self(id)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for LineupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for LineupId {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
 
 #[derive(
     Debug,
     Clone,
     PartialEq,
     Eq,
-    serde::Serialize,
-    serde::Deserialize,
+    Serialize,
+    Deserialize,
     diesel::Queryable,
     diesel::Selectable,
     diesel::Identifiable,
 )]
 #[diesel(table_name = crate::schema::lineup)]
 pub struct Lineup {
-    pub id: i32,
-    pub practice_id: i32,
+    pub id: LineupId,
+    pub practice_id: PracticeId,
     pub boat_id: BoatId,
     pub created_at: chrono::NaiveDateTime,
 }
@@ -44,7 +85,7 @@ pub struct Lineup {
 #[derive(Debug, Clone, diesel::Insertable)]
 #[diesel(table_name = crate::schema::lineup)]
 pub struct NewLineup {
-    pub practice_id: i32,
+    pub practice_id: PracticeId,
     pub boat_id: BoatId,
     pub created_at: chrono::NaiveDateTime,
 }
@@ -54,14 +95,14 @@ pub struct NewLineup {
     Clone,
     PartialEq,
     Eq,
-    serde::Serialize,
-    serde::Deserialize,
+    Serialize,
+    Deserialize,
     diesel::Queryable,
     diesel::Selectable,
 )]
 #[diesel(table_name = crate::schema::lineup_seat)]
 pub struct LineupSeatRow {
-    pub lineup_id: i32,
+    pub lineup_id: LineupId,
     pub seat_position: i32,
     pub rower_id: RowerId,
     pub is_cox: IntBool,
@@ -70,7 +111,7 @@ pub struct LineupSeatRow {
 #[derive(Debug, Clone, diesel::Insertable)]
 #[diesel(table_name = crate::schema::lineup_seat)]
 pub struct NewLineupSeat {
-    pub lineup_id: i32,
+    pub lineup_id: LineupId,
     pub seat_position: i32,
     pub rower_id: RowerId,
     pub is_cox: IntBool,
@@ -117,7 +158,7 @@ impl Lineup {
     #[tracing::instrument(level = "debug", skip(conn, seats), err)]
     pub fn commit_for_boat(
         conn: &mut SqliteConnection,
-        practice_id: i32,
+        practice_id: PracticeId,
         boat_id: BoatId,
         seats: &[CommitSeat],
     ) -> Result<Lineup, diesel::result::Error> {
@@ -165,7 +206,7 @@ impl Lineup {
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn for_practice(
         conn: &mut SqliteConnection,
-        practice_id: i32,
+        practice_id: PracticeId,
     ) -> Result<Vec<CommittedLineup>, diesel::result::Error> {
         let headers: Vec<Lineup> = lineup::table
             .filter(lineup::practice_id.eq(practice_id))
