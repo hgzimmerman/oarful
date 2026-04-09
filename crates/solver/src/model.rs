@@ -479,23 +479,27 @@ pub(crate) fn wrong_side_penalty(rower: &Rower, boat: &Boat, seat: i32) -> i32 {
 }
 
 /// Build a shared `(boat_idx, seat) -> seat_trait_var` map for a
-/// per-rower ordinal (skill, strength, height). For each required
-/// rowing seat of each boat, creates a `[0, 4]` aux var and posts
-/// the link equality
+/// per-rower ordinal (skill, strength, height). For each rowing
+/// seat of each boat, creates a `[0, 4]` aux var and posts the
+/// link equality
 ///
 ///   Σ_r ordinal(rower_r) · x[r, b, seat] − seat_trait[b, seat] = 0
 ///
 /// Because H1 guarantees the per-seat Σ_r x equals `use[b]`, the
 /// seat_trait variable equals the placed rower's ordinal when the
 /// seat is filled, and 0 when the boat is unused (the `[0, 4]`
-/// domain is deliberately loose to accommodate the unused-boat case,
-/// matching the per-block behaviour this helper replaced).
+/// domain is deliberately loose to accommodate the unused-boat case).
 ///
-/// Optional (partial-fill) seats are excluded — an empty seat would
-/// drive the trait var to 0 and pollute any downstream spread / diff
-/// calculation. Consumers that care about partial-fill-friendly
-/// per-partition logic must either work around the missing entries
-/// or accept "we don't score that partition".
+/// **Partial-fill interaction.** Under `PartialFillPolicy::Allowed`
+/// a boat's optional seats (currently just the 8+ inside bow pair
+/// `{3, 4}`) may be legally empty even when the boat is fielded,
+/// which would drive the seat_trait var to 0 and pollute downstream
+/// spread / pair-diff calculations in S1 / S9 / S10. To keep those
+/// consumers honest, we skip optional seats from the map **only when
+/// the partial-fill policy actually permits leaving them empty**.
+/// Under `Strict` (the default) every seat is required so we
+/// include optional seats too — and S9 pair (3, 4) / S12 engine
+/// room both get the trait vars they need.
 ///
 /// The caller is responsible for only calling this when at least
 /// one consuming soft constraint is enabled — empty traits are
@@ -505,9 +509,11 @@ pub(crate) fn build_seat_trait_map(
     boats: &[&Boat],
     available: &[&Rower],
     x: &BTreeMap<(usize, usize, i32), DomainId>,
+    partial_fill: crate::PartialFillPolicy,
     ordinal: impl Fn(&Rower) -> i32,
     label: &'static str,
 ) -> Result<BTreeMap<(usize, i32), DomainId>> {
+    let skip_optional = partial_fill.max_empty() > 0;
     let mut map: BTreeMap<(usize, i32), DomainId> = BTreeMap::new();
     for (b_idx, boat) in boats.iter().enumerate() {
         let n_rowing = boat.seat_count;
@@ -516,7 +522,7 @@ pub(crate) fn build_seat_trait_map(
         }
         let opt_seats = optional_seats(boat);
         for seat in 1..=n_rowing {
-            if opt_seats.contains(&seat) {
+            if skip_optional && opt_seats.contains(&seat) {
                 continue;
             }
             // Domain [0, 4] (not [1, 4]) so the seat_trait can equal 0

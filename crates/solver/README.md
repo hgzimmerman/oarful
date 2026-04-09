@@ -586,10 +586,13 @@ Encoding mirrors S9 with a `Height` ordinal instead of `Strength`:
 `Height::ordinal()` starts at **1** (Short=1 .. VeryTall=4), same
 zero-coefficient-avoidance reason as Skill/Strength.
 
-**Interaction with partial-fill.** Optional seats are excluded from
-the shared `seat_height_by_seat` map by `build_seat_trait_map`, so
-the (3,4) partition of a partial-fill 8+ falls through to the `None`
-arm of the lookup and is silently skipped — same behaviour as S9.
+**Interaction with partial-fill.** Optional seats are included in
+the shared `seat_height_by_seat` map under `Strict` partial-fill
+(where they're guaranteed filled) and excluded under `Allowed`
+(where an empty seat would drive the trait var to 0 and poison the
+pair diff). Under `Allowed`, the (3,4) partition of a partial-fill
+8+ falls through to the `None` arm of the lookup and is silently
+skipped — same behaviour as S9.
 
 ### S11. End-pair skill reward — **enabled** *(8-boats only)*
 In an eight, seats 1/2 are the bow pair and seats 7/8 are the stern
@@ -737,13 +740,27 @@ be filled:
 Σ_{s ∈ opt_seats, r} x[r,b,s]  ≥  (n_opt − k) · use[b]
 ```
 
-**Interaction with S1 / S9.** Optional seats are excluded from the
-S1 skill variance and S9 pair strength aggregations:
-- S1 creates `seat_skill` vars only for required seats, so an empty
-  optional seat can't pollute the max/min (a boat of 7 Experts + 1
-  empty seat would otherwise report spread = 4, nonsense).
-- S9 skips any partition that contains an optional seat — for the 8+
-  that's partition (3,4), which is exactly the partial-fill target.
+**Interaction with the shared seat-trait maps.** The shared
+`seat_{skill,strength,height}_by_seat` maps that feed S1 / S9 /
+S9b / S10 / S11 / S12 are built with a **policy-aware skip rule**:
+- Under `Strict` partial-fill, every seat is required so optional
+  seats are *included* — S9 pair strength diff, S10 pair height
+  diff, and S12 engine-room strength all correctly see partition
+  (3, 4) of an 8+.
+- Under `Allowed(k)`, optional seats are *excluded* from the maps
+  because an empty seat would drive the trait var to 0 and pollute
+  any max / min / spread / diff calculation downstream. This means
+  S9's partition (3,4) is silently skipped, S10's too, and S12
+  loses the seat-3 and seat-4 engine-room rewards.
+
+S11 end-pair skill is unaffected either way — end-pair seats
+`{1, 2, 7, 8}` never overlap the optional set.
+
+Prior to the policy-aware rule, optional seats were *always*
+excluded from the shared maps, which meant under `Strict` the
+pair-(3,4) balance constraints were silently dormant on every 8+.
+The unit tests in `crates/solver/tests/constraints.rs` caught the
+bug via an isolated S12 test.
 
 **CLI.** `cargo run -p lineup_cli -- solve --partial N [date]`
 switches the policy to `Allowed(N)`. `--partial 0` is equivalent to

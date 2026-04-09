@@ -372,7 +372,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // maps for any trait whose consumer constraints are enabled,
     // then post the per-boat / per-partition / per-end-pair soft
     // terms that read them. All of this lives in `soft_seats.rs`.
-    m.build_seat_trait_maps()?;
+    m.build_seat_trait_maps(request.partial_fill)?;
 
     m.post_s1_skill_variance()?;
     m.post_s2_pair_affinities(snapshot)?;

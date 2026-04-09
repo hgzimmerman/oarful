@@ -20,23 +20,36 @@ use lineup_db::snapshot::DbSnapshot;
 use pumpkin_core::variables::{DomainId, TransformableVariable};
 
 use crate::model::{build_seat_trait_map, ModelBuilder};
+use crate::PartialFillPolicy;
 
 impl<'a> ModelBuilder<'a> {
     /// Build the shared `seat_skill_by_seat`, `seat_strength_by_seat`,
     /// and `seat_height_by_seat` maps — but only for the traits
     /// whose consumer soft constraints are enabled in `cfg`.
     ///
-    /// Gating avoids allocating aux vars + link equalities for trait
-    /// maps no downstream constraint will read. See
-    /// `build_seat_trait_map` in `model.rs` for the per-trait
+    /// `partial_fill` controls whether optional (partial-fill) seats
+    /// are included in the maps. Under `Strict` every seat is
+    /// required and optional seats are included, letting S9 pair
+    /// diffs and S12 engine-room rewards see partition (3, 4) of
+    /// an 8+. Under `Allowed`, optional seats are skipped so a
+    /// legitimately empty seat can't poison max/min/spread
+    /// calculations.
+    ///
+    /// Gating on config weights avoids allocating aux vars + link
+    /// equalities for trait maps no downstream constraint will read.
+    /// See `build_seat_trait_map` in `model.rs` for the per-trait
     /// construction details.
-    pub(crate) fn build_seat_trait_maps(&mut self) -> Result<()> {
+    pub(crate) fn build_seat_trait_maps(
+        &mut self,
+        partial_fill: PartialFillPolicy,
+    ) -> Result<()> {
         if self.cfg.skill_variance_weight != 0 || self.cfg.end_pair_skill_weight != 0 {
             self.seat_skill_by_seat = build_seat_trait_map(
                 &mut self.solver,
                 &self.boats,
                 &self.available,
                 &self.x,
+                partial_fill,
                 |r| r.skill.ordinal(),
                 "seat skill link",
             )?;
@@ -50,6 +63,7 @@ impl<'a> ModelBuilder<'a> {
                 &self.boats,
                 &self.available,
                 &self.x,
+                partial_fill,
                 |r| r.strength.ordinal(),
                 "seat strength link",
             )?;
@@ -61,6 +75,7 @@ impl<'a> ModelBuilder<'a> {
                 &self.boats,
                 &self.available,
                 &self.x,
+                partial_fill,
                 |r| r.height.ordinal(),
                 "seat height link",
             )?;
