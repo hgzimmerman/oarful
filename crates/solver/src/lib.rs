@@ -77,6 +77,96 @@ pub struct SolveRequest {
     /// `SolveStatus::Timeout` if the budget expires before optimality
     /// is proven.
     pub time_budget: Option<std::time::Duration>,
+    /// Per-constraint weights controlling how strongly each soft
+    /// constraint contributes to the objective. See [`SolverConfig`]
+    /// for details. Default values preserve the historical behaviour
+    /// (mostly 1, cox cooldown = 5).
+    pub config: SolverConfig,
+}
+
+/// Per-constraint weight multipliers controlling how strongly each
+/// soft constraint contributes to the objective function. Every
+/// soft constraint scales its per-unit penalty (or reward) by the
+/// corresponding field here before pushing the term into the
+/// minimisation objective.
+///
+/// **Zero disables.** Setting any weight to `0` skips the entire
+/// constraint block — no auxiliary variables created, no linking
+/// constraints posted, no obj_terms pushed. This is both the
+/// performance-friendly path (Pumpkin would panic on `.scaled(0)`
+/// anyway) and the semantic way to turn a constraint off for a
+/// particular solve.
+///
+/// **Negative values invert the constraint.** A negative
+/// `skill_variance_weight` would reward high skill spread, a
+/// negative `placement_reward_weight` would penalise fielding
+/// boats, etc. This is a footgun but occasionally useful for
+/// experiments — the type system doesn't forbid it, but stick to
+/// non-negative values for normal coach use.
+///
+/// **Constraints with per-entity weights** (S2 / S3 stored pair and
+/// seat affinity weights, S4 `side_strength`, S8 `seats_total`)
+/// multiply their per-entity weight by the global config
+/// multiplier. So `SolverConfig::pair_affinity_weight = 2` would
+/// double the effect of every stored `pair_affinity.weight`, not
+/// replace it.
+///
+/// **Future work.** A TOML config file loader that lets a coach
+/// tune these weights per-club without recompiling. Deferred until
+/// there's a concrete admin UI or CLI flag surface that calls for
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SolverConfig {
+    /// S1 skill variance penalty per unit of `max_skill - min_skill`
+    /// within a boat. Default **1**.
+    pub skill_variance_weight: i32,
+    /// S2 pair-affinity multiplier. Scales each stored
+    /// `pair_affinity.weight` when the pair appears in the same
+    /// 2-seat partition. Default **1** (use stored weight as-is).
+    pub pair_affinity_weight: i32,
+    /// S3 seat-affinity multiplier. Scales each stored
+    /// `rower_seat_affinity.weight`. Default **1**.
+    pub seat_affinity_weight: i32,
+    /// S4 side-preference multiplier. Scales each rower's
+    /// `side_strength` when they're placed on the wrong side.
+    /// Default **1**.
+    pub side_preference_weight: i32,
+    /// S5 weight-class slack multiplier. Scales both the `over` and
+    /// `under` slack variables per boat. Default **1**.
+    pub weight_class_slack_weight: i32,
+    /// S6 cox-cooldown penalty. Flat constant added to the
+    /// objective when a non-designated cox is placed as cox within
+    /// the cooldown window. Default **5** — roughly the same
+    /// ballpark as a strongly side-locked rower on the wrong side
+    /// under S4.
+    pub cox_cooldown_penalty: i32,
+    /// S7 novelty multiplier. Scales the per-historical-lineup
+    /// similarity penalty. Default **1**. Note that the *width* of
+    /// the penalty band is controlled separately by
+    /// `SolveRequest.novelty_factor`.
+    pub novelty_weight: i32,
+    /// S8 placement-reward multiplier. Scales the per-boat
+    /// `-seats_total` reward for fielding a boat. Default **1**.
+    pub placement_reward_weight: i32,
+    /// S9 pair-strength multiplier. Scales the per-partition
+    /// `pair_max - pair_min` penalty. Default **1**.
+    pub pair_strength_weight: i32,
+}
+
+impl Default for SolverConfig {
+    fn default() -> Self {
+        Self {
+            skill_variance_weight: 1,
+            pair_affinity_weight: 1,
+            seat_affinity_weight: 1,
+            side_preference_weight: 1,
+            weight_class_slack_weight: 1,
+            cox_cooldown_penalty: 5,
+            novelty_weight: 1,
+            placement_reward_weight: 1,
+            pair_strength_weight: 1,
+        }
+    }
 }
 
 /// Policy for how aggressively the solver may leave designated "optional"
@@ -127,15 +217,10 @@ impl PartialFillPolicy {
 /// who ever coxes.
 const COX_COOLDOWN_DAYS: i64 = 14;
 
-/// S6 cox-cooldown penalty per "rower coxes while still in cooldown"
-/// placement. Scaled with the base obj_term weights; a value of 5 puts
-/// it in the same ballpark as S4 wrong-side preference for a strongly
-/// side-locked rower. Roughly: "cox cooldown matters about as much as
-/// putting a Port rower on Starboard."
-const COX_COOLDOWN_PENALTY: i32 = 5;
-
-// S7 novelty is now controlled by `SolveRequest.novelty_factor` rather
-// than a hardcoded constant. See the S7 block below for the semantics.
+// S6 cox-cooldown penalty and all other per-constraint weights are now
+// controlled via `SolverConfig` on the SolveRequest — see the struct
+// definition above. S7 novelty band width is separately controlled by
+// `SolveRequest.novelty_factor`.
 
 /// Which rowing seats of a given boat are "optional" — i.e. may be left
 /// empty under a non-strict [`PartialFillPolicy`]. The set is hardcoded
@@ -221,6 +306,11 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         bail!("no rowers are available for sweep seating on {}", request.date);
     }
 
+    // Per-constraint weights. Read once up front so the constraint
+    // blocks below can check `cfg.foo_weight != 0` to skip disabled
+    // constraints entirely (Pumpkin panics on `.scaled(0)`).
+    let cfg = request.config;
+
     let mut solver = Solver::default();
     // x[(rower_idx, boat_idx, seat_position)] ∈ {0,1}
     let mut x: BTreeMap<(usize, usize, i32), DomainId> = BTreeMap::new();
@@ -247,9 +337,15 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // the objective-link equality, vs. one term per x variable (which
     // was ~100+ for our fixture and dramatically slowed Pumpkin's
     // propagation through the huge linear objective constraint).
-    for (b_idx, boat) in boats.iter().enumerate() {
-        let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
-        obj_terms.push(use_b[b_idx].scaled(-seats_total));
+    if cfg.placement_reward_weight != 0 {
+        for (b_idx, boat) in boats.iter().enumerate() {
+            let seats_total =
+                boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+            let coef = -seats_total * cfg.placement_reward_weight;
+            if coef != 0 {
+                obj_terms.push(use_b[b_idx].scaled(coef));
+            }
+        }
     }
 
     // --- Variables ---
@@ -303,22 +399,28 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // objective-link equality. See crates/solver/README.md §S4 for
     // the detailed rationale and the performance note that motivated
     // this encoding.
-    for (&r_idx, wrong_vars) in &wrong_side_by_rower {
-        if wrong_vars.is_empty() {
-            continue;
-        }
-        let rower = available[r_idx];
-        let wrong_count = solver.new_bounded_integer(0, 1);
-        let mut link_terms: Vec<AffineView<DomainId>> =
-            wrong_vars.iter().map(|v| v.scaled(1)).collect();
-        link_terms.push(wrong_count.scaled(-1));
-        let tag = solver.new_constraint_tag();
-        solver
-            .add_constraint(pumpkin_constraints::equals(link_terms, 0, tag))
-            .post()
-            .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
+    if cfg.side_preference_weight != 0 {
+        for (&r_idx, wrong_vars) in &wrong_side_by_rower {
+            if wrong_vars.is_empty() {
+                continue;
+            }
+            let rower = available[r_idx];
+            let coef = rower.side_strength.as_int() * cfg.side_preference_weight;
+            if coef == 0 {
+                continue; // stored strength = 0 already meant "hard lock" so this shouldn't fire
+            }
+            let wrong_count = solver.new_bounded_integer(0, 1);
+            let mut link_terms: Vec<AffineView<DomainId>> =
+                wrong_vars.iter().map(|v| v.scaled(1)).collect();
+            link_terms.push(wrong_count.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link_terms, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
 
-        obj_terms.push(wrong_count.scaled(rower.side_strength.as_int()));
+            obj_terms.push(wrong_count.scaled(coef));
+        }
     }
 
     // --- S6: cox cooldown ---
@@ -339,48 +441,50 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // cooldown) — same pattern that made S4 and S8 tractable at
     // scale.
     //
-    // The penalty is a flat COX_COOLDOWN_PENALTY regardless of how
-    // recent the last cox was, because (a) it keeps the encoding
+    // The penalty is a flat `cfg.cox_cooldown_penalty` regardless of
+    // how recent the last cox was, because (a) it keeps the encoding
     // simple and (b) decay-by-days would require either per-rower
-    // coefficients in the objective (which we support) or a
-    // quadratic penalty (which we don't). A follow-up could add a
-    // linear decay like `penalty * (cooldown - days_since) / cooldown`.
-    for (r_idx, rower) in available.iter().enumerate() {
-        if rower.is_designated_cox.as_bool() {
-            continue; // exempt — designated coxes cox as often as needed
+    // coefficients (which we support) or a quadratic penalty (which
+    // we don't). A follow-up could add a linear decay like
+    // `penalty * (cooldown - days_since) / cooldown`.
+    if cfg.cox_cooldown_penalty != 0 {
+        for (r_idx, rower) in available.iter().enumerate() {
+            if rower.is_designated_cox.as_bool() {
+                continue; // exempt — designated coxes cox as often as needed
+            }
+            let Some(last_date) = snapshot.last_coxed.get(&rower.id) else {
+                continue; // never coxed → no cooldown to enforce
+            };
+            let days_since = (request.date - *last_date).num_days();
+            if days_since < 0 || days_since >= COX_COOLDOWN_DAYS {
+                continue; // outside cooldown window (or in the future; ignore)
+            }
+
+            // Gather this rower's cox-seat x variables. Each coxed boat
+            // contributes one; coxless boats don't create a seat-0 x var
+            // in the first place, so there's nothing to collect there.
+            let cox_vars: Vec<DomainId> = boats
+                .iter()
+                .enumerate()
+                .filter_map(|(b_idx, _)| x.get(&(r_idx, b_idx, 0)).copied())
+                .collect();
+
+            if cox_vars.is_empty() {
+                continue; // rower has no cox vars
+            }
+
+            let cox_use = solver.new_bounded_integer(0, 1);
+            let mut link: Vec<AffineView<DomainId>> =
+                cox_vars.iter().map(|v| v.scaled(1)).collect();
+            link.push(cox_use.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
+
+            obj_terms.push(cox_use.scaled(cfg.cox_cooldown_penalty));
         }
-        let Some(last_date) = snapshot.last_coxed.get(&rower.id) else {
-            continue; // never coxed → no cooldown to enforce
-        };
-        let days_since = (request.date - *last_date).num_days();
-        if days_since < 0 || days_since >= COX_COOLDOWN_DAYS {
-            continue; // outside cooldown window (or in the future; ignore)
-        }
-
-        // Gather this rower's cox-seat x variables. Each coxed boat
-        // contributes one; coxless boats don't create a seat-0 x var
-        // in the first place, so there's nothing to collect there.
-        let cox_vars: Vec<DomainId> = boats
-            .iter()
-            .enumerate()
-            .filter_map(|(b_idx, _)| x.get(&(r_idx, b_idx, 0)).copied())
-            .collect();
-
-        if cox_vars.is_empty() {
-            continue; // rower has no cox vars — can_cox=false or no coxed boats today
-        }
-
-        let cox_use = solver.new_bounded_integer(0, 1);
-        let mut link: Vec<AffineView<DomainId>> =
-            cox_vars.iter().map(|v| v.scaled(1)).collect();
-        link.push(cox_use.scaled(-1));
-        let tag = solver.new_constraint_tag();
-        solver
-            .add_constraint(pumpkin_constraints::equals(link, 0, tag))
-            .post()
-            .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
-
-        obj_terms.push(cox_use.scaled(COX_COOLDOWN_PENALTY));
     }
 
     // --- S7: novelty vs recent lineups ---
@@ -439,7 +543,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // Cost budget: one aux var + one linear inequality per historical
     // lineup. With RECENT_LINEUP_WINDOW = 4 and a realistic fleet,
     // that's at most ~16 historical lineups. Tiny.
-    if request.novelty_factor > 0 {
+    if request.novelty_factor > 0 && cfg.novelty_weight != 0 {
         // Group recent placements by (practice_date, boat_id). Each
         // group is one historical lineup whose similarity to the
         // current assignment we want to penalise.
@@ -507,7 +611,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 .post()
                 .map_err(|e| anyhow!("S7 novelty link: {e:?}"))?;
 
-            obj_terms.push(penalty.scaled(1));
+            obj_terms.push(penalty.scaled(cfg.novelty_weight));
         }
     }
 
@@ -712,22 +816,30 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .map_err(|e| anyhow!("weight-class hard wall (upper): {e:?}"))?;
 
         // S5 slack: sum(ordinal*x) - over + under - target_sum*use[b] = 0
-        let slack_upper = 3 * n_rowing;
-        let over = solver.new_bounded_integer(0, slack_upper);
-        let under = solver.new_bounded_integer(0, slack_upper);
+        //
+        // Only posted when the slack contributes to the objective.
+        // If `weight_class_slack_weight == 0`, the caller has
+        // disabled the soft target entirely — the hard wall above
+        // still applies, but the solver has no preference between
+        // any two configurations that both satisfy it.
+        if cfg.weight_class_slack_weight != 0 {
+            let slack_upper = 3 * n_rowing;
+            let over = solver.new_bounded_integer(0, slack_upper);
+            let under = solver.new_bounded_integer(0, slack_upper);
 
-        let mut eq_terms: Vec<_> = positive_terms.clone();
-        eq_terms.push(over.scaled(-1));
-        eq_terms.push(under.scaled(1));
-        eq_terms.push(use_b[b_idx].scaled(-target_sum));
-        let tag_eq = solver.new_constraint_tag();
-        solver
-            .add_constraint(pumpkin_constraints::equals(eq_terms, 0, tag_eq))
-            .post()
-            .map_err(|e| anyhow!("weight-class slack equality: {e:?}"))?;
+            let mut eq_terms: Vec<_> = positive_terms.clone();
+            eq_terms.push(over.scaled(-1));
+            eq_terms.push(under.scaled(1));
+            eq_terms.push(use_b[b_idx].scaled(-target_sum));
+            let tag_eq = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(eq_terms, 0, tag_eq))
+                .post()
+                .map_err(|e| anyhow!("weight-class slack equality: {e:?}"))?;
 
-        obj_terms.push(over.scaled(1));
-        obj_terms.push(under.scaled(1));
+            obj_terms.push(over.scaled(cfg.weight_class_slack_weight));
+            obj_terms.push(under.scaled(cfg.weight_class_slack_weight));
+        }
     }
 
     // --- S1: skill variance per boat ---
@@ -747,9 +859,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     //   4. Push `spread[b]` into `slack_vars` so it rides the same
     //      minimisation pipeline as the S5 weight-class slacks.
     //
-    // No weighting yet — each unit of skill spread weighs the same as one
-    // unit of weight-class deviation. User tuning arrives when we
-    // introduce SolverConfig.
+    // Each unit of skill spread contributes `cfg.skill_variance_weight`
+    // to the objective. Setting the weight to 0 skips the entire block —
+    // no per-seat aux vars, no max/min constraints, no obj push.
+    if cfg.skill_variance_weight != 0 {
     for (b_idx, boat) in boats.iter().enumerate() {
         let n_rowing = boat.seat_count;
         if n_rowing == 0 {
@@ -831,7 +944,8 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .post()
             .map_err(|e| anyhow!("spread link: {e:?}"))?;
 
-        obj_terms.push(spread.scaled(1));
+        obj_terms.push(spread.scaled(cfg.skill_variance_weight));
+    }
     }
 
     // --- S2: pair affinities ---
@@ -861,6 +975,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // more of a convention than a structural guarantee. The affinity
     // still fires if both rowers land in the same 2-seat partition,
     // but the "one-port-one-starboard" expectation doesn't hold.
+    if cfg.pair_affinity_weight != 0 {
     for aff in &snapshot.pair_affinities {
         // AffinityWeight forbids 0 at construction, but keep the guard
         // so a manually-crafted zero (e.g. from a future DB patch path
@@ -948,11 +1063,13 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                     .post()
                     .map_err(|e| anyhow!("pair reif lower: {e:?}"))?;
 
-                obj_terms.push(together.scaled(-aff.weight.as_int()));
+                obj_terms
+                    .push(together.scaled(-aff.weight.as_int() * cfg.pair_affinity_weight));
 
                 s_lo += 2;
             }
         }
+    }
     }
 
     // --- S3: seat affinities ---
@@ -967,6 +1084,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // seat_position is boat-agnostic: a preference for seat 4 applies to
     // every boat where seat 4 exists (so a stroke-4 preference applies
     // to 4-boats but not 8-boats, and vice versa).
+    if cfg.seat_affinity_weight != 0 {
     for aff in &snapshot.seat_affinities {
         // AffinityWeight forbids 0 at construction and at the SQL
         // CHECK, so this guard is belt-and-braces to keep a future
@@ -983,9 +1101,11 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 continue; // this boat doesn't have that seat
             }
             if let Some(&var) = x.get(&(r_idx, b_idx, aff.seat_position)) {
-                obj_terms.push(var.scaled(-aff.weight.as_int()));
+                obj_terms
+                    .push(var.scaled(-aff.weight.as_int() * cfg.seat_affinity_weight));
             }
         }
+    }
     }
 
     // --- S9: pair strength balance ---
@@ -1009,6 +1129,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // Scaling note: Strength ordinals start at 1 (Weak=1 .. VeryStrong=4)
     // so `.scaled(ordinal)` never hits the Pumpkin zero-coefficient
     // panic. Spread is `max - min` and is invariant under the shift.
+    if cfg.pair_strength_weight != 0 {
     for (b_idx, boat) in boats.iter().enumerate() {
         let n_rowing = boat.seat_count;
         if n_rowing < 2 {
@@ -1099,10 +1220,11 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 .post()
                 .map_err(|e| anyhow!("pair strength diff: {e:?}"))?;
 
-            obj_terms.push(diff.scaled(1));
+            obj_terms.push(diff.scaled(cfg.pair_strength_weight));
 
             s_lo += 2;
         }
+    }
     }
 
     // --- Objective variable ---

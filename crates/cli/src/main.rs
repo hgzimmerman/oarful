@@ -24,7 +24,9 @@ use lineup_db::{
     snapshot::DbSnapshot,
     state::Db,
 };
-use lineup_solver::{solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveStatus};
+use lineup_solver::{
+    solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveStatus, SolverConfig,
+};
 use tracing_subscriber::EnvFilter;
 
 const DEFAULT_DATE: (i32, u32, u32) = (2026, 4, 11);
@@ -180,6 +182,10 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         boats: vec![],
         partial_fill: partial,
         novelty_factor: novelty,
+        // No CLI flags for individual per-constraint weights yet —
+        // a config-file loader is future work. Default preserves
+        // the historical behaviour.
+        config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(10)),
     };
     let started = std::time::Instant::now();

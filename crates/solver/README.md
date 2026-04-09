@@ -130,23 +130,70 @@ function as a slack-variable penalty — see S5 below.
 
 The solver calls `solver.optimise()` with `LinearSatUnsat` +
 `OptimisationDirection::Minimise` against a single integer objective
-variable. The objective is a sum of per-constraint slack / penalty terms,
-each of which is linked to the objective via a linear equality. Weights
-are intended to live in a runtime config file so the coach can tune them
-without recompiling — today all enabled terms carry an implicit weight
-of 1.
+variable. The objective is a sum of per-constraint slack / penalty
+terms, each of which is linked to the objective via a linear equality.
+Per-constraint weights live in `SolverConfig` on the `SolveRequest`
+(see below) — defaults preserve the historical behaviour (mostly 1,
+cox cooldown = 5).
 
-| Term | Status       | Notes |
-|------|--------------|-------|
-| S1   | **enabled**  | skill variance within a boat (max − min) |
-| S2   | **enabled**  | pair affinities (2-seat partition reification) |
-| S3   | **enabled**  | seat affinities (stored in `rower_seat_affinity`) |
-| S4   | **enabled**  | soft side preference, weighted by `side_strength` |
-| S5   | **enabled**  | weight-class soft target via slack variables |
-| S6   | **enabled**  | cox cooldown (non-designated, derived from history) |
-| S7   | **enabled**  | novelty vs recent lineups (per-lineup Hamming distance, opt-in) |
-| S8   | **enabled**  | maximise rowers placed (per-boat seat reward + `use[b]`) |
-| S9   | **enabled**  | pair strength balance (universal, not data-driven) |
+| Term | Status       | Config field            | Notes |
+|------|--------------|-------------------------|-------|
+| S1   | **enabled**  | `skill_variance_weight` | skill variance within a boat (max − min) |
+| S2   | **enabled**  | `pair_affinity_weight`  | pair affinities (2-seat partition reification) |
+| S3   | **enabled**  | `seat_affinity_weight`  | seat affinities (stored in `rower_seat_affinity`) |
+| S4   | **enabled**  | `side_preference_weight`| soft side preference, scaled by `side_strength` |
+| S5   | **enabled**  | `weight_class_slack_weight` | weight-class soft target via slack variables |
+| S6   | **enabled**  | `cox_cooldown_penalty`  | cox cooldown (non-designated, derived from history) |
+| S7   | **enabled**  | `novelty_weight`        | novelty vs recent lineups (per-lineup Hamming, opt-in via `novelty_factor`) |
+| S8   | **enabled**  | `placement_reward_weight` | maximise rowers placed (per-boat seat reward + `use[b]`) |
+| S9   | **enabled**  | `pair_strength_weight`  | pair strength balance (universal, not data-driven) |
+
+### SolverConfig — per-constraint tunable weights
+
+`SolverConfig` is a plain struct on `SolveRequest` whose fields scale
+each soft constraint's contribution to the objective. Defaults:
+
+| Field | Default | What it scales |
+|---|---|---|
+| `skill_variance_weight` | 1 | S1 per-boat `max − min` spread |
+| `pair_affinity_weight` | 1 | S2 per-pair scaled coefficient (multiplies the stored `pair_affinity.weight`) |
+| `seat_affinity_weight` | 1 | S3 per-entry scaled coefficient (multiplies the stored `rower_seat_affinity.weight`) |
+| `side_preference_weight` | 1 | S4 wrong-side penalty (multiplies the rower's `side_strength`) |
+| `weight_class_slack_weight` | 1 | S5 weight-class slack `over` and `under` coefficients |
+| `cox_cooldown_penalty` | 5 | S6 flat per-rower penalty when coxing inside the cooldown window |
+| `novelty_weight` | 1 | S7 per-historical-lineup similarity penalty |
+| `placement_reward_weight` | 1 | S8 per-boat `-seats_total` placement reward |
+| `pair_strength_weight` | 1 | S9 per-partition `max − min` strength diff |
+
+**Zero disables the constraint entirely.** Setting any field to `0`
+skips the entire constraint block at solve time — no auxiliary
+variables created, no linking constraints posted, no `obj_terms`
+pushed. This is both the performance-friendly path (Pumpkin panics
+on `.scaled(0)` anyway) and the semantic "turn it off" knob. Useful
+for A/B experiments or disabling a noisy signal on a particular
+solve without editing the code.
+
+**Per-entity weights multiply.** Constraints that already carry a
+per-entity weight (S2 stored pair weights, S3 stored seat weights,
+S4 per-rower `side_strength`, S8 per-boat `seats_total`) combine that
+weight with the config multiplier via simple multiplication. So
+`pair_affinity_weight = 2` doubles the effect of every stored
+`pair_affinity.weight` rather than replacing it. The stored values
+still carry the coach's judgement about which rowers are more
+important; the config is a global dial.
+
+**Negative values invert the constraint.** A negative
+`skill_variance_weight` would reward high skill spread, a negative
+`placement_reward_weight` would penalise fielding boats, and so on.
+This is a footgun but occasionally useful for experiments. The type
+system doesn't prevent it; stick to non-negative values for normal
+coach use.
+
+**CLI/config-file loading — future work.** Right now the CLI uses
+`SolverConfig::default()` unconditionally. A future enhancement would
+load a TOML config file (or per-club profile) via a `--config PATH`
+flag. Deferred until there's a concrete admin UI surface calling for
+it.
 
 ### S1. Skill variance within a boat — **enabled**
 Avoid putting eight novices with one expert in an eight. Encoded as a

@@ -18,7 +18,7 @@ use lineup_db::rower::{
 };
 use lineup_db::snapshot::DbSnapshot;
 use lineup_db::types::IntBool;
-use lineup_solver::{solve, PartialFillPolicy, SolveRequest, SolveStatus};
+use lineup_solver::{solve, PartialFillPolicy, SolveRequest, SolveStatus, SolverConfig};
 use std::collections::HashMap;
 
 pub fn run() -> Result<()> {
@@ -96,6 +96,9 @@ fn run_one_with_label(
         // history anyway (`recent_placements` is empty), so this
         // is just clarity-of-intent.
         novelty_factor: 0,
+        // Default weights — the benchmark measures baseline scaling
+        // behaviour, not weight-tuning effects.
+        config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(5)),
     };
 
