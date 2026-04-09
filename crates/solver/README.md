@@ -168,6 +168,7 @@ each soft constraint's contribution to the objective. Defaults:
 | `height_balance_weight` | 1 | S10 per-partition `max − min` height diff |
 | `end_pair_skill_weight` | 1 | S11 8-boat end-pair skill reward (seats 1/2/7/8) |
 | `engine_room_strength_weight` | 1 | S12 8-boat engine-room strength reward (seats 3-6) |
+| `partial_fill_bonus` | 1 | Per-filled-optional-seat reward under `Allowed(k)` partial-fill; inert under `Strict` |
 
 **Zero disables the constraint entirely.** Setting any field to `0`
 skips the entire constraint block at solve time — no auxiliary
@@ -821,18 +822,50 @@ bug via an isolated S12 test.
 switches the policy to `Allowed(N)`. `--partial 0` is equivalent to
 `Strict`.
 
-**When this bites.** With 10 rowers and the default fixture (2 × 4s
-+ 1 × 8+), partial-fill doesn't visibly change the output because the
-two full 4s already place 8 rowers (vs a partial 7-of-8 Persephone
-placing 7 rowers — strictly worse under S8). The feature bites when
-the fleet is constrained such that a partial-filled larger boat is
-the only way to place more rowers than a smaller one.
+**When this bites.** The `Allowed(k)` policy lets the solver
+field an 8+ with `k` of its optional seats empty. With the
+partial-fill bonus on (the default), the solver still strictly
+prefers full fills when there are enough rowers to fill the
+boat, so the partial-fill path only actually produces an empty
+seat when either (a) there genuinely aren't enough rowers to
+fill it, or (b) the structural soft cost of squeezing a
+specific rower into seat 3 or 4 outweighs the full-fill bonus
+plus their S8 contribution. With the toy fixture (11 available,
+3 candidate boats), `Allowed(2)` still produces a full-fill
+Persephone because there are enough rowers for it.
 
-**Future work — partial-fill penalty.** Currently optional seats
-carry zero cost when empty beyond the S5 / S8 implicit effects. A
-future refinement would add a small per-empty-seat penalty so the
-solver prefers full fills when both are feasible, separately tunable
-from the other soft weights.
+**Partial-fill bonus — enabled.** Without any objective-side
+pressure, the solver is indifferent between "field Persephone
+with seats 3 and 4 filled" and "field Persephone with seats 3
+and 4 empty" under `Allowed(2)` — the S8 per-boat reward
+(`seats_total · use[b]`) doesn't know or care how many of those
+seats are actually occupied, so both outcomes produce the same
+objective contribution even though one benches rowers
+needlessly. Tie-broken by search order → silently unpredictable.
+
+Fix: `SolverConfig::partial_fill_bonus` (default 1) pushes a
+per-optional-seat reward of
+
+```
+Σ_r x[r, b, opt_seat] .scaled(-partial_fill_bonus)
+```
+
+so a filled optional seat contributes `-partial_fill_bonus` to
+the objective and an empty one contributes 0. The solver,
+minimising, strictly prefers the filled case by exactly
+`partial_fill_bonus` units per optional seat. Under `Strict`
+partial-fill the bonus is gated off entirely because H1's
+equality already forces every seat filled — no reason to pay
+for extra obj terms that contribute a constant.
+
+**Scale.** Default `1` breaks the "leave it empty" tie without
+overriding structural soft terms like S1 skill variance, S9
+pair strength, S11, or S12. If a specific rower can only fit in
+seat 3 at a cost that exceeds the combined structural penalty,
+the solver will still leave the seat empty — the bonus isn't a
+hard "must fill" rule, it's a gentle nudge. Raise the value to
+make full fills harder to beat; lower (or zero) it to recover
+the pre-bonus behaviour.
 
 ## Why Pumpkin?
 

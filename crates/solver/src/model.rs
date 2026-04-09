@@ -266,6 +266,57 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
+    /// Partial-fill bonus — rewards each optional seat that the
+    /// solver actually fills under a non-strict
+    /// [`crate::PartialFillPolicy`].
+    ///
+    /// Before this bonus existed, the solver was indifferent
+    /// between "field this 8+ with seats 3 and 4 filled" and
+    /// "field this 8+ with seats 3 and 4 empty" under
+    /// `Allowed(2)` — the S8 placement reward is per-*boat*
+    /// (scaled by `seats_total`, not by "seats actually
+    /// occupied"), so both outcomes produced the same objective
+    /// contribution even though one left rowers on the dock.
+    /// The net effect: partial fills could happen silently as
+    /// tie-broken by search order rather than reflecting a
+    /// deliberate trade-off.
+    ///
+    /// Encoding: for each `(boat, optional_seat)`, push
+    ///
+    ///   `Σ_r x[r, b, seat].scaled(-partial_fill_bonus)`
+    ///
+    /// into `obj_terms`. If the seat is filled, exactly one x is
+    /// 1 and the term contributes `-partial_fill_bonus`. If the
+    /// seat is empty, every x is 0 and the term contributes 0.
+    /// The solver, minimising, prefers the filled case by
+    /// exactly `partial_fill_bonus` units per optional seat.
+    ///
+    /// Inert under `Strict` partial-fill for two reasons: the
+    /// H1 equality already forces every seat to be filled (so
+    /// the bonus is a constant and affects no decision), and we
+    /// gate the block entirely on `partial_fill.max_empty() > 0`
+    /// to avoid pushing redundant terms into the objective-link
+    /// equality.
+    pub(crate) fn post_partial_fill_bonus(
+        &mut self,
+        partial_fill: PartialFillPolicy,
+    ) -> Result<()> {
+        if partial_fill.max_empty() == 0 || self.cfg.partial_fill_bonus == 0 {
+            return Ok(());
+        }
+        let coef = -self.cfg.partial_fill_bonus;
+        for (b_idx, boat) in self.boats.iter().enumerate() {
+            for seat in optional_seats(boat) {
+                for r_idx in 0..self.available.len() {
+                    if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
+                        self.obj_terms.push(var.scaled(coef));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// H6 — global fleet capacity prune:
     ///
     ///   `Σ_b (seats_total[b] · use[b]) ≤ num_available`

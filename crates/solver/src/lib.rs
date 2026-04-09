@@ -227,6 +227,19 @@ pub struct SolverConfig {
     /// an eight's propulsive power. Same negative-coefficient
     /// encoding as S11 but over `seat_strength` vars. Default **1**.
     pub engine_room_strength_weight: i32,
+    /// Per-filled-optional-seat reward under non-strict
+    /// [`PartialFillPolicy`]. Each optional seat that ends up
+    /// occupied contributes `-partial_fill_bonus` to the
+    /// objective, so the solver strictly prefers filling optional
+    /// seats when the resulting arrangement is otherwise equal or
+    /// close. Inert under `PartialFillPolicy::Strict` because
+    /// H1's equality form already forces every seat to be
+    /// filled; the bonus is only posted when the partial-fill
+    /// policy actually permits empty seats. Default **1** — big
+    /// enough to break ties against "leave it empty" but small
+    /// enough not to override S1 / S9 / S11 / S12 structural
+    /// preferences that would make the extra placement worse.
+    pub partial_fill_bonus: i32,
 }
 
 impl Default for SolverConfig {
@@ -245,6 +258,7 @@ impl Default for SolverConfig {
             height_balance_weight: 1,
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
+            partial_fill_bonus: 1,
         }
     }
 }
@@ -427,6 +441,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     m.post_h2_at_most_one()?;
     m.post_h6_fleet_capacity()?;
     m.post_h5_s5_weight_class()?;
+    // Partial-fill bonus rewards each occupied optional seat
+    // under non-strict partial-fill policies. Inert (no-op) under
+    // Strict, so this is safe to call unconditionally.
+    m.post_partial_fill_bonus(request.partial_fill)?;
 
     // --- Seat-level soft constraints ---
     //

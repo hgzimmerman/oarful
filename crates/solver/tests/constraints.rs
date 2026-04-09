@@ -175,6 +175,10 @@ fn silent_config() -> SolverConfig {
         height_balance_weight: 0,
         end_pair_skill_weight: 0,
         engine_room_strength_weight: 0,
+        // Partial-fill bonus off by default in silent_config so
+        // tests only opt it in explicitly when they're exercising
+        // the partial-fill path.
+        partial_fill_bonus: 0,
     }
 }
 
@@ -695,6 +699,106 @@ fn s12_engine_room_strength_puts_strong_rowers_in_middle() {
             "end-pair seat {seat} should hold a Weak rower, got VeryStrong {r:?}"
         );
     }
+}
+
+// ---------- Partial-fill bonus ----------
+
+#[test]
+fn partial_fill_bonus_prefers_filling_optional_seats() {
+    // An 8+ under `Allowed(2)` could legitimately leave seats 3
+    // and 4 empty while still fielding the boat — the cap
+    // permits it and S8's per-boat reward doesn't distinguish
+    // full-fill from partial-fill. With only the partial-fill
+    // bonus on, the solver should choose to *fill* both
+    // optional seats rather than leave them empty.
+    //
+    // Fixture: one 8+, 8 rowers (4 Port + 4 Starboard) that
+    // together exactly fill all 8 rowing seats, plus a
+    // designated cox for seat 0. Under `Allowed(2)` every
+    // arrangement — full fill or partial fill — is feasible
+    // for the hard constraints; only the partial-fill bonus
+    // tells the solver which one to pick.
+    let rowers = vec![
+        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(3, "PortB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(5, "PortC", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(6, "StarboardC", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(7, "PortD", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(8, "StarboardD", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(9, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![eight_boat(1, "TestEight")]);
+
+    let mut cfg = silent_config();
+    cfg.partial_fill_bonus = 1;
+
+    let mut req = request(cfg);
+    req.partial_fill = PartialFillPolicy::Allowed(2);
+
+    let result = solve(&snap, &req).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    let lineup = single_used(&result.lineups);
+
+    // Assert seats 3 and 4 — the optional pair — are both
+    // occupied. Without the bonus the solver is free to leave
+    // them empty.
+    let seat_3 = lineup.seats.iter().find(|(s, _)| *s == 3);
+    let seat_4 = lineup.seats.iter().find(|(s, _)| *s == 4);
+    assert!(
+        seat_3.is_some(),
+        "seat 3 should be filled under the partial-fill bonus; \
+         got seats {:?}",
+        lineup.seats
+    );
+    assert!(
+        seat_4.is_some(),
+        "seat 4 should be filled under the partial-fill bonus; \
+         got seats {:?}",
+        lineup.seats
+    );
+
+    // And the full rowing crew should be present (8 rowing +
+    // 1 cox = 9 entries).
+    assert_eq!(
+        lineup.seats.len(),
+        9,
+        "expected a full 8+ crew (8 rowing + cox); got {} seats",
+        lineup.seats.len()
+    );
+}
+
+#[test]
+fn partial_fill_bonus_is_inert_under_strict() {
+    // Under `Strict` partial-fill, the H1 equality forces every
+    // seat to be filled and the bonus has nothing to push pressure
+    // against. The solver should produce a valid full-crew lineup
+    // without the bonus affecting any decision, and — crucially —
+    // solve() must not panic on the (inert) bonus block.
+    let rowers = vec![
+        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(3, "PortB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    // Enable the bonus explicitly and keep partial_fill = Strict
+    // (the default in `request`).
+    let mut cfg = silent_config();
+    cfg.partial_fill_bonus = 5;
+
+    let result = solve(&snap, &request(cfg)).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    let lineup = single_used(&result.lineups);
+    assert_eq!(
+        lineup.seats.len(),
+        5,
+        "expected a full 4+ crew (4 rowing + cox); got {} seats",
+        lineup.seats.len()
+    );
 }
 
 // ---------- Top-N tabu re-solve tests ----------
