@@ -54,6 +54,21 @@ pub struct SolveRequest {
     /// fielded). Default `Strict`: no partial fills, every seat of every
     /// fielded boat must be filled. See `PartialFillPolicy` for details.
     pub partial_fill: PartialFillPolicy,
+    /// S7 novelty factor. Controls how aggressively the solver avoids
+    /// lineups that resemble historical committed lineups.
+    ///
+    /// - `0`: no novelty enforcement (exact repeats are fine).
+    /// - `1`: deprioritize lineups that are 1 seat (or fewer) different
+    ///   from a historical lineup. Penalises exact repeats harder than
+    ///   "all but 1 seat same", but both incur a cost.
+    /// - `2`: extends the penalty band to 2-seat differences.
+    /// - Higher values widen the band and steepen the per-distance
+    ///   penalty.
+    ///
+    /// Encoded as a per-historical-lineup soft constraint (see the S7
+    /// block in `solve`). See `crates/solver/README.md` §S7 for the
+    /// full formula.
+    pub novelty_factor: i32,
     /// Wall-clock budget the solver may spend looking for an optimal
     /// assignment. `None` lets the solver run to proven optimality
     /// (`Indefinite`), which is fine for small instances but can take
@@ -118,6 +133,9 @@ const COX_COOLDOWN_DAYS: i64 = 14;
 /// side-locked rower. Roughly: "cox cooldown matters about as much as
 /// putting a Port rower on Starboard."
 const COX_COOLDOWN_PENALTY: i32 = 5;
+
+// S7 novelty is now controlled by `SolveRequest.novelty_factor` rather
+// than a hardcoded constant. See the S7 block below for the semantics.
 
 /// Which rowing seats of a given boat are "optional" — i.e. may be left
 /// empty under a non-strict [`PartialFillPolicy`]. The set is hardcoded
@@ -363,6 +381,134 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
 
         obj_terms.push(cox_use.scaled(COX_COOLDOWN_PENALTY));
+    }
+
+    // --- S7: novelty vs recent lineups ---
+    //
+    // Penalise lineups that are too similar to recently-committed
+    // ones. "Similarity" is counted per historical lineup (one
+    // committed (practice, boat) pair) as the number of placements
+    // that would match if the solver rowed the same boat again with
+    // the same rowers in the same rowing seats.
+    //
+    // Controlled by `request.novelty_factor`:
+    //
+    //   0: no constraint. Exact repeats are fine. Special-cased —
+    //      we don't even post the constraint.
+    //   1: deprioritize lineups 1 seat (or fewer) different from any
+    //      historical lineup. Exact repeats incur the largest
+    //      penalty; "all but 1 seat same" incurs a smaller one.
+    //   2: extends the band to 2-seat differences, and so on.
+    //
+    // Encoding per historical lineup L (with N_L rowing placements):
+    //
+    //   threshold = N_L - factor - 1
+    //   match_L   = Σ x[r, b, s] for each of L's (rower, boat, seat)
+    //               placements that still has a live x variable today
+    //   penalty_L ≥ match_L - threshold           (soft lower bound)
+    //   penalty_L ≥ 0                             (via domain)
+    //   obj_terms.push(penalty_L.scaled(1))
+    //
+    // The first inequality is posted as
+    //   Σ match_terms - penalty_L ≤ threshold
+    // which gives `penalty_L ≥ match_L - threshold`. The solver
+    // minimises, so it picks `max(0, match_L - threshold)` — zero
+    // below threshold, linearly growing above.
+    //
+    // Numerical check for factor = 1 on an N = 8 lineup:
+    //   threshold = 6
+    //   match = 8 (exact)  →  penalty = 2
+    //   match = 7          →  penalty = 1
+    //   match = 6          →  penalty = 0
+    //
+    // For factor = 2 on N = 8:
+    //   threshold = 5
+    //   match = 8  →  penalty = 3
+    //   match = 7  →  penalty = 2
+    //   match = 6  →  penalty = 1
+    //
+    // Cox seats are deliberately excluded. Cox rotation is governed
+    // by S6 cox cooldown, which has a designated-exempt case that S7
+    // would fight against. Rowers who are no longer available today
+    // or boats no longer in today's candidate fleet contribute
+    // nothing — their x variables don't exist, so the match sum
+    // just skips those placements and the historical lineup appears
+    // "smaller" than it was (which is correct: we can't reproduce
+    // placements we can no longer make).
+    //
+    // Cost budget: one aux var + one linear inequality per historical
+    // lineup. With RECENT_LINEUP_WINDOW = 4 and a realistic fleet,
+    // that's at most ~16 historical lineups. Tiny.
+    if request.novelty_factor > 0 {
+        // Group recent placements by (practice_date, boat_id). Each
+        // group is one historical lineup whose similarity to the
+        // current assignment we want to penalise.
+        let mut groups: BTreeMap<
+            (NaiveDate, BoatId),
+            Vec<&lineup_db::lineup::RecentPlacement>,
+        > = BTreeMap::new();
+        for placement in &snapshot.recent_placements {
+            if placement.is_cox || placement.seat_position == 0 {
+                continue; // cox rotation handled by S6
+            }
+            groups
+                .entry((placement.practice_date, placement.boat_id))
+                .or_default()
+                .push(placement);
+        }
+
+        for placements in groups.values() {
+            // Match terms: x variables for placements that still
+            // exist in today's model. Placements whose rower is
+            // absent / boat is out of the fleet / x var doesn't
+            // exist are silently dropped.
+            let mut match_terms: Vec<AffineView<DomainId>> = Vec::new();
+            for p in placements {
+                let Some(r_idx) = available.iter().position(|r| r.id == p.rower_id)
+                else {
+                    continue;
+                };
+                let Some(b_idx) = boats.iter().position(|b| b.id == p.boat_id) else {
+                    continue;
+                };
+                if let Some(&var) = x.get(&(r_idx, b_idx, p.seat_position)) {
+                    match_terms.push(var.scaled(1));
+                }
+            }
+
+            let reachable_matches = match_terms.len() as i32;
+            if reachable_matches == 0 {
+                continue; // nothing from this historical lineup is live
+            }
+
+            let threshold = reachable_matches - request.novelty_factor - 1;
+            // If the threshold is ≥ max possible match count, the
+            // constraint is trivially slack (penalty always 0) — skip
+            // posting it to save Pumpkin work.
+            if threshold >= reachable_matches {
+                continue;
+            }
+
+            // penalty upper bound: max possible is `reachable_matches
+            // - threshold` = `factor + 1`. Overshoot slightly for
+            // safety.
+            let penalty_upper = request.novelty_factor + 2;
+            let penalty = solver.new_bounded_integer(0, penalty_upper);
+
+            // Σ match_terms - penalty ≤ threshold
+            //   ⇔  penalty ≥ Σ match_terms - threshold
+            let mut lhs = match_terms.clone();
+            lhs.push(penalty.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::less_than_or_equals(
+                    lhs, threshold, tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("S7 novelty link: {e:?}"))?;
+
+            obj_terms.push(penalty.scaled(1));
+        }
     }
 
     // --- Hard constraint 1: seat fill conditional on `use[b]`. ---

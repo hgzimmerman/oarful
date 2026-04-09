@@ -9,6 +9,8 @@
 //!                                               # allow up to N empty optional seats per boat
 //!   cargo run -p lineup_cli -- solve --commit [date]
 //!                                               # solve AND persist the chosen lineups
+//!   cargo run -p lineup_cli -- solve --novelty N [date]
+//!                                               # penalise lineups within N seats of a historical one
 //!   cargo run -p lineup_cli -- history [date]   # show committed lineups for a date
 
 mod bench;
@@ -60,14 +62,16 @@ struct SolveOpts {
     date: NaiveDate,
     partial: PartialFillPolicy,
     commit: bool,
+    novelty: i32,
 }
 
-/// Parse `solve` subcommand arguments: an optional `--partial N` flag,
-/// an optional `--commit` flag, and an optional date. Missing date
-/// defaults to `DEFAULT_DATE`.
+/// Parse `solve` subcommand arguments: `--partial N`, `--commit`,
+/// `--novelty N`, and an optional date. Missing date defaults to
+/// `DEFAULT_DATE`.
 fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
     let mut partial = PartialFillPolicy::Strict;
     let mut commit = false;
+    let mut novelty: i32 = 0;
     let mut date: Option<NaiveDate> = None;
     let mut i = 0;
     while i < args.len() {
@@ -89,6 +93,17 @@ fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
                 commit = true;
                 i += 1;
             }
+            "--novelty" => {
+                novelty = args
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("--novelty requires a number"))?
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("--novelty N must be an integer: {e}"))?;
+                if novelty < 0 {
+                    novelty = 0;
+                }
+                i += 2;
+            }
             other => {
                 date = Some(parse_date(Some(&other.to_string()))?);
                 i += 1;
@@ -99,6 +114,7 @@ fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
         date: date.unwrap_or_else(default_date),
         partial,
         commit,
+        novelty,
     })
 }
 
@@ -128,6 +144,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         date,
         partial,
         commit,
+        novelty,
     } = opts;
     let snapshot = db
         .with_conn(move |conn| DbSnapshot::for_date(conn, date))
@@ -138,6 +155,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
     println!("=== Solving lineup for {date} ===");
     println!("  {num_available} rowers available for sweep");
     println!("  partial-fill policy: {partial:?}");
+    println!("  novelty factor: {novelty}");
     println!("  commit mode: {}", if commit { "yes" } else { "dry-run" });
     println!("  candidate fleet: {} boat(s)", snapshot.sweep_boats.len());
     for b in &snapshot.sweep_boats {
@@ -161,6 +179,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         date,
         boats: vec![],
         partial_fill: partial,
+        novelty_factor: novelty,
         time_budget: Some(std::time::Duration::from_secs(10)),
     };
     let started = std::time::Instant::now();

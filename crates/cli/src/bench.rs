@@ -85,12 +85,17 @@ fn run_one_with_label(
         last_coxed: HashMap::new(),
         seat_affinities: vec![],
         pair_affinities: vec![],
+        recent_placements: vec![],
     };
 
     let request = SolveRequest {
         date,
         boats: vec![],
         partial_fill: PartialFillPolicy::Strict,
+        // S7 novelty disabled — the synthetic snapshots carry no
+        // history anyway (`recent_placements` is empty), so this
+        // is just clarity-of-intent.
+        novelty_factor: 0,
         time_budget: Some(std::time::Duration::from_secs(5)),
     };
 

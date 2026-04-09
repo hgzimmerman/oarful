@@ -2,12 +2,18 @@
 
 use crate::availability::{types::AvailabilityStatus, Availability};
 use crate::boat::Boat;
+use crate::lineup::{Lineup, RecentPlacement};
 use crate::pair_affinity::PairAffinity;
 use crate::rower::{types::RowerId, Rower};
 use crate::seat_affinity::SeatAffinity;
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
+
+/// How many recent practices feed into [`DbSnapshot::recent_placements`].
+/// Used by the S7 novelty soft constraint to detect "the same person in
+/// the same seat of the same boat every Tuesday" drift.
+pub const RECENT_LINEUP_WINDOW: i64 = 4;
 
 #[derive(Debug, Clone)]
 pub struct DbSnapshot {
@@ -27,6 +33,12 @@ pub struct DbSnapshot {
     /// Rower-pair affinities (two rowers should form a rowing pair — a
     /// fixed 2-seat partition of a boat). Drives S2.
     pub pair_affinities: Vec<PairAffinity>,
+    /// Flattened placements from the `RECENT_LINEUP_WINDOW` most recent
+    /// committed practices. Each entry is a `(practice_date, boat_id,
+    /// seat_position, rower_id, is_cox)` tuple. Drives S7 novelty —
+    /// the solver penalises placing the same rower into a seat they
+    /// recently occupied.
+    pub recent_placements: Vec<RecentPlacement>,
 }
 
 impl DbSnapshot {
@@ -43,6 +55,7 @@ impl DbSnapshot {
             last_coxed: Rower::last_coxed_dates(conn)?,
             seat_affinities: SeatAffinity::list_all(conn)?,
             pair_affinities: PairAffinity::list_all(conn)?,
+            recent_placements: Lineup::recent_placements(conn, RECENT_LINEUP_WINDOW)?,
         })
     }
 

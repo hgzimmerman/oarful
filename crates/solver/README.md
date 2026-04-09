@@ -144,7 +144,7 @@ of 1.
 | S4   | **enabled**  | soft side preference, weighted by `side_strength` |
 | S5   | **enabled**  | weight-class soft target via slack variables |
 | S6   | **enabled**  | cox cooldown (non-designated, derived from history) |
-| S7   | planned      | novelty vs recent lineups |
+| S7   | **enabled**  | novelty vs recent lineups (per-lineup Hamming distance, opt-in) |
 | S8   | **enabled**  | maximise rowers placed (per-boat seat reward + `use[b]`) |
 | S9   | **enabled**  | pair strength balance (universal, not data-driven) |
 
@@ -316,11 +316,96 @@ the solution you need a fixture where the non-designated cox is the
 naturally-preferred choice and the penalty tips the balance. The
 constraint is still posted and enforced in the current fixture.
 
-### S7. Novelty vs recent lineups
-Minimise overlap with the last K practices. For each `(rower, boat,
-seat)` triple that has appeared in the recent window, add a small
-penalty when the solver places the same rower in the same seat of the
-same boat. Prevents "every Tuesday is the same crew" drift.
+### S7. Novelty vs recent lineups — **enabled**
+Penalise *lineups* that are too similar to recently-committed ones.
+Similarity is measured per historical lineup (one committed
+`(practice, boat)` pair) as the number of matching placements — how
+many rowers from history would be sitting in the exact same seat of
+the exact same boat if the solver produced today's lineup. Think
+Hamming distance between the current lineup and each historical
+lineup.
+
+**Opt-in via `SolveRequest.novelty_factor: i32`**:
+
+- `0` (default) — no constraint posted. Exact repeats are fine.
+- `1` — deprioritize lineups that are **1 seat (or fewer) different**
+  from any historical lineup. An exact 8/8 repeat incurs the biggest
+  penalty; "all but 1 seat same" (7/8) incurs a smaller one.
+- `2` — extends the penalty band to 2-seat differences. 6/8, 7/8, 8/8
+  all penalised, each harder than the last.
+- Higher values widen the band and steepen the per-distance penalty.
+
+**Data source** is `snapshot.recent_placements`, the flattened
+placements from the last `RECENT_LINEUP_WINDOW` (= 4) committed
+practices. The solver groups them by `(practice_date, boat_id)` at
+solve time so each historical lineup gets its own constraint.
+
+**Encoding per historical lineup L** (with `N_L` reachable rowing
+placements — i.e. placements whose rower is still available today
+and whose boat is still in the candidate fleet):
+
+```
+threshold = N_L - factor - 1
+match_L   = Σ x[r, b, s] for each live (rower, boat, seat) in L
+penalty_L ≥ 0                            (by domain)
+penalty_L ≥ match_L - threshold          (soft lower bound)
+obj_terms.push(penalty_L.scaled(1))
+```
+
+The lower bound is posted as the linear inequality
+`Σ match_terms − penalty_L ≤ threshold`, which gives
+`penalty_L ≥ match_L − threshold`. Pumpkin minimises, so it picks
+`max(0, match_L − threshold)` — zero below the threshold, linearly
+growing above.
+
+**Numerical check** for `factor = 1` on an `N = 8` historical
+lineup:
+
+| match count | penalty |
+|---|---|
+| 8 (exact repeat) | 2 |
+| 7 | 1 |
+| 6 | 0 |
+
+For `factor = 2`, `N = 8`:
+
+| match count | penalty |
+|---|---|
+| 8 | 3 |
+| 7 | 2 |
+| 6 | 1 |
+| 5 | 0 |
+
+**Cox seats are excluded.** Cox rotation is governed by S6 cox
+cooldown, which has a designated-cox exemption that S7 would fight
+against.
+
+**Naturally inert cases**:
+- `novelty_factor = 0`: the constraint is never posted at all.
+- Fresh database with no committed history: `recent_placements` is
+  empty, the group map is empty, nothing posted.
+- Rowers absent today or boats no longer in today's fleet: the
+  corresponding match terms don't exist. The historical lineup just
+  appears "smaller" than it was, which is correct — placements we
+  can't reproduce shouldn't count against novelty.
+- Historical lineups where every placement is no longer reachable:
+  `reachable_matches == 0`, skipped.
+- Thresholds that exceed the reachable match count: constraint is
+  trivially slack, skipped.
+
+**Cost budget**: one aux var + one linear inequality per historical
+lineup. With `RECENT_LINEUP_WINDOW = 4` and a realistic 10-boat
+fleet, that's at most ~40 historical lineups — tiny compared to the
+`obj_terms` performance threshold.
+
+**CLI**: `cargo run -p lineup_cli -- solve --novelty N [date]`.
+`--novelty 0` or omitting the flag disables S7.
+
+**Broader novelty signals (future work).** The current encoding is
+"same exact seat on same exact boat". Variants like "same boat
+regardless of seat" (rotates within-boat) or "same pair partition"
+(rotates rowing pairs) are plausible extensions; deferred until the
+current form proves too tight or too loose in practice.
 
 ### S8. Maximise rowers placed — **enabled**
 Soft bias toward fielding more boats / leaving fewer rowers on the
