@@ -23,7 +23,7 @@ intent has drifted from the implementation.
   (two adjacent seats on the same side) are not modelled. The escape hatch
   is a future per-seat override table.
 - **Bucketed data.** Rower traits are coarse enums (`RowerWeightClass`,
-  `Skill`, `Strength`) rather than numeric measurements. This is a
+  `Skill`, `Strength`, `Height`) rather than numeric measurements. This is a
   deliberate choice to minimise admin data-entry friction; the solver only
   needs enough signal to distinguish categories.
 - **Coach-supplied fleet for now.** Boat selection is currently driven by
@@ -164,6 +164,10 @@ each soft constraint's contribution to the objective. Defaults:
 | `novelty_weight` | 1 | S7 per-historical-lineup similarity penalty |
 | `placement_reward_weight` | 1 | S8 per-boat `-seats_total` placement reward |
 | `pair_strength_weight` | 1 | S9 per-partition `max − min` strength diff |
+| `bow_pair_strength_weight` | 2 | S9b extra weight on the (1, 2) bow-pair strength diff, layered on top of S9 |
+| `height_balance_weight` | 1 | S10 per-partition `max − min` height diff |
+| `end_pair_skill_weight` | 1 | S11 8-boat end-pair skill reward (seats 1/2/7/8) |
+| `engine_room_strength_weight` | 1 | S12 8-boat engine-room strength reward (seats 3-6) |
 
 **Zero disables the constraint entirely.** Setting any field to `0`
 skips the entire constraint block at solve time — no auxiliary
@@ -539,6 +543,117 @@ rowers and the "matched strength keeps the boat straight" intuition
 weakens (same-side rowers don't cancel each other's pull laterally in
 the same way). When we add bucket-rig support, S9 would need to look at
 which *sides* the two rowers are on, not just their strength.
+
+### S9b. Bow-pair strength balance (extra) — **enabled**
+The (1, 2) bow pair has outsized influence on set and steering. A
+strength mismatch there translates into visible set problems and
+course corrections that compound for the rest of the crew, so bow
+pair matching matters more than any other partition.
+
+Encoding: an *additional* `diff.scaled(bow_pair_strength_weight)`
+term is pushed into `obj_terms` on top of the regular S9 per-partition
+term, **but only for the (1, 2) partition** of each boat. Under the
+defaults (`pair_strength_weight = 1`, `bow_pair_strength_weight = 2`)
+the bow pair's effective strength-diff cost becomes `1 + 2 = 3×` a
+regular partition's cost.
+
+This is intentionally a *layered* weight rather than a replacement —
+zeroing `bow_pair_strength_weight` leaves the regular S9 penalty
+intact on the bow pair, while zeroing `pair_strength_weight` still
+leaves S9b's bow-specific term firing. That gives the two knobs
+independent semantics (universal pair balance vs. bow-specific
+emphasis).
+
+Applies to every boat with a partition at seats (1, 2), not just
+eights — the bow pair's structural role is the same on a four.
+
+### S10. Pair height balance — **enabled**
+Within a 2-seat partition, the two rowers should be roughly the same
+height. Pairing a Short rower with a VeryTall one works fine
+mechanically but the rigging / catch timing / oar-handle height feel
+better when heights match. This is a **gentle** preference — rowable
+anyway, but worth nudging — hence the modest default weight.
+
+Encoding mirrors S9 with a `Height` ordinal instead of `Strength`:
+
+- Shared `seat_height_by_seat[(b, s)] ∈ [0, 4]` built once in the
+  prelude via `build_seat_trait_map`. Linked via
+  `Σ_r ordinal(rower.height) · x[r, b, s] - seat_height[b, s] = 0`.
+- Per partition `(s_lo, s_hi)`: `pair_max` / `pair_min` / `diff` via
+  the same `maximum` / `minimum` / linear-equality pattern as S9.
+- `diff.scaled(height_balance_weight)` pushes into `obj_terms`.
+
+`Height::ordinal()` starts at **1** (Short=1 .. VeryTall=4), same
+zero-coefficient-avoidance reason as Skill/Strength.
+
+**Interaction with partial-fill.** Optional seats are excluded from
+the shared `seat_height_by_seat` map by `build_seat_trait_map`, so
+the (3,4) partition of a partial-fill 8+ falls through to the `None`
+arm of the lookup and is silently skipped — same behaviour as S9.
+
+### S11. End-pair skill reward — **enabled** *(8-boats only)*
+In an eight, seats 1/2 are the bow pair and seats 7/8 are the stern
+pair. Both are high-skill positions but for different reasons: the
+stern pair leads the stroke and sets rhythm for the rest of the
+crew; the bow pair is where set and steering live — balance
+problems and course corrections both originate there. Both jobs
+reward technical skill over raw power, so we nudge the solver to
+put the most technically skilled rowers in the ends of an eight.
+
+The bow pair's separate sensitivity to *strength mismatch* (a
+distinct concern from skill) is handled by the S9b
+`bow_pair_strength_weight` term, not here.
+
+**Encoding.** A pure objective-side term with no new auxiliary
+variables or linking constraints:
+
+```
+for each 8-boat b:
+  for seat s ∈ {1, 2, 7, 8}:
+    obj_terms.push(seat_skill_by_seat[(b, s)].scaled(-end_pair_skill_weight))
+```
+
+The objective is minimised, so a negative-coefficient term
+effectively *maximises* the wrapped variable's value. For an unused
+boat, every `x` is 0 → `seat_skill = 0` → the term contributes
+nothing, so there's no phantom "reward for benching a boat" effect.
+
+**Piggybacks on the shared skill map.** The prelude builds
+`seat_skill_by_seat` whenever `skill_variance_weight ≠ 0` **or**
+`end_pair_skill_weight ≠ 0`, so S11 reuses S1's per-seat aux vars
+rather than creating a parallel set.
+
+**8-boats only.** A 4-boat has no engine-room/ends distinction — the
+whole thing is ends. Smaller boats are even more so. The constraint
+is gated on `boat.seat_count == 8` inside the loop; 4-boats and pairs
+are skipped silently.
+
+### S12. Engine-room strength reward — **enabled** *(8-boats only)*
+Seats 3, 4, 5, 6 of an eight are the "engine room" — the four middle
+seats that provide the bulk of the propulsive power. Unlike the
+end pairs, their job is pure force application, so we reward placing
+the strongest rowers here.
+
+**Encoding** is structurally identical to S11 but over the
+`seat_strength_by_seat` map and the engine-room seat set:
+
+```
+for each 8-boat b:
+  for seat s ∈ {3, 4, 5, 6}:
+    obj_terms.push(seat_strength_by_seat[(b, s)].scaled(-engine_room_strength_weight))
+```
+
+Same piggyback pattern: `seat_strength_by_seat` is built when either
+`pair_strength_weight ≠ 0` or `engine_room_strength_weight ≠ 0`, so
+S9 and S12 share the per-seat aux vars.
+
+**Interaction with S11.** They're complementary — S11 pulls skilled
+rowers toward the ends, S12 pulls strong rowers toward the middle.
+For a rower who is both (e.g. an Expert/VeryStrong), the solver
+weighs the two rewards against each other and places them where the
+marginal gain is larger. Most real rowers aren't maxed on both axes,
+so in practice the two constraints tend to partition the crew
+naturally along the skill/strength diagonal.
 
 ## Non-goals
 

@@ -151,6 +151,37 @@ pub struct SolverConfig {
     /// S9 pair-strength multiplier. Scales the per-partition
     /// `pair_max - pair_min` penalty. Default **1**.
     pub pair_strength_weight: i32,
+    /// S9b extra bow-pair strength-balance weight. The bow pair
+    /// (seats 1 and 2) has an outsized effect on set and steering —
+    /// a strength mismatch there is more visible and more costly
+    /// than in the engine room or the stern pair. We encode this by
+    /// pushing an *additional* `diff.scaled(bow_pair_strength_weight)`
+    /// term on top of the standard S9 per-partition term whenever
+    /// the partition is (1, 2). Total effective weight on the bow
+    /// partition becomes `pair_strength_weight + bow_pair_strength_weight`.
+    /// Default **2** (bow pair effectively costs 3× a regular pair's
+    /// strength diff under the default `pair_strength_weight = 1`).
+    pub bow_pair_strength_weight: i32,
+    /// S10 pair-height-balance multiplier. Scales the per-partition
+    /// `height_max - height_min` penalty so the solver tries to keep
+    /// similarly-heighted rowers together in a pair. Intentionally
+    /// light — mixed-height pairs row fine, this is just a gentle
+    /// preference. Default **1**.
+    pub height_balance_weight: i32,
+    /// S11 end-pair skill-reward multiplier. 8-boats only. Rewards
+    /// placing high-skill rowers in the end pairs (seats 1, 2, 7, 8)
+    /// of an eight: the bow pair sets the rhythm for the rest of the
+    /// crew and the stern pair leads the boat through the stroke.
+    /// Encoded as a negative-coefficient term on each end-pair
+    /// `seat_skill` var, i.e. the solver *maximises* end-pair skill
+    /// ordinals to minimise the overall objective. Default **1**.
+    pub end_pair_skill_weight: i32,
+    /// S12 engine-room strength-reward multiplier. 8-boats only.
+    /// Rewards placing strong rowers in the middle four seats
+    /// (3, 4, 5, 6) — the "engine room" that provides the bulk of
+    /// an eight's propulsive power. Same negative-coefficient
+    /// encoding as S11 but over `seat_strength` vars. Default **1**.
+    pub engine_room_strength_weight: i32,
 }
 
 impl Default for SolverConfig {
@@ -165,6 +196,10 @@ impl Default for SolverConfig {
             novelty_weight: 1,
             placement_reward_weight: 1,
             pair_strength_weight: 1,
+            bow_pair_strength_weight: 2,
+            height_balance_weight: 1,
+            end_pair_skill_weight: 1,
+            engine_room_strength_weight: 1,
         }
     }
 }
@@ -842,6 +877,64 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         }
     }
 
+    // --- Shared per-seat trait aggregation ---
+    //
+    // Several soft constraints need "the skill / strength / height
+    // ordinal of whoever ends up in this required rowing seat" as a
+    // DomainId: S1 (skill spread per boat), S9 (pair strength diff),
+    // S10 (pair height diff), S11 (end-pair skill bonus), S12
+    // (engine-room strength bonus). Rather than building the
+    // per-(boat, seat) aux var + link equality independently inside
+    // each block — which duplicates work and wastes both aux vars
+    // and propagation — we build each trait map exactly once here,
+    // gated on whether *any* of its consumer constraints is enabled.
+    //
+    // Optional (partial-fill) seats are excluded: those may legally
+    // be empty under `PartialFillPolicy::Allowed`, so their seat-trait
+    // var would equal 0 and poison pair diffs / spread calculations.
+    // This matches the original per-block behaviour.
+    let seat_skill_by_seat: BTreeMap<(usize, i32), DomainId> =
+        if cfg.skill_variance_weight != 0 || cfg.end_pair_skill_weight != 0 {
+            build_seat_trait_map(
+                &mut solver,
+                &boats,
+                &available,
+                &x,
+                |r| r.skill.ordinal(),
+                "seat skill link",
+            )?
+        } else {
+            BTreeMap::new()
+        };
+
+    let seat_strength_by_seat: BTreeMap<(usize, i32), DomainId> =
+        if cfg.pair_strength_weight != 0 || cfg.engine_room_strength_weight != 0 {
+            build_seat_trait_map(
+                &mut solver,
+                &boats,
+                &available,
+                &x,
+                |r| r.strength.ordinal(),
+                "seat strength link",
+            )?
+        } else {
+            BTreeMap::new()
+        };
+
+    let seat_height_by_seat: BTreeMap<(usize, i32), DomainId> =
+        if cfg.height_balance_weight != 0 {
+            build_seat_trait_map(
+                &mut solver,
+                &boats,
+                &available,
+                &x,
+                |r| r.height.ordinal(),
+                "seat height link",
+            )?
+        } else {
+            BTreeMap::new()
+        };
+
     // --- S1: skill variance per boat ---
     //
     // We penalise large skill spread within a boat (don't mix a lone
@@ -869,41 +962,13 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue;
         }
 
-        // Skip OPTIONAL seats (partial-fill territory): an optional seat
-        // may be empty even when the boat is used, so its `seat_skill`
-        // would be 0 and pollute the max/min. Aggregating over required
-        // seats only gives a correct signal for the "stable core" of
-        // the boat, and matches the natural reading of skill variance
-        // for partial-fill crews.
-        let opt_seats = optional_seats(boat);
-        let mut seat_skill_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
-        for seat in 1..=n_rowing {
-            if opt_seats.contains(&seat) {
-                continue;
-            }
-            // Domain [0, 4] (not [1, 4]) because the seat_skill has to
-            // equal 0 for unused boats — H1 forces all x to 0, the link
-            // equality forces seat_skill to 0, and a tighter [1, 4]
-            // domain would make the whole problem infeasible whenever
-            // any boat is left unused.
-            let s_var = solver.new_bounded_integer(0, 4);
-            let mut terms: Vec<_> = Vec::new();
-            for (r_idx, rower) in available.iter().enumerate() {
-                if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
-                    terms.push(var.scaled(rower.skill.ordinal()));
-                }
-            }
-            if terms.is_empty() {
-                continue; // unreachable for requested boats — H1 would have bailed
-            }
-            terms.push(s_var.scaled(-1));
-            let tag = solver.new_constraint_tag();
-            solver
-                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
-                .post()
-                .map_err(|e| anyhow!("seat skill link (boat {b_idx}, seat {seat}): {e:?}"))?;
-            seat_skill_vars.push(s_var);
-        }
+        // The shared `seat_skill_by_seat` map already excludes optional
+        // (partial-fill) seats. Collect this boat's required rowing
+        // seats in order — max/min operates on values, so seat order
+        // doesn't matter beyond stability for debugging.
+        let seat_skill_vars: Vec<DomainId> = (1..=n_rowing)
+            .filter_map(|seat| seat_skill_by_seat.get(&(b_idx, seat)).copied())
+            .collect();
 
         if seat_skill_vars.len() < 2 {
             continue; // single-seat (or empty) boat — no meaningful spread
@@ -1136,48 +1201,17 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue;
         }
 
-        // Skip OPTIONAL seats: under partial-fill policies these may be
-        // empty and their seat_strength would be 0, polluting the pair
-        // diff computation. Keyed by seat position so the partition
-        // iteration below can check presence rather than relying on a
-        // dense index.
-        let opt_seats = optional_seats(boat);
-        let mut seat_strength_by_seat: BTreeMap<i32, DomainId> = BTreeMap::new();
-        for seat in 1..=n_rowing {
-            if opt_seats.contains(&seat) {
-                continue;
-            }
-            let s_var = solver.new_bounded_integer(0, 4);
-            let mut terms: Vec<_> = Vec::new();
-            for (r_idx, rower) in available.iter().enumerate() {
-                if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
-                    terms.push(var.scaled(rower.strength.ordinal()));
-                }
-            }
-            if terms.is_empty() {
-                // Unreachable for requested boats — H1 would have bailed.
-                continue;
-            }
-            terms.push(s_var.scaled(-1));
-            let tag = solver.new_constraint_tag();
-            solver
-                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
-                .post()
-                .map_err(|e| anyhow!("seat strength link: {e:?}"))?;
-            seat_strength_by_seat.insert(seat, s_var);
-        }
-
-        // Iterate 2-seat partitions and penalise strength spread. Skip
-        // any partition that includes an optional seat — when the seat
-        // is empty the pair-strength diff is meaningless, and when it's
-        // filled we don't want a partial-fill-capable partition's
-        // balance to dominate the objective either.
+        // Iterate 2-seat partitions and penalise strength spread. The
+        // shared `seat_strength_by_seat` map already excludes optional
+        // seats, so any partition containing an optional seat will
+        // have a `None` lookup and skip. This keeps partial-fill-
+        // capable partitions out of the pair-balance objective.
         let mut s_lo = 1i32;
         while s_lo + 1 <= n_rowing {
             let s_hi = s_lo + 1;
             let (lo_var, hi_var) = match (
-                seat_strength_by_seat.get(&s_lo).copied(),
-                seat_strength_by_seat.get(&s_hi).copied(),
+                seat_strength_by_seat.get(&(b_idx, s_lo)).copied(),
+                seat_strength_by_seat.get(&(b_idx, s_hi)).copied(),
             ) {
                 (Some(l), Some(h)) => (l, h),
                 _ => {
@@ -1222,9 +1256,167 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
             obj_terms.push(diff.scaled(cfg.pair_strength_weight));
 
+            // S9b: the bow pair (seats 1, 2) has outsized influence on
+            // set and steering, so we layer an extra diff term on top
+            // of the regular S9 contribution for that partition only.
+            // Safe to push the same `diff` DomainId twice — Pumpkin's
+            // AffineView is a Copy projection of the underlying var,
+            // and the objective-link equality just accumulates both
+            // coefficients.
+            if s_lo == 1 && cfg.bow_pair_strength_weight != 0 {
+                obj_terms.push(diff.scaled(cfg.bow_pair_strength_weight));
+            }
+
             s_lo += 2;
         }
     }
+    }
+
+    // --- S10: pair height balance ---
+    //
+    // Within a 2-seat partition we'd rather keep rowers of similar
+    // height together. A pair of a Short with a VeryTall rows fine,
+    // but alignment / rigging / catch timing all feel nicer when the
+    // two are close in height. This is a gentle preference rather
+    // than a hard structural rule, so the default weight is 1 (the
+    // same as S1 skill variance) and the encoding intentionally
+    // mirrors S9 so the two can ride the same shared
+    // `seat_height_by_seat` map and the same partition iteration
+    // pattern.
+    //
+    // Encoding per partition (s_lo, s_hi):
+    //   pair_max = max(seat_height[b, s_lo], seat_height[b, s_hi])
+    //   pair_min = min(seat_height[b, s_lo], seat_height[b, s_hi])
+    //   diff     = pair_max - pair_min    (in [0, 3])
+    //   obj_terms.push(diff.scaled(height_balance_weight))
+    //
+    // Optional seats are already excluded by the shared map (see
+    // `build_seat_trait_map`), so partitions containing an optional
+    // seat miss the lookup and skip — same as S9.
+    if cfg.height_balance_weight != 0 {
+    for (b_idx, boat) in boats.iter().enumerate() {
+        let n_rowing = boat.seat_count;
+        if n_rowing < 2 {
+            continue;
+        }
+
+        let mut s_lo = 1i32;
+        while s_lo + 1 <= n_rowing {
+            let s_hi = s_lo + 1;
+            let (lo_var, hi_var) = match (
+                seat_height_by_seat.get(&(b_idx, s_lo)).copied(),
+                seat_height_by_seat.get(&(b_idx, s_hi)).copied(),
+            ) {
+                (Some(l), Some(h)) => (l, h),
+                _ => {
+                    s_lo += 2;
+                    continue;
+                }
+            };
+
+            let pair_max = solver.new_bounded_integer(0, 4);
+            let pair_min = solver.new_bounded_integer(0, 4);
+
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::maximum(
+                    vec![lo_var, hi_var],
+                    pair_max,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair height max: {e:?}"))?;
+
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::minimum(
+                    vec![lo_var, hi_var],
+                    pair_min,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair height min: {e:?}"))?;
+
+            let diff = solver.new_bounded_integer(0, 3);
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(
+                    vec![pair_max.scaled(1), pair_min.scaled(-1), diff.scaled(-1)],
+                    0,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair height diff: {e:?}"))?;
+
+            obj_terms.push(diff.scaled(cfg.height_balance_weight));
+
+            s_lo += 2;
+        }
+    }
+    }
+
+    // --- S11: end-pair skill reward (8-boats only) ---
+    //
+    // In an eight, seats 1/2 (the bow pair) and 7/8 (the stern pair)
+    // are both high-skill positions but for different reasons. The
+    // stern pair leads the stroke and sets rhythm for the rest of the
+    // crew; the bow pair has the biggest influence on set and
+    // steering — balance problems and course corrections both
+    // originate there. Both jobs reward skill more than raw power,
+    // so we nudge the solver to put the most technically skilled
+    // rowers in those four seats.
+    //
+    // (The bow pair's *strength-balance* sensitivity — distinct from
+    // skill — is handled separately by S9b
+    // `bow_pair_strength_weight`, which layers an extra pair-balance
+    // term on the (1, 2) partition of every boat.)
+    //
+    // Encoding: push a negative-coefficient term on each end-pair
+    // `seat_skill` var. The objective is minimised, so a
+    // `-weight * seat_skill` term is maximised at seat_skill = 4
+    // (Expert). For unused boats every `x` is 0 → seat_skill = 0,
+    // so the term contributes 0 and there's no phantom reward for
+    // benching a boat.
+    //
+    // Only applies to 8-boats. Smaller boats have no meaningful
+    // "engine room vs ends" split — a four is all engine, a pair is
+    // all ends.
+    if cfg.end_pair_skill_weight != 0 {
+        const END_PAIR_SEATS: [i32; 4] = [1, 2, 7, 8];
+        for (b_idx, boat) in boats.iter().enumerate() {
+            if boat.seat_count != 8 {
+                continue;
+            }
+            for seat in END_PAIR_SEATS {
+                if let Some(&s_var) = seat_skill_by_seat.get(&(b_idx, seat)) {
+                    obj_terms.push(s_var.scaled(-cfg.end_pair_skill_weight));
+                }
+            }
+        }
+    }
+
+    // --- S12: engine-room strength reward (8-boats only) ---
+    //
+    // Seats 3/4/5/6 of an eight are the "engine room" — the four
+    // middle seats do the bulk of the propulsive work. We reward
+    // placing the strongest rowers there with a negative-coefficient
+    // term on the engine-room `seat_strength` vars, exactly
+    // symmetric to S11.
+    //
+    // Only applies to 8-boats: a four has no engine-room/ends
+    // distinction, and smaller boats are entirely ends.
+    if cfg.engine_room_strength_weight != 0 {
+        const ENGINE_ROOM_SEATS: [i32; 4] = [3, 4, 5, 6];
+        for (b_idx, boat) in boats.iter().enumerate() {
+            if boat.seat_count != 8 {
+                continue;
+            }
+            for seat in ENGINE_ROOM_SEATS {
+                if let Some(&s_var) = seat_strength_by_seat.get(&(b_idx, seat)) {
+                    obj_terms.push(s_var.scaled(-cfg.engine_room_strength_weight));
+                }
+            }
+        }
     }
 
     // --- Objective variable ---
@@ -1324,6 +1516,77 @@ impl<B: Brancher, R: ConflictResolver> SolutionCallback<B, R> for NoCallback {
     ) -> ControlFlow<Self::Stop> {
         ControlFlow::Continue(())
     }
+}
+
+/// Build a shared `(boat_idx, seat) -> seat_trait_var` map for a
+/// per-rower ordinal (skill, strength, height). For each required
+/// rowing seat of each boat, creates a `[0, 4]` aux var and posts
+/// the link equality
+///
+///   Σ_r ordinal(rower_r) · x[r, b, seat] − seat_trait[b, seat] = 0
+///
+/// Because H1 guarantees the per-seat Σ_r x equals `use[b]`, the
+/// seat_trait variable equals the placed rower's ordinal when the
+/// seat is filled, and 0 when the boat is unused (the `[0, 4]`
+/// domain is deliberately loose to accommodate the unused-boat case,
+/// matching the per-block behaviour this helper replaced).
+///
+/// Optional (partial-fill) seats are excluded — an empty seat would
+/// drive the trait var to 0 and pollute any downstream spread / diff
+/// calculation. Consumers that care about partial-fill-friendly
+/// per-partition logic must either work around the missing entries
+/// or accept "we don't score that partition".
+///
+/// The caller is responsible for only calling this when at least
+/// one consuming soft constraint is enabled — empty traits are
+/// wasted aux vars + propagation work.
+fn build_seat_trait_map(
+    solver: &mut Solver,
+    boats: &[&Boat],
+    available: &[&Rower],
+    x: &BTreeMap<(usize, usize, i32), DomainId>,
+    ordinal: impl Fn(&Rower) -> i32,
+    label: &'static str,
+) -> Result<BTreeMap<(usize, i32), DomainId>> {
+    let mut map: BTreeMap<(usize, i32), DomainId> = BTreeMap::new();
+    for (b_idx, boat) in boats.iter().enumerate() {
+        let n_rowing = boat.seat_count;
+        if n_rowing == 0 {
+            continue;
+        }
+        let opt_seats = optional_seats(boat);
+        for seat in 1..=n_rowing {
+            if opt_seats.contains(&seat) {
+                continue;
+            }
+            // Domain [0, 4] (not [1, 4]) so the seat_trait can equal 0
+            // for unused boats — H1 forces all x to 0, the link
+            // equality forces seat_trait to 0, and a tighter [1, 4]
+            // domain would make the whole problem infeasible whenever
+            // any boat is left unused.
+            let s_var = solver.new_bounded_integer(0, 4);
+            let mut terms: Vec<AffineView<DomainId>> = Vec::new();
+            for (r_idx, rower) in available.iter().enumerate() {
+                if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
+                    terms.push(var.scaled(ordinal(rower)));
+                }
+            }
+            if terms.is_empty() {
+                // No eligible rower for this seat — H1 will have
+                // already forced use[b] = 0 for this boat, so skipping
+                // is correct (the seat_trait var would be unused).
+                continue;
+            }
+            terms.push(s_var.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("{label} (boat {b_idx}, seat {seat}): {e:?}"))?;
+            map.insert((b_idx, seat), s_var);
+        }
+    }
+    Ok(map)
 }
 
 fn seat_positions(boat: &Boat) -> Vec<i32> {
