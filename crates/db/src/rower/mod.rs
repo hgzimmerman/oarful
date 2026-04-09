@@ -22,6 +22,11 @@ use crate::types::IntBool;
 pub struct Rower {
     pub id: RowerId,
     pub name: String,
+    /// Unique contact identifier. Populated by the Google Sheets sync
+    /// and used as the matching key when re-importing. Nullable
+    /// because not every rower has one on file (fixture rowers, legacy
+    /// manual entries).
+    pub email: Option<String>,
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
@@ -45,6 +50,7 @@ pub struct Rower {
 #[diesel(table_name = crate::schema::rower)]
 pub struct NewRower {
     pub name: String,
+    pub email: Option<String>,
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
@@ -66,7 +72,8 @@ impl NewRower {
     /// `IntBool::FALSE` for rowers who genuinely can't cox (e.g.,
     /// brand-new learn-to-row members). `is_designated_cox` stays
     /// `false` — designated coxes are the rare case and the admin
-    /// sets it explicitly.
+    /// sets it explicitly. Email is None by default; set it when
+    /// creating rowers from a sync that has one.
     pub fn sweep(
         name: impl Into<String>,
         weight_class: RowerWeightClass,
@@ -77,6 +84,7 @@ impl NewRower {
         let now = chrono::Utc::now().naive_utc();
         Self {
             name: name.into(),
+            email: None,
             weight_class,
             skill,
             strength,
@@ -85,6 +93,36 @@ impl NewRower {
             can_scull: IntBool::FALSE,
             can_cox: IntBool::TRUE,
             is_designated_cox: IntBool::FALSE,
+            active: IntBool::TRUE,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// Builder used by the Google Sheets sync path. Applies
+    /// middle-ground defaults for attributes the sheet doesn't
+    /// know about (weight_class / skill / strength) and uses the
+    /// sheet-provided values for everything it does know.
+    pub fn from_sheet(
+        name: impl Into<String>,
+        email: String,
+        side: Side,
+        can_scull: bool,
+        can_cox: bool,
+        is_designated_cox: bool,
+    ) -> Self {
+        let now = chrono::Utc::now().naive_utc();
+        Self {
+            name: name.into(),
+            email: Some(email),
+            weight_class: RowerWeightClass::Medium,
+            skill: Skill::Intermediate,
+            strength: Strength::Intermediate,
+            side,
+            side_strength: SideStrength::default(),
+            can_scull: IntBool::new(can_scull),
+            can_cox: IntBool::new(can_cox),
+            is_designated_cox: IntBool::new(is_designated_cox),
             active: IntBool::TRUE,
             created_at: now,
             updated_at: now,

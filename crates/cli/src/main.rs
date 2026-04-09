@@ -12,11 +12,13 @@
 //!   cargo run -p lineup_cli -- solve --novelty N [date]
 //!                                               # penalise lineups within N seats of a historical one
 //!   cargo run -p lineup_cli -- history [date]   # show committed lineups for a date
+//!   cargo run -p lineup_cli -- sync-sheet <ID> [--gid N]
+//!                                               # pull availability from a public Google Sheet
 
 mod bench;
 
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use lineup_db::{
     fixture,
     lineup::{CommitSeat, Lineup},
@@ -51,6 +53,7 @@ async fn main() -> Result<()> {
         }
         Some("history") => cmd_history(&db, parse_date(args.get(1))?).await,
         Some("bench") => bench::run(),
+        Some("sync-sheet") => cmd_sync_sheet(&db, &args[1..]).await,
         Some(other) if other != "dump" => {
             cmd_dump(&db, parse_date(Some(&other.to_string()))?).await
         }
@@ -343,6 +346,100 @@ async fn cmd_history(db: &Db, date: NaiveDate) -> Result<()> {
                 format!("seat {}", seat.seat_position)
             };
             println!("  {:<8} {name}", label);
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_sync_sheet(db: &Db, args: &[String]) -> Result<()> {
+    // Parse positional sheet ID + optional --gid flag.
+    let mut sheet_id: Option<String> = None;
+    let mut gid: u32 = 0;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--gid" => {
+                gid = args
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("--gid requires a number"))?
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("--gid N must be a non-negative integer: {e}"))?;
+                i += 2;
+            }
+            positional if sheet_id.is_none() => {
+                sheet_id = Some(positional.to_string());
+                i += 1;
+            }
+            other => {
+                anyhow::bail!("unexpected argument to sync-sheet: {other}");
+            }
+        }
+    }
+    let sheet_id = sheet_id.ok_or_else(|| {
+        anyhow::anyhow!(
+            "usage: lineup_cli sync-sheet <SPREADSHEET_ID> [--gid N]"
+        )
+    })?;
+
+    println!("=== Syncing sheet {sheet_id} (gid={gid}) ===");
+
+    // `db.with_conn` takes a sync closure, so we can't .await the HTTP
+    // fetch inside it. Split the work: fetch the CSV in the outer async
+    // context, then hand the resulting String into a sync closure that
+    // runs `lineup_sheets::sync_csv` on a pooled connection.
+    let url = format!(
+        "https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+    );
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()?;
+    let resp = client.get(&url).send().await?;
+    if !resp.status().is_success() {
+        anyhow::bail!(
+            "sheet csv export returned HTTP {}: is the sheet set to \
+             'Anyone with the link can view'?",
+            resp.status()
+        );
+    }
+    let csv_text: String = resp.text().await?;
+
+    let year = chrono::Utc::now().date_naive().year();
+
+    // `lineup_sheets::sync_csv` returns `anyhow::Result` but
+    // `db.with_conn` demands a closure returning
+    // `Result<_, diesel::result::Error>`. We flatten anyhow errors
+    // into a sqlite-shaped error inside the closure, then unwrap it
+    // on the outside.
+    let sync_result: Result<lineup_sheets::SyncSummary> = db
+        .with_conn(move |conn| {
+            match lineup_sheets::sync_csv(&csv_text, year, conn) {
+                Ok(summary) => Ok(Ok(summary)),
+                Err(e) => Ok(Err(e)),
+            }
+        })
+        .await?;
+    let summary = sync_result?;
+
+    println!(
+        "Sync complete. Read {} rows ({} sweep, {} sculling). \
+         Created {} rowers, updated {}. Upserted {} availability entries.",
+        summary.rows_read,
+        summary.sweep_rows,
+        summary.sculling_rows,
+        summary.rowers_created,
+        summary.rowers_updated,
+        summary.availabilities_upserted,
+    );
+    if summary.rows_skipped_no_email > 0 {
+        println!(
+            "  Skipped {} rows without an email.",
+            summary.rows_skipped_no_email
+        );
+    }
+    if !summary.warnings.is_empty() {
+        println!("\nWarnings ({}):", summary.warnings.len());
+        for w in &summary.warnings {
+            println!("  - {w}");
         }
     }
     Ok(())

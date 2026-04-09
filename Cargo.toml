@@ -38,11 +38,18 @@ pumpkin-core = "0.3"
 pumpkin-constraints = "0.3"
 pumpkin-conflict-resolvers = "0.3"
 
+# Google Sheets sync. v1 reads a publicly-shared sheet via its CSV
+# export URL, so we only need an HTTP client + CSV parser. For private
+# sheets we'd add google-sheets4 + yup-oauth2 later; kept commented
+# out so the version baseline is documented.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+csv = "1.3"
+# google-sheets4 = "7"   # future: authenticated sheets
+# yup-oauth2 = "12"      # future: service-account auth
+
 # Reserved for later milestones — declared centrally so versions stay consistent.
 # axum = "0.8"
 # maud = "0.26"
-# google-sheets4 = "7"
-# yup-oauth2 = "12"
 # hyper-rustls = "0.27"
 
 # Local crates

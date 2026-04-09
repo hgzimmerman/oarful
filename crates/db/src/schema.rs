@@ -7,6 +7,7 @@ diesel::table! {
     rower (id) {
         id -> Integer,
         name -> Text,
+        email -> Nullable<Text>,
         weight_class -> RowerWeightClassMapping,
         skill -> SkillMapping,
         strength -> StrengthMapping,

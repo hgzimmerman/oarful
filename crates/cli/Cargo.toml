@@ -11,9 +11,11 @@ path = "src/main.rs"
 [dependencies]
 lineup_db.workspace = true
 lineup_solver.workspace = true
+lineup_sheets.workspace = true
 
 anyhow.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

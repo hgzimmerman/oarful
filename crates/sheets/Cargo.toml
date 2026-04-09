@@ -5,11 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-# Filled in during milestone 6 (Google Sheets availability sync).
-# google-sheets4 = { workspace = true }
-# yup-oauth2 = { workspace = true }
-# hyper-rustls = { workspace = true }
 lineup_db.workspace = true
 
 anyhow.workspace = true
 tracing.workspace = true
+chrono.workspace = true
+diesel.workspace = true
+
+reqwest.workspace = true
+csv.workspace = true

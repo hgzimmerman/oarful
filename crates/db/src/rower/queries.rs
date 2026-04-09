@@ -1,6 +1,7 @@
-use super::types::RowerId;
+use super::types::{RowerId, Side};
 use super::{NewRower, Rower};
 use crate::schema::{lineup, lineup_seat, practice, rower};
+use crate::types::IntBool;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -64,5 +65,82 @@ impl Rower {
                 .or_insert(date);
         }
         Ok(map)
+    }
+
+    /// Look up a rower by email. Used as the matching key during the
+    /// Google Sheets sync. Returns `Ok(None)` if no rower with that
+    /// email exists.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn find_by_email(
+        conn: &mut SqliteConnection,
+        email: &str,
+    ) -> Result<Option<Rower>, diesel::result::Error> {
+        rower::table
+            .filter(rower::email.eq(email))
+            .select(Rower::as_select())
+            .first(conn)
+            .optional()
+    }
+
+    /// Promote-only update of mutable rower attributes from sheet data.
+    ///
+    /// Rule: the sync path NEVER demotes a coach-set value. Specific
+    /// sides stay specific, true flags stay true. The sync only
+    /// promotes:
+    /// - `side`: `Either` → `Port` or `Starboard`
+    /// - `can_cox`: `false` → `true`
+    /// - `can_scull`: `false` → `true`
+    /// - `is_designated_cox`: `false` → `true`
+    ///
+    /// Also updates `name` unconditionally (the sheet is the authoritative
+    /// display name) and `updated_at` to now.
+    ///
+    /// Returns the updated Rower. If no fields changed, the existing
+    /// row is returned unchanged and no UPDATE is issued.
+    #[tracing::instrument(level = "debug", skip(conn, current), err)]
+    pub fn promote_from_sheet(
+        conn: &mut SqliteConnection,
+        current: &Rower,
+        new_name: &str,
+        new_side: Side,
+        new_can_scull: bool,
+        new_can_cox: bool,
+        new_is_designated_cox: bool,
+    ) -> Result<Rower, diesel::result::Error> {
+        let mut dirty = false;
+        let mut next = current.clone();
+
+        if next.name != new_name {
+            next.name = new_name.to_string();
+            dirty = true;
+        }
+        // Side: promote Either → specific; never demote.
+        if next.side == Side::Either && new_side != Side::Either {
+            next.side = new_side;
+            dirty = true;
+        }
+        // Boolean flags: promote false → true; never demote.
+        if !next.can_scull.as_bool() && new_can_scull {
+            next.can_scull = IntBool::TRUE;
+            dirty = true;
+        }
+        if !next.can_cox.as_bool() && new_can_cox {
+            next.can_cox = IntBool::TRUE;
+            dirty = true;
+        }
+        if !next.is_designated_cox.as_bool() && new_is_designated_cox {
+            next.is_designated_cox = IntBool::TRUE;
+            dirty = true;
+        }
+
+        if !dirty {
+            return Ok(current.clone());
+        }
+
+        next.updated_at = chrono::Utc::now().naive_utc();
+        diesel::update(rower::table.filter(rower::id.eq(current.id)))
+            .set(&next)
+            .returning(Rower::as_returning())
+            .get_result(conn)
     }
 }

@@ -13,6 +13,10 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE rower (
     id INTEGER PRIMARY KEY ASC NOT NULL,
     name TEXT NOT NULL UNIQUE,
+    -- Email is the natural unique key for cross-system identity (e.g.
+    -- when syncing from the shared club spreadsheet). Nullable because
+    -- not every rower has one on file, but UNIQUE when present.
+    email TEXT UNIQUE,
     weight_class TEXT CHECK( weight_class IN ('Light','Medium','Heavy') ) NOT NULL,
     skill TEXT CHECK( skill IN ('Novice','Intermediate','Master','Expert') ) NOT NULL,
     strength TEXT CHECK( strength IN ('Weak','Intermediate','Strong','VeryStrong') ) NOT NULL,
