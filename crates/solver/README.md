@@ -143,7 +143,7 @@ of 1.
 | S3   | **enabled**  | seat affinities (stored in `rower_seat_affinity`) |
 | S4   | **enabled**  | soft side preference, weighted by `side_strength` |
 | S5   | **enabled**  | weight-class soft target via slack variables |
-| S6   | planned      | cox cooldown |
+| S6   | **enabled**  | cox cooldown (non-designated, derived from history) |
 | S7   | planned      | novelty vs recent lineups |
 | S8   | **enabled**  | maximise rowers placed (per-boat seat reward + `use[b]`) |
 | S9   | **enabled**  | pair strength balance (universal, not data-driven) |
@@ -263,11 +263,56 @@ In the current fixture this is the *only* objective term, so the solver
 is effectively minimising "total deviation from every boat's target". As
 S1–S8 arrive they all feed into the same objective sum.
 
-### S6. Cox cooldown
-`last_coxed_dates` gives us the most recent cox appearance per rower,
-derived from lineup history. For non-designated coxes, coxing within
-N days of their last cox appearance incurs a large penalty. Designated
-coxes are exempt.
+### S6. Cox cooldown — **enabled**
+`snapshot.last_coxed` gives us the most recent cox appearance per rower,
+derived from `lineup_seat` history via `Rower::last_coxed_dates`. For
+non-designated rowers who coxed within the cooldown window, the solver
+pays a flat penalty if it tries to seat them as cox again. Designated
+coxswains are exempt — they're meant to cox often.
+
+**Constants** (in `crates/solver/src/lib.rs`):
+- `COX_COOLDOWN_DAYS = 7` — "not the same person two practices running"
+  for a club that runs every other day.
+- `COX_COOLDOWN_PENALTY = 5` — same ballpark as S4 wrong-side penalty
+  for a strongly side-locked rower.
+
+**Encoding** mirrors the S4 per-rower aggregation:
+
+```
+for each rower r where
+  !is_designated_cox(r)
+  AND last_coxed[r] exists
+  AND (request.date - last_coxed[r]) ∈ [0, COX_COOLDOWN_DAYS):
+
+    cox_vars[r] = [x[r, b, 0] for each boat b]   (cox-seat x vars only)
+    cox_use[r] ∈ {0, 1}                          (by H2)
+    Σ cox_vars[r] - cox_use[r] = 0
+    obj_terms.push(cox_use[r].scaled(COX_COOLDOWN_PENALTY))
+```
+
+One aux var + one linking equality + one obj term per penalized rower.
+O(rowers in cooldown) cost.
+
+**Naturally inert cases**:
+- Designated coxes: skipped outright (exempt).
+- Rowers who've never coxed: no history entry, no penalty.
+- Coxes outside the cooldown window: skipped.
+- Coxless candidate fleet: no cox-seat x vars exist, `cox_vars` is empty, skipped.
+
+**Decay**: currently a flat penalty within the window. A linear decay
+like `penalty * (cooldown - days_since) / cooldown` would reward
+waiting longer before re-coxing, but the constant form is simpler and
+sufficient for the "don't cox two days in a row" signal that matters
+most. The constants can migrate into `SolverConfig` when per-team
+tuning arrives.
+
+**Demonstration note**: in the toy fixture, Lena is the only
+designated cox and the only high-value cox candidate — she wins the
+cox competition on other dimensions (S1 skill, her availability, etc.)
+regardless of whether S6 penalises Mika. To see S6 visibly reshuffle
+the solution you need a fixture where the non-designated cox is the
+naturally-preferred choice and the penalty tips the balance. The
+constraint is still posted and enforced in the current fixture.
 
 ### S7. Novelty vs recent lineups
 Minimise overlap with the last K practices. For each `(rower, boat,

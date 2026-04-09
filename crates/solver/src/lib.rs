@@ -103,6 +103,20 @@ impl PartialFillPolicy {
     }
 }
 
+/// S6 cox-cooldown window. Non-designated coxes who coxed within this
+/// many days of the current practice date incur a penalty if the solver
+/// tries to seat them as cox again. Designated coxswains are exempt.
+/// 7 days = "not the same person two practices running" for a club
+/// that runs roughly every other day.
+const COX_COOLDOWN_DAYS: i64 = 7;
+
+/// S6 cox-cooldown penalty per "rower coxes while still in cooldown"
+/// placement. Scaled with the base obj_term weights; a value of 5 puts
+/// it in the same ballpark as S4 wrong-side preference for a strongly
+/// side-locked rower. Roughly: "cox cooldown matters about as much as
+/// putting a Port rower on Starboard."
+const COX_COOLDOWN_PENALTY: i32 = 5;
+
 /// Which rowing seats of a given boat are "optional" — i.e. may be left
 /// empty under a non-strict [`PartialFillPolicy`]. The set is hardcoded
 /// per boat class based on common rowing practice:
@@ -285,6 +299,68 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
 
         obj_terms.push(wrong_count.scaled(rower.side_strength.as_int()));
+    }
+
+    // --- S6: cox cooldown ---
+    //
+    // Non-designated rowers who coxed recently get a penalty if the
+    // solver tries to seat them as cox again inside the cooldown
+    // window. Designated coxes are exempt — they're meant to cox
+    // often. The history data comes from `DbSnapshot.last_coxed`,
+    // which the db layer derives from committed lineup_seat rows.
+    //
+    // Encoding mirrors S4 per-rower aggregation: collect the rower's
+    // cox-seat x variables across all boats (each rower has at most
+    // one such var per boat, since only coxed boats have seat 0),
+    // sum them into a `cox_use[r] ∈ {0,1}` aux var (by H2 a rower is
+    // in at most one seat overall), link via a linear equality, and
+    // push ONE scaled penalty term into obj_terms. That's O(rowers in
+    // cooldown) obj terms rather than O(coxed boats × rowers in
+    // cooldown) — same pattern that made S4 and S8 tractable at
+    // scale.
+    //
+    // The penalty is a flat COX_COOLDOWN_PENALTY regardless of how
+    // recent the last cox was, because (a) it keeps the encoding
+    // simple and (b) decay-by-days would require either per-rower
+    // coefficients in the objective (which we support) or a
+    // quadratic penalty (which we don't). A follow-up could add a
+    // linear decay like `penalty * (cooldown - days_since) / cooldown`.
+    for (r_idx, rower) in available.iter().enumerate() {
+        if rower.is_designated_cox.as_bool() {
+            continue; // exempt — designated coxes cox as often as needed
+        }
+        let Some(last_date) = snapshot.last_coxed.get(&rower.id) else {
+            continue; // never coxed → no cooldown to enforce
+        };
+        let days_since = (request.date - *last_date).num_days();
+        if days_since < 0 || days_since >= COX_COOLDOWN_DAYS {
+            continue; // outside cooldown window (or in the future; ignore)
+        }
+
+        // Gather this rower's cox-seat x variables. Each coxed boat
+        // contributes one; coxless boats don't create a seat-0 x var
+        // in the first place, so there's nothing to collect there.
+        let cox_vars: Vec<DomainId> = boats
+            .iter()
+            .enumerate()
+            .filter_map(|(b_idx, _)| x.get(&(r_idx, b_idx, 0)).copied())
+            .collect();
+
+        if cox_vars.is_empty() {
+            continue; // rower has no cox vars — can_cox=false or no coxed boats today
+        }
+
+        let cox_use = solver.new_bounded_integer(0, 1);
+        let mut link: Vec<AffineView<DomainId>> =
+            cox_vars.iter().map(|v| v.scaled(1)).collect();
+        link.push(cox_use.scaled(-1));
+        let tag = solver.new_constraint_tag();
+        solver
+            .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+            .post()
+            .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
+
+        obj_terms.push(cox_use.scaled(COX_COOLDOWN_PENALTY));
     }
 
     // --- Hard constraint 1: seat fill conditional on `use[b]`. ---

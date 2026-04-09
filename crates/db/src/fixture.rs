@@ -45,21 +45,23 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     Practice::upsert_by_date(conn, date, Some("Toy seeded practice".to_string()))?;
 
     // Rough mix: most Yes, a couple No, one Maybe, one ScullingOnly.
+    // Mika (12) is Yes — she's the non-designated cox that S6 uses to
+    // demonstrate the cooldown constraint.
     let statuses = [
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::No,
-        AvailabilityStatus::Maybe,
-        AvailabilityStatus::Yes,
-        AvailabilityStatus::ScullingOnly,
-        AvailabilityStatus::No,
+        AvailabilityStatus::Yes,         // Alice
+        AvailabilityStatus::Yes,         // Bob
+        AvailabilityStatus::Yes,         // Carla
+        AvailabilityStatus::Yes,         // Diego
+        AvailabilityStatus::Yes,         // Erin
+        AvailabilityStatus::Yes,         // Finn
+        AvailabilityStatus::Yes,         // Grace
+        AvailabilityStatus::Yes,         // Hana
+        AvailabilityStatus::Yes,         // Ivan
+        AvailabilityStatus::No,          // Juno
+        AvailabilityStatus::Maybe,       // Kai
+        AvailabilityStatus::Yes,         // Lena (designated cox)
+        AvailabilityStatus::Yes,         // Mika (non-designated cox)
+        AvailabilityStatus::ScullingOnly, // Nico → scullers team today
     ];
     for (rower_id, status) in rower_ids.iter().copied().zip(statuses) {
         Availability::upsert(
@@ -177,7 +179,16 @@ fn toy_rowers() -> Vec<NewRower> {
             r.is_designated_cox = IntBool::TRUE;
             r
         },
-        NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, Starboard),
+        {
+            // Mika can cox but is NOT a designated cox — she rows
+            // most of the time but fills in when Lena is unavailable.
+            // This is the configuration S6 (cox cooldown) was designed
+            // for: a non-designated cox-capable rower whose recent
+            // cox history should discourage re-cox.
+            let mut r = NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, Starboard);
+            r.can_cox = IntBool::TRUE;
+            r
+        },
         {
             // Nico can be pushed to the scullers as overflow.
             let mut r = NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, Either);
