@@ -60,6 +60,13 @@ pub struct NewRower {
 
 impl NewRower {
     /// Convenience builder with sensible defaults for a new sweep rower.
+    ///
+    /// Most rowers at a typical club are trained to cox in a pinch,
+    /// so `can_cox` defaults to `true`. Opt out by setting it to
+    /// `IntBool::FALSE` for rowers who genuinely can't cox (e.g.,
+    /// brand-new learn-to-row members). `is_designated_cox` stays
+    /// `false` — designated coxes are the rare case and the admin
+    /// sets it explicitly.
     pub fn sweep(
         name: impl Into<String>,
         weight_class: RowerWeightClass,
@@ -76,7 +83,7 @@ impl NewRower {
             side,
             side_strength: SideStrength::default(),
             can_scull: IntBool::FALSE,
-            can_cox: IntBool::FALSE,
+            can_cox: IntBool::TRUE,
             is_designated_cox: IntBool::FALSE,
             active: IntBool::TRUE,
             created_at: now,

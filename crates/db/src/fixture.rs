@@ -169,26 +169,28 @@ fn toy_rowers() -> Vec<NewRower> {
         NewRower::sweep("Finn", Heavy, Sk::Intermediate, St::Strong, Port),
         NewRower::sweep("Grace", Light, Sk::Expert, St::Intermediate, Starboard),
         NewRower::sweep("Hana", Medium, Sk::Master, St::VeryStrong, Port),
-        NewRower::sweep("Ivan", Heavy, Sk::Novice, St::Weak, Starboard),
+        {
+            // Ivan is a brand-new novice and hasn't learned to cox
+            // yet — the realistic case where `can_cox = false` makes
+            // sense. Most other rowers default to can_cox = true.
+            let mut r = NewRower::sweep("Ivan", Heavy, Sk::Novice, St::Weak, Starboard);
+            r.can_cox = IntBool::FALSE;
+            r
+        },
         NewRower::sweep("Juno", Medium, Sk::Intermediate, St::Intermediate, Either),
         NewRower::sweep("Kai", Light, Sk::Master, St::Strong, Port),
         {
-            // Lena is the designated cox.
+            // Lena is the designated cox — she's Light, Expert, and
+            // Weak which makes her a natural fit for seat 0 rather
+            // than a rowing seat. `can_cox` is already true by
+            // default; we only need to flip the designated flag.
             let mut r = NewRower::sweep("Lena", Light, Sk::Expert, St::Weak, Either);
-            r.can_cox = IntBool::TRUE;
             r.is_designated_cox = IntBool::TRUE;
             r
         },
-        {
-            // Mika can cox but is NOT a designated cox — she rows
-            // most of the time but fills in when Lena is unavailable.
-            // This is the configuration S6 (cox cooldown) was designed
-            // for: a non-designated cox-capable rower whose recent
-            // cox history should discourage re-cox.
-            let mut r = NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, Starboard);
-            r.can_cox = IntBool::TRUE;
-            r
-        },
+        // Mika rows most of the time but picks up cox duty when Lena
+        // is out. `can_cox = true` is the default; nothing to flip.
+        NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, Starboard),
         {
             // Nico can be pushed to the scullers as overflow.
             let mut r = NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, Either);
