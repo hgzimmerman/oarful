@@ -1,15 +1,17 @@
 //! Milestone 1 + 2 CLI.
 //!
 //! Usage:
-//!   cargo run -p lineup_cli                    # dump snapshot for default date
-//!   cargo run -p lineup_cli -- 2026-04-11      # dump snapshot for given date
-//!   cargo run -p lineup_cli -- solve           # solve for default date
+//!   cargo run -p lineup_cli                     # dump snapshot for default date
+//!   cargo run -p lineup_cli -- 2026-04-11       # dump snapshot for given date
+//!   cargo run -p lineup_cli -- solve            # solve for default date (strict fill)
 //!   cargo run -p lineup_cli -- solve 2026-04-11
+//!   cargo run -p lineup_cli -- solve --partial N [date]
+//!                                               # allow up to N empty optional seats per boat
 
 use anyhow::Result;
 use chrono::NaiveDate;
 use lineup_db::{fixture, snapshot::DbSnapshot, state::Db};
-use lineup_solver::{solve, SolveRequest, SolveStatus};
+use lineup_solver::{solve, PartialFillPolicy, SolveRequest, SolveStatus};
 use tracing_subscriber::EnvFilter;
 
 const DEFAULT_DATE: (i32, u32, u32) = (2026, 4, 11);
@@ -28,11 +30,46 @@ async fn main() -> Result<()> {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("solve") => cmd_solve(&db, parse_date(args.get(1))?).await,
-        Some(other) if other != "dump" => cmd_dump(&db, parse_date(Some(&other.to_string()))?).await,
+        Some("solve") => {
+            let (partial, date) = parse_solve_args(&args[1..])?;
+            cmd_solve(&db, date, partial).await
+        }
+        Some(other) if other != "dump" => {
+            cmd_dump(&db, parse_date(Some(&other.to_string()))?).await
+        }
         Some(_) => cmd_dump(&db, parse_date(args.get(1))?).await,
         None => cmd_dump(&db, default_date()).await,
     }
+}
+
+/// Parse `solve` subcommand arguments: an optional `--partial N` flag
+/// followed by an optional date. Missing date defaults to `DEFAULT_DATE`.
+fn parse_solve_args(args: &[String]) -> Result<(PartialFillPolicy, NaiveDate)> {
+    let mut partial = PartialFillPolicy::Strict;
+    let mut date: Option<NaiveDate> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--partial" => {
+                let n: i32 = args
+                    .get(i + 1)
+                    .ok_or_else(|| anyhow::anyhow!("--partial requires a number"))?
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("--partial N must be an integer: {e}"))?;
+                partial = if n <= 0 {
+                    PartialFillPolicy::Strict
+                } else {
+                    PartialFillPolicy::Allowed(n)
+                };
+                i += 2;
+            }
+            other => {
+                date = Some(parse_date(Some(&other.to_string()))?);
+                i += 1;
+            }
+        }
+    }
+    Ok((partial, date.unwrap_or_else(default_date)))
 }
 
 fn default_date() -> NaiveDate {
@@ -56,7 +93,7 @@ async fn cmd_dump(db: &Db, date: NaiveDate) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_solve(db: &Db, date: NaiveDate) -> Result<()> {
+async fn cmd_solve(db: &Db, date: NaiveDate, partial: PartialFillPolicy) -> Result<()> {
     let snapshot = db
         .with_conn(move |conn| DbSnapshot::for_date(conn, date))
         .await?;
@@ -65,6 +102,7 @@ async fn cmd_solve(db: &Db, date: NaiveDate) -> Result<()> {
 
     println!("=== Solving lineup for {date} ===");
     println!("  {num_available} rowers available for sweep");
+    println!("  partial-fill policy: {partial:?}");
     println!("  candidate fleet: {} boat(s)", snapshot.sweep_boats.len());
     for b in &snapshot.sweep_boats {
         println!(
@@ -83,6 +121,7 @@ async fn cmd_solve(db: &Db, date: NaiveDate) -> Result<()> {
     let request = SolveRequest {
         date,
         boats: vec![],
+        partial_fill: partial,
     };
     let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;

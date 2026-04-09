@@ -49,6 +49,67 @@ pub struct SolveRequest {
     /// Primitive coach-override semantics: to require a specific boat,
     /// pass it alone; to forbid a boat, just don't include it.
     pub boats: Vec<BoatId>,
+    /// Whether and how aggressively the solver may partial-fill a boat
+    /// (leave specific "optional" seats empty even when the boat is
+    /// fielded). Default `Strict`: no partial fills, every seat of every
+    /// fielded boat must be filled. See `PartialFillPolicy` for details.
+    pub partial_fill: PartialFillPolicy,
+}
+
+/// Policy for how aggressively the solver may leave designated "optional"
+/// seats empty on boats it fields.
+///
+/// Some clubs prefer going out in a 7/8-filled 8+ (missing seat 3 or 4)
+/// rather than downsizing to a smaller boat and benching more rowers.
+/// This enum controls that trade-off.
+///
+/// The *set* of optional seats is hardcoded per boat class by
+/// `optional_seats` — e.g. an 8+ has `[3, 4]` as optional, a 4-boat has
+/// no optional seats (partial-filling a 4 is too structurally unbalanced
+/// to be useful). The `Allowed(k)` variant sets the maximum number of
+/// those optional seats that may be empty per boat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartialFillPolicy {
+    /// No partial fills. Every seat of every fielded boat must be
+    /// filled exactly once. This is the current/default behaviour.
+    Strict,
+    /// Each fielded boat may have up to `k` of its optional seats
+    /// empty. For an 8+ with optional seats `[3, 4]`, `Allowed(1)`
+    /// permits "missing seat 3" or "missing seat 4" but not both;
+    /// `Allowed(2)` permits any combination including both empty.
+    Allowed(i32),
+}
+
+impl Default for PartialFillPolicy {
+    fn default() -> Self {
+        Self::Strict
+    }
+}
+
+impl PartialFillPolicy {
+    fn max_empty(self) -> i32 {
+        match self {
+            Self::Strict => 0,
+            Self::Allowed(k) => k.max(0),
+        }
+    }
+}
+
+/// Which rowing seats of a given boat are "optional" — i.e. may be left
+/// empty under a non-strict [`PartialFillPolicy`]. The set is hardcoded
+/// per boat class based on common rowing practice:
+///
+/// - **8+**: seats 3 and 4 are the inside bow pair; these are the
+///   conventional "row it down a pair" positions when the club is short
+///   on rowers.
+/// - **Everything else**: no optional seats. A 4-boat with a missing
+///   seat is too unbalanced to be useful, and smaller boats have no
+///   realistic partial-fill pattern.
+fn optional_seats(boat: &Boat) -> Vec<i32> {
+    match boat.seat_count {
+        8 => vec![3, 4],
+        _ => vec![],
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -182,14 +243,22 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
     // --- Hard constraint 1: seat fill conditional on `use[b]`. ---
     //
-    // For each (boat, seat):   Σ_r x[r,b,s] = use[b]
+    // For each REQUIRED (boat, seat):   Σ_r x[r,b,s] = use[b]
+    // For each OPTIONAL (boat, seat):   Σ_r x[r,b,s] ≤ use[b]
     //
-    // If the solver picks the boat (use[b] = 1) every seat is filled
-    // exactly once; if not (use[b] = 0) every seat is empty. There is no
-    // partial-fill: a boat is all-in or all-out. This is what lets
-    // boat selection move inside the model — the solver decides use[b]
-    // based on the objective balance.
+    // Required seats must be filled whenever the boat is used; optional
+    // seats may be empty (but still can't be double-filled). The
+    // partial-fill policy adds a cap on how many optional seats may go
+    // empty — see the cap posting below.
+    //
+    // If the solver picks the boat (use[b] = 1) every required seat is
+    // filled exactly once and every optional seat is 0 or 1; if not
+    // (use[b] = 0) every seat is empty. This all-or-nothing-per-boat
+    // semantics is what lets boat selection move inside the model —
+    // the solver decides use[b] based on the objective balance.
+    let k_allowed = request.partial_fill.max_empty();
     for (b_idx, boat) in boats.iter().enumerate() {
+        let opt_seats = optional_seats(boat);
         for seat in seat_positions(boat) {
             let mut terms: Vec<AffineView<DomainId>> = (0..available.len())
                 .filter_map(|r_idx| x.get(&(r_idx, b_idx, seat)).map(|v| v.scaled(1)))
@@ -213,13 +282,55 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 );
                 break;
             }
-            // Σ x - use[b] = 0
+            // Required: Σ x - use[b] = 0. Optional: Σ x - use[b] ≤ 0.
             terms.push(use_b[b_idx].scaled(-1));
             let tag = solver.new_constraint_tag();
-            solver
-                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
-                .post()
-                .map_err(|e| anyhow!("posting seat-fill constraint: {e:?}"))?;
+            if opt_seats.contains(&seat) && k_allowed > 0 {
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        terms, 0, tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("posting optional seat-fill constraint: {e:?}"))?;
+            } else {
+                solver
+                    .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
+                    .post()
+                    .map_err(|e| anyhow!("posting seat-fill constraint: {e:?}"))?;
+            }
+        }
+
+        // Partial-fill cap: at least `(n_opt - k_allowed)` of the
+        // optional seats must be filled when the boat is used.
+        //
+        //   Σ_{s ∈ opt_seats, r} x[r,b,s]  ≥  (n_opt - k) * use[b]
+        //   ⇔  (n_opt - k) * use[b] - Σ x ≤ 0
+        //
+        // Only posted when k > 0 and the boat has optional seats;
+        // otherwise the tight H1 equality above already forces every
+        // optional seat to be filled.
+        let n_opt = opt_seats.len() as i32;
+        if k_allowed > 0 && n_opt > 0 {
+            let k = k_allowed.min(n_opt);
+            let min_filled_opt = n_opt - k;
+            if min_filled_opt > 0 {
+                let mut cap_terms: Vec<AffineView<DomainId>> = Vec::new();
+                for s in &opt_seats {
+                    for r_idx in 0..available.len() {
+                        if let Some(&var) = x.get(&(r_idx, b_idx, *s)) {
+                            cap_terms.push(var.scaled(-1));
+                        }
+                    }
+                }
+                cap_terms.push(use_b[b_idx].scaled(min_filled_opt));
+                let tag = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        cap_terms, 0, tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("posting partial-fill cap: {e:?}"))?;
+            }
         }
     }
 
@@ -336,8 +447,23 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue;
         }
 
+        // Skip OPTIONAL seats (partial-fill territory): an optional seat
+        // may be empty even when the boat is used, so its `seat_skill`
+        // would be 0 and pollute the max/min. Aggregating over required
+        // seats only gives a correct signal for the "stable core" of
+        // the boat, and matches the natural reading of skill variance
+        // for partial-fill crews.
+        let opt_seats = optional_seats(boat);
         let mut seat_skill_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
         for seat in 1..=n_rowing {
+            if opt_seats.contains(&seat) {
+                continue;
+            }
+            // Domain [0, 4] (not [1, 4]) because the seat_skill has to
+            // equal 0 for unused boats — H1 forces all x to 0, the link
+            // equality forces seat_skill to 0, and a tighter [1, 4]
+            // domain would make the whole problem infeasible whenever
+            // any boat is left unused.
             let s_var = solver.new_bounded_integer(0, 4);
             let mut terms: Vec<_> = Vec::new();
             for (r_idx, rower) in available.iter().enumerate() {
@@ -574,9 +700,17 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             continue;
         }
 
-        // Per-seat strength auxiliary variables, indexed by `seat - 1`.
-        let mut seat_strength_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
+        // Skip OPTIONAL seats: under partial-fill policies these may be
+        // empty and their seat_strength would be 0, polluting the pair
+        // diff computation. Keyed by seat position so the partition
+        // iteration below can check presence rather than relying on a
+        // dense index.
+        let opt_seats = optional_seats(boat);
+        let mut seat_strength_by_seat: BTreeMap<i32, DomainId> = BTreeMap::new();
         for seat in 1..=n_rowing {
+            if opt_seats.contains(&seat) {
+                continue;
+            }
             let s_var = solver.new_bounded_integer(0, 4);
             let mut terms: Vec<_> = Vec::new();
             for (r_idx, rower) in available.iter().enumerate() {
@@ -594,15 +728,27 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                 .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
                 .post()
                 .map_err(|e| anyhow!("seat strength link: {e:?}"))?;
-            seat_strength_vars.push(s_var);
+            seat_strength_by_seat.insert(seat, s_var);
         }
 
-        // Iterate 2-seat partitions and penalise strength spread.
+        // Iterate 2-seat partitions and penalise strength spread. Skip
+        // any partition that includes an optional seat — when the seat
+        // is empty the pair-strength diff is meaningless, and when it's
+        // filled we don't want a partial-fill-capable partition's
+        // balance to dominate the objective either.
         let mut s_lo = 1i32;
         while s_lo + 1 <= n_rowing {
             let s_hi = s_lo + 1;
-            let lo_var = seat_strength_vars[(s_lo - 1) as usize];
-            let hi_var = seat_strength_vars[(s_hi - 1) as usize];
+            let (lo_var, hi_var) = match (
+                seat_strength_by_seat.get(&s_lo).copied(),
+                seat_strength_by_seat.get(&s_hi).copied(),
+            ) {
+                (Some(l), Some(h)) => (l, h),
+                _ => {
+                    s_lo += 2;
+                    continue;
+                }
+            };
 
             let pair_max = solver.new_bounded_integer(0, 4);
             let pair_min = solver.new_bounded_integer(0, 4);

@@ -415,17 +415,58 @@ constraint that forces the placement of at least K rowers to differ
 from the recorded solution, re-solve. The `NoCallback` stub becomes a
 real callback that records every improving solution during search.
 
-**Partial-fill strategy (planned).**
-Some clubs prefer fielding an 8+ that's missing one seat (typically
-seat 3 or seat 4 — inside middle seats) rather than downsizing to a
-smaller boat and benching more rowers. The rough encoding would be:
-per boat, a designated set of "optional" seats that can be empty even
-when `use[b] = 1`, plus a per-empty-seat penalty in the objective.
-Configurable per boat class — "at most K middle seats missing for an
-8+", typically K=0, sometimes K=1, rarely K=2. Deferred because it
-interacts with H1, S9 pair-strength balance (missing one seat of a
-pair breaks the pair cleanly — easier than breaking both), and the
-coach UI needs a way to surface the trade-off.
+**Partial-fill strategy — enabled.**
+Some clubs prefer fielding an 8+ that's missing seat 3 or 4 (the
+inside middle pair) rather than downsizing to a smaller boat and
+benching more rowers. Controlled by
+`SolveRequest.partial_fill: PartialFillPolicy`:
+
+- `Strict` (default) — every seat of every fielded boat must be
+  filled exactly once. Matches the pre-feature behaviour.
+- `Allowed(k)` — each fielded boat may have up to `k` of its
+  "optional" seats empty. The optional set is hardcoded per boat
+  class in `optional_seats(boat)`:
+  - 8+: `[3, 4]` (inside bow pair — conventional "row it down a pair")
+  - Everything else: `[]` (too structurally unbalanced)
+
+**Encoding.** H1 splits into two cases per seat:
+
+```
+Required seat:   Σ_r x[r,b,s] = use[b]     (tight)
+Optional seat:   Σ_r x[r,b,s] ≤ use[b]     (may be 0 or 1 when used)
+```
+
+Plus a per-boat cap forcing at least `(n_opt − k)` optional seats to
+be filled:
+
+```
+Σ_{s ∈ opt_seats, r} x[r,b,s]  ≥  (n_opt − k) · use[b]
+```
+
+**Interaction with S1 / S9.** Optional seats are excluded from the
+S1 skill variance and S9 pair strength aggregations:
+- S1 creates `seat_skill` vars only for required seats, so an empty
+  optional seat can't pollute the max/min (a boat of 7 Experts + 1
+  empty seat would otherwise report spread = 4, nonsense).
+- S9 skips any partition that contains an optional seat — for the 8+
+  that's partition (3,4), which is exactly the partial-fill target.
+
+**CLI.** `cargo run -p lineup_cli -- solve --partial N [date]`
+switches the policy to `Allowed(N)`. `--partial 0` is equivalent to
+`Strict`.
+
+**When this bites.** With 10 rowers and the default fixture (2 × 4s
++ 1 × 8+), partial-fill doesn't visibly change the output because the
+two full 4s already place 8 rowers (vs a partial 7-of-8 Persephone
+placing 7 rowers — strictly worse under S8). The feature bites when
+the fleet is constrained such that a partial-filled larger boat is
+the only way to place more rowers than a smaller one.
+
+**Future work — partial-fill penalty.** Currently optional seats
+carry zero cost when empty beyond the S5 / S8 implicit effects. A
+future refinement would add a small per-empty-seat penalty so the
+solver prefers full fills when both are feasible, separately tunable
+from the other soft weights.
 
 ## Why Pumpkin?
 
