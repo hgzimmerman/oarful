@@ -271,8 +271,10 @@ pays a flat penalty if it tries to seat them as cox again. Designated
 coxswains are exempt — they're meant to cox often.
 
 **Constants** (in `crates/solver/src/lib.rs`):
-- `COX_COOLDOWN_DAYS = 7` — "not the same person two practices running"
-  for a club that runs every other day.
+- `COX_COOLDOWN_DAYS = 14` — roughly two weeks of practice, the
+  rotation horizon most clubs care about ("don't have the same person
+  cox two weeks running"). Long enough to matter, short enough not to
+  effectively lock out anyone who ever coxes.
 - `COX_COOLDOWN_PENALTY = 5` — same ballpark as S4 wrong-side penalty
   for a strongly side-locked rower.
 

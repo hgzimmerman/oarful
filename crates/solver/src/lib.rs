@@ -106,9 +106,11 @@ impl PartialFillPolicy {
 /// S6 cox-cooldown window. Non-designated coxes who coxed within this
 /// many days of the current practice date incur a penalty if the solver
 /// tries to seat them as cox again. Designated coxswains are exempt.
-/// 7 days = "not the same person two practices running" for a club
-/// that runs roughly every other day.
-const COX_COOLDOWN_DAYS: i64 = 7;
+/// 14 days ≈ two weeks of practice — covers the full rotation horizon
+/// most clubs care about ("don't have the same person cox two weeks
+/// running") without being so long it effectively locks out anyone
+/// who ever coxes.
+const COX_COOLDOWN_DAYS: i64 = 14;
 
 /// S6 cox-cooldown penalty per "rower coxes while still in cooldown"
 /// placement. Scaled with the base obj_term weights; a value of 5 puts
