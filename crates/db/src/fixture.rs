@@ -5,6 +5,7 @@
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
 use crate::boat::types::WeightClass as BoatWeightClass;
 use crate::boat::{Boat, NewBoat};
+use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
 use crate::rower::types::{RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
@@ -88,6 +89,22 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
                 seat_position: seat,
                 weight,
             },
+        )?;
+    }
+
+    // Pair affinities. Two examples:
+    //   - Alice (0, Port/Medium/Expert) + Erin (4, Either/Medium/Expert):
+    //     +4. These two train together as a pair. In the current
+    //     optimum they're in the same boat but in different 2-seat
+    //     partitions, so this one should demonstrably reshuffle.
+    //   - Carla (2, Port/Light/Intermediate) + Diego (3, Starboard/
+    //     Medium/Master): +2. Currently already in the same partition
+    //     (Artemis seats 1-2); the affinity just makes that choice
+    //     locked rather than accidental.
+    for (idx_a, idx_b, weight) in [(0usize, 4usize, 4), (2, 3, 2)] {
+        PairAffinity::insert(
+            conn,
+            NewPairAffinity::canonical(rower_ids[idx_a], rower_ids[idx_b], weight),
         )?;
     }
     Ok(())

@@ -413,6 +413,124 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         obj_terms.push(spread.scaled(1));
     }
 
+    // --- S2: pair affinities ---
+    //
+    // A "pair" in rowing is a fixed 2-seat partition of a boat: seats
+    // (1,2), (3,4), (5,6), (7,8). Under standard alternating rig each
+    // partition contains one port and one starboard rower. We encode
+    // `pair_affinity(A, B, w)` as a per-partition reified boolean
+    // `together[pair, boat, partition] ∈ {0,1}` driven by the AND of
+    // "A is in this partition" and "B is in this partition":
+    //
+    //   A_in_part = x[A, b, s_lo] + x[A, b, s_hi]   (at most 1)
+    //   B_in_part = x[B, b, s_lo] + x[B, b, s_hi]   (at most 1)
+    //   together ≤ A_in_part
+    //   together ≤ B_in_part
+    //   together ≥ A_in_part + B_in_part - 1
+    //
+    // `together.scaled(-w)` is pushed into `obj_terms`. Positive w
+    // rewards pair-sharing; negative w penalises it. Unavailable
+    // rowers, designated coxes, and bucket-rigged boats all yield
+    // structurally-zero indicators, so those cases are inert rather
+    // than erroring.
+    //
+    // Non-standard rigs: this encoding assumes standard alternating rig
+    // (see README §Scope). Double-bucket rigs break the "pair contains
+    // one port + one starboard" invariant — a pair in such a boat is
+    // more of a convention than a structural guarantee. The affinity
+    // still fires if both rowers land in the same 2-seat partition,
+    // but the "one-port-one-starboard" expectation doesn't hold.
+    for aff in &snapshot.pair_affinities {
+        if aff.weight == 0 {
+            continue;
+        }
+        let a_idx = match available.iter().position(|r| r.id == aff.rower_a_id) {
+            Some(i) => i,
+            None => continue,
+        };
+        let b_idx = match available.iter().position(|r| r.id == aff.rower_b_id) {
+            Some(i) => i,
+            None => continue,
+        };
+
+        for (boat_idx, boat) in boats.iter().enumerate() {
+            // Iterate pair partitions: (1,2), (3,4), (5,6), (7,8) ...
+            let mut s_lo = 1;
+            while s_lo + 1 <= boat.seat_count {
+                let s_hi = s_lo + 1;
+
+                // A_in_part and B_in_part: each a Vec of up to 2 x vars.
+                let a_terms: Vec<_> = [s_lo, s_hi]
+                    .into_iter()
+                    .filter_map(|s| x.get(&(a_idx, boat_idx, s)).copied())
+                    .collect();
+                let b_terms: Vec<_> = [s_lo, s_hi]
+                    .into_iter()
+                    .filter_map(|s| x.get(&(b_idx, boat_idx, s)).copied())
+                    .collect();
+
+                // If either rower has no eligible variable for both seats
+                // of this partition (e.g. they're a designated cox, or
+                // side-locked away from both seats), the partition is
+                // structurally infeasible for them — skip and leave the
+                // affinity inert for this (boat, partition).
+                if a_terms.is_empty() || b_terms.is_empty() {
+                    s_lo += 2;
+                    continue;
+                }
+
+                let together = solver.new_bounded_integer(0, 1);
+
+                // together ≤ A_in_part  ⇔  together - A_in_part ≤ 0
+                let mut upper_a = vec![together.scaled(1)];
+                for t in &a_terms {
+                    upper_a.push(t.scaled(-1));
+                }
+                let tag = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        upper_a, 0, tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("pair reif upper-A: {e:?}"))?;
+
+                // together ≤ B_in_part
+                let mut upper_b = vec![together.scaled(1)];
+                for t in &b_terms {
+                    upper_b.push(t.scaled(-1));
+                }
+                let tag = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        upper_b, 0, tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("pair reif upper-B: {e:?}"))?;
+
+                // together ≥ A_in_part + B_in_part - 1
+                //   ⇔ -together + A_in_part + B_in_part ≤ 1
+                let mut lower = vec![together.scaled(-1)];
+                for t in &a_terms {
+                    lower.push(t.scaled(1));
+                }
+                for t in &b_terms {
+                    lower.push(t.scaled(1));
+                }
+                let tag = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        lower, 1, tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("pair reif lower: {e:?}"))?;
+
+                obj_terms.push(together.scaled(-aff.weight));
+
+                s_lo += 2;
+            }
+        }
+    }
+
     // --- S3: seat affinities ---
     //
     // For each stored (rower, seat_position, weight) entry, push a

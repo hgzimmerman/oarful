@@ -132,7 +132,7 @@ of 1.
 | Term | Status       | Notes |
 |------|--------------|-------|
 | S1   | **enabled**  | skill variance within a boat (max − min) |
-| S2   | planned      | pair affinities / anti-affinities |
+| S2   | **enabled**  | pair affinities (2-seat partition reification) |
 | S3   | **enabled**  | seat affinities (stored in `rower_seat_affinity`) |
 | S4   | **enabled**  | soft side preference, weighted by `side_strength` |
 | S5   | **enabled**  | weight-class soft target via slack variables |
@@ -157,11 +157,53 @@ Skill ordinals start at **1** (Novice=1 .. Expert=4), not 0. Pumpkin
 panics on `.scaled(0)`, so we shift the ordinals up by one. Spread is
 max-minus-min and is invariant under the shift.
 
-### S2. Pair affinities / anti-affinities
-From the `pair_affinity` table. For each stored pair with weight `w`, add
-`w · [both rowers on the same boat]` to the objective. Positive `w`
-rewards keeping them together; negative `w` penalises it. Reified via a
-per-pair-per-boat "both present" boolean.
+### S2. Pair affinities — **enabled**
+From the `pair_affinity` table. In rowing, a "pair" is a fixed 2-seat
+partition of a boat: `(1,2), (3,4), (5,6), (7,8)` — **not** every
+adjacent pair of seats. `(seat 2, seat 3)` is not a pair because it
+crosses a partition boundary.
+
+For each stored `(A, B, w)` and each boat, the solver iterates over the
+boat's partitions and introduces a reified boolean
+`together[pair, boat, partition] ∈ {0,1}` driven by the AND of "A is in
+this partition" and "B is in this partition":
+
+```
+A_in_partition := x[A, b, s_lo] + x[A, b, s_hi]   (at most 1 by H2)
+B_in_partition := x[B, b, s_lo] + x[B, b, s_hi]   (at most 1)
+
+together ≤ A_in_partition
+together ≤ B_in_partition
+together ≥ A_in_partition + B_in_partition − 1
+```
+
+Three linear inequalities per (stored_pair × boat × partition). Then
+`together.scaled(-w)` pushes into `obj_terms`. Positive `w` rewards
+pair-sharing; negative `w` penalises it.
+
+**Naturally inert cases** (no error, just no effect):
+- Either rower unavailable → no `x` vars exist, partition terms are
+  empty, the partition is skipped.
+- Designated cox involved → cox has no rowing-seat variables, same
+  result.
+- Structurally incompatible pair (e.g. both Port under hard side-locks)
+  → the reified boolean stays 0 for every partition; no reward earned
+  but no error.
+
+**Standard-rig assumption.** Under standard alternating rig, every
+partition contains exactly one port and one starboard rower, so pair
+affinities are implicitly opposite-sided. Double-bucket rigs (two
+adjacent seats on the same side) break that invariant: a partition in
+a double-bucket boat may contain two same-side rowers, and the
+"pair = port + starboard" expectation no longer holds. We currently
+don't model bucket rigs at all (see §Scope), so this is a deferred
+concern; if we add per-seat side overrides later, pair affinity
+semantics under non-standard rigs will need revisiting.
+
+**Future: cox-crew affinity.** Coxswains tend to be associated with
+particular boats or crews — a future soft term could reward matching
+a cox with a crew they've been working with. Not implemented; tracked
+here for visibility.
 
 ### S3. Seat affinities — **enabled**
 From the `rower_seat_affinity` table. For each `(rower, seat, weight)`
