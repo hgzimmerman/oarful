@@ -1,0 +1,5 @@
+/target
+lineup.sql
+lineup.sql-journal
+.direnv
+.envrc.local

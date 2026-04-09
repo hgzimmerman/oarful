@@ -1,0 +1,8 @@
+# Run diesel CLI from the workspace root.
+# e.g. `diesel migration run --migration-dir crates/db/migrations --database-url lineup.sql`
+[print_schema]
+file = "crates/db/src/schema.rs"
+custom_type_derives = ["diesel::query_builder::QueryId"]
+
+[migrations_directory]
+dir = "crates/db/migrations"

@@ -1,0 +1,22 @@
+[package]
+name = "lineup_server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lineup_server"
+path = "src/main.rs"
+
+[dependencies]
+# Filled in during milestone 5 (axum + Maud/HTMX UI).
+# axum = { workspace = true }
+# maud = { workspace = true }
+lineup_db.workspace = true
+lineup_solver.workspace = true
+lineup_sheets.workspace = true
+
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

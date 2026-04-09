@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/db",
+    "crates/solver",
+    "crates/sheets",
+    "crates/server",
+    "crates/cli",
+]
+default-members = ["crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "1"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["full"] }
+
+diesel = { version = "2.3", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
+diesel-derive-enum = { version = "2.1", features = ["sqlite"] }
+diesel-derive-newtype = "2.1"
+diesel_migrations = "2.3"
+deadpool-diesel = { version = "0.5", features = ["sqlite"] }
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+
+# Constraint solver. We pull in pumpkin-core directly (rather than the
+# higher-level `pumpkin-solver` crate) to sidestep its `cc`/`vergen-gix`
+# build.rs — we only need the library API, not the FlatZinc binary frontend.
+pumpkin-core = "0.3"
+pumpkin-constraints = "0.3"
+pumpkin-conflict-resolvers = "0.3"
+
+# Reserved for later milestones — declared centrally so versions stay consistent.
+# axum = "0.8"
+# maud = "0.26"
+# google-sheets4 = "7"
+# yup-oauth2 = "12"
+# hyper-rustls = "0.27"
+
+# Local crates
+lineup_db = { path = "crates/db" }
+lineup_solver = { path = "crates/solver" }
+lineup_sheets = { path = "crates/sheets" }

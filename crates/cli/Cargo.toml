@@ -1,0 +1,19 @@
+[package]
+name = "lineup_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lineup_cli"
+path = "src/main.rs"
+
+[dependencies]
+lineup_db.workspace = true
+lineup_solver.workspace = true
+
+anyhow.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
