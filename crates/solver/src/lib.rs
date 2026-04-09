@@ -561,6 +561,103 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         }
     }
 
+    // --- S9: pair strength balance ---
+    //
+    // Within a single rowing pair (a 2-seat partition), the two rowers
+    // should have similar strength. A mismatched pair pulls harder on
+    // one side and the boat yaws off course — matched strength means
+    // the boat tracks straight. This is a universal structural rule,
+    // not a coach preference about specific rowers, so it applies to
+    // every partition regardless of the pair_affinity table.
+    //
+    // Encoding mirrors S1 but scoped to two-seat windows:
+    //   1. Per rowing seat, `seat_strength[b,s] ∈ [1,4]` linked to
+    //      `Σ_r ordinal(rower.strength) · x[r,b,s]`. H1 guarantees the
+    //      sum equals the placed rower's strength ordinal.
+    //   2. For each partition (s_lo, s_hi), compute
+    //      `pair_max`, `pair_min` via maximum / minimum over the two
+    //      seat_strength vars, then `diff = pair_max - pair_min`.
+    //   3. Push `diff.scaled(1)` into `obj_terms`.
+    //
+    // Scaling note: Strength ordinals start at 1 (Weak=1 .. VeryStrong=4)
+    // so `.scaled(ordinal)` never hits the Pumpkin zero-coefficient
+    // panic. Spread is `max - min` and is invariant under the shift.
+    for (b_idx, boat) in boats.iter().enumerate() {
+        let n_rowing = boat.seat_count;
+        if n_rowing < 2 {
+            continue;
+        }
+
+        // Per-seat strength auxiliary variables, indexed by `seat - 1`.
+        let mut seat_strength_vars: Vec<DomainId> = Vec::with_capacity(n_rowing as usize);
+        for seat in 1..=n_rowing {
+            let s_var = solver.new_bounded_integer(1, 4);
+            let mut terms: Vec<_> = Vec::new();
+            for (r_idx, rower) in available.iter().enumerate() {
+                if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
+                    terms.push(var.scaled(rower.strength.ordinal()));
+                }
+            }
+            if terms.is_empty() {
+                // Unreachable for requested boats — H1 would have bailed.
+                continue;
+            }
+            terms.push(s_var.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("seat strength link: {e:?}"))?;
+            seat_strength_vars.push(s_var);
+        }
+
+        // Iterate 2-seat partitions and penalise strength spread.
+        let mut s_lo = 1i32;
+        while s_lo + 1 <= n_rowing {
+            let s_hi = s_lo + 1;
+            let lo_var = seat_strength_vars[(s_lo - 1) as usize];
+            let hi_var = seat_strength_vars[(s_hi - 1) as usize];
+
+            let pair_max = solver.new_bounded_integer(1, 4);
+            let pair_min = solver.new_bounded_integer(1, 4);
+
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::maximum(
+                    vec![lo_var, hi_var],
+                    pair_max,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair strength max: {e:?}"))?;
+
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::minimum(
+                    vec![lo_var, hi_var],
+                    pair_min,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair strength min: {e:?}"))?;
+
+            let diff = solver.new_bounded_integer(0, 3);
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(
+                    vec![pair_max.scaled(1), pair_min.scaled(-1), diff.scaled(-1)],
+                    0,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("pair strength diff: {e:?}"))?;
+
+            obj_terms.push(diff.scaled(1));
+
+            s_lo += 2;
+        }
+    }
+
     // --- Objective variable ---
     // The objective is the sum of every weighted term pushed into
     // `obj_terms`: S5 weight deviation, S1 skill spread, S4 side-pref

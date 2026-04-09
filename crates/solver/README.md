@@ -139,6 +139,7 @@ of 1.
 | S6   | planned      | cox cooldown |
 | S7   | planned      | novelty vs recent lineups |
 | S8   | planned      | maximise rowers placed |
+| S9   | **enabled**  | pair strength balance (universal, not data-driven) |
 
 ### S1. Skill variance within a boat — **enabled**
 Avoid putting eight novices with one expert in an eight. Encoded as a
@@ -271,6 +272,43 @@ same boat. Prevents "every Tuesday is the same crew" drift.
 Soft bias toward fielding more boats / leaving fewer rowers on the dock.
 Counterbalances weight-class and skill penalties when they'd otherwise
 prefer a smaller-but-tighter crew.
+
+### S9. Pair strength balance — **enabled**
+Within a single rowing pair (a 2-seat partition), the two rowers should
+have similar strength. Mismatched strength in a pair means one side
+pulls harder than the other and the hull yaws off course — matched
+strength keeps the boat tracking straight. This is a universal
+structural rule, not a coach preference about specific rowers, so it
+applies to every partition automatically regardless of the
+`pair_affinity` table contents.
+
+Encoding mirrors S1 but scoped to two-seat windows:
+- `seat_strength[b, s] ∈ [1, 4]` per rowing seat, linked via
+  `Σ_r ordinal(rower.strength) · x[r, b, s] - seat_strength[b, s] = 0`.
+  H1 guarantees the sum equals the placed rower's strength ordinal.
+- Per partition `(s_lo, s_hi)`: `pair_max` and `pair_min` via
+  `maximum` / `minimum` over the two seat_strength vars, then
+  `diff = pair_max - pair_min ∈ [0, 3]`.
+- `diff.scaled(1)` pushes into `obj_terms`.
+
+`Strength::ordinal()` starts at `1` (Weak=1 .. VeryStrong=4) for the
+same reason as `Skill::ordinal()` — Pumpkin panics on `.scaled(0)` and
+max/min differences are invariant under the shift.
+
+**Design note: why S9 is separate from S2.** S2 represents coach
+preferences about *specific* rower pairings ("Alice and Erin train
+together"). S9 is a universal hull-tracking rule that applies to any
+pair regardless of who's in it. They share the 2-seat partition concept
+but the storage and scope differ: S2 reads from `pair_affinity`; S9 is
+computed from strength ordinals on every partition the solver considers.
+
+**Interaction with bucket rigs.** Like S2, S9 assumes standard
+alternating rig so that every 2-seat partition is a real opposite-side
+pair. Under a double-bucket rig the partition may contain two same-side
+rowers and the "matched strength keeps the boat straight" intuition
+weakens (same-side rowers don't cancel each other's pull laterally in
+the same way). When we add bucket-rig support, S9 would need to look at
+which *sides* the two rowers are on, not just their strength.
 
 ## Non-goals
 

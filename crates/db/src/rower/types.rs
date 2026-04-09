@@ -149,12 +149,17 @@ pub enum Strength {
 }
 
 impl Strength {
+    /// Ordinal used by the solver for pair-strength balance and skill /
+    /// strength variance. Starts at 1 rather than 0 so the solver never
+    /// multiplies a decision variable by zero — Pumpkin panics on
+    /// `.scaled(0)`. Differences and variances are invariant under the
+    /// shift.
     pub fn ordinal(self) -> i32 {
         match self {
-            Self::Weak => 0,
-            Self::Intermediate => 1,
-            Self::Strong => 2,
-            Self::VeryStrong => 3,
+            Self::Weak => 1,
+            Self::Intermediate => 2,
+            Self::Strong => 3,
+            Self::VeryStrong => 4,
         }
     }
 }
