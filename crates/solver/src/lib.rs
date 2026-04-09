@@ -365,12 +365,33 @@ pub struct ProposedLineup {
 // are now passed wholesale to `solve`, and the solver decides which to
 // field via `use[b]` decision variables balanced against S1/S5/S8.
 
-/// Find a feasible seat assignment for the requested boats. Hard constraints
-/// only; no objective function.
+/// Find a feasible seat assignment for the requested boats with
+/// soft-constraint-aware optimisation and optional Top-N
+/// alternatives.
+///
+/// The body is a thin three-phase orchestrator:
+///
+/// 1. **Resolve inputs.** Turn `request.boats` into a concrete
+///    `Vec<&Boat>` (empty = "every in-service sweep boat"),
+///    gather the available rowers for the date, and short-circuit
+///    the trivial cases where there's nothing to do.
+/// 2. **Build the model.** Delegate to [`build_model`] to
+///    assemble a fully-constrained `ModelBuilder` and linked
+///    objective variable.
+/// 3. **Search for lineups.** Delegate to [`search_lineups`] to
+///    run the Pumpkin optimiser (with Top-N tabu re-solve if
+///    requested) and decode the result.
+///
+/// Each phase is self-contained; the split makes it obvious
+/// where "assembling constraints" ends and "running search"
+/// begins.
 #[tracing::instrument(level = "debug", skip_all, fields(date = %request.date, n_boats = request.boats.len()), err)]
 pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResult> {
-    // Resolve candidate fleet. An empty `request.boats` means "consider
-    // every in-service sweep boat".
+    // --- Phase 1: resolve inputs ---
+    //
+    // Turn `request.boats` into a concrete fleet vec. An empty
+    // request means "consider every in-service sweep boat"; any
+    // explicit IDs must correspond to actual snapshot entries.
     let boats: Vec<&Boat> = if request.boats.is_empty() {
         snapshot.sweep_boats.iter().collect()
     } else {
@@ -386,7 +407,6 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             })
             .collect::<Result<_>>()?
     };
-
     if boats.is_empty() {
         return Ok(SolveResult {
             status: SolveStatus::Satisfied,
@@ -396,47 +416,85 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     }
 
     let available: Vec<&Rower> = snapshot.available_rowers().collect();
-
     if available.is_empty() {
         bail!("no rowers are available for sweep seating on {}", request.date);
     }
 
-    // All mutable solver state lives on a single `ModelBuilder`. Its
-    // methods post whole constraint blocks (variable creation, H1,
-    // H2, H5/S5, H6) and the remaining blocks below access shared
-    // fields directly. Per-constraint weights, the candidate fleet,
-    // and the available-rowers list all move onto the builder.
+    // --- Phase 2: build the model ---
+    let (builder, objective) = build_model(snapshot, request, boats, available)?;
+
+    // --- Phase 3: search ---
+    search_lineups(builder, objective, request)
+}
+
+/// Assemble the Pumpkin model for a single solve request.
+///
+/// Takes the pre-resolved candidate fleet and availability list,
+/// spins up a fresh [`ModelBuilder`], and posts every active
+/// constraint in the order the solver expects:
+///
+/// 1. S8 placement reward (per-boat objective term, needs
+///    `use_b` but not `x`, so it runs before variable creation)
+/// 2. Variable creation — populates `x` and
+///    `wrong_side_by_rower` for the fleet-level softs
+/// 3. Fleet-level soft constraints (S4, S6, S7) that aggregate
+///    across rowers / historical lineups
+/// 4. Hard constraints (H1, H2, H6, H5 + the S5 slack bundled
+///    with it) plus the partial-fill bonus
+/// 5. Shared per-seat trait maps (`seat_skill_by_seat`,
+///    `seat_strength_by_seat`, `seat_height_by_seat`) for the
+///    seat-level softs that consume them
+/// 6. Seat-level soft constraints (S1, S2, S3, S9/S9b, S10,
+///    S11, S12)
+/// 7. Objective variable — allocated in `[-10_000, 10_000]` and
+///    linked to the accumulated `obj_terms` via a single linear
+///    equality.
+///
+/// Returns the fully-assembled builder plus the `objective`
+/// `DomainId` so the search phase can hand them to Pumpkin.
+/// Precondition: `boats` and `available` are both non-empty
+/// (the trivial cases are rejected by `solve` before calling).
+fn build_model<'a>(
+    snapshot: &'a DbSnapshot,
+    request: &SolveRequest,
+    boats: Vec<&'a Boat>,
+    available: Vec<&'a Rower>,
+) -> Result<(ModelBuilder<'a>, DomainId)> {
+    // All mutable solver state lives on a single `ModelBuilder`.
+    // Its methods post whole constraint blocks (variable
+    // creation, H1, H2, H5/S5, H6, etc.). Per-constraint weights,
+    // the candidate fleet, and the available-rowers list all
+    // move onto the builder.
     let mut m = ModelBuilder::new(boats, available, request.config);
 
     // S8 — per-boat placement reward (`-seats_total · use[b]`).
-    // Posted up front so the fleet-selection objective is visible to
-    // later constraint propagation, though order only affects
+    // Posted up front so the fleet-selection objective is visible
+    // to later constraint propagation, though order only affects
     // reporting — the objective sum is commutative.
     m.post_s8_placement_reward();
 
-    // --- Variables ---
-    // Create one x[(r, b, s)] ∈ {0, 1} per eligible triple and, along
-    // the way, collect wrong-side candidates into
+    // Create one x[(r, b, s)] ∈ {0, 1} per eligible triple and,
+    // along the way, collect wrong-side candidates into
     // `m.wrong_side_by_rower` for S4 to consume. See
     // `ModelBuilder::create_variables` for the full eligibility
     // rules and per-rower aggregation rationale.
     m.create_variables();
 
-    // --- Fleet-level soft constraints: S4 wrong-side aggregation,
-    // S6 cox cooldown, S7 novelty vs recent lineups. These all
-    // live in `soft_fleet.rs` as ModelBuilder methods. S8 already
-    // ran above because it only needs `use_b` / `boats` / `cfg`
-    // and doesn't touch `x`.
+    // Fleet-level soft constraints: S4 wrong-side aggregation,
+    // S6 cox cooldown, S7 novelty vs recent lineups. These live
+    // in `soft_fleet.rs` as ModelBuilder methods. S8 already ran
+    // above because it only needs `use_b` / `boats` / `cfg` and
+    // doesn't touch `x`.
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s7_novelty(snapshot, request.novelty_factor)?;
 
-    // --- Hard constraints: H1 seat fill + partial-fill cap, H2
+    // Hard constraints: H1 seat fill + partial-fill cap, H2
     // rower-at-most-one, H6 fleet capacity, H5 weight-class wall
-    // (plus the S5 weight-class slack bundled with it because the
-    // wall and the slack iterate the same boat loop and share the
-    // `positive_terms` sum). See the method docs on ModelBuilder
-    // for the per-constraint rationale.
+    // (plus the S5 weight-class slack bundled with it because
+    // the wall and the slack iterate the same boat loop and
+    // share the `positive_terms` sum). See the method docs on
+    // ModelBuilder for the per-constraint rationale.
     m.post_h1_seat_fill(request.partial_fill)?;
     m.post_h2_at_most_one()?;
     m.post_h6_fleet_capacity()?;
@@ -446,14 +504,12 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // Strict, so this is safe to call unconditionally.
     m.post_partial_fill_bonus(request.partial_fill)?;
 
-    // --- Seat-level soft constraints ---
-    //
-    // First build the shared `seat_{skill,strength,height}_by_seat`
-    // maps for any trait whose consumer constraints are enabled,
-    // then post the per-boat / per-partition / per-end-pair soft
-    // terms that read them. All of this lives in `soft_seats.rs`.
+    // Seat-level soft constraints. First build the shared
+    // `seat_{skill,strength,height}_by_seat` maps for any trait
+    // whose consumer constraints are enabled, then post the
+    // per-boat / per-partition / per-end-pair soft terms that
+    // read them. All of this lives in `soft_seats.rs`.
     m.build_seat_trait_maps(request.partial_fill)?;
-
     m.post_s1_skill_variance()?;
     m.post_s2_pair_affinities(snapshot)?;
     m.post_s3_seat_affinities(snapshot)?;
@@ -463,12 +519,13 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     m.post_s12_engine_room_strength();
 
     // --- Objective variable ---
-    // Sum of every weighted term pushed into `m.obj_terms` by the
-    // soft constraint blocks above. A generous domain is fine —
-    // Pumpkin propagates tighter bounds from the term domains
-    // during search. The lower bound must be negative because S2
-    // pair-affinity / S3 seat-affinity / S11 / S12 rewards
-    // contribute negative terms.
+    //
+    // Sum of every weighted term pushed into `m.obj_terms` by
+    // the soft constraint blocks above. A generous domain is
+    // fine — Pumpkin propagates tighter bounds from the term
+    // domains during search. The lower bound must be negative
+    // because S2 pair-affinity / S3 seat-affinity / S11 / S12
+    // rewards contribute negative terms.
     let objective = m.solver.new_bounded_integer(-10_000, 10_000);
     if !m.obj_terms.is_empty() {
         let mut link_terms = m.obj_terms.clone();
@@ -480,21 +537,36 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             .map_err(|e| anyhow!("objective link: {e:?}"))?;
     }
 
-    // --- Solve (optimisation) ---
-    //
-    // One or more optimise() calls in a tabu re-solve loop. For
-    // `top_n == 1` (the default) the loop runs exactly once and
-    // behaves identically to the pre-Top-N code path. For `top_n
-    // > 1`, after each successful solve we collect the winning
-    // placements as a set of x=1 variables and post a new linear
-    // constraint forbidding a future solution from re-using more
-    // than `placements - tabu_min_diff` of them. Pumpkin supports
-    // posting constraints between optimise calls — the Solver
-    // isn't consumed — so we just rebuild the termination +
-    // procedure for each iteration and keep accumulating tabu
-    // constraints until we have enough alternatives or the
-    // feasible region is exhausted.
-    let mut brancher = m.solver.default_brancher();
+    Ok((m, objective))
+}
+
+/// Run the Pumpkin optimiser on a built model and decode the
+/// result, including the Top-N tabu re-solve loop when the
+/// caller asked for alternatives.
+///
+/// For `top_n == 1` (the default) the loop runs exactly once
+/// and this function behaves identically to the pre-Top-N code
+/// path. For `top_n > 1`, after each successful solve the
+/// routine collects the winning placements as a set of x = 1
+/// variables and posts a new linear constraint forbidding a
+/// future solution from re-using more than `placements -
+/// tabu_min_diff` of them. Pumpkin supports posting constraints
+/// between `optimise()` calls — the Solver isn't consumed — so
+/// we just rebuild the termination + procedure each iteration
+/// and keep accumulating tabu constraints until we have enough
+/// alternatives or the feasible region is exhausted.
+///
+/// Consumes the `ModelBuilder` by value because the search
+/// phase mutably borrows solver state across multiple `optimise`
+/// calls and there's no good reason to hand the builder back to
+/// the caller afterward — once the search is done, the model
+/// is spent.
+fn search_lineups(
+    mut builder: ModelBuilder<'_>,
+    objective: DomainId,
+    request: &SolveRequest,
+) -> Result<SolveResult> {
+    let mut brancher = builder.solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
 
     // Helper: run a single optimisation call with the current
@@ -527,23 +599,31 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     };
 
     // Primary solve — determines the overall result status.
-    let primary_opt = run_one(&mut m.solver, &mut brancher, &mut resolver);
+    let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
     let (primary_status, primary_lineups, primary_placements) =
         match primary_opt {
             OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
-                let lineups =
-                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
-                        sol.get_integer_value(v)
-                    });
-                let placements = collect_placements(&m.x, |v| sol.get_integer_value(v));
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements =
+                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
                 (SolveStatus::Satisfied, lineups, placements)
             }
             OptimisationResult::Stopped(sol, _) => {
-                let lineups =
-                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
-                        sol.get_integer_value(v)
-                    });
-                let placements = collect_placements(&m.x, |v| sol.get_integer_value(v));
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements =
+                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
                 (SolveStatus::Satisfied, lineups, placements)
             }
             OptimisationResult::Unsatisfiable => {
@@ -566,19 +646,21 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     let mut alternatives: Vec<Vec<ProposedLineup>> = Vec::new();
     if request.wants_alternatives() {
         // Post the first tabu constraint off the primary
-        // placements, then loop `top_n - 1` times. Each iteration
-        // posts its own fresh tabu against the solution it
-        // produced, so the N-th alternative differs from all N-1
-        // previous ones. If `post_tabu_constraint` returns `false`
-        // at any point, the tabu radius is larger than the
-        // placement set can support and we stop looking.
+        // placements, then loop `top_n - 1` times. Each
+        // iteration posts its own fresh tabu against the
+        // solution it produced, so the N-th alternative differs
+        // from all N-1 previous ones. If `post_tabu_constraint`
+        // returns `false` at any point, the tabu radius is
+        // larger than the placement set can support and we stop
+        // looking.
         if post_tabu_constraint(
-            &mut m.solver,
+            &mut builder.solver,
             &primary_placements,
             request.tabu_min_diff,
         )? {
             for _ in 1..request.top_n {
-                let next = run_one(&mut m.solver, &mut brancher, &mut resolver);
+                let next =
+                    run_one(&mut builder.solver, &mut brancher, &mut resolver);
                 let sol = match next {
                     OptimisationResult::Optimal(sol)
                     | OptimisationResult::Satisfiable(sol)
@@ -595,27 +677,31 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
                     }
                 };
 
-                let alt_lineups =
-                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
-                        sol.get_integer_value(v)
-                    });
+                let alt_lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
                 let alt_placements =
-                    collect_placements(&m.x, |v| sol.get_integer_value(v));
+                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
                 alternatives.push(alt_lineups);
 
                 // Prepare the next iteration: forbid the set we
                 // just returned. Skip the final iteration's tabu
-                // post — it would only apply to a solve we're not
-                // going to run. Stop early if post_tabu_constraint
-                // signals that the radius is exhausted.
-                if alternatives.len() + 1 < request.top_n {
-                    if !post_tabu_constraint(
-                        &mut m.solver,
+                // post — it would only apply to a solve we're
+                // not going to run. Stop early if
+                // `post_tabu_constraint` signals that the radius
+                // is exhausted.
+                if alternatives.len() + 1 < request.top_n
+                    && !post_tabu_constraint(
+                        &mut builder.solver,
                         &alt_placements,
                         request.tabu_min_diff,
-                    )? {
-                        break;
-                    }
+                    )?
+                {
+                    break;
                 }
             }
         }
