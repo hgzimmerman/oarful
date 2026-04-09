@@ -1,0 +1,14 @@
+status: Satisfied
+fielded: 1/3
+skipped: Artemis, Hestia
+
+boat 1: Persephone
+  cox  Mika
+  s1   Alice
+  s2   Erin
+  s3   Hana
+  s4   Diego
+  s5   Finn
+  s6   Bob
+  s7   Carla
+  s8   Grace
