@@ -706,11 +706,43 @@ example). If you find yourself pushing N × B × S terms, step back and
 see whether an aggregating auxiliary variable would give you the same
 objective value with O(B) terms.
 
-**Top-N alternatives** via tabu re-solve land naturally with the
-optimise pipeline: optimise once, record the solution, add a linear
-constraint that forces the placement of at least K rowers to differ
-from the recorded solution, re-solve. The `NoCallback` stub becomes a
-real callback that records every improving solution during search.
+**Top-N alternatives — enabled.** `SolveRequest.top_n` (default 1)
+asks for N distinct lineups instead of just the best. `solve()`
+runs one full `optimise()` call to produce the primary solution,
+collects the set of `x = 1` placements, and posts a linear tabu
+constraint before the next call:
+
+```
+Σ_{v ∈ previous placements} v  ≤  |previous| − tabu_min_diff
+```
+
+Every successive iteration adds another tabu constraint against
+its own output, so the N-th alternative differs from all N−1
+previous ones by at least `SolveRequest.tabu_min_diff` placements
+(default 2 — one rower swap between two seats). The loop stops
+early if the accumulated tabus leave an empty feasible region
+(Pumpkin returns `Unsatisfiable`) or if `tabu_min_diff` exceeds
+the placement count, in which case the result carries fewer
+alternatives than requested rather than erroring.
+
+**Budget caveat.** `time_budget` is per-alternative, not total —
+top_n = 3 with budget = 10s can take up to 30 seconds wall-clock
+because each Pumpkin invocation burns its own clock. For
+interactive use shrink the per-call budget (e.g. 2s × 5
+alternatives = 10s total).
+
+**Ranking.** Alternatives are returned best-first. Because each
+tabu constraint makes the previous optimum infeasible, every
+subsequent solve's best objective is ≥ the previous one, so
+`SolveResult.alternatives[0]` is the 2nd-best lineup,
+`alternatives[1]` is the 3rd-best, etc.
+
+**Only the primary is persisted.** `cargo run -p lineup_cli --
+solve --alternatives 3 --commit` commits only the primary; the
+alternatives are shown for reference but the DB layer has no
+notion of "proposed alternatives" yet. A future enhancement
+would store all N as a bundle the coach can pick from via a web
+UI.
 
 **Partial-fill strategy — enabled.**
 Some clubs prefer fielding an 8+ that's missing seat 3 or 4 (the

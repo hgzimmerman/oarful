@@ -100,6 +100,10 @@ fn run_one_with_label(
         // behaviour, not weight-tuning effects.
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(5)),
+        // Top-N is irrelevant to scaling measurements — stick with
+        // the historical single-solution path.
+        top_n: 1,
+        tabu_min_diff: 2,
     };
 
     let start = std::time::Instant::now();

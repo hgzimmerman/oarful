@@ -191,6 +191,8 @@ fn request(config: SolverConfig) -> SolveRequest {
         novelty_factor: 0,
         config,
         time_budget: None,
+        top_n: 1,
+        tabu_min_diff: 2,
     }
 }
 
@@ -636,6 +638,168 @@ fn s12_engine_room_strength_puts_strong_rowers_in_middle() {
             "end-pair seat {seat} should hold a Weak rower, got VeryStrong {r:?}"
         );
     }
+}
+
+// ---------- Top-N tabu re-solve tests ----------
+
+/// Collect every `(boat_id, seat, rower_id)` placement from a
+/// lineup set so two alternatives can be compared by set-difference.
+fn placement_set(lineups: &[ProposedLineup]) -> std::collections::HashSet<(i32, i32, i32)> {
+    let mut out = std::collections::HashSet::new();
+    for l in lineups.iter().filter(|l| l.used) {
+        for (seat, rower_id) in &l.seats {
+            out.insert((l.boat_id.as_int(), *seat, rower_id.as_int()));
+        }
+    }
+    out
+}
+
+/// How many placements differ between two lineup sets. Since both
+/// sets contain the same number of filled seats under H1 (when
+/// both field the same boats), the symmetric-difference size is
+/// 2 × the number of "flipped" placements. We return the raw
+/// symmetric-difference count so callers can compare against
+/// `2 * tabu_min_diff`.
+fn placements_flipped(a: &[ProposedLineup], b: &[ProposedLineup]) -> usize {
+    let sa = placement_set(a);
+    let sb = placement_set(b);
+    sa.symmetric_difference(&sb).count()
+}
+
+#[test]
+fn topn_returns_requested_number_of_alternatives() {
+    // 4+ with 4 rowers (2 port, 2 starboard) + a designated cox.
+    // With every soft weight off, the solver is free to swap
+    // rowers between same-side seats at no cost, so many distinct
+    // placements are equally optimal. Ask for 3 alternatives and
+    // confirm we get primary + 2 more.
+    let rowers = vec![
+        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let mut req = request(silent_config());
+    req.top_n = 3;
+    req.tabu_min_diff = 2;
+
+    let result = solve(&snap, &req).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    assert_eq!(
+        result.alternatives.len(),
+        2,
+        "primary + 2 alternatives = 3 lineups total; got {} extras",
+        result.alternatives.len()
+    );
+}
+
+#[test]
+fn topn_alternatives_respect_tabu_min_diff() {
+    // Same 4+ / 4 rowers setup, but ask for 3 alternatives with
+    // tabu_min_diff = 2. Each consecutive pair of alternatives
+    // must differ by at least 2 placements × 2 (symmetric
+    // difference counts both "removed" and "added").
+    let rowers = vec![
+        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let mut req = request(silent_config());
+    req.top_n = 3;
+    req.tabu_min_diff = 2;
+
+    let result = solve(&snap, &req).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // Build an iterator that walks [primary, alt1, alt2, ...] as
+    // Vec<ProposedLineup> slices so pairwise comparisons are
+    // straightforward.
+    let mut all: Vec<&Vec<ProposedLineup>> = vec![&result.lineups];
+    all.extend(result.alternatives.iter());
+
+    // Every unordered pair of lineups must differ by at least
+    // `tabu_min_diff` placements in each direction (so the
+    // symmetric-difference size is at least 2 * tabu_min_diff).
+    // The tabu constraint only forces successive pairs apart, but
+    // the accumulated constraints ensure every pair is distinct.
+    for (i, a) in all.iter().enumerate() {
+        for (j, b) in all.iter().enumerate().skip(i + 1) {
+            let diff = placements_flipped(a, b);
+            assert!(
+                diff >= 2 * req.tabu_min_diff as usize,
+                "alternatives {i} and {j} differ by only {diff} placements, \
+                 expected ≥ {} (2 * tabu_min_diff={})",
+                2 * req.tabu_min_diff,
+                req.tabu_min_diff
+            );
+        }
+    }
+}
+
+#[test]
+fn topn_one_is_identical_to_single_solve() {
+    // Regression guard: `top_n == 1` must produce exactly the
+    // same SolveResult shape as the pre-Top-N code path, which
+    // means an empty alternatives vec. This protects callers
+    // who read `result.lineups` and never look at alternatives.
+    let rowers = vec![
+        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let result = solve(&snap, &request(silent_config())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    assert!(
+        result.alternatives.is_empty(),
+        "top_n=1 must produce no alternatives, got {} extras",
+        result.alternatives.len()
+    );
+    // And the primary is still populated as before.
+    assert!(!result.lineups.is_empty());
+}
+
+#[test]
+fn topn_gracefully_caps_at_feasible_region() {
+    // A pathological case: tabu_min_diff is set so high that
+    // after the primary solve, no further feasible solutions
+    // exist. The solver should return the primary plus an empty
+    // alternatives vec, rather than erroring or panicking.
+    //
+    // With 4 rowers on a 4+ and tabu_min_diff = 10, we're asking
+    // for "differ by at least 10 placements" but there are only
+    // 5 filled seats total — the tabu constraint is trivially
+    // infeasible, so no second alternative can be found.
+    let rowers = vec![
+        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let mut req = request(silent_config());
+    req.top_n = 5;
+    req.tabu_min_diff = 10;
+
+    let result = solve(&snap, &req).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    assert!(!result.lineups.is_empty(), "primary should still solve");
+    assert!(
+        result.alternatives.is_empty(),
+        "no alternative should satisfy tabu_min_diff = 10 on a 5-seat boat"
+    );
 }
 
 #[test]

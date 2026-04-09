@@ -30,8 +30,9 @@ use pumpkin_core::optimisation::solution_callback::SolutionCallback;
 use pumpkin_core::optimisation::OptimisationDirection;
 use pumpkin_core::results::{OptimisationResult, ProblemSolution, SolutionReference};
 use pumpkin_core::termination::{Indefinite, TimeBudget};
-use pumpkin_core::variables::TransformableVariable;
+use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
+use std::collections::BTreeMap;
 use std::ops::ControlFlow;
 
 use decode::decode_solution;
@@ -77,12 +78,55 @@ pub struct SolveRequest {
     /// a few seconds — the solver returns best-found-so-far with
     /// `SolveStatus::Timeout` if the budget expires before optimality
     /// is proven.
+    ///
+    /// **Per-alternative.** When `top_n > 1` this budget applies to
+    /// *each* alternative independently. Total wall-clock time in
+    /// the worst case is `top_n * time_budget`. If you want a tight
+    /// global budget with multiple alternatives, shrink the per-call
+    /// budget proportionally.
     pub time_budget: Option<std::time::Duration>,
     /// Per-constraint weights controlling how strongly each soft
     /// constraint contributes to the objective. See [`SolverConfig`]
     /// for details. Default values preserve the historical behaviour
     /// (mostly 1, cox cooldown = 5).
     pub config: SolverConfig,
+    /// How many distinct lineups to return. `1` (the default) gives
+    /// the historical behaviour — the single best solution lands in
+    /// `SolveResult.lineups`. `N > 1` additionally populates
+    /// `SolveResult.alternatives` with up to `N - 1` further
+    /// lineups, each guaranteed to differ from every previous one
+    /// by at least [`SolveRequest::tabu_min_diff`] placements. The
+    /// alternatives are ranked best-first by the same objective
+    /// function as the primary solution; each successive alternative
+    /// is strictly worse than (or tied with) its predecessor.
+    ///
+    /// If the solver exhausts the feasible region before producing
+    /// `N` distinct alternatives (too small a roster, too tight a
+    /// tabu radius, too many hard constraints) the result carries
+    /// fewer alternatives than requested rather than erroring.
+    pub top_n: usize,
+    /// Minimum number of per-seat placements that must differ
+    /// between any two returned alternatives. Ignored when
+    /// `top_n == 1`. A "placement" is a single `(rower, boat,
+    /// seat)` triple; swapping two rowers between seats therefore
+    /// counts as 2 placement differences, which is also the default
+    /// — forcing every alternative to differ from all previous ones
+    /// by at least one rower swap.
+    ///
+    /// Larger values yield more-obviously-distinct alternatives at
+    /// the cost of fewer of them being feasible. Setting this to
+    /// `0` degenerates to "re-solve the same problem" and returns
+    /// exact duplicates (not useful).
+    pub tabu_min_diff: i32,
+}
+
+impl SolveRequest {
+    /// Whether the request asks for more than one lineup back. Used
+    /// by the solver to skip the tabu re-solve plumbing when the
+    /// caller wants the historical single-solution behaviour.
+    fn wants_alternatives(&self) -> bool {
+        self.top_n > 1
+    }
 }
 
 /// Per-constraint weight multipliers controlling how strongly each
@@ -260,8 +304,25 @@ pub(crate) const COX_COOLDOWN_DAYS: i64 = 14;
 
 #[derive(Debug, Clone)]
 pub struct SolveResult {
+    /// Solver outcome for the *primary* (best) solution. When
+    /// `status != Satisfied`, `lineups` is empty and
+    /// `alternatives` is too — an unsatisfiable or timed-out
+    /// problem yields no lineups at all.
     pub status: SolveStatus,
+    /// Primary (best) lineup set — one `ProposedLineup` per
+    /// candidate boat, with `used = true` for boats the solver
+    /// chose to field. This is the single-solution result: callers
+    /// that don't care about Top-N alternatives can stop here.
     pub lineups: Vec<ProposedLineup>,
+    /// Additional distinct lineup sets, ranked best-first, each
+    /// guaranteed to differ from every preceding one (including
+    /// `lineups`) by at least [`SolveRequest::tabu_min_diff`]
+    /// placements. Empty when [`SolveRequest::top_n`] is 1 (the
+    /// default) or when the solver couldn't find any further
+    /// distinct feasible assignments under the tabu radius. Each
+    /// inner `Vec<ProposedLineup>` has the same shape as the
+    /// primary `lineups`: one entry per candidate boat.
+    pub alternatives: Vec<Vec<ProposedLineup>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -316,6 +377,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         return Ok(SolveResult {
             status: SolveStatus::Satisfied,
             lineups: vec![],
+            alternatives: vec![],
         });
     }
 
@@ -401,66 +463,210 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     }
 
     // --- Solve (optimisation) ---
+    //
+    // One or more optimise() calls in a tabu re-solve loop. For
+    // `top_n == 1` (the default) the loop runs exactly once and
+    // behaves identically to the pre-Top-N code path. For `top_n
+    // > 1`, after each successful solve we collect the winning
+    // placements as a set of x=1 variables and post a new linear
+    // constraint forbidding a future solution from re-using more
+    // than `placements - tabu_min_diff` of them. Pumpkin supports
+    // posting constraints between optimise calls — the Solver
+    // isn't consumed — so we just rebuild the termination +
+    // procedure for each iteration and keep accumulating tabu
+    // constraints until we have enough alternatives or the
+    // feasible region is exhausted.
     let mut brancher = m.solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
 
-    // The termination type depends on whether the caller set a time
-    // budget. Both branches return the same `OptimisationResult<()>`
-    // (NoCallback fixes `Callback::Stop = ()`), so we can unify the
-    // result before the outer match.
-    let opt_result = match request.time_budget {
-        None => {
-            let mut termination = Indefinite;
-            let procedure =
-                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-            m.solver
-                .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
-        }
-        Some(budget) => {
-            let mut termination = TimeBudget::starting_now(budget);
-            let procedure =
-                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-            m.solver
-                .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+    // Helper: run a single optimisation call with the current
+    // time-budget policy. Returns the raw Pumpkin result so the
+    // caller can decode and decide whether to continue.
+    let run_one = |solver: &mut Solver,
+                   brancher: &mut _,
+                   resolver: &mut _|
+     -> OptimisationResult<()> {
+        match request.time_budget {
+            None => {
+                let mut termination = Indefinite;
+                let procedure = LinearSatUnsat::new(
+                    OptimisationDirection::Minimise,
+                    objective,
+                    NoCallback,
+                );
+                solver.optimise(brancher, &mut termination, resolver, procedure)
+            }
+            Some(budget) => {
+                let mut termination = TimeBudget::starting_now(budget);
+                let procedure = LinearSatUnsat::new(
+                    OptimisationDirection::Minimise,
+                    objective,
+                    NoCallback,
+                );
+                solver.optimise(brancher, &mut termination, resolver, procedure)
+            }
         }
     };
 
-    let result: SolveResult = match opt_result {
-        OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
-            let lineups = decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
-                sol.get_integer_value(v)
-            });
-            SolveResult {
-                status: SolveStatus::Satisfied,
-                lineups,
+    // Primary solve — determines the overall result status.
+    let primary_opt = run_one(&mut m.solver, &mut brancher, &mut resolver);
+    let (primary_status, primary_lineups, primary_placements) =
+        match primary_opt {
+            OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
+                let lineups =
+                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
+                        sol.get_integer_value(v)
+                    });
+                let placements = collect_placements(&m.x, |v| sol.get_integer_value(v));
+                (SolveStatus::Satisfied, lineups, placements)
+            }
+            OptimisationResult::Stopped(sol, _) => {
+                let lineups =
+                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
+                        sol.get_integer_value(v)
+                    });
+                let placements = collect_placements(&m.x, |v| sol.get_integer_value(v));
+                (SolveStatus::Satisfied, lineups, placements)
+            }
+            OptimisationResult::Unsatisfiable => {
+                return Ok(SolveResult {
+                    status: SolveStatus::Unsatisfiable,
+                    lineups: vec![],
+                    alternatives: vec![],
+                });
+            }
+            OptimisationResult::Unknown => {
+                return Ok(SolveResult {
+                    status: SolveStatus::Timeout,
+                    lineups: vec![],
+                    alternatives: vec![],
+                });
+            }
+        };
+
+    // Tabu re-solve loop for the remaining alternatives.
+    let mut alternatives: Vec<Vec<ProposedLineup>> = Vec::new();
+    if request.wants_alternatives() {
+        // Post the first tabu constraint off the primary
+        // placements, then loop `top_n - 1` times. Each iteration
+        // posts its own fresh tabu against the solution it
+        // produced, so the N-th alternative differs from all N-1
+        // previous ones. If `post_tabu_constraint` returns `false`
+        // at any point, the tabu radius is larger than the
+        // placement set can support and we stop looking.
+        if post_tabu_constraint(
+            &mut m.solver,
+            &primary_placements,
+            request.tabu_min_diff,
+        )? {
+            for _ in 1..request.top_n {
+                let next = run_one(&mut m.solver, &mut brancher, &mut resolver);
+                let sol = match next {
+                    OptimisationResult::Optimal(sol)
+                    | OptimisationResult::Satisfiable(sol)
+                    | OptimisationResult::Stopped(sol, _) => sol,
+                    // Unsat means the feasible region under the
+                    // accumulated tabu constraints is empty —
+                    // we've run out of distinct alternatives.
+                    // Unknown means the solver timed out on this
+                    // iteration; in that case we stop looking
+                    // rather than returning a partial /
+                    // potentially-duplicate result.
+                    OptimisationResult::Unsatisfiable | OptimisationResult::Unknown => {
+                        break;
+                    }
+                };
+
+                let alt_lineups =
+                    decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
+                        sol.get_integer_value(v)
+                    });
+                let alt_placements =
+                    collect_placements(&m.x, |v| sol.get_integer_value(v));
+                alternatives.push(alt_lineups);
+
+                // Prepare the next iteration: forbid the set we
+                // just returned. Skip the final iteration's tabu
+                // post — it would only apply to a solve we're not
+                // going to run. Stop early if post_tabu_constraint
+                // signals that the radius is exhausted.
+                if alternatives.len() + 1 < request.top_n {
+                    if !post_tabu_constraint(
+                        &mut m.solver,
+                        &alt_placements,
+                        request.tabu_min_diff,
+                    )? {
+                        break;
+                    }
+                }
             }
         }
-        OptimisationResult::Stopped(sol, _) => {
-            let lineups = decode_solution(&m.x, &m.use_b, &m.boats, &m.available, |v| {
-                sol.get_integer_value(v)
-            });
-            SolveResult {
-                status: SolveStatus::Satisfied,
-                lineups,
-            }
-        }
-        OptimisationResult::Unsatisfiable => SolveResult {
-            status: SolveStatus::Unsatisfiable,
-            lineups: vec![],
-        },
-        OptimisationResult::Unknown => SolveResult {
-            status: SolveStatus::Timeout,
-            lineups: vec![],
-        },
-    };
-    Ok(result)
+    }
+
+    Ok(SolveResult {
+        status: primary_status,
+        lineups: primary_lineups,
+        alternatives,
+    })
 }
 
-/// No-op solution callback for `LinearSatUnsat`. We don't need intermediate
-/// solution hooks right now, but the `LinearSatUnsat::new` API requires
-/// *some* callback. When we add top-N alternative lineups via tabu
-/// re-solve this will grow into a real callback that records every
-/// improving solution.
+/// Walk the `x[(r, b, s)]` assignment matrix and return the
+/// [`DomainId`]s of every variable that evaluated to 1 in the
+/// given solution. Used by the tabu re-solve loop to build a
+/// "forbid re-using too many of these placements" constraint.
+fn collect_placements(
+    x: &BTreeMap<(usize, usize, i32), DomainId>,
+    mut value_of: impl FnMut(DomainId) -> i32,
+) -> Vec<DomainId> {
+    x.values()
+        .copied()
+        .filter(|&v| value_of(v) == 1)
+        .collect()
+}
+
+/// Post a tabu constraint forcing any future solution to differ
+/// from the given `placements` set by at least `min_diff` seats.
+///
+/// Mathematically, given the previous solution's live-placement
+/// set `P` of size `|P|`, we require
+///
+///   Σ_{v ∈ P} v ≤ |P| − min_diff
+///
+/// which says "at most `|P| − min_diff` of the previous placements
+/// may repeat", equivalently "at least `min_diff` must flip".
+///
+/// Returns `Ok(true)` when the constraint was posted successfully
+/// and the re-solve loop can continue; `Ok(false)` when `min_diff`
+/// exceeds the total number of filled seats, in which case there
+/// is no point posting anything — the request is trivially
+/// infeasible and the caller should stop looking for more
+/// alternatives. An empty placement set (e.g. a primary solve
+/// that fielded no boats) is treated the same way.
+fn post_tabu_constraint(
+    solver: &mut Solver,
+    placements: &[DomainId],
+    min_diff: i32,
+) -> Result<bool> {
+    let cap = placements.len() as i32 - min_diff;
+    if cap < 0 || placements.is_empty() {
+        return Ok(false);
+    }
+    let terms: Vec<AffineView<DomainId>> =
+        placements.iter().map(|v: &DomainId| v.scaled(1)).collect();
+    let tag = solver.new_constraint_tag();
+    solver
+        .add_constraint(pumpkin_constraints::less_than_or_equals(terms, cap, tag))
+        .post()
+        .map_err(|e| anyhow!("tabu re-solve constraint: {e:?}"))?;
+    Ok(true)
+}
+
+/// No-op solution callback for `LinearSatUnsat`. The
+/// `LinearSatUnsat::new` API requires *some* callback type and
+/// we don't need intermediate solution hooks — Top-N is
+/// implemented via the tabu re-solve loop around `optimise()`,
+/// not via an in-search callback, so every top-N iteration
+/// re-uses this same no-op stub.
 #[derive(Debug, Default)]
 struct NoCallback;
 

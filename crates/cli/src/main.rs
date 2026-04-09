@@ -11,6 +11,11 @@
 //!                                               # solve AND persist the chosen lineups
 //!   cargo run -p lineup_cli -- solve --novelty N [date]
 //!                                               # penalise lineups within N seats of a historical one
+//!   cargo run -p lineup_cli -- solve --alternatives N [date]
+//!                                               # return N distinct lineups (tabu re-solve). Each
+//!                                               # alternative differs from the previous by at
+//!                                               # least 2 placements. Only the primary is
+//!                                               # persisted under --commit.
 //!   cargo run -p lineup_cli -- history [date]   # show committed lineups for a date
 //!   cargo run -p lineup_cli -- sync-sheet <ID> [--gid N]
 //!                                               # pull availability from a public Google Sheet
@@ -68,15 +73,19 @@ struct SolveOpts {
     partial: PartialFillPolicy,
     commit: bool,
     novelty: i32,
+    /// `--alternatives N` — how many distinct lineups to return.
+    /// `1` (the default) is the historical single-solution path.
+    top_n: usize,
 }
 
 /// Parse `solve` subcommand arguments: `--partial N`, `--commit`,
-/// `--novelty N`, and an optional date. Missing date defaults to
-/// `DEFAULT_DATE`.
+/// `--novelty N`, `--alternatives N`, and an optional date. Missing
+/// date defaults to `DEFAULT_DATE`.
 fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
     let mut partial = PartialFillPolicy::Strict;
     let mut commit = false;
     let mut novelty: i32 = 0;
+    let mut top_n: usize = 1;
     let mut date: Option<NaiveDate> = None;
     let mut i = 0;
     while i < args.len() {
@@ -109,6 +118,19 @@ fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
                 }
                 i += 2;
             }
+            "--alternatives" => {
+                let n: usize = args
+                    .get(i + 1)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("--alternatives requires a number")
+                    })?
+                    .parse()
+                    .map_err(|e| {
+                        anyhow::anyhow!("--alternatives N must be a positive integer: {e}")
+                    })?;
+                top_n = n.max(1); // clamp to at least 1 so solve() always runs
+                i += 2;
+            }
             other => {
                 date = Some(parse_date(Some(&other.to_string()))?);
                 i += 1;
@@ -120,6 +142,7 @@ fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
         partial,
         commit,
         novelty,
+        top_n,
     })
 }
 
@@ -150,6 +173,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         partial,
         commit,
         novelty,
+        top_n,
     } = opts;
     let snapshot = db
         .with_conn(move |conn| DbSnapshot::for_date(conn, date))
@@ -162,6 +186,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
     println!("  partial-fill policy: {partial:?}");
     println!("  novelty factor: {novelty}");
     println!("  commit mode: {}", if commit { "yes" } else { "dry-run" });
+    println!("  alternatives requested: {top_n}");
     println!("  candidate fleet: {} boat(s)", snapshot.sweep_boats.len());
     for b in &snapshot.sweep_boats {
         println!(
@@ -190,6 +215,8 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         // the historical behaviour.
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(10)),
+        top_n,
+        tabu_min_diff: 2,
     };
     let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;
@@ -228,29 +255,24 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
                 println!();
             }
 
-            for lineup in &used {
-                println!("\nBoat #{} {}", lineup.boat_id, lineup.boat_name);
-                for (seat, rower_id) in &lineup.seats {
-                    let rower = snapshot
-                        .rowers
-                        .iter()
-                        .find(|r| r.id == *rower_id)
-                        .expect("solver returned an unknown rower id");
-                    let label = if *seat == 0 {
-                        "cox".to_string()
-                    } else {
-                        format!("seat {seat}")
-                    };
-                    println!(
-                        "  {:<8} {:<20} [{}/{}/{}, side={}]",
-                        label,
-                        rower.name,
-                        rower.weight_class,
-                        rower.skill,
-                        rower.strength,
-                        rower.side
-                    );
-                }
+            if top_n > 1 {
+                let found = 1 + result.alternatives.len();
+                println!(
+                    "\n=== Primary lineup ({found}/{top_n} alternatives found) ==="
+                );
+            }
+            print_lineups(&snapshot, &used);
+
+            for (idx, alt) in result.alternatives.iter().enumerate() {
+                let rank = idx + 2; // primary is #1, alts start at #2
+                let alt_used: Vec<&ProposedLineup> =
+                    alt.iter().filter(|l| l.used).collect();
+                println!(
+                    "\n=== Alternative #{rank} ({}/{} boats fielded) ===",
+                    alt_used.len(),
+                    alt.len()
+                );
+                print_lineups(&snapshot, &alt_used);
             }
 
             if commit {
@@ -258,7 +280,8 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
                     used.into_iter().cloned().collect();
                 let committed = commit_lineups(db, date, &used_owned).await?;
                 println!(
-                    "\nCommitted {} lineup(s) to the database.",
+                    "\nCommitted primary lineup ({} boat(s)) to the database. \
+                     Alternatives are not persisted.",
                     committed
                 );
             }
@@ -271,6 +294,36 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Pretty-print one set of fielded lineups (primary or an
+/// alternative) to stdout. Factored out of `cmd_solve` so the
+/// Top-N branch can reuse the same rendering for each rank.
+fn print_lineups(snapshot: &DbSnapshot, used: &[&ProposedLineup]) {
+    for lineup in used {
+        println!("\nBoat #{} {}", lineup.boat_id, lineup.boat_name);
+        for (seat, rower_id) in &lineup.seats {
+            let rower = snapshot
+                .rowers
+                .iter()
+                .find(|r| r.id == *rower_id)
+                .expect("solver returned an unknown rower id");
+            let label = if *seat == 0 {
+                "cox".to_string()
+            } else {
+                format!("seat {seat}")
+            };
+            println!(
+                "  {:<8} {:<20} [{}/{}/{}, side={}]",
+                label,
+                rower.name,
+                rower.weight_class,
+                rower.skill,
+                rower.strength,
+                rower.side
+            );
+        }
+    }
 }
 
 /// Persist the given `ProposedLineup`s to `lineup` + `lineup_seat`.

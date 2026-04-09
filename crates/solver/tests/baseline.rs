@@ -95,6 +95,8 @@ fn request(partial_fill: PartialFillPolicy, novelty_factor: i32) -> SolveRequest
         novelty_factor,
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(5)),
+        top_n: 1,
+        tabu_min_diff: 2,
     }
 }
 
