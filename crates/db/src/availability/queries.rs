@@ -45,4 +45,20 @@ impl Availability {
             .map(|a| (a.rower_id, a.status))
             .collect())
     }
+
+    /// Distinct practice dates on or after `today` that have *any*
+    /// availability rows. Used by the `/practices` dashboard in the
+    /// server. Returned in chronological order (earliest first).
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn upcoming_dates(
+        conn: &mut SqliteConnection,
+        today: NaiveDate,
+    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+        availability::table
+            .filter(availability::date.ge(today))
+            .select(availability::date)
+            .distinct()
+            .order(availability::date.asc())
+            .get_results(conn)
+    }
 }
