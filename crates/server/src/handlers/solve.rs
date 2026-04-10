@@ -27,6 +27,7 @@ use lineup_solver::{
     SolverConfig,
 };
 use serde::Deserialize;
+use tokio::sync::OwnedSemaphorePermit;
 
 use crate::{handlers::internal_error, state::AppState, templates};
 
@@ -140,6 +141,11 @@ pub(crate) async fn view_handler(
         .await
         .map_err(internal_error)?;
 
+    // Hold a solve permit across the spawn_blocking call so the
+    // global concurrency cap counts this run. The permit drops
+    // automatically when the function returns.
+    let _permit = acquire_solve_permit(&state).await?;
+
     // solve() is sync and may burn most of the time budget — keep it
     // off the async runtime via spawn_blocking.
     let request = knobs.to_request(date);
@@ -179,6 +185,7 @@ pub(crate) async fn commit_handler(
     let mut request = knobs.to_request(date);
     request.top_n = 1;
 
+    let _permit = acquire_solve_permit(&state).await?;
     let snapshot_for_solve = snapshot.clone();
     let result = tokio::task::spawn_blocking(move || {
         solve(&snapshot_for_solve, &request)
@@ -221,4 +228,36 @@ pub(crate) async fn commit_handler(
         .map_err(internal_error)?;
 
     Ok(Redirect::to(&format!("/history/{date}")))
+}
+
+/// Acquire one slot on the global solve semaphore. Returns immediately
+/// when capacity is available; otherwise blocks the request future
+/// until another solve completes. Logs queue depth so operators can
+/// see the cap biting in production.
+///
+/// The permit is owned (`OwnedSemaphorePermit`) so callers can hold
+/// it across an `await` for `spawn_blocking` without lifetime
+/// gymnastics. Drop the permit by letting it fall out of scope.
+async fn acquire_solve_permit(
+    state: &AppState,
+) -> Result<OwnedSemaphorePermit, StatusCode> {
+    if let Ok(permit) = state.solve_semaphore.clone().try_acquire_owned() {
+        return Ok(permit);
+    }
+    let queue_start = std::time::Instant::now();
+    tracing::info!(
+        capacity = state.solve_semaphore.available_permits(),
+        "solve queued — semaphore at capacity"
+    );
+    let permit = state
+        .solve_semaphore
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(internal_error)?;
+    tracing::info!(
+        queued_for = ?queue_start.elapsed(),
+        "solve dequeued"
+    );
+    Ok(permit)
 }
