@@ -32,6 +32,7 @@ use serde::Deserialize;
 use tokio::sync::OwnedSemaphorePermit;
 
 use crate::{handlers::internal_error, state::AppState, templates};
+use lineup_db::app_user::Role;
 
 /// Default per-alternative solve budget, in seconds. Total wall time
 /// for one request is roughly `DEFAULT_BUDGET_SECS × DEFAULT_ALTS`
@@ -139,6 +140,7 @@ pub(crate) async fn view_handler(
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let snapshot = tenant
         .db
@@ -165,6 +167,7 @@ pub(crate) async fn commit_handler(
     Path(date): Path<NaiveDate>,
     Form(knobs): Form<SolveKnobs>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let snapshot = tenant
         .db

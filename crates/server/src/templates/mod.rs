@@ -5,6 +5,7 @@
 
 pub(crate) mod auth;
 pub(crate) mod boats;
+pub(crate) mod my;
 pub(crate) mod history;
 pub(crate) mod layout;
 pub(crate) mod practices;

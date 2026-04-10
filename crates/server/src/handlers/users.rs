@@ -15,6 +15,7 @@ use axum_htmx::HxRequest;
 use chrono::Utc;
 use diesel::prelude::*;
 use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId};
+use lineup_db::rower::Rower;
 use lineup_db::schema::{app_user, user_invite};
 use serde::Deserialize;
 
@@ -94,8 +95,14 @@ pub(crate) async fn invite_handler(
             )?;
             AppUser::set_role(conn, user.id, role)?;
 
-            // Store invite token (plaintext for v1 — see Phase 3
-            // design notes for hardening path).
+            // Auto-link rower → user if a rower with the same email
+            // exists. This lets the rower access self-service pages
+            // after accepting the invite.
+            if let Some(rower) = Rower::find_by_email(conn, &user.email)? {
+                Rower::link_to_user(conn, rower.id, user.id.as_int())?;
+            }
+
+            // Store invite token.
             let expires = now + chrono::TimeDelta::try_days(7).unwrap();
             diesel::insert_into(user_invite::table)
                 .values((

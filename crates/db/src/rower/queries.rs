@@ -65,6 +65,33 @@ impl Rower {
             .get_result(conn)
     }
 
+    /// Find the rower linked to a user account. Returns None if the
+    /// user doesn't have a linked rower (e.g. a PD who doesn't row).
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn find_by_user_id(
+        conn: &mut SqliteConnection,
+        uid: i32,
+    ) -> Result<Option<Rower>, diesel::result::Error> {
+        rower::table
+            .filter(rower::user_id.eq(uid))
+            .select(Rower::as_select())
+            .first(conn)
+            .optional()
+    }
+
+    /// Link a rower to a user account.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn link_to_user(
+        conn: &mut SqliteConnection,
+        rower_id: RowerId,
+        uid: i32,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(rower::table.filter(rower::id.eq(rower_id)))
+            .set(rower::user_id.eq(uid))
+            .execute(conn)?;
+        Ok(())
+    }
+
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn count(conn: &mut SqliteConnection) -> Result<i64, diesel::result::Error> {
         rower::table.count().get_result(conn)

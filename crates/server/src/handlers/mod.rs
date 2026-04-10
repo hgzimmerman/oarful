@@ -17,6 +17,7 @@ use crate::{state::AppState, templates};
 
 pub(crate) mod auth;
 pub(crate) mod boats;
+pub(crate) mod my;
 pub(crate) mod users;
 pub(crate) mod history;
 pub(crate) mod practices;
@@ -83,6 +84,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
         .route("/users", get(users::list_handler))
         .route("/users/invite", post(users::invite_handler))
+        .route(
+            "/my/profile",
+            get(my::profile_handler).post(my::profile_update_handler),
+        )
+        .route(
+            "/my/availability",
+            get(my::availability_handler).post(my::availability_update_handler),
+        )
         .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))
         .layer(axum::middleware::from_fn_with_state(
