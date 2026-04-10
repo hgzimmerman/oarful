@@ -10,7 +10,9 @@ use lineup_db::{
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
-use lineup_solver::{ProposedLineup, ProposedSolution, SolveResult, SolveStatus, UnplacedRowers};
+use lineup_solver::{
+    Diagnostic, ProposedLineup, ProposedSolution, SolveResult, SolveStatus, UnplacedRowers,
+};
 use maud::{html, Markup};
 
 use super::layout::page_header;
@@ -32,7 +34,7 @@ pub(crate) fn view_content(
         (page_header(&format!("Solve · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs))
-            (status_banner(date, &result.status))
+            (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
                 (primary_panel(snapshot, date, knobs, &result.primary))
@@ -124,7 +126,7 @@ fn knob_input(
     }
 }
 
-fn status_banner(date: NaiveDate, status: &SolveStatus) -> Markup {
+fn status_banner(date: NaiveDate, status: &SolveStatus, diagnostics: &[Diagnostic]) -> Markup {
     match status {
         SolveStatus::Satisfied => html! {
             div class="bg-emerald-50 border-l-4 border-emerald-500 px-4 py-3 rounded text-sm text-emerald-900" {
@@ -134,8 +136,16 @@ fn status_banner(date: NaiveDate, status: &SolveStatus) -> Markup {
         SolveStatus::Unsatisfiable => html! {
             div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                 strong { "Unsatisfiable." }
-                " No seat assignment exists under the current constraints for " (date)
-                ". Check the roster, availability, and hard locks."
+                " No seat assignment exists under the current constraints for " (date) "."
+                @if diagnostics.is_empty() {
+                    " Check the roster, availability, and hard locks."
+                } @else {
+                    ul class="mt-2 ml-4 list-disc space-y-1" {
+                        @for d in diagnostics {
+                            li { (diagnostic_message(d)) }
+                        }
+                    }
+                }
             }
         },
         SolveStatus::Timeout => html! {
@@ -144,6 +154,35 @@ fn status_banner(date: NaiveDate, status: &SolveStatus) -> Markup {
                 " Solver did not finish within its time budget. Try again or increase the budget."
             }
         },
+    }
+}
+
+fn diagnostic_message(d: &Diagnostic) -> String {
+    match d {
+        Diagnostic::NoCoxForBoat { boat_name } => {
+            format!("{boat_name} needs a cox but no available rower can cox.")
+        }
+        Diagnostic::NotEnoughRowers {
+            available,
+            smallest_boat_seats,
+            smallest_boat_name,
+        } => {
+            format!(
+                "Only {available} rowers available, but even the smallest boat \
+                 ({smallest_boat_name}) needs {smallest_boat_seats} seats filled."
+            )
+        }
+        Diagnostic::UnfillableSeat { boat_name, seat } => {
+            format!(
+                "Seat {seat} on {boat_name} has no eligible rower \
+                 (check side preferences and roster)."
+            )
+        }
+        Diagnostic::AllBoatsUnfillable => {
+            "Every candidate boat has at least one seat that can't be filled — \
+             no fleet combination is possible."
+                .to_string()
+        }
     }
 }
 

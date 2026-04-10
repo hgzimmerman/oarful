@@ -356,6 +356,11 @@ pub struct SolveResult {
     /// "who sits out" per alternative without having to
     /// recompute.
     pub alternatives: Vec<ProposedSolution>,
+    /// Pre-solve diagnostics explaining why the problem is (or
+    /// is likely) unsatisfiable. Empty when `status == Satisfied`.
+    /// Populated by cheap eligibility checks before the solver
+    /// runs, so the coach gets actionable feedback instantly.
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 /// A single self-contained proposal from the solver: one
@@ -407,6 +412,32 @@ pub enum SolveStatus {
     Satisfied,
     Unsatisfiable,
     Timeout,
+}
+
+/// A pre-solve diagnostic explaining why a problem is (or is likely)
+/// unsatisfiable. Populated by cheap eligibility checks *before*
+/// invoking Pumpkin, so the coach gets actionable feedback without
+/// waiting for a full solve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Diagnostic {
+    /// A coxed boat has no eligible cox among the available rowers.
+    NoCoxForBoat { boat_name: String },
+    /// Every candidate boat needs more total seats than rowers
+    /// available. Even the smallest boat can't be fully crewed.
+    NotEnoughRowers {
+        available: usize,
+        smallest_boat_seats: usize,
+        smallest_boat_name: String,
+    },
+    /// A specific required seat on a boat has zero eligible rowers
+    /// (after side + cox + designated-cox filtering).
+    UnfillableSeat {
+        boat_name: String,
+        seat: i32,
+    },
+    /// Every candidate boat was forced unused because at least one
+    /// of its required seats is unfillable — no fleet can be fielded.
+    AllBoatsUnfillable,
 }
 
 #[derive(Debug, Clone)]
@@ -475,6 +506,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             status: SolveStatus::Satisfied,
             primary: ProposedSolution::default(),
             alternatives: vec![],
+            diagnostics: vec![],
         });
     }
 
@@ -483,11 +515,81 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         bail!("no rowers are available for sweep seating on {}", request.date);
     }
 
+    // --- Phase 1b: pre-solve diagnostics ---
+    let diagnostics = pre_solve_diagnostics(&boats, &available);
+
     // --- Phase 2: build the model ---
     let (builder, objective) = build_model(snapshot, request, boats, available)?;
 
     // --- Phase 3: search ---
-    search_lineups(builder, objective, request)
+    search_lineups(builder, objective, request, diagnostics)
+}
+
+/// Cheap pre-solve checks that detect common reasons for
+/// unsatisfiability before Pumpkin is invoked. Returns an empty
+/// vec when everything looks feasible.
+fn pre_solve_diagnostics(boats: &[&Boat], available: &[&Rower]) -> Vec<Diagnostic> {
+    use model::{rower_eligible_for_seat, seat_positions};
+
+    let mut diags = Vec::new();
+
+    // Track which boats have at least one unfillable required seat.
+    let mut all_boats_unfillable = true;
+
+    for boat in boats {
+        let mut boat_unfillable = false;
+        let positions = seat_positions(boat);
+
+        // Check each seat for at least one eligible rower.
+        for &seat in &positions {
+            let eligible_count = available
+                .iter()
+                .filter(|r| rower_eligible_for_seat(r, boat, seat))
+                .count();
+            if eligible_count == 0 {
+                if seat == 0 {
+                    diags.push(Diagnostic::NoCoxForBoat {
+                        boat_name: boat.name.clone(),
+                    });
+                } else {
+                    diags.push(Diagnostic::UnfillableSeat {
+                        boat_name: boat.name.clone(),
+                        seat,
+                    });
+                }
+                boat_unfillable = true;
+            }
+        }
+
+        if !boat_unfillable {
+            all_boats_unfillable = false;
+        }
+    }
+
+    if all_boats_unfillable && !boats.is_empty() {
+        diags.push(Diagnostic::AllBoatsUnfillable);
+    }
+
+    // Check if even the smallest boat can't be crewed.
+    let smallest = boats
+        .iter()
+        .map(|b| {
+            let total = b.seat_count as usize
+                + if b.has_cox.as_bool() { 1 } else { 0 };
+            (total, &b.name)
+        })
+        .min_by_key(|(seats, _)| *seats);
+    if let Some((smallest_seats, smallest_name)) = smallest {
+        if available.len() < smallest_seats {
+            diags.push(Diagnostic::NotEnoughRowers {
+                available: available.len(),
+                smallest_boat_seats: smallest_seats,
+                smallest_boat_name: smallest_name.clone(),
+            });
+        }
+    }
+
+    diags
 }
 
 /// Assemble the Pumpkin model for a single solve request.
@@ -630,6 +732,7 @@ fn search_lineups(
     mut builder: ModelBuilder<'_>,
     objective: DomainId,
     request: &SolveRequest,
+    diagnostics: Vec<Diagnostic>,
 ) -> Result<SolveResult> {
     let mut brancher = builder.solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
@@ -696,6 +799,7 @@ fn search_lineups(
                     status: SolveStatus::Unsatisfiable,
                     primary: ProposedSolution::default(),
                     alternatives: vec![],
+                    diagnostics,
                 });
             }
             OptimisationResult::Unknown => {
@@ -703,6 +807,7 @@ fn search_lineups(
                     status: SolveStatus::Timeout,
                     primary: ProposedSolution::default(),
                     alternatives: vec![],
+                    diagnostics: vec![],
                 });
             }
         };
@@ -788,6 +893,7 @@ fn search_lineups(
             unplaced: primary_unplaced,
         },
         alternatives,
+        diagnostics: vec![],
     })
 }
 
