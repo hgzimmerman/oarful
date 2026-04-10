@@ -34,7 +34,21 @@ fn row(p: &Practice) -> Markup {
           hx-push-url="true" {
             div {
                 div class="font-semibold text-slate-800" { (p.date) }
-                div class="text-sm text-slate-500" { (weekday) }
+                div class="text-sm text-slate-500" {
+                    (weekday)
+                    @if let Some(ref notes) = p.notes {
+                        @if !notes.is_empty() {
+                            " — "
+                            span class="text-slate-400 italic" {
+                                @if notes.len() > 60 {
+                                    (&notes[..60]) "…"
+                                } @else {
+                                    (notes)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             span class="text-slate-400" { "→" }
         }
@@ -44,16 +58,70 @@ fn row(p: &Practice) -> Markup {
 pub(crate) fn detail_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
+    practice: Option<&Practice>,
     committed: &[CommittedLineup],
 ) -> Markup {
     html! {
         (page_header(&format!("History · {date}"), None))
         div class="px-8 py-6 max-w-4xl space-y-4" {
+            (notes_section(practice, date))
+
             @if committed.is_empty() {
                 (empty_state("No lineups committed for this date."))
             } @else {
                 @for c in committed {
                     (lineup_block(snapshot, c))
+                }
+            }
+        }
+    }
+}
+
+fn notes_section(practice: Option<&Practice>, date: NaiveDate) -> Markup {
+    let existing_notes = practice.and_then(|p| p.notes.as_deref()).unwrap_or("");
+    html! {
+        div id="practice-notes" {
+            (notes_display_inner(existing_notes, date))
+        }
+    }
+}
+
+/// Rendered by the HTMX swap after saving notes.
+pub(crate) fn notes_display(practice: &Practice, date: NaiveDate) -> Markup {
+    let notes = practice.notes.as_deref().unwrap_or("");
+    html! {
+        div id="practice-notes" {
+            (notes_display_inner(notes, date))
+        }
+    }
+}
+
+fn notes_display_inner(notes: &str, date: NaiveDate) -> Markup {
+    let action = format!("/history/{date}/notes");
+    html! {
+        form
+            hx-post=(action)
+            hx-target="#practice-notes"
+            hx-swap="outerHTML"
+            class="bg-white rounded-lg shadow p-4"
+        {
+            label class="block text-sm font-medium text-slate-700 mb-1" {
+                "Practice notes"
+            }
+            textarea
+                name="notes"
+                rows="3"
+                placeholder="Add notes for this practice…"
+                class="w-full border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            {
+                (notes)
+            }
+            div class="mt-2 flex justify-end" {
+                button
+                    type="submit"
+                    class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                {
+                    "Save notes"
                 }
             }
         }

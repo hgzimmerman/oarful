@@ -116,6 +116,24 @@ impl Practice {
             .get_results(conn)
     }
 
+    /// Update the notes on an existing practice row.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn update_notes(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        date: NaiveDate,
+        notes: Option<String>,
+    ) -> Result<Practice, diesel::result::Error> {
+        diesel::update(
+            practice::table
+                .filter(practice::team_id.eq(team_id))
+                .filter(practice::date.eq(date)),
+        )
+        .set(practice::notes.eq(notes))
+        .returning(Practice::as_returning())
+        .get_result(conn)
+    }
+
     /// Find an existing practice for a (team, date) pair.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn find_by_date(
