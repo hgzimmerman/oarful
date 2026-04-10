@@ -29,7 +29,7 @@ pub(crate) async fn list_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    require_role(&tenant.claims, Role::ProgramDirector)?;
+    require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let users = tenant
         .db
         .with_conn(|conn| {
@@ -60,7 +60,7 @@ pub(crate) async fn invite_handler(
     hx: HxRequest,
     Form(input): Form<InviteInput>,
 ) -> Result<Html<String>, StatusCode> {
-    require_role(&tenant.claims, Role::ProgramDirector)?;
+    require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let email = input.email.trim().to_lowercase();
     let name = input.name.trim().to_string();
@@ -247,8 +247,10 @@ async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool,
 }
 
 /// Check that the authenticated user has at least `min` role.
-/// Returns 403 if insufficient.
-pub(crate) fn require_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), StatusCode> {
+/// Returns 403 if insufficient. The check is ordinal: Member < Coach
+/// < ProgramDirector, so `require_at_least_role(claims, Coach)` passes
+/// for both Coach and ProgramDirector.
+pub(crate) fn require_at_least_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), StatusCode> {
     let role = claims.role().unwrap_or(Role::Member);
     if role.at_least(min) {
         Ok(())

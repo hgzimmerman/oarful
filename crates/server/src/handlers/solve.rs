@@ -140,7 +140,7 @@ pub(crate) async fn view_handler(
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_role(&tenant.claims, Role::Coach)?;
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let snapshot = tenant
         .db
@@ -167,7 +167,7 @@ pub(crate) async fn commit_handler(
     Path(date): Path<NaiveDate>,
     Form(knobs): Form<SolveKnobs>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    crate::handlers::users::require_role(&tenant.claims, Role::Coach)?;
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let snapshot = tenant
         .db

@@ -22,6 +22,8 @@ use lineup_db::state::Db;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
 
+use lineup_db::app_user::Role;
+
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
 /// `GET /boats` — full fleet list.
@@ -39,9 +41,13 @@ pub(crate) async fn list_handler(
 }
 
 /// `GET /boats/new` — empty creation form.
-pub(crate) async fn new_handler(hx: HxRequest) -> Html<String> {
+pub(crate) async fn new_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let content = templates::boats::form_content(FormMode::New, &BoatFormData::empty(), None);
-    super::maybe_page("New boat", content, hx)
+    Ok(super::maybe_page("New boat", content, hx))
 }
 
 /// `POST /boats` — create a new boat from the form.
@@ -50,6 +56,7 @@ pub(crate) async fn create_handler(
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let parsed = match parse_input(&input) {
         Ok(p) => p,
         Err(msg) => {
@@ -89,6 +96,7 @@ pub(crate) async fn edit_handler(
     Path(id): Path<BoatId>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boat = load(&tenant.db, id).await?;
     let data = BoatFormData::from_boat(&boat);
     let content =
@@ -109,6 +117,7 @@ pub(crate) async fn update_handler(
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let parsed = match parse_input(&input) {
         Ok(p) => p,
         Err(msg) => {

@@ -11,7 +11,7 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
-use lineup_db::{lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
+use lineup_db::{app_user::Role, lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
@@ -74,6 +74,7 @@ pub(crate) async fn notes_handler(
     Path(date): Path<NaiveDate>,
     Form(input): Form<NotesInput>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let notes = if input.notes.trim().is_empty() {
         None

@@ -30,6 +30,8 @@ use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
+use lineup_db::app_user::Role;
+
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
 pub(crate) async fn list_handler(
@@ -61,6 +63,7 @@ pub(crate) async fn edit_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
         templates::rowers::edit_row(&rower, None).into_string(),
@@ -90,6 +93,7 @@ pub(crate) async fn update_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<RowerEditInput>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let mut rower = load(&tenant.db, id).await?;
 
     // Parse string enums into typed values. Any unknown variant gets
@@ -275,6 +279,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityInput>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let weight = match validate_weight(input.weight) {
         Ok(w) => w,
         Err(msg) => return seat_section_with_error(&tenant.db, id, &msg).await,
@@ -305,6 +310,7 @@ pub(crate) async fn seat_affinity_delete_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityDelete>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let seat = input.seat_position;
     tenant
         .db
@@ -354,6 +360,7 @@ pub(crate) async fn pair_affinity_upsert_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityInput>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if input.partner_id == id {
         return pair_section_with_error(&tenant.db, id, "cannot pair a rower with themselves")
             .await;
@@ -377,6 +384,7 @@ pub(crate) async fn pair_affinity_delete_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityDelete>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let partner = input.partner_id;
     tenant
         .db

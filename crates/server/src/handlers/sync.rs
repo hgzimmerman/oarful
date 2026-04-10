@@ -19,6 +19,8 @@ use chrono::{Datelike, Utc};
 use lineup_sheets::SyncSummary;
 use serde::Deserialize;
 
+use lineup_db::app_user::Role;
+
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
 #[derive(Debug, Deserialize)]
@@ -30,9 +32,13 @@ pub(crate) struct SyncFormInput {
     pub(crate) gid: u32,
 }
 
-pub(crate) async fn form_handler(hx: HxRequest) -> Html<String> {
+pub(crate) async fn form_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let content = templates::sync::form_content(None, None, None);
-    super::maybe_page("Sync sheet", content, hx)
+    Ok(super::maybe_page("Sync sheet", content, hx))
 }
 
 pub(crate) async fn sync_handler(
@@ -41,6 +47,7 @@ pub(crate) async fn sync_handler(
     hx: HxRequest,
     Form(input): Form<SyncFormInput>,
 ) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
