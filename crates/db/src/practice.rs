@@ -1,4 +1,4 @@
-use crate::schema::practice;
+use crate::schema::{lineup, practice};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -88,6 +88,20 @@ impl Practice {
             .values(NewPractice { date, notes })
             .returning(Practice::as_returning())
             .get_result(conn)
+    }
+
+    /// Practices that have at least one committed lineup, newest first.
+    /// Used by the `/history` page. Filters via a subquery on
+    /// `lineup.practice_id` so no join or DISTINCT is needed.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_committed(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
+        practice::table
+            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .select(Practice::as_select())
+            .order(practice::date.desc())
+            .get_results(conn)
     }
 
     #[tracing::instrument(level = "debug", skip_all, err)]

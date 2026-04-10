@@ -3,6 +3,7 @@
 //! live in [`layout`]; per-view content renderers live next to their
 //! handler's domain.
 
+pub(crate) mod boats;
 pub(crate) mod history;
 pub(crate) mod layout;
 pub(crate) mod practices;

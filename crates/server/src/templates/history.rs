@@ -1,21 +1,21 @@
 //! History list + detail templates.
 
 use chrono::NaiveDate;
-use lineup_db::{lineup::CommittedLineup, snapshot::DbSnapshot};
+use lineup_db::{lineup::CommittedLineup, practice::Practice, snapshot::DbSnapshot};
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
 
-pub(crate) fn list_content(dates: &[NaiveDate]) -> Markup {
+pub(crate) fn list_content(practices: &[Practice]) -> Markup {
     html! {
         (page_header("Committed practices", Some("Lineups that have been committed to the database.")))
         div class="px-8 py-6 max-w-3xl" {
-            @if dates.is_empty() {
+            @if practices.is_empty() {
                 (empty_state("No practices committed yet."))
             } @else {
                 div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for date in dates {
-                        (row(date))
+                    @for p in practices {
+                        (row(p))
                     }
                 }
             }
@@ -23,15 +23,19 @@ pub(crate) fn list_content(dates: &[NaiveDate]) -> Markup {
     }
 }
 
-fn row(date: &NaiveDate) -> Markup {
-    let href = format!("/history/{date}");
+fn row(p: &Practice) -> Markup {
+    let href = format!("/history/{}", p.date);
+    let weekday = p.date.format("%A").to_string();
     html! {
         a href=(href)
           class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition cursor-pointer"
           hx-get=(href)
           hx-target="#content"
           hx-push-url="true" {
-            div class="font-semibold text-slate-800" { (date) }
+            div {
+                div class="font-semibold text-slate-800" { (p.date) }
+                div class="text-sm text-slate-500" { (weekday) }
+            }
             span class="text-slate-400" { "→" }
         }
     }

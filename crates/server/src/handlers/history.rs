@@ -16,25 +16,13 @@ pub(crate) async fn list_handler(
     State(state): State<AppState>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    // There's no direct "list all practices" helper on Practice today;
-    // derive the list from recent_placements (via the snapshot API's
-    // underlying query) instead. Cheap enough for a small club.
-    let dates = state
+    let practices = state
         .db
-        .with_conn(|conn| {
-            // `recent_placements(limit=i64::MAX)` returns every
-            // committed placement, newest practice first. We only
-            // need the distinct dates.
-            let placements = Lineup::recent_placements(conn, i64::MAX)?;
-            let mut dates: Vec<NaiveDate> =
-                placements.into_iter().map(|p| p.practice_date).collect();
-            dates.dedup();
-            Ok(dates)
-        })
+        .with_conn(|conn| Practice::list_committed(conn))
         .await
         .map_err(internal_error)?;
 
-    let content = templates::history::list_content(&dates);
+    let content = templates::history::list_content(&practices);
     Ok(super::maybe_page("History", content, hx))
 }
 

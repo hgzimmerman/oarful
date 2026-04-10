@@ -12,6 +12,7 @@ use maud::Markup;
 
 use crate::{state::AppState, templates};
 
+pub(crate) mod boats;
 pub(crate) mod history;
 pub(crate) mod practices;
 pub(crate) mod rowers;
@@ -28,6 +29,17 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/commit/{date}", post(solve::commit_handler))
         .route("/history", get(history::list_handler))
         .route("/history/{date}", get(history::detail_handler))
+        .route(
+            "/boats",
+            get(boats::list_handler).post(boats::create_handler),
+        )
+        .route("/boats/new", get(boats::new_handler))
+        .route(
+            "/boats/{id}",
+            get(boats::edit_handler)
+                .put(boats::update_handler)
+                .post(boats::update_handler),
+        )
         .route("/rowers", get(rowers::list_handler))
         .route(
             "/rowers/{id}",
