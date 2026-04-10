@@ -6,10 +6,10 @@
 //! table row.
 
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
-    Form,
+    Extension, Form,
 };
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
@@ -18,17 +18,18 @@ use lineup_db::boat::{
     Boat, NewBoat,
 };
 use lineup_db::rower::types::Side;
+use lineup_db::state::Db;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::AppState, templates};
+use crate::{handlers::internal_error, state::TenantContext, templates};
 
 /// `GET /boats` — full fleet list.
 pub(crate) async fn list_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let boats = state
+    let boats = tenant
         .db
         .with_conn(|conn| Boat::list_all(conn))
         .await
@@ -45,7 +46,7 @@ pub(crate) async fn new_handler(hx: HxRequest) -> Html<String> {
 
 /// `POST /boats` — create a new boat from the form.
 pub(crate) async fn create_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
@@ -59,7 +60,7 @@ pub(crate) async fn create_handler(
         }
     };
 
-    state
+    tenant
         .db
         .with_conn(move |conn| {
             Boat::insert(
@@ -79,16 +80,16 @@ pub(crate) async fn create_handler(
         .await
         .map_err(internal_error)?;
 
-    redirect_or_list(&state, hx).await
+    redirect_or_list(&tenant.db, hx).await
 }
 
 /// `GET /boats/{id}` — edit form pre-filled with current values.
 pub(crate) async fn edit_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let boat = load(&state, id).await?;
+    let boat = load(&tenant.db, id).await?;
     let data = BoatFormData::from_boat(&boat);
     let content =
         templates::boats::form_content(FormMode::Edit(id), &data, None);
@@ -103,7 +104,7 @@ pub(crate) async fn edit_handler(
 /// a fallback for non-JS form submissions (HTML forms don't support
 /// PUT natively).
 pub(crate) async fn update_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
@@ -118,7 +119,7 @@ pub(crate) async fn update_handler(
         }
     };
 
-    let mut boat = load(&state, id).await?;
+    let mut boat = load(&tenant.db, id).await?;
     boat.name = parsed.name;
     boat.weight_class = parsed.weight_class;
     boat.seat_count = parsed.seat_count;
@@ -129,24 +130,23 @@ pub(crate) async fn update_handler(
     boat.relinquished_at = parsed.relinquished_at;
     boat.stroke_side = parsed.stroke_side;
 
-    state
+    tenant
         .db
         .with_conn(move |conn| Boat::save(conn, &boat))
         .await
         .map_err(internal_error)?;
 
-    redirect_or_list(&state, hx).await
+    redirect_or_list(&tenant.db, hx).await
 }
 
 /// HTMX requests get 200 + the boats list content (avoiding a
 /// redirect round-trip). Non-JS falls back to 303 → /boats.
 async fn redirect_or_list(
-    state: &AppState,
+    db: &Db,
     HxRequest(is_htmx): HxRequest,
 ) -> Result<axum::response::Response, StatusCode> {
     if is_htmx {
-        let boats = state
-            .db
+        let boats = db
             .with_conn(|conn| Boat::list_all(conn))
             .await
             .map_err(internal_error)?;
@@ -338,9 +338,8 @@ fn parse_optional_date(s: &str) -> Result<Option<NaiveDate>, String> {
         .map_err(|e| format!("invalid date '{s}': {e}"))
 }
 
-async fn load(state: &AppState, id: BoatId) -> Result<Boat, StatusCode> {
-    let maybe = state
-        .db
+async fn load(db: &Db, id: BoatId) -> Result<Boat, StatusCode> {
+    let maybe = db
         .with_conn(move |conn| Boat::get(conn, id))
         .await
         .map_err(internal_error)?;

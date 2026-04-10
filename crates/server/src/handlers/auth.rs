@@ -11,6 +11,7 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use lineup_db::app_user::{AppUser, Role, UserStatus};
 use lineup_db::team::Team;
+use lineup_master_db::tenant::TenantId;
 use serde::Deserialize;
 
 use crate::{state::AppState, templates};
@@ -45,33 +46,64 @@ pub(crate) async fn login_handler(
     let email = input.email.trim().to_lowercase();
     let password = input.password.clone();
 
-    // Look up user + role in the tenant DB.
-    let found = state
-        .db
-        .with_conn(move |conn| {
-            let user = AppUser::find_by_email(conn, &email)?;
-            let role = match &user {
-                Some(u) => AppUser::role(conn, u.id)?,
-                None => None,
-            };
-            let default_team = Team::first(conn)?;
-            Ok((user, role, default_team))
-        })
+    // Scan all tenant DBs for this email. If found in multiple,
+    // the user picks which club to log into.
+    let tenants = state
+        .master_db
+        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
         .await
         .map_err(super::internal_error)?;
 
-    let (user, role, default_team) = found;
+    struct Match {
+        tenant_id: TenantId,
+        tenant_name: String,
+        user: AppUser,
+        role: Option<Role>,
+        default_team: Option<Team>,
+    }
 
-    // Validate.
-    let user = match user {
-        Some(u) => u,
-        None => {
-            return Ok(
-                Html(templates::auth::login_page(Some("Invalid credentials.")).into_string())
-                    .into_response(),
-            );
+    let mut matches = Vec::new();
+    for t in &tenants {
+        let Ok(db) = state.tenant_db(t.id).await else {
+            continue;
+        };
+        let email_clone = email.clone();
+        let found: Option<(AppUser, Option<Role>, Option<Team>)> = db
+            .with_conn(move |conn| {
+                let Some(user) = AppUser::find_by_email(conn, &email_clone)? else {
+                    return Ok(None);
+                };
+                let role = AppUser::role(conn, user.id)?;
+                let default_team = Team::first(conn)?;
+                Ok(Some((user, role, default_team)))
+            })
+            .await
+            .map_err(super::internal_error)?;
+        if let Some((user, role, default_team)) = found {
+            matches.push(Match {
+                tenant_id: t.id,
+                tenant_name: t.name.clone(),
+                user,
+                role,
+                default_team,
+            });
         }
-    };
+    }
+
+    if matches.is_empty() {
+        return Ok(
+            Html(templates::auth::login_page(Some("Invalid credentials.")).into_string())
+                .into_response(),
+        );
+    }
+
+    // For now, use the first match (single-tenant deployments).
+    // TODO: if matches.len() > 1, render a club picker.
+    let m = matches.into_iter().next().unwrap();
+    let user = m.user;
+    let role = m.role;
+    let default_team = m.default_team;
+    let login_tenant_id = m.tenant_id;
 
     if user.parsed_status() != Some(UserStatus::Active) {
         return Ok(
@@ -85,7 +117,7 @@ pub(crate) async fn login_handler(
         );
     }
 
-    let hash = match &user.password_hash {
+    let hash: String = match &user.password_hash {
         Some(h) => h.clone(),
         None => {
             return Ok(
@@ -120,7 +152,7 @@ pub(crate) async fn login_handler(
 
     let token = state
         .jwt_keys
-        .issue(user.id, state.tenant_id, role, team_id)
+        .issue(user.id, login_tenant_id, role, team_id)
         .map_err(super::internal_error)?;
 
     let cookie = axum_extra::extract::cookie::Cookie::build((TOKEN_COOKIE, token))
@@ -149,8 +181,9 @@ pub(crate) async fn logout_handler(jar: CookieJar) -> impl IntoResponse {
 // =====================================================================
 
 /// Axum middleware that validates the JWT cookie on every request.
-/// If missing or invalid, redirects to `/login`. On success, injects
-/// `Claims` into request extensions so handlers can extract it.
+/// If missing or invalid, redirects to `/login`. On success, resolves
+/// the tenant DB from the cache and injects a `TenantContext` into
+/// request extensions so handlers can extract it.
 pub(crate) async fn require_auth(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -169,7 +202,21 @@ pub(crate) async fn require_auth(
         None => return Redirect::to("/login").into_response(),
     };
 
-    // Stash claims in request extensions for downstream handlers.
-    req.extensions_mut().insert(claims);
+    // Resolve the tenant DB for this request.
+    let tenant_id = claims.tenant_id();
+    let db = match state.tenant_db(tenant_id).await {
+        Ok(db) => db,
+        Err(err) => {
+            tracing::error!(?err, %tenant_id, "failed to resolve tenant DB");
+            return Redirect::to("/login").into_response();
+        }
+    };
+
+    let ctx = crate::state::TenantContext {
+        db,
+        tenant_id,
+        claims,
+    };
+    req.extensions_mut().insert(ctx);
     next.run(req).await
 }

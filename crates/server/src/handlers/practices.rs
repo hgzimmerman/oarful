@@ -1,23 +1,22 @@
 //! `GET /practices` — dashboard of upcoming practice dates with rower
 //! availability counts, linking into the solve view for each date.
 
-use axum::{extract::State, http::StatusCode, response::Html, Extension};
+use axum::{http::StatusCode, response::Html, Extension};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::Utc;
 use lineup_db::availability::Availability;
 
-use crate::{jwt::Claims, handlers::internal_error, state::AppState, templates};
+use crate::{handlers::internal_error, state::TenantContext, templates};
 
 pub(crate) async fn list_handler(
-    State(state): State<AppState>,
     jar: CookieJar,
-    Extension(claims): Extension<Claims>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
-    let summaries = state
+    let summaries = tenant
         .db
         .with_conn(move |conn| {
             let dates = Availability::upcoming_dates(conn, team_id, today)?;

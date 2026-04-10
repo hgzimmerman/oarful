@@ -121,28 +121,23 @@ pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
 // Active-team context (cookie-based until JWT lands in Phase 3)
 // =====================================================================
 
-/// Extract the active team. In auth mode, reads from the JWT claims
-/// (injected by the `require_auth` middleware). Falls back to the
-/// `active_team_id` cookie for backward compatibility during
-/// migration, then to the first team in the DB.
+/// Extract the active team from the TenantContext's JWT claims.
+/// Falls back to the `active_team_id` cookie then the first team
+/// in the DB.
 pub(crate) async fn active_team(
-    state: &AppState,
+    db: &lineup_db::state::Db,
     jar: &CookieJar,
     claims: Option<&crate::jwt::Claims>,
 ) -> Result<TeamId, StatusCode> {
-    // Prefer JWT claims if available (set by require_auth middleware).
     if let Some(c) = claims {
         return Ok(c.team_id());
     }
-    // Legacy cookie fallback.
     if let Some(cookie) = jar.get("active_team_id") {
         if let Ok(id) = cookie.value().parse::<TeamId>() {
             return Ok(id);
         }
     }
-    // Last resort: first team in the DB.
-    let team = state
-        .db
+    let team = db
         .with_conn(|conn| lineup_db::team::Team::first(conn))
         .await
         .map_err(internal_error)?;
@@ -150,15 +145,6 @@ pub(crate) async fn active_team(
         tracing::error!("no teams in the database");
         StatusCode::INTERNAL_SERVER_ERROR
     })
-}
-
-/// Helper to extract Claims from request extensions (set by
-/// require_auth middleware). Returns None for unauthenticated
-/// requests (should only happen on public routes).
-pub(crate) fn extract_claims(
-    extensions: &axum::http::Extensions,
-) -> Option<crate::jwt::Claims> {
-    extensions.get::<crate::jwt::Claims>().cloned()
 }
 
 #[derive(Debug, Deserialize)]

@@ -2,7 +2,7 @@
 //! `GET /history/{date}` — detail view for one committed practice.
 
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     response::Html,
     Extension,
@@ -12,16 +12,15 @@ use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
 
-use crate::{jwt::Claims, handlers::internal_error, state::AppState, templates};
+use crate::{handlers::internal_error, state::TenantContext, templates};
 
 pub(crate) async fn list_handler(
-    State(state): State<AppState>,
     jar: CookieJar,
-    Extension(claims): Extension<Claims>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
-    let practices = state
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let practices = tenant
         .db
         .with_conn(move |conn| Practice::list_committed(conn, team_id))
         .await
@@ -32,14 +31,13 @@ pub(crate) async fn list_handler(
 }
 
 pub(crate) async fn detail_handler(
-    State(state): State<AppState>,
     jar: CookieJar,
-    Extension(claims): Extension<Claims>,
+    Extension(tenant): Extension<TenantContext>,
     Path(date): Path<NaiveDate>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
-    let (snapshot, committed) = state
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let (snapshot, committed) = tenant
         .db
         .with_conn(move |conn| {
             let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;

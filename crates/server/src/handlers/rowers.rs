@@ -14,10 +14,10 @@
 //! so the user keeps their entered values.
 
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     response::Html,
-    Form,
+    Extension, Form,
 };
 use axum_htmx::HxRequest;
 use lineup_db::pair_affinity::PairAffinity;
@@ -26,16 +26,17 @@ use lineup_db::rower::{
     Rower,
 };
 use lineup_db::seat_affinity::SeatAffinity;
+use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::AppState, templates};
+use crate::{handlers::internal_error, state::TenantContext, templates};
 
 pub(crate) async fn list_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let rowers = state
+    let rowers = tenant
         .db
         .with_conn(|conn| Rower::list_active(conn))
         .await
@@ -47,20 +48,20 @@ pub(crate) async fn list_handler(
 /// Return one canonical static `<tr>` for the given rower. Used by
 /// the Cancel button to undo an in-progress edit.
 pub(crate) async fn row_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
-    let rower = load(&state, id).await?;
+    let rower = load(&tenant.db, id).await?;
     Ok(Html(templates::rowers::static_row(&rower).into_string()))
 }
 
 /// Return one editable `<tr>` for the given rower. Triggered by the
 /// Edit button on a static row.
 pub(crate) async fn edit_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
-    let rower = load(&state, id).await?;
+    let rower = load(&tenant.db, id).await?;
     Ok(Html(
         templates::rowers::edit_row(&rower, None).into_string(),
     ))
@@ -85,11 +86,11 @@ pub(crate) struct RowerEditInput {
 }
 
 pub(crate) async fn update_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<RowerEditInput>,
 ) -> Result<Html<String>, StatusCode> {
-    let mut rower = load(&state, id).await?;
+    let mut rower = load(&tenant.db, id).await?;
 
     // Parse string enums into typed values. Any unknown variant gets
     // funneled into the inline error path so the user can correct it
@@ -113,7 +114,7 @@ pub(crate) async fn update_handler(
     rower.can_scull = IntBool::new(typed.can_scull);
     rower.is_designated_cox = IntBool::new(typed.is_designated_cox);
 
-    let saved = state
+    let saved = tenant
         .db
         .with_conn(move |conn| Rower::save(conn, &rower))
         .await
@@ -183,9 +184,8 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
     })
 }
 
-async fn load(state: &AppState, id: RowerId) -> Result<Rower, StatusCode> {
-    let maybe = state
-        .db
+async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
+    let maybe = db
         .with_conn(move |conn| Rower::get(conn, id))
         .await
         .map_err(internal_error)?;
@@ -208,11 +208,11 @@ async fn load(state: &AppState, id: RowerId) -> Result<Rower, StatusCode> {
 
 /// `GET /rowers/{id}` — full detail page.
 pub(crate) async fn detail_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let detail = load_detail(&state, id).await?;
+    let detail = load_detail(&tenant.db, id).await?;
     let content = templates::rowers::detail_content(&detail);
     Ok(super::maybe_page(
         &format!("Rower · {}", detail.rower.name),
@@ -231,9 +231,8 @@ pub(crate) struct RowerDetail {
     pub(crate) other_rowers: Vec<Rower>,
 }
 
-async fn load_detail(state: &AppState, id: RowerId) -> Result<RowerDetail, StatusCode> {
-    let maybe = state
-        .db
+async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {
+    let maybe = db
         .with_conn(move |conn| {
             let Some(rower) = Rower::get(conn, id)? else {
                 return Ok(None);
@@ -272,17 +271,17 @@ pub(crate) struct SeatAffinityDelete {
 
 /// `POST /rowers/{id}/seat-affinity` — upsert one (rower, seat) row.
 pub(crate) async fn seat_affinity_upsert_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityInput>,
 ) -> Result<Html<String>, StatusCode> {
     let weight = match validate_weight(input.weight) {
         Ok(w) => w,
-        Err(msg) => return seat_section_with_error(&state, id, &msg).await,
+        Err(msg) => return seat_section_with_error(&tenant.db, id, &msg).await,
     };
     if !(1..=8).contains(&input.seat_position) {
         return seat_section_with_error(
-            &state,
+            &tenant.db,
             id,
             &format!(
                 "seat position must be between 1 and 8, got {}",
@@ -292,45 +291,45 @@ pub(crate) async fn seat_affinity_upsert_handler(
         .await;
     }
     let seat = input.seat_position;
-    state
+    tenant
         .db
         .with_conn(move |conn| SeatAffinity::upsert(conn, id, seat, weight))
         .await
         .map_err(internal_error)?;
-    seat_section_response(&state, id).await
+    seat_section_response(&tenant.db, id).await
 }
 
 /// `POST /rowers/{id}/seat-affinity/delete` — drop one (rower, seat).
 pub(crate) async fn seat_affinity_delete_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityDelete>,
 ) -> Result<Html<String>, StatusCode> {
     let seat = input.seat_position;
-    state
+    tenant
         .db
         .with_conn(move |conn| SeatAffinity::delete(conn, id, seat))
         .await
         .map_err(internal_error)?;
-    seat_section_response(&state, id).await
+    seat_section_response(&tenant.db, id).await
 }
 
 async fn seat_section_response(
-    state: &AppState,
+    db: &Db,
     id: RowerId,
 ) -> Result<Html<String>, StatusCode> {
-    let detail = load_detail(state, id).await?;
+    let detail = load_detail(db, id).await?;
     Ok(Html(
         templates::rowers::seat_affinities_section(&detail, None).into_string(),
     ))
 }
 
 async fn seat_section_with_error(
-    state: &AppState,
+    db: &Db,
     id: RowerId,
     msg: &str,
 ) -> Result<Html<String>, StatusCode> {
-    let detail = load_detail(state, id).await?;
+    let detail = load_detail(db, id).await?;
     Ok(Html(
         templates::rowers::seat_affinities_section(&detail, Some(msg)).into_string(),
     ))
@@ -351,58 +350,58 @@ pub(crate) struct PairAffinityDelete {
 
 /// `POST /rowers/{id}/pair-affinity` — upsert one canonical pair.
 pub(crate) async fn pair_affinity_upsert_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityInput>,
 ) -> Result<Html<String>, StatusCode> {
     if input.partner_id == id {
-        return pair_section_with_error(&state, id, "cannot pair a rower with themselves")
+        return pair_section_with_error(&tenant.db, id, "cannot pair a rower with themselves")
             .await;
     }
     let weight = match validate_weight(input.weight) {
         Ok(w) => w,
-        Err(msg) => return pair_section_with_error(&state, id, &msg).await,
+        Err(msg) => return pair_section_with_error(&tenant.db, id, &msg).await,
     };
     let partner = input.partner_id;
-    state
+    tenant
         .db
         .with_conn(move |conn| PairAffinity::upsert(conn, id, partner, weight))
         .await
         .map_err(internal_error)?;
-    pair_section_response(&state, id).await
+    pair_section_response(&tenant.db, id).await
 }
 
 /// `POST /rowers/{id}/pair-affinity/delete` — drop one canonical pair.
 pub(crate) async fn pair_affinity_delete_handler(
-    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityDelete>,
 ) -> Result<Html<String>, StatusCode> {
     let partner = input.partner_id;
-    state
+    tenant
         .db
         .with_conn(move |conn| PairAffinity::delete(conn, id, partner))
         .await
         .map_err(internal_error)?;
-    pair_section_response(&state, id).await
+    pair_section_response(&tenant.db, id).await
 }
 
 async fn pair_section_response(
-    state: &AppState,
+    db: &Db,
     id: RowerId,
 ) -> Result<Html<String>, StatusCode> {
-    let detail = load_detail(state, id).await?;
+    let detail = load_detail(db, id).await?;
     Ok(Html(
         templates::rowers::pair_affinities_section(&detail, None).into_string(),
     ))
 }
 
 async fn pair_section_with_error(
-    state: &AppState,
+    db: &Db,
     id: RowerId,
     msg: &str,
 ) -> Result<Html<String>, StatusCode> {
-    let detail = load_detail(state, id).await?;
+    let detail = load_detail(db, id).await?;
     Ok(Html(
         templates::rowers::pair_affinities_section(&detail, Some(msg)).into_string(),
     ))

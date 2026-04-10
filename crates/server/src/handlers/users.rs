@@ -18,19 +18,18 @@ use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId};
 use lineup_db::schema::{app_user, user_invite};
 use serde::Deserialize;
 
-use crate::{jwt::Claims, state::AppState, templates};
+use crate::{state::{AppState, TenantContext}, templates};
 
 // =====================================================================
 // User list (PD only)
 // =====================================================================
 
 pub(crate) async fn list_handler(
-    State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    require_role(&claims, Role::ProgramDirector)?;
-    let users = state
+    require_role(&tenant.claims, Role::ProgramDirector)?;
+    let users = tenant
         .db
         .with_conn(|conn| {
             app_user::table
@@ -56,12 +55,11 @@ pub(crate) struct InviteInput {
 }
 
 pub(crate) async fn invite_handler(
-    State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<InviteInput>,
 ) -> Result<Html<String>, StatusCode> {
-    require_role(&claims, Role::ProgramDirector)?;
+    require_role(&tenant.claims, Role::ProgramDirector)?;
 
     let email = input.email.trim().to_lowercase();
     let name = input.name.trim().to_string();
@@ -74,7 +72,7 @@ pub(crate) async fn invite_handler(
     let token = generate_token();
     let token_for_db = token.clone();
 
-    let result = state
+    let result = tenant
         .db
         .with_conn(move |conn| {
             // Check for existing user with this email.
@@ -134,7 +132,8 @@ pub(crate) async fn accept_page(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Html<String>, StatusCode> {
-    let valid = validate_invite(&state, &token).await?;
+    let db = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
+    let valid = validate_invite(&db, &token).await?;
     if !valid {
         return Ok(Html(
             templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
@@ -180,9 +179,9 @@ pub(crate) async fn accept_handler(
     .map_err(super::internal_error)?
     .map_err(super::internal_error)?;
 
+    let db = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
     let token_for_db = token.clone();
-    let result = state
-        .db
+    let result = db
         .with_conn(move |conn| {
             // Look up and consume the invite.
             let invite: Option<(UserId, chrono::NaiveDateTime)> = user_invite::table
@@ -224,10 +223,9 @@ pub(crate) async fn accept_handler(
 // Helpers
 // =====================================================================
 
-async fn validate_invite(state: &AppState, token: &str) -> Result<bool, StatusCode> {
+async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool, StatusCode> {
     let token = token.to_string();
-    state
-        .db
+    db
         .with_conn(move |conn| {
             let row: Option<chrono::NaiveDateTime> = user_invite::table
                 .filter(user_invite::token_hash.eq(&token))
@@ -243,7 +241,7 @@ async fn validate_invite(state: &AppState, token: &str) -> Result<bool, StatusCo
 
 /// Check that the authenticated user has at least `min` role.
 /// Returns 403 if insufficient.
-pub(crate) fn require_role(claims: &Claims, min: Role) -> Result<(), StatusCode> {
+pub(crate) fn require_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), StatusCode> {
     let role = claims.role().unwrap_or(Role::Member);
     if role.at_least(min) {
         Ok(())

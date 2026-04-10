@@ -15,7 +15,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
     Form,
 };
-use axum::{Extension};
+use axum::Extension;
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
@@ -134,13 +134,13 @@ fn default_budget() -> u64 {
 pub(crate) async fn view_handler(
     State(state): State<AppState>,
     jar: CookieJar,
-    Extension(claims): Extension<crate::jwt::Claims>,
+    Extension(tenant): Extension<crate::state::TenantContext>,
     Path(date): Path<NaiveDate>,
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
-    let snapshot = state
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let snapshot = tenant
         .db
         .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await
@@ -161,12 +161,12 @@ pub(crate) async fn view_handler(
 pub(crate) async fn commit_handler(
     State(state): State<AppState>,
     jar: CookieJar,
-    Extension(claims): Extension<crate::jwt::Claims>,
+    Extension(tenant): Extension<crate::state::TenantContext>,
     Path(date): Path<NaiveDate>,
     Form(knobs): Form<SolveKnobs>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
-    let snapshot = state
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let snapshot = tenant
         .db
         .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await
@@ -190,7 +190,7 @@ pub(crate) async fn commit_handler(
         .filter(|l| l.used)
         .collect();
 
-    state
+    tenant
         .db
         .with_conn(move |conn| {
             let practice = Practice::upsert_by_date(conn, team_id, date, None)?;

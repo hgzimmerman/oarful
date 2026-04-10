@@ -9,10 +9,9 @@
 //! sync closure — we can't `.await` the reqwest call inside it.
 
 use axum::{
-    extract::State,
     http::StatusCode,
     response::Html,
-    Form,
+    Extension, Form,
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
@@ -20,7 +19,7 @@ use chrono::{Datelike, Utc};
 use lineup_sheets::SyncSummary;
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::AppState, templates};
+use crate::{handlers::internal_error, state::TenantContext, templates};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SyncFormInput {
@@ -37,13 +36,12 @@ pub(crate) async fn form_handler(hx: HxRequest) -> Html<String> {
 }
 
 pub(crate) async fn sync_handler(
-    State(state): State<AppState>,
     jar: CookieJar,
-    axum::Extension(claims): axum::Extension<crate::jwt::Claims>,
+    Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<SyncFormInput>,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
         let content = templates::sync::form_content(
@@ -77,7 +75,7 @@ pub(crate) async fn sync_handler(
     // anyhow into an Ok(Result<...>) and unwrapping outside.
     let year = Utc::now().year();
     let csv_for_sync = csv_text.clone();
-    let sync_outcome: anyhow::Result<SyncSummary> = state
+    let sync_outcome: anyhow::Result<SyncSummary> = tenant
         .db
         .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, conn)))
         .await

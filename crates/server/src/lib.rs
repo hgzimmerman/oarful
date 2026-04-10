@@ -11,6 +11,7 @@ pub(crate) mod handlers;
 pub(crate) mod jwt;
 pub(crate) mod state;
 pub(crate) mod templates;
+pub(crate) mod tenant_cache;
 
 pub(crate) use state::AppState;
 

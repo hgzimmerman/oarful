@@ -1,11 +1,7 @@
 //! Shared application state passed to every handler as `State<AppState>`.
 //!
-//! Holds the master DB (tenant registry), the active tenant's DB pool,
-//! a solver semaphore, and a dedicated rayon thread pool for solver work.
-//!
-//! Phase 2 hard-codes a single tenant. Phase 4 will add a
-//! `DashMap<TenantId, Db>` for dynamic multi-tenant resolution from
-//! JWT claims.
+//! Holds the master DB, a tenant cache for lazy per-tenant pool
+//! opening, solver infrastructure, and JWT keys.
 
 use std::sync::Arc;
 
@@ -14,43 +10,44 @@ use lineup_master_db::state::MasterDb;
 use lineup_master_db::tenant::{NewTenant, Tenant, TenantId};
 use tokio::sync::Semaphore;
 
-use crate::jwt::JwtKeys;
+use crate::jwt::{Claims, JwtKeys};
+use crate::tenant_cache::TenantCache;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    /// Global tenant registry. Tiny, rarely queried.
     pub(crate) master_db: MasterDb,
-    /// The single active tenant's DB pool. Phase 4 replaces this with
-    /// a per-tenant cache keyed by `TenantId`.
-    pub(crate) db: Db,
-    /// The tenant ID for the hard-coded single tenant.
-    pub(crate) tenant_id: TenantId,
-    /// Bounds how many `lineup_solver::solve` calls can run at once.
+    pub(crate) tenant_cache: Arc<TenantCache>,
+    /// The default tenant's ID, used for backward compat and startup
+    /// seeding. Phase 5+ may remove this once all access is JWT-driven.
+    pub(crate) default_tenant_id: TenantId,
     pub(crate) solve_semaphore: Arc<Semaphore>,
-    /// Dedicated CPU pool for solver work, isolated from tokio's
-    /// blocking pool.
     pub(crate) solver_pool: Arc<rayon::ThreadPool>,
-    /// JWT signing/verification keys.
     pub(crate) jwt_keys: JwtKeys,
 }
 
+/// Bundle of per-request tenant state injected into request
+/// extensions by the `require_auth` middleware. Handlers extract
+/// this instead of reading `state.db` directly.
+#[derive(Clone)]
+pub(crate) struct TenantContext {
+    pub(crate) db: Db,
+    pub(crate) tenant_id: TenantId,
+    pub(crate) claims: Claims,
+}
+
 impl AppState {
-    /// Boot the server state. Opens (or creates) the master DB, ensures
-    /// a default tenant exists pointing at `tenant_conn_str`, then opens
-    /// the tenant DB pool.
     pub(crate) fn new(
         master_conn_str: &str,
         tenant_conn_str: &str,
     ) -> anyhow::Result<Self> {
         let master_db = MasterDb::connect(master_conn_str)?;
 
-        // Ensure the default tenant exists in the master registry.
-        // Use a one-shot sync connection (MasterDb::connect already
-        // ran migrations). Calling `with_conn` requires a tokio
-        // runtime which may not be set up at this point.
-        let tenant_id = ensure_default_tenant(master_conn_str, tenant_conn_str)?;
+        let default_tenant_id = ensure_default_tenant(master_conn_str, tenant_conn_str)?;
 
-        let db = Db::connect(tenant_conn_str)?;
+        // Pre-warm the cache with the default tenant.
+        let default_db = Db::connect(tenant_conn_str)?;
+        let tenant_cache = Arc::new(TenantCache::new());
+        tenant_cache.insert(default_tenant_id, default_db);
 
         let solve_concurrency = std::env::var("SOLVE_CONCURRENCY")
             .ok()
@@ -70,8 +67,6 @@ impl AppState {
             .build()
             .map_err(|e| anyhow::anyhow!("building solver thread pool: {e}"))?;
 
-        // JWT secret: from env or random (dev-mode; tokens don't
-        // survive restarts).
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
             use std::collections::hash_map::RandomState;
             use std::hash::{BuildHasher, Hasher};
@@ -84,18 +79,23 @@ impl AppState {
 
         Ok(Self {
             master_db,
-            db,
-            tenant_id,
+            tenant_cache,
+            default_tenant_id,
             solve_semaphore: Arc::new(Semaphore::new(solve_concurrency)),
             solver_pool: Arc::new(solver_pool),
             jwt_keys,
         })
     }
+
+    /// Resolve a tenant's Db from the cache, opening it on first
+    /// access. Used by the auth middleware and public invite routes.
+    pub(crate) async fn tenant_db(&self, tenant_id: TenantId) -> anyhow::Result<Db> {
+        self.tenant_cache
+            .get_or_connect(tenant_id, &self.master_db)
+            .await
+    }
 }
 
-/// Seed a "default" tenant row if one doesn't already exist. Returns
-/// its `TenantId`. Uses a one-shot sync connection since this runs
-/// at startup before the async runtime is fully available.
 fn ensure_default_tenant(
     master_conn_str: &str,
     tenant_db_path: &str,
