@@ -3,3 +3,4 @@ lineup.sql
 lineup.sql-journal
 .direnv
 .envrc.local
+master.db
