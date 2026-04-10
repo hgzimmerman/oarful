@@ -7,11 +7,11 @@
 use axum::Router;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
-pub mod handlers;
-pub mod state;
-pub mod templates;
+pub(crate) mod handlers;
+pub(crate) mod state;
+pub(crate) mod templates;
 
-pub use state::AppState;
+pub(crate) use state::AppState;
 
 /// Build the full application router.
 ///

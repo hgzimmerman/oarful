@@ -1,0 +1,132 @@
+//! Sync-sheet form + result panel.
+
+use lineup_sheets::SyncSummary;
+use maud::{html, Markup};
+
+use super::layout::page_header;
+use crate::handlers::sync::SyncFormInput;
+
+pub(crate) fn form_content(
+    prev: Option<&SyncFormInput>,
+    summary: Option<&SyncSummary>,
+    error: Option<&str>,
+) -> Markup {
+    let id_value = prev.map(|p| p.spreadsheet_id.as_str()).unwrap_or("");
+    let gid_value = prev.map(|p| p.gid).unwrap_or(0);
+
+    html! {
+        (page_header(
+            "Sync sheet",
+            Some("Pull rower availability from a publicly-shared Google Sheet."),
+        ))
+        div class="px-8 py-6 max-w-3xl space-y-6" {
+            @if let Some(msg) = error {
+                div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
+                    strong { "Error. " } (msg)
+                }
+            }
+
+            form method="post" action="/sync"
+                 hx-post="/sync"
+                 hx-target="#content"
+                 hx-push-url="false"
+                 hx-indicator="#sync-spinner"
+                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                div {
+                    label for="spreadsheet_id" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Spreadsheet ID"
+                    }
+                    input id="spreadsheet_id" name="spreadsheet_id" type="text" required
+                          value=(id_value)
+                          placeholder="1AbCDeFgHiJkLmNoPqRsTuVwXyZ..."
+                          class="w-full border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                    p class="text-xs text-slate-500 mt-1" {
+                        "From the sheet URL: "
+                        code class="bg-slate-100 px-1" { "/spreadsheets/d/" strong { "ID" } "/edit" }
+                        ". The sheet must be set to 'Anyone with the link can view'."
+                    }
+                }
+                div {
+                    label for="gid" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Tab ID (gid)"
+                    }
+                    input id="gid" name="gid" type="number" min="0" value=(gid_value)
+                          class="w-32 border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                    p class="text-xs text-slate-500 mt-1" {
+                        "0 for the first tab. Otherwise the "
+                        code class="bg-slate-100 px-1" { "gid=" }
+                        " value in the tab's URL."
+                    }
+                }
+                div class="flex items-center space-x-3" {
+                    button type="submit"
+                           class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                        "Sync"
+                    }
+                    span #sync-spinner class="htmx-indicator text-sm text-slate-500" {
+                        "Fetching and syncing…"
+                    }
+                }
+            }
+
+            @if let Some(s) = summary {
+                (summary_panel(s))
+            }
+        }
+    }
+}
+
+fn summary_panel(s: &SyncSummary) -> Markup {
+    html! {
+        section class="bg-white rounded-lg shadow p-6 space-y-4" {
+            h2 class="text-xl font-bold text-slate-800" { "Sync complete" }
+
+            div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm" {
+                (stat("Rows read", s.rows_read))
+                (stat("Sweep", s.sweep_rows))
+                (stat("Sculling", s.sculling_rows))
+                (stat("Rowers created", s.rowers_created))
+                (stat("Rowers updated", s.rowers_updated))
+                (stat("Availability upserted", s.availabilities_upserted))
+            }
+
+            @if s.rows_skipped_no_email > 0 {
+                p class="text-xs text-slate-500" {
+                    "Skipped " (s.rows_skipped_no_email) " row(s) without an email."
+                }
+            }
+
+            @if !s.warnings.is_empty() {
+                div {
+                    h3 class="font-semibold text-slate-700 mb-2" {
+                        "Warnings (" (s.warnings.len()) ")"
+                    }
+                    ul class="list-disc pl-5 space-y-1 text-sm text-amber-800" {
+                        @for w in &s.warnings {
+                            li { (w) }
+                        }
+                    }
+                }
+            }
+
+            div class="pt-2 border-t border-slate-200" {
+                a href="/practices"
+                  hx-get="/practices"
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="text-emerald-700 hover:text-emerald-900 font-semibold text-sm" {
+                    "→ View practices dashboard"
+                }
+            }
+        }
+    }
+}
+
+fn stat(label: &str, value: usize) -> Markup {
+    html! {
+        div class="bg-slate-50 rounded p-3" {
+            div class="text-xs text-slate-500 uppercase tracking-wide" { (label) }
+            div class="text-2xl font-bold text-slate-800" { (value) }
+        }
+    }
+}

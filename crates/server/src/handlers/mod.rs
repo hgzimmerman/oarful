@@ -12,14 +12,15 @@ use maud::Markup;
 
 use crate::{state::AppState, templates};
 
-pub mod history;
-pub mod practices;
-pub mod rowers;
-pub mod solve;
+pub(crate) mod history;
+pub(crate) mod practices;
+pub(crate) mod rowers;
+pub(crate) mod solve;
+pub(crate) mod sync;
 
 /// Compose the full route table. Called from [`crate::build_router`] so
 /// the binary doesn't need to know about individual handlers.
-pub fn create_router() -> Router<AppState> {
+pub(crate) fn create_router() -> Router<AppState> {
     Router::new()
         .route("/", get(|| async { Redirect::permanent("/practices") }))
         .route("/practices", get(practices::list_handler))
@@ -28,13 +29,14 @@ pub fn create_router() -> Router<AppState> {
         .route("/history", get(history::list_handler))
         .route("/history/{date}", get(history::detail_handler))
         .route("/rowers", get(rowers::list_handler))
+        .route("/sync", get(sync::form_handler).post(sync::sync_handler))
 }
 
 /// Render `content` either as a full page (for a normal navigation) or
 /// as the bare inner content (when HTMX is doing an in-place swap).
 /// Every visual handler should return through here so the HTMX and
 /// non-HTMX paths stay in sync.
-pub fn maybe_page(
+pub(crate) fn maybe_page(
     title: &str,
     content: Markup,
     HxRequest(is_htmx): HxRequest,
@@ -48,7 +50,7 @@ pub fn maybe_page(
 
 /// Collapse an anyhow/diesel/etc. error into a 500 response and log it.
 /// Handlers use `.map_err(internal_error)` as their escape hatch.
-pub fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
+pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
     tracing::error!(?error, "handler error");
     StatusCode::INTERNAL_SERVER_ERROR
 }

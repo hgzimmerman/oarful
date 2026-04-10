@@ -6,15 +6,15 @@ use maud::{html, Markup};
 use super::layout::{empty_state, page_header};
 
 /// Per-row summary for the practices dashboard.
-pub struct PracticeRow {
-    pub date: NaiveDate,
+pub(crate) struct PracticeRow {
+    pub(crate) date: NaiveDate,
     /// Rowers who said "Yes" — directly usable by the sweep solver.
-    pub yes_count: usize,
+    pub(crate) yes_count: usize,
     /// Everyone who responded (Yes / No / Maybe / ScullingOnly).
-    pub total_responses: usize,
+    pub(crate) total_responses: usize,
 }
 
-pub fn list_content(rows: &[PracticeRow]) -> Markup {
+pub(crate) fn list_content(rows: &[PracticeRow]) -> Markup {
     html! {
         (page_header("Upcoming practices", Some("Pick a date to generate a lineup.")))
         div class="px-8 py-6" {

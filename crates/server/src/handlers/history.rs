@@ -12,7 +12,7 @@ use lineup_db::{lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
 
 use crate::{handlers::internal_error, state::AppState, templates};
 
-pub async fn list_handler(
+pub(crate) async fn list_handler(
     State(state): State<AppState>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
@@ -38,7 +38,7 @@ pub async fn list_handler(
     Ok(super::maybe_page("History", content, hx))
 }
 
-pub async fn detail_handler(
+pub(crate) async fn detail_handler(
     State(state): State<AppState>,
     Path(date): Path<NaiveDate>,
     hx: HxRequest,

@@ -1059,6 +1059,7 @@ dependencies = [
  "lineup_sheets",
  "lineup_solver",
  "maud",
+ "reqwest",
  "serde",
  "tokio",
  "tower-http",

@@ -9,12 +9,12 @@
 use lineup_db::state::Db;
 
 #[derive(Clone)]
-pub struct AppState {
-    pub db: Db,
+pub(crate) struct AppState {
+    pub(crate) db: Db,
 }
 
 impl AppState {
-    pub fn new(conn_str: &str) -> anyhow::Result<Self> {
+    pub(crate) fn new(conn_str: &str) -> anyhow::Result<Self> {
         Ok(Self {
             db: Db::connect(conn_str)?,
         })

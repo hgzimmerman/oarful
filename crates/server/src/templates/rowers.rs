@@ -5,7 +5,7 @@ use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
 
-pub fn list_content(rowers: &[Rower]) -> Markup {
+pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
     let subtitle = format!("{} active rowers", rowers.len());
     html! {
         (page_header("Rowers", Some(&subtitle)))

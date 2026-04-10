@@ -6,7 +6,7 @@ use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
 
-pub fn list_content(dates: &[NaiveDate]) -> Markup {
+pub(crate) fn list_content(dates: &[NaiveDate]) -> Markup {
     html! {
         (page_header("Committed practices", Some("Lineups that have been committed to the database.")))
         div class="px-8 py-6 max-w-3xl" {
@@ -37,7 +37,7 @@ fn row(date: &NaiveDate) -> Markup {
     }
 }
 
-pub fn detail_content(
+pub(crate) fn detail_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
     committed: &[CommittedLineup],

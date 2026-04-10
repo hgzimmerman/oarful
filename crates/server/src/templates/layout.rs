@@ -8,7 +8,7 @@
 
 use maud::{html, Markup, DOCTYPE};
 
-pub fn page(title: &str, content: Markup) -> Markup {
+pub(crate) fn page(title: &str, content: Markup) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -40,6 +40,7 @@ fn navbar() -> Markup {
                 (nav_link("/practices", "Practices"))
                 (nav_link("/history", "History"))
                 (nav_link("/rowers", "Rowers"))
+                (nav_link("/sync", "Sync"))
             }
         }
     }
@@ -59,14 +60,14 @@ fn nav_link(href: &str, label: &str) -> Markup {
 }
 
 /// Tiny empty-state helper used by a few list views.
-pub fn empty_state(message: &str) -> Markup {
+pub(crate) fn empty_state(message: &str) -> Markup {
     html! {
         div class="text-center text-slate-500 italic py-12" { (message) }
     }
 }
 
 /// Generic page header: large title + optional subtitle.
-pub fn page_header(title: &str, subtitle: Option<&str>) -> Markup {
+pub(crate) fn page_header(title: &str, subtitle: Option<&str>) -> Markup {
     html! {
         header class="bg-white border-b border-slate-200 px-8 py-6" {
             h1 class="text-2xl font-bold text-slate-800" { (title) }

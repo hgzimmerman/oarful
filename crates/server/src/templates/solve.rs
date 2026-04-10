@@ -12,7 +12,7 @@ use maud::{html, Markup};
 
 use super::layout::page_header;
 
-pub fn view_content(
+pub(crate) fn view_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
     result: &SolveResult,

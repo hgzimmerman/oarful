@@ -7,7 +7,7 @@ use lineup_db::rower::Rower;
 
 use crate::{handlers::internal_error, state::AppState, templates};
 
-pub async fn list_handler(
+pub(crate) async fn list_handler(
     State(state): State<AppState>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {

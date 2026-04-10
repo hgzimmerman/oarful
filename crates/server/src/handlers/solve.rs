@@ -30,7 +30,7 @@ const DEFAULT_TIME_BUDGET: Duration = Duration::from_secs(3);
 /// Default number of alternatives to surface alongside the primary.
 const DEFAULT_TOP_N: usize = 3;
 
-pub async fn view_handler(
+pub(crate) async fn view_handler(
     State(state): State<AppState>,
     Path(date): Path<NaiveDate>,
     hx: HxRequest,
@@ -69,7 +69,7 @@ pub async fn view_handler(
     ))
 }
 
-pub async fn commit_handler(
+pub(crate) async fn commit_handler(
     State(state): State<AppState>,
     Path(date): Path<NaiveDate>,
 ) -> Result<impl IntoResponse, StatusCode> {
