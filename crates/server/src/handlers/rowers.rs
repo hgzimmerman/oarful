@@ -20,11 +20,13 @@ use axum::{
     Form,
 };
 use axum_htmx::HxRequest;
+use lineup_db::pair_affinity::PairAffinity;
 use lineup_db::rower::{
     types::{RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
     Rower,
 };
-use lineup_db::types::IntBool;
+use lineup_db::seat_affinity::SeatAffinity;
+use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::AppState, templates};
@@ -188,4 +190,236 @@ async fn load(state: &AppState, id: RowerId) -> Result<Rower, StatusCode> {
         .await
         .map_err(internal_error)?;
     maybe.ok_or(StatusCode::NOT_FOUND)
+}
+
+// =====================================================================
+// Per-rower detail page + affinity CRUD
+// =====================================================================
+//
+// `GET /rowers/{id}` renders a detail page composed of three sections:
+//   1. attribute summary (read-only — editing lives on the list view)
+//   2. seat affinities (S3) — table + add form
+//   3. pair affinities (S2) — table + add form
+//
+// Each affinity mutation hits a small POST endpoint that returns just
+// the affected `<section>` so HTMX can `outerHTML`-swap it without
+// re-rendering the whole page. The section partial functions in the
+// template module are exposed so handlers can call them directly.
+
+/// `GET /rowers/{id}` — full detail page.
+pub(crate) async fn detail_handler(
+    State(state): State<AppState>,
+    Path(id): Path<RowerId>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    let detail = load_detail(&state, id).await?;
+    let content = templates::rowers::detail_content(&detail);
+    Ok(super::maybe_page(
+        &format!("Rower · {}", detail.rower.name),
+        content,
+        hx,
+    ))
+}
+
+/// Bundled lookup for the detail page: rower + their affinities + the
+/// roster of every other active rower (used by the partner picker on
+/// the pair-affinity add form).
+pub(crate) struct RowerDetail {
+    pub(crate) rower: Rower,
+    pub(crate) seat_affinities: Vec<SeatAffinity>,
+    pub(crate) pair_affinities: Vec<PairAffinity>,
+    pub(crate) other_rowers: Vec<Rower>,
+}
+
+async fn load_detail(state: &AppState, id: RowerId) -> Result<RowerDetail, StatusCode> {
+    let maybe = state
+        .db
+        .with_conn(move |conn| {
+            let Some(rower) = Rower::get(conn, id)? else {
+                return Ok(None);
+            };
+            let seat_affinities = SeatAffinity::list_for_rower(conn, id)?;
+            let pair_affinities = PairAffinity::list_for_rower(conn, id)?;
+            let mut other_rowers: Vec<Rower> = Rower::list_active(conn)?
+                .into_iter()
+                .filter(|r| r.id != id)
+                .collect();
+            other_rowers.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(Some(RowerDetail {
+                rower,
+                seat_affinities,
+                pair_affinities,
+                other_rowers,
+            }))
+        })
+        .await
+        .map_err(internal_error)?;
+    maybe.ok_or(StatusCode::NOT_FOUND)
+}
+
+// ---- Seat affinities ------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SeatAffinityInput {
+    pub(crate) seat_position: i32,
+    pub(crate) weight: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SeatAffinityDelete {
+    pub(crate) seat_position: i32,
+}
+
+/// `POST /rowers/{id}/seat-affinity` — upsert one (rower, seat) row.
+pub(crate) async fn seat_affinity_upsert_handler(
+    State(state): State<AppState>,
+    Path(id): Path<RowerId>,
+    Form(input): Form<SeatAffinityInput>,
+) -> Result<Html<String>, StatusCode> {
+    let weight = match validate_weight(input.weight) {
+        Ok(w) => w,
+        Err(msg) => return seat_section_with_error(&state, id, &msg).await,
+    };
+    if !(1..=8).contains(&input.seat_position) {
+        return seat_section_with_error(
+            &state,
+            id,
+            &format!(
+                "seat position must be between 1 and 8, got {}",
+                input.seat_position
+            ),
+        )
+        .await;
+    }
+    let seat = input.seat_position;
+    state
+        .db
+        .with_conn(move |conn| SeatAffinity::upsert(conn, id, seat, weight))
+        .await
+        .map_err(internal_error)?;
+    seat_section_response(&state, id).await
+}
+
+/// `POST /rowers/{id}/seat-affinity/delete` — drop one (rower, seat).
+pub(crate) async fn seat_affinity_delete_handler(
+    State(state): State<AppState>,
+    Path(id): Path<RowerId>,
+    Form(input): Form<SeatAffinityDelete>,
+) -> Result<Html<String>, StatusCode> {
+    let seat = input.seat_position;
+    state
+        .db
+        .with_conn(move |conn| SeatAffinity::delete(conn, id, seat))
+        .await
+        .map_err(internal_error)?;
+    seat_section_response(&state, id).await
+}
+
+async fn seat_section_response(
+    state: &AppState,
+    id: RowerId,
+) -> Result<Html<String>, StatusCode> {
+    let detail = load_detail(state, id).await?;
+    Ok(Html(
+        templates::rowers::seat_affinities_section(&detail, None).into_string(),
+    ))
+}
+
+async fn seat_section_with_error(
+    state: &AppState,
+    id: RowerId,
+    msg: &str,
+) -> Result<Html<String>, StatusCode> {
+    let detail = load_detail(state, id).await?;
+    Ok(Html(
+        templates::rowers::seat_affinities_section(&detail, Some(msg)).into_string(),
+    ))
+}
+
+// ---- Pair affinities ------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PairAffinityInput {
+    pub(crate) partner_id: RowerId,
+    pub(crate) weight: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PairAffinityDelete {
+    pub(crate) partner_id: RowerId,
+}
+
+/// `POST /rowers/{id}/pair-affinity` — upsert one canonical pair.
+pub(crate) async fn pair_affinity_upsert_handler(
+    State(state): State<AppState>,
+    Path(id): Path<RowerId>,
+    Form(input): Form<PairAffinityInput>,
+) -> Result<Html<String>, StatusCode> {
+    if input.partner_id == id {
+        return pair_section_with_error(&state, id, "cannot pair a rower with themselves")
+            .await;
+    }
+    let weight = match validate_weight(input.weight) {
+        Ok(w) => w,
+        Err(msg) => return pair_section_with_error(&state, id, &msg).await,
+    };
+    let partner = input.partner_id;
+    state
+        .db
+        .with_conn(move |conn| PairAffinity::upsert(conn, id, partner, weight))
+        .await
+        .map_err(internal_error)?;
+    pair_section_response(&state, id).await
+}
+
+/// `POST /rowers/{id}/pair-affinity/delete` — drop one canonical pair.
+pub(crate) async fn pair_affinity_delete_handler(
+    State(state): State<AppState>,
+    Path(id): Path<RowerId>,
+    Form(input): Form<PairAffinityDelete>,
+) -> Result<Html<String>, StatusCode> {
+    let partner = input.partner_id;
+    state
+        .db
+        .with_conn(move |conn| PairAffinity::delete(conn, id, partner))
+        .await
+        .map_err(internal_error)?;
+    pair_section_response(&state, id).await
+}
+
+async fn pair_section_response(
+    state: &AppState,
+    id: RowerId,
+) -> Result<Html<String>, StatusCode> {
+    let detail = load_detail(state, id).await?;
+    Ok(Html(
+        templates::rowers::pair_affinities_section(&detail, None).into_string(),
+    ))
+}
+
+async fn pair_section_with_error(
+    state: &AppState,
+    id: RowerId,
+    msg: &str,
+) -> Result<Html<String>, StatusCode> {
+    let detail = load_detail(state, id).await?;
+    Ok(Html(
+        templates::rowers::pair_affinities_section(&detail, Some(msg)).into_string(),
+    ))
+}
+
+/// Validate a coach-supplied affinity weight against the documented
+/// `[-5, 5] \ {0}` range. Returns the typed [`AffinityWeight`] on
+/// success or a friendly error message on rejection.
+fn validate_weight(weight: i32) -> Result<AffinityWeight, String> {
+    if weight == 0 {
+        return Err("weight cannot be zero (use ±1 for the weakest preference)".into());
+    }
+    if !(AFFINITY_WEIGHT_MIN..=AFFINITY_WEIGHT_MAX).contains(&weight) {
+        return Err(format!(
+            "weight must be between {AFFINITY_WEIGHT_MIN} and {AFFINITY_WEIGHT_MAX} (excluding zero), got {weight}"
+        ));
+    }
+    AffinityWeight::try_new(weight)
+        .ok_or_else(|| format!("invalid weight: {weight}"))
 }

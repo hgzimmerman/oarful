@@ -29,9 +29,28 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/history", get(history::list_handler))
         .route("/history/{date}", get(history::detail_handler))
         .route("/rowers", get(rowers::list_handler))
-        .route("/rowers/{id}", post(rowers::update_handler))
+        .route(
+            "/rowers/{id}",
+            get(rowers::detail_handler).post(rowers::update_handler),
+        )
         .route("/rowers/{id}/row", get(rowers::row_handler))
         .route("/rowers/{id}/edit", get(rowers::edit_handler))
+        .route(
+            "/rowers/{id}/seat-affinity",
+            post(rowers::seat_affinity_upsert_handler),
+        )
+        .route(
+            "/rowers/{id}/seat-affinity/delete",
+            post(rowers::seat_affinity_delete_handler),
+        )
+        .route(
+            "/rowers/{id}/pair-affinity",
+            post(rowers::pair_affinity_upsert_handler),
+        )
+        .route(
+            "/rowers/{id}/pair-affinity/delete",
+            post(rowers::pair_affinity_delete_handler),
+        )
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
 }
 

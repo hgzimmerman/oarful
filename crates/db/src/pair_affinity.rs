@@ -79,4 +79,76 @@ impl PairAffinity {
             .select(Self::as_select())
             .get_results(conn)
     }
+
+    /// Every pair affinity that mentions `rower` on either side. Used
+    /// by the per-rower detail page so the coach sees both directions
+    /// of the symmetric relationship in one list.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn list_for_rower(
+        conn: &mut SqliteConnection,
+        rower: RowerId,
+    ) -> Result<Vec<Self>, diesel::result::Error> {
+        pair_affinity::table
+            .filter(
+                pair_affinity::rower_a_id
+                    .eq(rower)
+                    .or(pair_affinity::rower_b_id.eq(rower)),
+            )
+            .select(Self::as_select())
+            .get_results(conn)
+    }
+
+    /// Insert or update one canonical pair. Caller-supplied IDs are
+    /// reordered so `a < b` matches the SQL `CHECK` constraint, then
+    /// the unique `(rower_a_id, rower_b_id)` index resolves the
+    /// upsert.
+    ///
+    /// Returns `Err(NotFound)` if `a == b` (a self-pair is meaningless
+    /// and `NewPairAffinity::canonical` would panic). Callers should
+    /// validate this at the form layer first; the check here is a
+    /// belt-and-braces guard.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn upsert(
+        conn: &mut SqliteConnection,
+        a: RowerId,
+        b: RowerId,
+        weight: AffinityWeight,
+    ) -> Result<(), diesel::result::Error> {
+        if a == b {
+            return Err(diesel::result::Error::NotFound);
+        }
+        let new = NewPairAffinity::canonical(a, b, weight);
+        diesel::insert_into(pair_affinity::table)
+            .values(&new)
+            .on_conflict((pair_affinity::rower_a_id, pair_affinity::rower_b_id))
+            .do_update()
+            .set(pair_affinity::weight.eq(weight))
+            .execute(conn)?;
+        Ok(())
+    }
+
+    /// Remove one canonical pair. Caller-supplied IDs are reordered
+    /// before the delete. Silently no-ops if the row didn't exist.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn delete(
+        conn: &mut SqliteConnection,
+        a: RowerId,
+        b: RowerId,
+    ) -> Result<(), diesel::result::Error> {
+        if a == b {
+            return Ok(());
+        }
+        let (a, b) = if a.as_int() < b.as_int() {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        diesel::delete(
+            pair_affinity::table
+                .filter(pair_affinity::rower_a_id.eq(a))
+                .filter(pair_affinity::rower_b_id.eq(b)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
 }

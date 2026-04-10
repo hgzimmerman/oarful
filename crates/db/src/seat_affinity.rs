@@ -53,4 +53,61 @@ impl SeatAffinity {
             .select(Self::as_select())
             .get_results(conn)
     }
+
+    /// Every seat preference belonging to one rower, ordered by seat
+    /// position. Used by the per-rower detail page.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn list_for_rower(
+        conn: &mut SqliteConnection,
+        rower: RowerId,
+    ) -> Result<Vec<Self>, diesel::result::Error> {
+        rower_seat_affinity::table
+            .filter(rower_seat_affinity::rower_id.eq(rower))
+            .order(rower_seat_affinity::seat_position.asc())
+            .select(Self::as_select())
+            .get_results(conn)
+    }
+
+    /// Insert or update one (rower, seat) preference. The unique key
+    /// is `(rower_id, seat_position)` so the upsert collapses any
+    /// existing row's weight to the new value.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn upsert(
+        conn: &mut SqliteConnection,
+        rower: RowerId,
+        seat_position: i32,
+        weight: AffinityWeight,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::insert_into(rower_seat_affinity::table)
+            .values(NewSeatAffinity {
+                rower_id: rower,
+                seat_position,
+                weight,
+            })
+            .on_conflict((
+                rower_seat_affinity::rower_id,
+                rower_seat_affinity::seat_position,
+            ))
+            .do_update()
+            .set(rower_seat_affinity::weight.eq(weight))
+            .execute(conn)?;
+        Ok(())
+    }
+
+    /// Remove one (rower, seat) preference. Silently no-ops if the
+    /// row didn't exist.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn delete(
+        conn: &mut SqliteConnection,
+        rower: RowerId,
+        seat_position: i32,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::delete(
+            rower_seat_affinity::table
+                .filter(rower_seat_affinity::rower_id.eq(rower))
+                .filter(rower_seat_affinity::seat_position.eq(seat_position)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
 }
