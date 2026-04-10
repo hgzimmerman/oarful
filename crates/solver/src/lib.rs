@@ -240,6 +240,21 @@ pub struct SolverConfig {
     /// enough not to override S1 / S9 / S11 / S12 structural
     /// preferences that would make the extra placement worse.
     pub partial_fill_bonus: i32,
+    /// S13 non-scull retention reward. Per-rower bonus for
+    /// *keeping a sweep-only rower in a sweep seat*. Applied only
+    /// to rowers with `can_scull = false`: if they don't get a
+    /// sweep seat, there's nowhere else for them to row, so the
+    /// solver should be more reluctant to bench them than it is
+    /// to bench a `can_scull = true` rower (who can fall back to
+    /// the scullers team). Encoded as one `rower_used[r] ∈ {0, 1}`
+    /// aux var per non-scull available rower, linked to
+    /// `Σ_{b, s} x[r, b, s]`, with a single scaled obj term so
+    /// the total contribution is O(non-scull rowers). Default
+    /// **2** — breaks the "who gets benched" tie against
+    /// scullers without overriding hard structural preferences
+    /// (side, skill, weight-class) that might make placing a
+    /// specific sweep-only rower uneconomical.
+    pub non_scull_retention_weight: i32,
 }
 
 impl Default for SolverConfig {
@@ -259,6 +274,7 @@ impl Default for SolverConfig {
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
             partial_fill_bonus: 1,
+            non_scull_retention_weight: 2,
         }
     }
 }
@@ -528,13 +544,15 @@ fn build_model<'a>(
     m.create_variables();
 
     // Fleet-level soft constraints: S4 wrong-side aggregation,
-    // S6 cox cooldown, S7 novelty vs recent lineups. These live
-    // in `soft_fleet.rs` as ModelBuilder methods. S8 already ran
-    // above because it only needs `use_b` / `boats` / `cfg` and
-    // doesn't touch `x`.
+    // S6 cox cooldown, S7 novelty vs recent lineups, S13
+    // non-scull retention. These live in `soft_fleet.rs` as
+    // ModelBuilder methods. S8 already ran above because it
+    // only needs `use_b` / `boats` / `cfg` and doesn't touch
+    // `x`.
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s7_novelty(snapshot, request.novelty_factor)?;
+    m.post_s13_non_scull_retention()?;
 
     // Hard constraints: H1 seat fill + partial-fill cap, H2
     // rower-at-most-one, H6 fleet capacity, H5 weight-class wall

@@ -179,6 +179,10 @@ fn silent_config() -> SolverConfig {
         // tests only opt it in explicitly when they're exercising
         // the partial-fill path.
         partial_fill_bonus: 0,
+        // S13 retention off so tests don't accidentally couple
+        // can_scull flags into their assertions; the retention
+        // test opts it back in explicitly.
+        non_scull_retention_weight: 0,
     }
 }
 
@@ -699,6 +703,85 @@ fn s12_engine_room_strength_puts_strong_rowers_in_middle() {
             "end-pair seat {seat} should hold a Weak rower, got VeryStrong {r:?}"
         );
     }
+}
+
+// ---------- S13 non-scull retention ----------
+
+#[test]
+fn s13_non_scull_retention_prefers_benching_sculler() {
+    // A 4+ (4 rowing + cox = 5 seats) with 6 available rowers:
+    // 4 Port/Starboard rowers needed for rowing seats, 1
+    // designated cox, and 1 extra rower who can fall back to
+    // sculling. The solver has to bench someone. Without the
+    // retention bonus, any non-cox rower could be chosen; with
+    // it, the sculling-eligible one should be the bench pick.
+    //
+    // Layout: rowers 1-4 cover the 4 rowing seats (2 Port + 2
+    // Starboard). Rower 5 is a third Port rower with
+    // `can_scull = true` — the overflow candidate. Rower 6 is
+    // the designated cox. Since the 4+ needs exactly 2 Port
+    // and 2 Starboard, one Port rower must be benched. The
+    // solver should pick rower 5 (can_scull) over rowers 1 or
+    // 3 (sweep-only).
+    let rowers = vec![
+        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(3, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        {
+            // Sculling-eligible Port rower — the solver should
+            // prefer to bench *this* one because they have a
+            // fallback.
+            let mut r = rower(5, "Scullable", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            r.can_scull = IntBool::TRUE;
+            r
+        },
+        cox_rower(6, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let mut cfg = silent_config();
+    cfg.non_scull_retention_weight = 2;
+
+    let result = solve(&snap, &request(cfg)).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+    let lineup = single_used(&result.primary.lineups);
+
+    // Both sweep-only Port rowers (PortA, PortB) should be
+    // seated; the can_scull rower should be in the unplaced
+    // `to_sculling` bucket.
+    let placed_ids: std::collections::HashSet<RowerId> = lineup
+        .seats
+        .iter()
+        .map(|(_, r)| *r)
+        .collect();
+    assert!(
+        placed_ids.contains(&RowerId::new(1)),
+        "PortA (sweep-only) should be seated, got lineup {:?}",
+        lineup.seats
+    );
+    assert!(
+        placed_ids.contains(&RowerId::new(3)),
+        "PortB (sweep-only) should be seated, got lineup {:?}",
+        lineup.seats
+    );
+    assert!(
+        !placed_ids.contains(&RowerId::new(5)),
+        "Scullable (can_scull) should be benched, but got lineup {:?}",
+        lineup.seats
+    );
+
+    // And the unplaced breakdown should confirm the classification.
+    assert_eq!(
+        result.primary.unplaced.to_sculling,
+        vec![RowerId::new(5)],
+        "the can_scull rower should land in to_sculling",
+    );
+    assert!(
+        result.primary.unplaced.benched.is_empty(),
+        "no sweep-only rower should be benched, got {:?}",
+        result.primary.unplaced.benched
+    );
 }
 
 // ---------- Partial-fill bonus ----------

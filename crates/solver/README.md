@@ -169,6 +169,7 @@ each soft constraint's contribution to the objective. Defaults:
 | `end_pair_skill_weight` | 1 | S11 8-boat end-pair skill reward (seats 1/2/7/8) |
 | `engine_room_strength_weight` | 1 | S12 8-boat engine-room strength reward (seats 3-6) |
 | `partial_fill_bonus` | 1 | Per-filled-optional-seat reward under `Allowed(k)` partial-fill; inert under `Strict` |
+| `non_scull_retention_weight` | 2 | S13 per-sweep-only-rower placement reward; biases "who gets benched" toward can_scull rowers |
 
 **Zero disables the constraint entirely.** Setting any field to `0`
 skips the entire constraint block at solve time — no auxiliary
@@ -681,6 +682,55 @@ weighs the two rewards against each other and places them where the
 marginal gain is larger. Most real rowers aren't maxed on both axes,
 so in practice the two constraints tend to partition the crew
 naturally along the skill/strength diagonal.
+
+### S13. Non-scull retention — **enabled**
+Without any per-rower preference, S8's per-boat placement reward
+treats every available rower the same: two solutions that differ
+only in *who* sits on the dock are tied to the objective and the
+solver picks one arbitrarily. That's wrong from the coach's
+perspective — a rower flagged `can_scull = true` has somewhere to
+go (the scullers team), whereas a sweep-only rower benched today
+just sits out.
+
+S13 fixes the tie-break. For every available rower with
+`can_scull = false`, push a per-rower retention reward into the
+objective:
+
+```
+for each available rower r where !r.can_scull:
+    rower_used[r] ∈ {0, 1}              (aux var; H2 makes the bound tight)
+    Σ_{b, s} x[r, b, s] − rower_used[r] = 0
+    obj_terms.push(rower_used[r].scaled(-non_scull_retention_weight))
+```
+
+When the solver places rower r anywhere, `rower_used[r] = 1` and
+the objective drops by `non_scull_retention_weight`. When r is
+benched, `rower_used[r] = 0` and no reward accrues. Sculling-
+eligible rowers get no extra term — they cover their own fallback
+via the existing S8 placement signal, and adding the retention
+bonus uniformly would just shift a constant without breaking any
+tie.
+
+**Encoding cost.** Same per-rower aggregation pattern as S4 / S6
+— one aux var, one link equality, one obj term per non-scull
+rower. O(non-scull rowers) total contribution to `obj_terms`. No
+seat-level explosion.
+
+**Default weight.** `2`, same ballpark as a single S1 skill-
+spread unit and slightly lower than the cox cooldown penalty.
+Big enough to break "who do I bench" ties decisively, small
+enough that it can't outvote S1 / S5 / S9 / S11 / S12 structural
+preferences when those would prefer a non-scull rower stays
+benched (e.g. their skill or strength would actively hurt the
+boat).
+
+**Interaction with the unplaced output.** The `SolveResult`
+returned by `solve()` carries an `UnplacedRowers` breakdown
+split into `to_sculling` (can_scull = true) and `benched`
+(can_scull = false) — coaches see exactly which fallback the
+solver implicitly assumed. S13 makes the `benched` list as
+short as the constraints allow, with `to_sculling` absorbing
+the overflow.
 
 ## Non-goals
 

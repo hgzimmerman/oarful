@@ -312,4 +312,86 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
+    /// S13 — non-scull retention. Rewards placing rowers who
+    /// *can't* fall back to the scullers team, so the solver
+    /// prefers benching sculling-eligible rowers over sweep-only
+    /// ones when it has to bench somebody.
+    ///
+    /// Without this term, the S8 placement reward treats every
+    /// rower the same — rewarding "seat filled" without caring
+    /// who's in it. Two equivalent assignments, one benching a
+    /// `can_scull = true` rower and one benching a `can_scull =
+    /// false` rower, look identical to the objective; the
+    /// solver picks arbitrarily. That's wrong from the coach's
+    /// perspective: the can_scull rower has a sensible fallback
+    /// (go row singles today), whereas the sweep-only rower
+    /// sits on the dock.
+    ///
+    /// Encoding mirrors S4 / S6's per-rower aggregation — one
+    /// `rower_used[r] ∈ {0, 1}` aux var per *non-scull*
+    /// available rower, linked to `Σ_{b, s} x[r, b, s]` by an
+    /// equality. By H2 the sum is at most 1, so the `[0, 1]`
+    /// domain is tight. Push exactly one obj term per
+    /// penalised rower:
+    ///
+    ///   `obj_terms.push(rower_used[r].scaled(-retention_weight))`
+    ///
+    /// Total contribution is O(non-scull rowers) obj terms. When
+    /// rower r is placed anywhere, `rower_used[r] = 1` and the
+    /// objective drops by `retention_weight`. When r is
+    /// benched, `rower_used[r] = 0` and no reward accrues.
+    ///
+    /// Rowers with `can_scull = true` are deliberately skipped —
+    /// the baseline S8 reward already covers the "please place
+    /// them if convenient" case, and adding the retention
+    /// bonus uniformly would just shift the constant and not
+    /// break any ties.
+    pub(crate) fn post_s13_non_scull_retention(&mut self) -> Result<()> {
+        if self.cfg.non_scull_retention_weight == 0 {
+            return Ok(());
+        }
+        let ModelBuilder {
+            solver,
+            available,
+            x,
+            obj_terms,
+            cfg,
+            ..
+        } = self;
+        for (r_idx, rower) in available.iter().enumerate() {
+            if rower.can_scull.as_bool() {
+                // Sculling-eligible rowers fall back to the
+                // scullers team if benched — no retention pressure.
+                continue;
+            }
+            // Collect every x variable for this rower. H2 bounds
+            // the sum at 1, so the aggregated aux var's [0, 1]
+            // domain is tight without any explicit upper.
+            let rower_vars: Vec<DomainId> = x
+                .iter()
+                .filter_map(|(&(r, _, _), &v)| if r == r_idx { Some(v) } else { None })
+                .collect();
+            if rower_vars.is_empty() {
+                // Rower has no eligible (r, b, s) triples — they
+                // can't be placed at all, so there's no "use vs
+                // bench" decision to bias and no aux var to
+                // create.
+                continue;
+            }
+
+            let rower_used = solver.new_bounded_integer(0, 1);
+            let mut link: Vec<AffineView<DomainId>> =
+                rower_vars.iter().map(|v| v.scaled(1)).collect();
+            link.push(rower_used.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S13 rower-use link: {e:?}"))?;
+
+            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight));
+        }
+        Ok(())
+    }
 }
