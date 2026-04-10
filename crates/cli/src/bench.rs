@@ -54,12 +54,115 @@ pub fn run() -> Result<()> {
         run_one_with_label(&subfleet, date, 20, n)?;
     }
 
+    // Axis C: UI scenarios. Mirrors the lineup_server defaults
+    // (top_n=3, partial=Strict, small fleet) and runs each cell N
+    // times to surface tail latencies, since that's what budget
+    // tuning actually cares about. This is the data feeding the
+    // chosen DEFAULT_BUDGET_SECS in handlers/solve.rs.
+    println!("\n-- axis C: UI defaults (top_n=3, small fleet), repeated --");
+    println!(
+        "{:<10} {:<10} {:<11} {:<11} {:<11} {:<11} {:<10}",
+        "N rowers", "budget", "min", "median", "p95", "max", "outcomes",
+    );
+    println!("{}", "-".repeat(80));
+    std::io::stdout().flush().ok();
+    let samples = 5usize;
+    for &n_rowers in &[10usize, 14, 20] {
+        for &budget_secs in &[1u64, 2, 3, 5, 10] {
+            run_repeated(&small_fleet, date, n_rowers, budget_secs, samples, 3)?;
+        }
+    }
+
     println!();
     Ok(())
 }
 
 fn run_one(fleet: &[Boat], date: NaiveDate, n_rowers: usize) -> Result<()> {
     run_one_with_label(fleet, date, n_rowers, n_rowers)
+}
+
+/// Run the same configuration `samples` times under the realistic UI
+/// settings (`top_n` from the caller, partial-fill strict, default
+/// weights) and report tail latencies. Counts how many runs ended in
+/// each `SolveStatus` so the operator can spot a budget that's
+/// causing partial-timeouts.
+fn run_repeated(
+    fleet: &[Boat],
+    date: NaiveDate,
+    n_rowers: usize,
+    budget_secs: u64,
+    samples: usize,
+    top_n: usize,
+) -> Result<()> {
+    print!(
+        "{:<10} {:<10} ",
+        n_rowers,
+        format!("{budget_secs}s"),
+    );
+    std::io::stdout().flush().ok();
+
+    let rowers = generate_rowers(n_rowers);
+    let availability = rowers
+        .iter()
+        .map(|r| (r.id, AvailabilityStatus::Yes))
+        .collect::<HashMap<_, _>>();
+    let snapshot = DbSnapshot {
+        date,
+        rowers,
+        availability,
+        sweep_boats: fleet.to_vec(),
+        last_coxed: HashMap::new(),
+        seat_affinities: vec![],
+        pair_affinities: vec![],
+        recent_placements: vec![],
+    };
+    let request = SolveRequest {
+        date,
+        boats: vec![],
+        partial_fill: PartialFillPolicy::Strict,
+        novelty_factor: 0,
+        config: SolverConfig::default(),
+        time_budget: Some(std::time::Duration::from_secs(budget_secs)),
+        top_n,
+        tabu_min_diff: 2,
+    };
+
+    let mut elapsed: Vec<std::time::Duration> = Vec::with_capacity(samples);
+    let mut sat = 0usize;
+    let mut unsat = 0usize;
+    let mut timeout = 0usize;
+    for _ in 0..samples {
+        let start = std::time::Instant::now();
+        let result = solve(&snapshot, &request)?;
+        elapsed.push(start.elapsed());
+        match result.status {
+            SolveStatus::Satisfied => sat += 1,
+            SolveStatus::Unsatisfiable => unsat += 1,
+            SolveStatus::Timeout => timeout += 1,
+        }
+    }
+
+    elapsed.sort();
+    let min = elapsed.first().copied().unwrap_or_default();
+    let max = elapsed.last().copied().unwrap_or_default();
+    let median = elapsed[elapsed.len() / 2];
+    // For N=5 the "p95" is just the max — there aren't enough samples
+    // for a real percentile, but reporting both keeps the column
+    // structure consistent if we crank `samples` later.
+    let p95_idx = ((elapsed.len() as f64) * 0.95).ceil() as usize - 1;
+    let p95 = elapsed[p95_idx.min(elapsed.len() - 1)];
+
+    let outcomes = format!("{sat}s/{unsat}u/{timeout}t");
+    println!(
+        "{:<11} {:<11} {:<11} {:<11} {:<10}",
+        format!("{min:?}"),
+        format!("{median:?}"),
+        format!("{p95:?}"),
+        format!("{max:?}"),
+        outcomes,
+    );
+    std::io::stdout().flush().ok();
+    Ok(())
 }
 
 fn run_one_with_label(

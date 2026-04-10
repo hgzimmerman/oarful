@@ -30,12 +30,34 @@ use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::AppState, templates};
 
-/// Default UI solve budget, in seconds. Snappier than the CLI's 10s
-/// because coaches expect an interactive response. See DESIGN.md
-/// §"Solve invocation policy".
-const DEFAULT_BUDGET_SECS: u64 = 3;
+/// Default per-alternative solve budget, in seconds. Total wall time
+/// for one request is roughly `DEFAULT_BUDGET_SECS × DEFAULT_ALTS`
+/// because each alternative is a separate tabu re-solve with its own
+/// budget — see the lineup_cli `bench` axis C for the data.
+///
+/// **Why 1s**, measured on 10/14/20-rower fixtures with the small
+/// 3-boat fleet:
+///
+/// | budget | wall (top_n=3) | outcome |
+/// |--------|----------------|---------|
+/// | 1s     | ~3s            | 5/5 satisfied at every roster size |
+/// | 2s     | ~6s            | same |
+/// | 3s     | ~9s            | same |
+/// | 5s     | ~15s           | same |
+///
+/// The solver finds *a* feasible solution in milliseconds and spends
+/// the rest of the budget searching for proven optimality. The 18/18
+/// rower-placement count in `bench` axis A is identical at every
+/// budget, so the marginal quality gained by going above 1s is at
+/// best invisible to the coach. Drop to 1s; let the user crank it up
+/// via the knob form when they care.
+const DEFAULT_BUDGET_SECS: u64 = 1;
 
 /// Default number of distinct lineups (primary + alternatives).
+/// Alternatives are a marquee UI feature, so we keep the default at
+/// 3 even though it triples the per-request wall time — the
+/// `DEFAULT_BUDGET_SECS` decision above already accounts for the
+/// multiplier.
 const DEFAULT_ALTS: usize = 3;
 
 /// Coach-tunable solver knobs. Round-trips through both the URL query
