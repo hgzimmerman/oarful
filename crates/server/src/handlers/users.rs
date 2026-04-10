@@ -56,6 +56,7 @@ pub(crate) struct InviteInput {
 }
 
 pub(crate) async fn invite_handler(
+    State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<InviteInput>,
@@ -72,6 +73,8 @@ pub(crate) async fn invite_handler(
     let role = Role::from_str(&input.role).unwrap_or(Role::Member);
     let token = generate_token();
     let token_for_db = token.clone();
+    let email_for_mailer = email.clone();
+    let name_for_mailer = name.clone();
 
     let result = tenant
         .db
@@ -120,6 +123,17 @@ pub(crate) async fn invite_handler(
     match result {
         Ok(_user_id) => {
             let invite_url = format!("/invite/{token}");
+
+            // Best-effort delivery — failure is logged but doesn't
+            // block the invite (the UI still shows the link).
+            if let Err(err) = state
+                .mailer
+                .send_invite(&email_for_mailer, &name_for_mailer, &invite_url)
+                .await
+            {
+                tracing::warn!(?err, %email_for_mailer, "mailer failed to send invite");
+            }
+
             let content = templates::users::invite_result(Some(&invite_url), None);
             Ok(super::maybe_page("Invite sent", content, hx))
         }

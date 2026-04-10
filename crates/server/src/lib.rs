@@ -9,6 +9,7 @@ use tower_http::{services::ServeDir, trace::TraceLayer};
 
 pub(crate) mod handlers;
 pub(crate) mod jwt;
+pub mod mailer;
 pub(crate) mod state;
 pub(crate) mod templates;
 pub(crate) mod tenant_cache;
@@ -25,8 +26,9 @@ pub fn build_router(
     master_conn_str: &str,
     tenant_conn_str: &str,
     public_dir: &str,
+    mailer: std::sync::Arc<dyn mailer::Mailer>,
 ) -> anyhow::Result<Router> {
-    let state = AppState::new(master_conn_str, tenant_conn_str)?;
+    let state = AppState::new(master_conn_str, tenant_conn_str, mailer)?;
     Ok(handlers::create_router(state)
         .fallback_service(ServeDir::new(public_dir))
         .layer(TraceLayer::new_for_http()))

@@ -32,7 +32,9 @@ async fn main() -> Result<()> {
 
     tracing::info!(%master_db, %tenant_db, %port, %public_dir, "starting lineup_server");
 
-    let app = lineup_server::build_router(&master_db, &tenant_db, &public_dir)?;
+    let mailer: std::sync::Arc<dyn lineup_server::mailer::Mailer> =
+        std::sync::Arc::new(lineup_server::mailer::LogMailer);
+    let app = lineup_server::build_router(&master_db, &tenant_db, &public_dir, mailer)?;
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     println!("running at http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;

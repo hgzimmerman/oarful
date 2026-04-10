@@ -11,6 +11,7 @@ use lineup_master_db::tenant::{NewTenant, Tenant, TenantId};
 use tokio::sync::Semaphore;
 
 use crate::jwt::{Claims, JwtKeys};
+use crate::mailer::Mailer;
 use crate::tenant_cache::TenantCache;
 
 #[derive(Clone)]
@@ -23,6 +24,7 @@ pub(crate) struct AppState {
     pub(crate) solve_semaphore: Arc<Semaphore>,
     pub(crate) solver_pool: Arc<rayon::ThreadPool>,
     pub(crate) jwt_keys: JwtKeys,
+    pub(crate) mailer: Arc<dyn Mailer>,
 }
 
 /// Bundle of per-request tenant state injected into request
@@ -39,6 +41,7 @@ impl AppState {
     pub(crate) fn new(
         master_conn_str: &str,
         tenant_conn_str: &str,
+        mailer: Arc<dyn Mailer>,
     ) -> anyhow::Result<Self> {
         let master_db = MasterDb::connect(master_conn_str)?;
 
@@ -84,6 +87,7 @@ impl AppState {
             solve_semaphore: Arc::new(Semaphore::new(solve_concurrency)),
             solver_pool: Arc::new(solver_pool),
             jwt_keys,
+            mailer,
         })
     }
 
