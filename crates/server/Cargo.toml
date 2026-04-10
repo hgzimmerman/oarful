@@ -18,6 +18,7 @@ lineup_solver.workspace = true
 lineup_sheets.workspace = true
 
 anyhow.workspace = true
+rayon.workspace = true
 chrono.workspace = true
 reqwest.workspace = true
 serde.workspace = true

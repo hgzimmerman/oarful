@@ -141,21 +141,9 @@ pub(crate) async fn view_handler(
         .await
         .map_err(internal_error)?;
 
-    // Hold a solve permit across the spawn_blocking call so the
-    // global concurrency cap counts this run. The permit drops
-    // automatically when the function returns.
     let _permit = acquire_solve_permit(&state).await?;
-
-    // solve() is sync and may burn most of the time budget — keep it
-    // off the async runtime via spawn_blocking.
     let request = knobs.to_request(date);
-    let snapshot_for_solve = snapshot.clone();
-    let result: SolveResult = tokio::task::spawn_blocking(move || {
-        solve(&snapshot_for_solve, &request)
-    })
-    .await
-    .map_err(internal_error)?
-    .map_err(internal_error)?;
+    let result = run_solve(&state, snapshot.clone(), request).await?;
 
     let content = templates::solve::view_content(&snapshot, date, &knobs, &result);
     Ok(super::maybe_page(
@@ -186,13 +174,7 @@ pub(crate) async fn commit_handler(
     request.top_n = 1;
 
     let _permit = acquire_solve_permit(&state).await?;
-    let snapshot_for_solve = snapshot.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        solve(&snapshot_for_solve, &request)
-    })
-    .await
-    .map_err(internal_error)?
-    .map_err(internal_error)?;
+    let result = run_solve(&state, snapshot.clone(), request).await?;
 
     if result.status != SolveStatus::Satisfied {
         tracing::warn!(?result.status, %date, "refusing to commit non-satisfied solve");
@@ -228,6 +210,26 @@ pub(crate) async fn commit_handler(
         .map_err(internal_error)?;
 
     Ok(Redirect::to(&format!("/history/{date}")))
+}
+
+/// Dispatch `solve()` onto the dedicated rayon thread pool via a
+/// oneshot channel. The async handler awaits the result without
+/// touching tokio's blocking pool — DB queries via deadpool-diesel
+/// are unaffected regardless of how many concurrent solves are
+/// in flight.
+async fn run_solve(
+    state: &AppState,
+    snapshot: DbSnapshot,
+    request: SolveRequest,
+) -> Result<SolveResult, StatusCode> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    state.solver_pool.spawn(move || {
+        let result = solve(&snapshot, &request);
+        let _ = tx.send(result);
+    });
+    rx.await
+        .map_err(internal_error)? // oneshot cancelled (rayon panicked)
+        .map_err(internal_error) // solve() returned Err
 }
 
 /// Acquire one slot on the global solve semaphore. Returns immediately
