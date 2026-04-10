@@ -2,8 +2,11 @@
 //! alternatives (Alpine-toggled), the unplaced-rowers breakdown, and
 //! the commit button.
 
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use lineup_db::{
+    boat::types::BoatId,
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
@@ -35,7 +38,7 @@ pub(crate) fn view_content(
                 (primary_panel(snapshot, date, knobs, &result.primary))
 
                 @if !result.alternatives.is_empty() {
-                    (alternatives_panel(snapshot, &result.alternatives))
+                    (alternatives_panel(snapshot, &result.primary, &result.alternatives))
                 }
             }
         }
@@ -178,7 +181,7 @@ fn primary_panel(
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (boat_card(snapshot, lineup))
+                        (boat_card(snapshot, lineup, None))
                     }
                 }
             }
@@ -200,6 +203,7 @@ fn primary_panel(
 
 fn alternatives_panel(
     snapshot: &DbSnapshot,
+    primary: &ProposedSolution,
     alternatives: &[ProposedSolution],
 ) -> Markup {
     html! {
@@ -219,7 +223,7 @@ fn alternatives_panel(
 
             div x-show="open" class="mt-4 space-y-6" {
                 @for (idx, alt) in alternatives.iter().enumerate() {
-                    (alternative_block(snapshot, idx + 2, alt))
+                    (alternative_block(snapshot, primary, idx + 2, alt))
                 }
             }
         }
@@ -228,19 +232,31 @@ fn alternatives_panel(
 
 fn alternative_block(
     snapshot: &DbSnapshot,
+    primary: &ProposedSolution,
     rank: usize,
     alt: &ProposedSolution,
 ) -> Markup {
+    let diff = build_diff(primary, alt);
+    let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
     let used: Vec<&ProposedLineup> = alt.lineups.iter().filter(|l| l.used).collect();
     html! {
         div class="border border-slate-200 rounded-lg p-4" {
-            h3 class="font-bold text-slate-700 mb-3" { "Alternative #" (rank) }
+            div class="flex items-center space-x-3 mb-3" {
+                h3 class="font-bold text-slate-700" { "Alternative #" (rank) }
+                @if changed_count > 0 {
+                    span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" {
+                        (changed_count) " seat"
+                        @if changed_count != 1 { "s" }
+                        " changed"
+                    }
+                }
+            }
             @if used.is_empty() {
                 div class="text-slate-500 italic" { "No boats fielded." }
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (boat_card(snapshot, lineup))
+                        (boat_card(snapshot, lineup, Some(&diff)))
                     }
                 }
             }
@@ -249,15 +265,62 @@ fn alternative_block(
     }
 }
 
-fn boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
+// =====================================================================
+// Diff engine: compare alternative seat assignments against the primary
+// =====================================================================
+
+/// Per-seat diff against the primary lineup.
+enum SeatDiff {
+    /// Same rower in this seat as the primary.
+    Same,
+    /// Different rower; `was` is who held this seat in the primary.
+    Changed { was: RowerId },
+    /// Seat wasn't in the primary (boat not fielded or seat didn't exist).
+    New,
+}
+
+type DiffMap = HashMap<(BoatId, i32), SeatDiff>;
+
+/// Index every `(boat_id, seat) → rower` in the primary, then compare
+/// each alt seat against it. O(seats) in both solutions.
+fn build_diff(primary: &ProposedSolution, alt: &ProposedSolution) -> DiffMap {
+    let mut primary_seats: HashMap<(BoatId, i32), RowerId> = HashMap::new();
+    for lineup in &primary.lineups {
+        if lineup.used {
+            for &(seat, rower_id) in &lineup.seats {
+                primary_seats.insert((lineup.boat_id, seat), rower_id);
+            }
+        }
+    }
+
+    let mut diff = DiffMap::new();
+    for lineup in &alt.lineups {
+        if lineup.used {
+            for &(seat, rower_id) in &lineup.seats {
+                let key = (lineup.boat_id, seat);
+                let entry = match primary_seats.get(&key) {
+                    Some(&primary_rower) if primary_rower == rower_id => SeatDiff::Same,
+                    Some(&primary_rower) => SeatDiff::Changed { was: primary_rower },
+                    None => SeatDiff::New,
+                };
+                diff.insert(key, entry);
+            }
+        }
+    }
+    diff
+}
+
+fn boat_card(
+    snapshot: &DbSnapshot,
+    lineup: &ProposedLineup,
+    diff: Option<&DiffMap>,
+) -> Markup {
     let seat_count = snapshot
         .sweep_boats
         .iter()
         .find(|b| b.id == lineup.boat_id)
         .map(|b| b.seat_count)
         .unwrap_or(0);
-    // Sort seats so the cox row (seat 0) sits at the top, then
-    // bow→stroke.
     let mut seats = lineup.seats.clone();
     seats.sort_by_key(|(s, _)| *s);
 
@@ -270,7 +333,8 @@ fn boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
             table class="w-full text-sm" {
                 tbody {
                     @for (seat, rower_id) in &seats {
-                        (seat_row(snapshot, *seat, *rower_id))
+                        @let seat_diff = diff.and_then(|d| d.get(&(lineup.boat_id, *seat)));
+                        (seat_row(snapshot, *seat, *rower_id, seat_diff))
                     }
                 }
             }
@@ -278,21 +342,44 @@ fn boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
     }
 }
 
-fn seat_row(snapshot: &DbSnapshot, seat: i32, rower_id: RowerId) -> Markup {
+fn seat_row(
+    snapshot: &DbSnapshot,
+    seat: i32,
+    rower_id: RowerId,
+    diff: Option<&SeatDiff>,
+) -> Markup {
     let label = if seat == 0 {
         "cox".to_string()
     } else {
         format!("s{seat}")
     };
+    let is_changed = matches!(diff, Some(SeatDiff::Changed { .. }) | Some(SeatDiff::New));
+    let row_class = if is_changed {
+        "border-b border-slate-100 last:border-0 bg-amber-50"
+    } else {
+        "border-b border-slate-100 last:border-0"
+    };
     let rower = find_rower(snapshot, rower_id);
     html! {
-        tr class="border-b border-slate-100 last:border-0" {
+        tr class=(row_class) {
             td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
             td class="px-4 py-2" {
                 @if let Some(r) = rower {
-                    div class="font-medium text-slate-800" { (r.name) }
+                    div class="font-medium text-slate-800" {
+                        (r.name)
+                        @if is_changed {
+                            span class="ml-1 text-xs text-amber-700" { "●" }
+                        }
+                    }
                     div class="text-xs text-slate-500" {
                         (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
+                    }
+                    @if let Some(SeatDiff::Changed { was }) = diff {
+                        @if let Some(prev) = find_rower(snapshot, *was) {
+                            div class="text-xs text-amber-700 italic" {
+                                "was " (prev.name)
+                            }
+                        }
                     }
                 } @else {
                     span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
