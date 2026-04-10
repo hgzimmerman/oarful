@@ -15,6 +15,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
     Form,
 };
+use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{
@@ -131,13 +132,15 @@ fn default_budget() -> u64 {
 
 pub(crate) async fn view_handler(
     State(state): State<AppState>,
+    jar: CookieJar,
     Path(date): Path<NaiveDate>,
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
+    let team_id = super::active_team(&state, &jar).await?;
     let snapshot = state
         .db
-        .with_conn(move |conn| DbSnapshot::for_date(conn, date))
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await
         .map_err(internal_error)?;
 
@@ -155,18 +158,14 @@ pub(crate) async fn view_handler(
 
 pub(crate) async fn commit_handler(
     State(state): State<AppState>,
+    jar: CookieJar,
     Path(date): Path<NaiveDate>,
     Form(knobs): Form<SolveKnobs>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Re-solve with the same knobs the coach saw on the view page.
-    // The solver is deterministic on a fixed snapshot + request, so
-    // this reproduces the proposed lineup as long as the snapshot
-    // hasn't changed between view and commit. Top-N is forced to 1
-    // here because we only persist the primary regardless of how
-    // many alternatives the view rendered.
+    let team_id = super::active_team(&state, &jar).await?;
     let snapshot = state
         .db
-        .with_conn(move |conn| DbSnapshot::for_date(conn, date))
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await
         .map_err(internal_error)?;
 
@@ -191,7 +190,7 @@ pub(crate) async fn commit_handler(
     state
         .db
         .with_conn(move |conn| {
-            let practice = Practice::upsert_by_date(conn, date, None)?;
+            let practice = Practice::upsert_by_date(conn, team_id, date, None)?;
             for lineup in &used {
                 let seats: Vec<CommitSeat> = lineup
                     .seats

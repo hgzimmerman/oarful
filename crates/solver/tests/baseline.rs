@@ -71,7 +71,10 @@ fn fixture_date() -> NaiveDate {
 fn fixture_snapshot() -> DbSnapshot {
     let mut conn = in_memory_conn();
     fixture::seed_if_empty(&mut conn).expect("seeding toy fixture");
-    DbSnapshot::for_date(&mut conn, fixture_date())
+    let team = lineup_db::team::Team::first(&mut conn)
+        .expect("querying first team")
+        .expect("fixture should seed a team");
+    DbSnapshot::for_team_date(&mut conn, team.id, fixture_date())
         .expect("building snapshot from seeded fixture")
 }
 

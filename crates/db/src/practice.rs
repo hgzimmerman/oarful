@@ -1,4 +1,5 @@
 use crate::schema::{lineup, practice};
+use crate::team::TeamId;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -58,6 +59,7 @@ impl std::str::FromStr for PracticeId {
 #[diesel(table_name = crate::schema::practice)]
 pub struct Practice {
     pub id: PracticeId,
+    pub team_id: TeamId,
     pub date: NaiveDate,
     pub notes: Option<String>,
 }
@@ -65,18 +67,23 @@ pub struct Practice {
 #[derive(Debug, Clone, diesel::Insertable)]
 #[diesel(table_name = crate::schema::practice)]
 pub struct NewPractice {
+    pub team_id: TeamId,
     pub date: NaiveDate,
     pub notes: Option<String>,
 }
 
 impl Practice {
+    /// Find or create a practice for a (team, date) pair. If one
+    /// already exists, returns it unchanged (notes are not overwritten).
     #[tracing::instrument(level = "debug", skip(conn), err)]
     pub fn upsert_by_date(
         conn: &mut SqliteConnection,
+        team_id: TeamId,
         date: NaiveDate,
         notes: Option<String>,
     ) -> Result<Practice, diesel::result::Error> {
         if let Some(existing) = practice::table
+            .filter(practice::team_id.eq(team_id))
             .filter(practice::date.eq(date))
             .select(Practice::as_select())
             .first(conn)
@@ -85,31 +92,39 @@ impl Practice {
             return Ok(existing);
         }
         diesel::insert_into(practice::table)
-            .values(NewPractice { date, notes })
+            .values(NewPractice {
+                team_id,
+                date,
+                notes,
+            })
             .returning(Practice::as_returning())
             .get_result(conn)
     }
 
-    /// Practices that have at least one committed lineup, newest first.
-    /// Used by the `/history` page. Filters via a subquery on
-    /// `lineup.practice_id` so no join or DISTINCT is needed.
+    /// Practices with at least one committed lineup, newest first.
+    /// Scoped to a single team.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn list_committed(
         conn: &mut SqliteConnection,
+        team_id: TeamId,
     ) -> Result<Vec<Practice>, diesel::result::Error> {
         practice::table
+            .filter(practice::team_id.eq(team_id))
             .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
             .select(Practice::as_select())
             .order(practice::date.desc())
             .get_results(conn)
     }
 
+    /// Find an existing practice for a (team, date) pair.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn find_by_date(
         conn: &mut SqliteConnection,
+        team_id: TeamId,
         date: NaiveDate,
     ) -> Result<Option<Practice>, diesel::result::Error> {
         practice::table
+            .filter(practice::team_id.eq(team_id))
             .filter(practice::date.eq(date))
             .select(Practice::as_select())
             .first(conn)

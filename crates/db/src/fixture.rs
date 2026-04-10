@@ -10,6 +10,7 @@ use crate::practice::Practice;
 use crate::rower::types::{Height, RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
 use crate::seat_affinity::{NewSeatAffinity, SeatAffinity};
+use crate::team::{NewTeam, Team, TeamMembership};
 use crate::types::{AffinityWeight, IntBool};
 use chrono::NaiveDate;
 use diesel::prelude::*;
@@ -28,25 +29,30 @@ pub fn seed_if_empty(conn: &mut SqliteConnection) -> Result<(), diesel::result::
 fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     tracing::info!("Seeding toy fixture");
 
+    // --- team (use existing if the migration seeded one, else create) ---
+    let now = chrono::Utc::now().naive_utc();
+    let team = match Team::first(conn)? {
+        Some(t) => t,
+        None => Team::create(conn, NewTeam { name: "Sweep".to_string(), created_at: now })?,
+    };
+
     // --- boats (sweep only; scullers handle their own) ---
     for b in toy_boats() {
         Boat::insert(conn, b)?;
     }
 
-    // --- rowers ---
+    // --- rowers + team membership ---
     let mut rower_ids = Vec::new();
     for r in toy_rowers() {
         let inserted = Rower::insert(conn, r)?;
+        TeamMembership::add(conn, team.id, inserted.id)?;
         rower_ids.push(inserted.id);
     }
 
     // --- practice + availabilities for an upcoming date ---
     let date = NaiveDate::from_ymd_opt(2026, 4, 11).expect("valid date");
-    Practice::upsert_by_date(conn, date, Some("Toy seeded practice".to_string()))?;
+    Practice::upsert_by_date(conn, team.id, date, Some("Toy seeded practice".to_string()))?;
 
-    // Rough mix: most Yes, a couple No, one Maybe, one ScullingOnly.
-    // Mika (12) is Yes — she's the non-designated cox that S6 uses to
-    // demonstrate the cooldown constraint.
     let statuses = [
         AvailabilityStatus::Yes,         // Alice
         AvailabilityStatus::Yes,         // Bob
@@ -68,6 +74,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             conn,
             NewAvailability {
                 rower_id,
+                team_id: team.id,
                 date,
                 status,
             },

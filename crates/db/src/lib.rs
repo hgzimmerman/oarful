@@ -16,6 +16,7 @@ pub mod schema;
 pub mod seat_affinity;
 pub mod snapshot;
 pub mod state;
+pub mod team;
 pub mod test_support;
 pub mod types;
 

@@ -14,6 +14,7 @@ use axum::{
     response::Html,
     Form,
 };
+use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::{Datelike, Utc};
 use lineup_sheets::SyncSummary;
@@ -37,9 +38,11 @@ pub(crate) async fn form_handler(hx: HxRequest) -> Html<String> {
 
 pub(crate) async fn sync_handler(
     State(state): State<AppState>,
+    jar: CookieJar,
     hx: HxRequest,
     Form(input): Form<SyncFormInput>,
 ) -> Result<Html<String>, StatusCode> {
+    let team_id = super::active_team(&state, &jar).await?;
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
         let content = templates::sync::form_content(
@@ -75,7 +78,7 @@ pub(crate) async fn sync_handler(
     let csv_for_sync = csv_text.clone();
     let sync_outcome: anyhow::Result<SyncSummary> = state
         .db
-        .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, conn)))
+        .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, conn)))
         .await
         .map_err(internal_error)?;
 

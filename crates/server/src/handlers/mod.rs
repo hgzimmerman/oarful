@@ -5,10 +5,13 @@ use axum::{
     http::StatusCode,
     response::{Html, Redirect},
     routing::{get, post},
-    Router,
+    Form, Router,
 };
+use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
+use lineup_db::team::TeamId;
 use maud::Markup;
+use serde::Deserialize;
 
 use crate::{state::AppState, templates};
 
@@ -64,6 +67,7 @@ pub(crate) fn create_router() -> Router<AppState> {
             post(rowers::pair_affinity_delete_handler),
         )
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
+        .route("/switch-team", post(switch_team_handler))
 }
 
 /// Render `content` either as a full page (for a normal navigation) or
@@ -87,4 +91,53 @@ pub(crate) fn maybe_page(
 pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
     tracing::error!(?error, "handler error");
     StatusCode::INTERNAL_SERVER_ERROR
+}
+
+// =====================================================================
+// Active-team context (cookie-based until JWT lands in Phase 3)
+// =====================================================================
+
+const TEAM_COOKIE: &str = "active_team_id";
+
+/// Extract the active team from the `active_team_id` cookie. Falls
+/// back to the first team in the DB if the cookie is missing or
+/// unparseable. Returns 500 only if there are no teams at all.
+pub(crate) async fn active_team(
+    state: &AppState,
+    jar: &CookieJar,
+) -> Result<TeamId, StatusCode> {
+    if let Some(cookie) = jar.get(TEAM_COOKIE) {
+        if let Ok(id) = cookie.value().parse::<TeamId>() {
+            return Ok(id);
+        }
+    }
+    // Fallback: first team in the DB.
+    let team = state
+        .db
+        .with_conn(|conn| lineup_db::team::Team::first(conn))
+        .await
+        .map_err(internal_error)?;
+    team.map(|t| t.id).ok_or_else(|| {
+        tracing::error!("no teams in the database");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TeamSwitchInput {
+    pub(crate) team_id: TeamId,
+}
+
+/// `POST /switch-team` — set the `active_team_id` cookie and redirect
+/// back to the practices dashboard.
+pub(crate) async fn switch_team_handler(
+    jar: CookieJar,
+    Form(input): Form<TeamSwitchInput>,
+) -> (CookieJar, Redirect) {
+    let jar = jar.add(
+        axum_extra::extract::cookie::Cookie::build((TEAM_COOKIE, input.team_id.to_string()))
+            .path("/")
+            .http_only(true),
+    );
+    (jar, Redirect::to("/practices"))
 }

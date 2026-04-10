@@ -30,6 +30,7 @@ use lineup_db::{
     practice::Practice,
     snapshot::DbSnapshot,
     state::Db,
+    team::{Team, TeamId},
 };
 use lineup_solver::{
     solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveStatus, SolverConfig,
@@ -50,20 +51,31 @@ async fn main() -> Result<()> {
     let db = Db::connect(&db_path)?;
     db.with_conn(|conn| fixture::seed_if_empty(conn)).await?;
 
+    // Resolve team: use the first team in the DB. A real deployment
+    // will expose a --team flag or team selector; for the fixture
+    // this is always the seeded "Sweep" team.
+    let team_id = db
+        .with_conn(|conn| {
+            Ok(Team::first(conn)?
+                .map(|t| t.id)
+                .unwrap_or(TeamId::new(1)))
+        })
+        .await?;
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("solve") => {
             let opts = parse_solve_args(&args[1..])?;
-            cmd_solve(&db, opts).await
+            cmd_solve(&db, team_id, opts).await
         }
-        Some("history") => cmd_history(&db, parse_date(args.get(1))?).await,
+        Some("history") => cmd_history(&db, team_id, parse_date(args.get(1))?).await,
         Some("bench") => bench::run(),
-        Some("sync-sheet") => cmd_sync_sheet(&db, &args[1..]).await,
+        Some("sync-sheet") => cmd_sync_sheet(&db, team_id, &args[1..]).await,
         Some(other) if other != "dump" => {
-            cmd_dump(&db, parse_date(Some(&other.to_string()))?).await
+            cmd_dump(&db, team_id, parse_date(Some(&other.to_string()))?).await
         }
-        Some(_) => cmd_dump(&db, parse_date(args.get(1))?).await,
-        None => cmd_dump(&db, default_date()).await,
+        Some(_) => cmd_dump(&db, team_id, parse_date(args.get(1))?).await,
+        None => cmd_dump(&db, team_id, default_date()).await,
     }
 }
 
@@ -159,15 +171,15 @@ fn parse_date(s: Option<&String>) -> Result<NaiveDate> {
     }
 }
 
-async fn cmd_dump(db: &Db, date: NaiveDate) -> Result<()> {
+async fn cmd_dump(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
     let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_date(conn, date))
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await?;
     print!("{snapshot}");
     Ok(())
 }
 
-async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
+async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
     let SolveOpts {
         date,
         partial,
@@ -176,7 +188,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         top_n,
     } = opts;
     let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_date(conn, date))
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await?;
 
     let num_available = snapshot.available_rowers().count();
@@ -282,7 +294,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
             if commit {
                 let used_owned: Vec<ProposedLineup> =
                     used.into_iter().cloned().collect();
-                let committed = commit_lineups(db, date, &used_owned).await?;
+                let committed = commit_lineups(db, team_id, date, &used_owned).await?;
                 println!(
                     "\nCommitted primary lineup ({} boat(s)) to the database. \
                      Alternatives are not persisted.",
@@ -366,12 +378,13 @@ fn print_lineups(snapshot: &DbSnapshot, used: &[&ProposedLineup]) {
 /// existing committed lineup per boat with the solver's choice.
 async fn commit_lineups(
     db: &Db,
+    team_id: TeamId,
     date: NaiveDate,
     used: &[ProposedLineup],
 ) -> Result<usize> {
     let used_owned: Vec<ProposedLineup> = used.to_vec();
     db.with_conn(move |conn| {
-        let practice = Practice::upsert_by_date(conn, date, None)?;
+        let practice = Practice::upsert_by_date(conn, team_id, date, None)?;
         let mut count = 0usize;
         for lineup in &used_owned {
             let seats: Vec<CommitSeat> = lineup
@@ -391,13 +404,13 @@ async fn commit_lineups(
     .await
 }
 
-async fn cmd_history(db: &Db, date: NaiveDate) -> Result<()> {
+async fn cmd_history(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
     let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_date(conn, date))
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await?;
     let committed = db
         .with_conn(move |conn| {
-            let Some(practice) = Practice::find_by_date(conn, date)? else {
+            let Some(practice) = Practice::find_by_date(conn, team_id, date)? else {
                 return Ok(None);
             };
             Lineup::for_practice(conn, practice.id).map(Some)
@@ -439,7 +452,7 @@ async fn cmd_history(db: &Db, date: NaiveDate) -> Result<()> {
     Ok(())
 }
 
-async fn cmd_sync_sheet(db: &Db, args: &[String]) -> Result<()> {
+async fn cmd_sync_sheet(db: &Db, team_id: TeamId, args: &[String]) -> Result<()> {
     // Parse positional sheet ID + optional --gid flag.
     let mut sheet_id: Option<String> = None;
     let mut gid: u32 = 0;
@@ -500,7 +513,7 @@ async fn cmd_sync_sheet(db: &Db, args: &[String]) -> Result<()> {
     // on the outside.
     let sync_result: Result<lineup_sheets::SyncSummary> = db
         .with_conn(move |conn| {
-            match lineup_sheets::sync_csv(&csv_text, year, conn) {
+            match lineup_sheets::sync_csv(&csv_text, year, team_id, conn) {
                 Ok(summary) => Ok(Ok(summary)),
                 Err(e) => Ok(Err(e)),
             }

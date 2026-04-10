@@ -6,6 +6,7 @@ use crate::lineup::{Lineup, RecentPlacement};
 use crate::pair_affinity::PairAffinity;
 use crate::rower::{types::RowerId, Rower};
 use crate::seat_affinity::SeatAffinity;
+use crate::team::{TeamId, TeamMembership};
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
@@ -24,7 +25,8 @@ pub struct DbSnapshot {
     pub availability: HashMap<RowerId, AvailabilityStatus>,
     /// In-service sweep boats — the only candidates for lineup assignment in
     /// this project. Sculling boats belong to the scullers team and are
-    /// deliberately excluded.
+    /// deliberately excluded. Fleet is shared across teams (not filtered
+    /// by team_id).
     pub sweep_boats: Vec<Boat>,
     /// Derived from `lineup_seat` history.
     pub last_coxed: HashMap<RowerId, NaiveDate>,
@@ -42,20 +44,35 @@ pub struct DbSnapshot {
 }
 
 impl DbSnapshot {
+    /// Build a snapshot for a specific team on a specific date.
+    ///
+    /// Rowers are filtered to those on the team (via `team_membership`).
+    /// Availability is scoped to the (team, date) pair. Boats are the
+    /// full shared fleet (not team-filtered). Affinities are loaded for
+    /// all rowers on the team.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn for_date(
+    pub fn for_team_date(
         conn: &mut SqliteConnection,
+        team_id: TeamId,
         date: NaiveDate,
     ) -> Result<Self, diesel::result::Error> {
+        // Rowers on this team (active only).
+        let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
+        let all_active = Rower::list_active(conn)?;
+        let rowers: Vec<Rower> = all_active
+            .into_iter()
+            .filter(|r| team_rower_ids.contains(&r.id))
+            .collect();
+
         Ok(Self {
             date,
-            rowers: Rower::list_active(conn)?,
-            availability: Availability::map_for_date(conn, date)?,
+            availability: Availability::map_for_team_date(conn, team_id, date)?,
             sweep_boats: Boat::list_sweep(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
             seat_affinities: SeatAffinity::list_all(conn)?,
             pair_affinities: PairAffinity::list_all(conn)?,
             recent_placements: Lineup::recent_placements(conn, RECENT_LINEUP_WINDOW)?,
+            rowers,
         })
     }
 
@@ -98,25 +115,21 @@ impl std::fmt::Display for DbSnapshot {
                 .availability
                 .get(&r.id)
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| "-".to_string());
+                .unwrap_or_else(|| "unset".to_string());
+            let flags = format!(
+                "{}{}{}",
+                if r.can_cox.as_bool() { "C" } else { "" },
+                if r.is_designated_cox.as_bool() { "*" } else { "" },
+                if r.can_scull.as_bool() { "S" } else { "" },
+            );
             let last_cox = self
                 .last_coxed
                 .get(&r.id)
                 .map(|d| d.to_string())
                 .unwrap_or_else(|| "-".to_string());
-            let mut flags = String::new();
-            if r.can_cox.as_bool() {
-                flags.push('C');
-            }
-            if r.is_designated_cox.as_bool() {
-                flags.push('*');
-            }
-            if r.can_scull.as_bool() {
-                flags.push('S');
-            }
             writeln!(
                 f,
-                "  #{:<3} {:<20} {:<7} {:<13} {:<13} side={:<10}({}) {:<4} avail={:<13} last_cox={}",
+                "  #{:<4} {:<20} {} {} {} side={:<12} ({}) {:<4} avail={:<15} last_cox={}",
                 r.id,
                 r.name,
                 r.weight_class,
@@ -126,7 +139,7 @@ impl std::fmt::Display for DbSnapshot {
                 r.side_strength,
                 flags,
                 status,
-                last_cox
+                last_cox,
             )?;
         }
         Ok(())

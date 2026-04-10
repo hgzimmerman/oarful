@@ -87,6 +87,7 @@ pub struct SyncSummary {
 pub async fn sync_public_sheet(
     spreadsheet_id: &str,
     gid: u32,
+    team_id: lineup_db::team::TeamId,
     conn: &mut SqliteConnection,
 ) -> Result<SyncSummary> {
     let url = format!(
@@ -116,7 +117,7 @@ pub async fn sync_public_sheet(
         .context("reading sheet csv body")?;
 
     let year = Utc::now().year();
-    sync_csv(&csv_text, year, conn)
+    sync_csv(&csv_text, year, team_id, conn)
 }
 
 /// Pure parser + upsert logic. Separated from the HTTP fetching so
@@ -131,6 +132,7 @@ pub async fn sync_public_sheet(
 pub fn sync_csv(
     csv_text: &str,
     year: i32,
+    team_id: lineup_db::team::TeamId,
     conn: &mut SqliteConnection,
 ) -> Result<SyncSummary> {
     let mut reader = csv::ReaderBuilder::new()
@@ -165,7 +167,7 @@ pub fn sync_csv(
 
     for record in &all_records[header_idx + 1..] {
         summary.rows_read += 1;
-        match sync_row(record, &date_columns, conn, &mut summary) {
+        match sync_row(record, &date_columns, team_id, conn, &mut summary) {
             Ok(()) => {}
             Err(e) => summary.warnings.push(format!(
                 "row {}: {e}",
@@ -180,6 +182,7 @@ pub fn sync_csv(
 fn sync_row(
     record: &csv::StringRecord,
     date_columns: &[(usize, NaiveDate)],
+    team_id: lineup_db::team::TeamId,
     conn: &mut SqliteConnection,
     summary: &mut SyncSummary,
 ) -> Result<()> {
@@ -285,6 +288,7 @@ fn sync_row(
             conn,
             NewAvailability {
                 rower_id: rower.id,
+                team_id,
                 date: *date,
                 status,
             },
@@ -375,6 +379,7 @@ mod tests {
     use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength};
     use lineup_db::rower::{NewRower, Rower};
     use lineup_db::schema::availability as availability_schema;
+    use lineup_db::team::{NewTeam, Team, TeamId};
     use lineup_db::test_support::in_memory_conn;
     use lineup_db::types::IntBool;
 
@@ -388,6 +393,14 @@ mod tests {
 
     /// Year used by every test so date parsing is stable.
     const YEAR: i32 = 2026;
+
+    /// Seed a team for tests. Returns its id.
+    fn seed_team(conn: &mut SqliteConnection) -> TeamId {
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(conn, NewTeam { name: "Test".into(), created_at: now })
+            .expect("seed team")
+            .id
+    }
 
     /// Fetch the rowers table ordered by id so assertions can rely
     /// on insertion order.
@@ -407,6 +420,7 @@ mod tests {
     #[test]
     fn happy_path_creates_rowers_and_availabilities() {
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending,Not Attending\n\
@@ -414,7 +428,7 @@ mod tests {
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 2);
         assert_eq!(summary.rowers_created, 2);
@@ -449,6 +463,7 @@ mod tests {
         // The parser scans for "Sweep/Scull" and treats whatever row
         // matches as the header.
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             ",,,,,,,Session 1 - Week 1,Session 1 - Week 2\n\
              {}\n\
@@ -456,7 +471,7 @@ mod tests {
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 1);
         assert_eq!(summary.rowers_created, 1);
@@ -467,13 +482,14 @@ mod tests {
     #[test]
     fn sculling_row_maps_attending_to_scullingonly() {
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sculling,Scully,Nico,they/them,nico@example.com,Yes,Port,Attending\n",
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 1);
         assert_eq!(summary.sculling_rows, 1);
@@ -495,6 +511,7 @@ mod tests {
     #[test]
     fn row_with_no_email_is_skipped_with_warning() {
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,NoEmail,Ghost,they/them,,Yes,Port,Attending\n\
@@ -502,7 +519,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 2);
         assert_eq!(summary.rows_skipped_no_email, 1);
@@ -515,13 +532,14 @@ mod tests {
     #[test]
     fn unknown_status_cell_warns_but_keeps_going() {
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Maybe\n",
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rowers_created, 1);
         assert_eq!(summary.availabilities_upserted, 0); // Maybe isn't upserted
@@ -538,13 +556,14 @@ mod tests {
         // "no response yet" — the parser should not upsert anything
         // and should not produce a warning.
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,,Attending\n",
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         assert_eq!(summary.rowers_created, 1);
         assert_eq!(summary.availabilities_upserted, 1);
@@ -557,6 +576,7 @@ mod tests {
         // sheet's Side/Cox value of "Both" (which parses to Either)
         // must NOT overwrite the specific side.
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
 
         // Seed a rower with a specific side directly via the db layer.
         let seeded = Rower::insert(
@@ -587,7 +607,7 @@ mod tests {
              Sweep,Smith,Alice,she/her,alice@example.com,No,Both,Attending\n",
             header_with_dates(&["4/11"]),
         );
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
         assert_eq!(summary.rowers_created, 0);
 
         let rowers = all_rowers(&mut conn);
@@ -603,13 +623,14 @@ mod tests {
         // column — the sheet format changed and the operator should
         // know before running a bad import.
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n",
             header_with_dates(&["not-a-date"]),
         );
 
-        let err = sync_csv(&csv, YEAR, &mut conn).unwrap_err();
+        let err = sync_csv(&csv, YEAR, tid, &mut conn).unwrap_err();
         let msg = format!("{err:#}");
         assert!(
             msg.contains("not-a-date") || msg.contains("M/D"),
@@ -622,10 +643,11 @@ mod tests {
         // If the first column isn't "Sweep/Scull" anywhere in the
         // file, we can't find the header row and should error.
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = "Team,Last,First,Pronoun,Email,Scull,Side,4/11\n\
                    Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n";
 
-        let err = sync_csv(csv, YEAR, &mut conn).unwrap_err();
+        let err = sync_csv(csv, YEAR, tid, &mut conn).unwrap_err();
         let msg = format!("{err:#}");
         assert!(
             msg.contains("header"),
@@ -636,6 +658,7 @@ mod tests {
     #[test]
     fn blank_rows_are_silently_skipped() {
         let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
         let csv = format!(
             "{}\n\
              Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n\
@@ -644,7 +667,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
 
         // The blank row is counted in rows_read but produces no
         // warning, no rower, and no availability.

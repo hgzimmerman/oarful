@@ -58,8 +58,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    team (id) {
+        id -> Integer,
+        name -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    team_membership (team_id, rower_id) {
+        team_id -> Integer,
+        rower_id -> Integer,
+    }
+}
+
+diesel::table! {
+    team_coach (team_id, user_id) {
+        team_id -> Integer,
+        user_id -> Integer,
+    }
+}
+
+diesel::table! {
     practice (id) {
         id -> Integer,
+        team_id -> Integer,
         date -> Date,
         notes -> Nullable<Text>,
     }
@@ -69,8 +92,9 @@ diesel::table! {
     use diesel::sql_types::*;
     use crate::sql_types::*;
 
-    availability (rower_id, date) {
+    availability (rower_id, team_id, date) {
         rower_id -> Integer,
+        team_id -> Integer,
         date -> Date,
         status -> AvailabilityStatusMapping,
     }
@@ -96,6 +120,11 @@ diesel::table! {
 
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
 diesel::joinable!(availability -> rower (rower_id));
+diesel::joinable!(availability -> team (team_id));
+diesel::joinable!(practice -> team (team_id));
+diesel::joinable!(team_membership -> team (team_id));
+diesel::joinable!(team_membership -> rower (rower_id));
+diesel::joinable!(team_coach -> team (team_id));
 diesel::joinable!(lineup -> practice (practice_id));
 diesel::joinable!(lineup -> boat (boat_id));
 diesel::joinable!(lineup_seat -> lineup (lineup_id));
@@ -106,6 +135,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     boat,
     rower_seat_affinity,
     pair_affinity,
+    team,
+    team_membership,
+    team_coach,
     practice,
     availability,
     lineup,
