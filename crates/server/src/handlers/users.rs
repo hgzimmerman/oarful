@@ -14,9 +14,11 @@ use axum::{
 use axum_htmx::HxRequest;
 use chrono::Utc;
 use diesel::prelude::*;
-use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId};
+use std::collections::HashMap;
+
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow};
 use lineup_db::rower::Rower;
-use lineup_db::schema::{app_user, user_invite};
+use lineup_db::schema::{app_user, user_invite, user_role};
 use serde::Deserialize;
 
 use crate::{state::{AppState, TenantContext}, templates};
@@ -30,17 +32,25 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let users = tenant
+    let (users, roles) = tenant
         .db
         .with_conn(|conn| {
-            app_user::table
+            let users = app_user::table
                 .select(AppUser::as_select())
                 .order(app_user::name.asc())
-                .get_results(conn)
+                .get_results(conn)?;
+            let role_rows: Vec<UserRoleRow> = user_role::table
+                .select(UserRoleRow::as_select())
+                .get_results(conn)?;
+            let roles: HashMap<UserId, Role> = role_rows
+                .into_iter()
+                .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
+                .collect();
+            Ok((users, roles))
         })
         .await
         .map_err(super::internal_error)?;
-    let content = templates::users::list_content(&users);
+    let content = templates::users::list_content(&users, &roles);
     Ok(super::maybe_page("Users", content, hx))
 }
 
@@ -142,6 +152,79 @@ pub(crate) async fn invite_handler(
             Ok(super::maybe_page("Invite", content, hx))
         }
     }
+}
+
+// =====================================================================
+// Resend invite (PD only)
+// =====================================================================
+
+pub(crate) async fn resend_invite_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    Path(user_id): Path<UserId>,
+) -> Result<Html<String>, StatusCode> {
+    require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let token = generate_token();
+    let token_for_db = token.clone();
+
+    let user = tenant
+        .db
+        .with_conn(move |conn| {
+            let user = AppUser::get(conn, user_id)?
+                .ok_or_else(|| diesel::result::Error::NotFound)?;
+            if user.status != "invited" {
+                return Err(diesel::result::Error::NotFound);
+            }
+
+            // Delete any existing invite token for this user.
+            diesel::delete(
+                user_invite::table.filter(user_invite::user_id.eq(user_id)),
+            )
+            .execute(conn)?;
+
+            // Insert fresh token.
+            let expires = chrono::Utc::now().naive_utc()
+                + chrono::TimeDelta::try_days(7).unwrap();
+            diesel::insert_into(user_invite::table)
+                .values((
+                    user_invite::token_hash.eq(&token_for_db),
+                    user_invite::user_id.eq(user_id),
+                    user_invite::expires_at.eq(expires),
+                ))
+                .execute(conn)?;
+
+            Ok(user)
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    let invite_url = format!("/invite/{token}");
+    if let Err(err) = state
+        .mailer
+        .send_invite(&user.email, &user.name, &invite_url)
+        .await
+    {
+        tracing::warn!(?err, email = %user.email, "mailer failed to resend invite");
+    }
+
+    // Return the updated row for HTMX swap. We need the roles map
+    // for rendering, so fetch this user's role.
+    let roles = tenant
+        .db
+        .with_conn(move |conn| {
+            let mut map = HashMap::new();
+            if let Some(role) = AppUser::role(conn, user_id)? {
+                map.insert(user_id, role);
+            }
+            Ok(map)
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    Ok(Html(
+        templates::users::user_row(&user, &roles).into_string(),
+    ))
 }
 
 // =====================================================================

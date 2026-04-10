@@ -86,6 +86,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/users", get(users::list_handler))
         .route("/users/invite", post(users::invite_handler))
         .route(
+            "/users/{id}/resend-invite",
+            post(users::resend_invite_handler),
+        )
+        .route(
             "/my/profile",
             get(my::profile_handler).post(my::profile_update_handler),
         )

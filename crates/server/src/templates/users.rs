@@ -1,12 +1,14 @@
 //! User management + invite templates.
 
-use lineup_db::app_user::AppUser;
+use std::collections::HashMap;
+
+use lineup_db::app_user::{AppUser, Role, UserId};
 use maud::{html, Markup, DOCTYPE};
 
 use super::layout::page_header;
 
 /// User list with invite form (PD-only page).
-pub(crate) fn list_content(users: &[AppUser]) -> Markup {
+pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>) -> Markup {
     let subtitle = format!("{} users", users.len());
     html! {
         (page_header("Users", Some(&subtitle)))
@@ -50,27 +52,58 @@ pub(crate) fn list_content(users: &[AppUser]) -> Markup {
                             tr {
                                 th class="px-4 py-2" { "Name" }
                                 th class="px-4 py-2" { "Email" }
+                                th class="px-4 py-2" { "Role" }
                                 th class="px-4 py-2" { "Status" }
+                                th class="px-4 py-2" {}
                             }
                         }
                         tbody {
                             @for u in users {
-                                tr class="border-t border-slate-100" {
-                                    td class="px-4 py-2 font-medium text-slate-800" { (u.name) }
-                                    td class="px-4 py-2 text-slate-600" { (u.email) }
-                                    td class="px-4 py-2" {
-                                        @let badge_class = match u.status.as_str() {
-                                            "active" => "bg-emerald-100 text-emerald-800",
-                                            "invited" => "bg-amber-100 text-amber-800",
-                                            "disabled" => "bg-slate-200 text-slate-600",
-                                            _ => "bg-slate-100 text-slate-600",
-                                        };
-                                        span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
-                                            (u.status)
-                                        }
-                                    }
-                                }
+                                (user_row(u, roles))
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>) -> Markup {
+    let role_label = roles
+        .get(&u.id)
+        .map(|r| match r {
+            Role::Member => "Member",
+            Role::Coach => "Coach",
+            Role::ProgramDirector => "Program Director",
+        })
+        .unwrap_or("—");
+    html! {
+        tr id={"user-" (u.id)} class="border-t border-slate-100" {
+            td class="px-4 py-2 font-medium text-slate-800" { (u.name) }
+            td class="px-4 py-2 text-slate-600" { (u.email) }
+            td class="px-4 py-2 text-slate-600" { (role_label) }
+            td class="px-4 py-2" {
+                @let badge_class = match u.status.as_str() {
+                    "active" => "bg-emerald-100 text-emerald-800",
+                    "invited" => "bg-amber-100 text-amber-800",
+                    "disabled" => "bg-slate-200 text-slate-600",
+                    _ => "bg-slate-100 text-slate-600",
+                };
+                span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
+                    (u.status)
+                }
+            }
+            td class="px-4 py-2 text-right" {
+                @if u.status == "invited" {
+                    form method="post"
+                         action={"/users/" (u.id) "/resend-invite"}
+                         hx-post={"/users/" (u.id) "/resend-invite"}
+                         hx-target={"#user-" (u.id)}
+                         hx-swap="outerHTML" {
+                        button type="submit"
+                               class="text-xs text-blue-600 hover:text-blue-800 font-medium" {
+                            "Resend invite"
                         }
                     }
                 }
