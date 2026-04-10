@@ -2,6 +2,11 @@
 //!
 //! Usage:
 //!   DATABASE_URL=lineup.sql PORT=3000 cargo run -p lineup_server
+//!
+//! The master database (`MASTER_DB`, defaults to `master.db`) tracks
+//! the tenant registry. The tenant database (`DATABASE_URL`) holds
+//! the actual rowing data. Phase 4 will resolve tenants dynamically
+//! from JWT claims; for now a single tenant is hard-coded.
 
 use anyhow::Result;
 use tracing_subscriber::EnvFilter;
@@ -14,7 +19,9 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    let conn_string =
+    let master_db =
+        std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
+    let tenant_db =
         std::env::var("DATABASE_URL").unwrap_or_else(|_| "lineup.sql".to_string());
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -23,9 +30,9 @@ async fn main() -> Result<()> {
     let public_dir = std::env::var("PUBLIC_DIR")
         .unwrap_or_else(|_| "crates/server/public".to_string());
 
-    tracing::info!(%conn_string, %port, %public_dir, "starting lineup_server");
+    tracing::info!(%master_db, %tenant_db, %port, %public_dir, "starting lineup_server");
 
-    let app = lineup_server::build_router(&conn_string, &public_dir)?;
+    let app = lineup_server::build_router(&master_db, &tenant_db, &public_dir)?;
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     println!("running at http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/db",
+    "crates/master_db",
     "crates/solver",
     "crates/sheets",
     "crates/server",
@@ -58,5 +59,6 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 
 # Local crates
 lineup_db = { path = "crates/db" }
+lineup_master_db = { path = "crates/master_db" }
 lineup_solver = { path = "crates/solver" }
 lineup_sheets = { path = "crates/sheets" }

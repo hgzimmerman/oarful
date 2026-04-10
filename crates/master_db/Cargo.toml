@@ -1,0 +1,17 @@
+[package]
+name = "lineup_master_db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+diesel.workspace = true
+diesel-derive-newtype.workspace = true
+diesel_migrations.workspace = true
+deadpool-diesel.workspace = true
+libsqlite3-sys.workspace = true

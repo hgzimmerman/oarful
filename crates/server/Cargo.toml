@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 lineup_db.workspace = true
+lineup_master_db.workspace = true
 lineup_solver.workspace = true
 lineup_sheets.workspace = true
 

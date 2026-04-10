@@ -1072,6 +1072,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "lineup_master_db"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "deadpool-diesel",
+ "diesel",
+ "diesel-derive-newtype",
+ "diesel_migrations",
+ "libsqlite3-sys",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "lineup_server"
 version = "0.1.0"
 dependencies = [
@@ -1081,6 +1096,7 @@ dependencies = [
  "axum-htmx",
  "chrono",
  "lineup_db",
+ "lineup_master_db",
  "lineup_sheets",
  "lineup_solver",
  "maud",

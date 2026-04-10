@@ -15,12 +15,16 @@ pub(crate) use state::AppState;
 
 /// Build the full application router.
 ///
-/// The `public_dir` path is resolved relative to the process's current
-/// working directory; in dev that's typically the workspace root, so
-/// passing `"crates/server/public"` works out of the box. Production
-/// deployments should pass an absolute path next to the executable.
-pub fn build_router(conn_string: &str, public_dir: &str) -> anyhow::Result<Router> {
-    let state = AppState::new(conn_string)?;
+/// `master_conn_str` points at the global master.db (tenant registry).
+/// `tenant_conn_str` points at the active tenant's SQLite file.
+/// Phase 4 will resolve the tenant dynamically from JWT claims;
+/// for now the single tenant is hard-coded at startup.
+pub fn build_router(
+    master_conn_str: &str,
+    tenant_conn_str: &str,
+    public_dir: &str,
+) -> anyhow::Result<Router> {
+    let state = AppState::new(master_conn_str, tenant_conn_str)?;
     Ok(handlers::create_router()
         .fallback_service(ServeDir::new(public_dir))
         .with_state(state)
