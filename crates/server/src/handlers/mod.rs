@@ -21,6 +21,7 @@ pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod solve;
 pub(crate) mod sync;
+pub(crate) mod teams;
 
 /// Compose the full route table. Called from [`crate::build_router`] so
 /// the binary doesn't need to know about individual handlers.
@@ -67,6 +68,7 @@ pub(crate) fn create_router() -> Router<AppState> {
             post(rowers::pair_affinity_delete_handler),
         )
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
+        .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))
 }
 

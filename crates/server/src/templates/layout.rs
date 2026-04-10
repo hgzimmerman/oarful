@@ -42,6 +42,13 @@ fn navbar() -> Markup {
                 (nav_link("/boats", "Boats"))
                 (nav_link("/rowers", "Rowers"))
                 (nav_link("/sync", "Sync"))
+                // Team selector — loaded via HTMX on page init so the
+                // navbar template stays a pure function without DB access.
+                li class="ml-auto"
+                   hx-get="/teams/selector"
+                   hx-trigger="load"
+                   hx-swap="innerHTML" {
+                }
             }
         }
     }
