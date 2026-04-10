@@ -1179,6 +1179,7 @@ dependencies = [
  "axum-htmx",
  "bcrypt",
  "chrono",
+ "diesel",
  "jsonwebtoken",
  "lineup_db",
  "lineup_master_db",

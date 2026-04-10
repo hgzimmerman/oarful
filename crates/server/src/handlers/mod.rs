@@ -17,6 +17,7 @@ use crate::{state::AppState, templates};
 
 pub(crate) mod auth;
 pub(crate) mod boats;
+pub(crate) mod users;
 pub(crate) mod history;
 pub(crate) mod practices;
 pub(crate) mod rowers;
@@ -31,6 +32,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
     let public = Router::new()
         .route("/login", get(auth::login_page).post(auth::login_handler))
         .route("/logout", post(auth::logout_handler))
+        .route(
+            "/invite/{token}",
+            get(users::accept_page).post(users::accept_handler),
+        )
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.
@@ -76,6 +81,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(rowers::pair_affinity_delete_handler),
         )
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
+        .route("/users", get(users::list_handler))
+        .route("/users/invite", post(users::invite_handler))
         .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))
         .layer(axum::middleware::from_fn_with_state(

@@ -20,6 +20,7 @@ lineup_sheets.workspace = true
 
 anyhow.workspace = true
 bcrypt.workspace = true
+diesel.workspace = true
 jsonwebtoken.workspace = true
 rayon.workspace = true
 chrono.workspace = true
