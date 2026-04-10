@@ -28,6 +28,43 @@ impl Rower {
             .get_results(conn)
     }
 
+    /// Look up a rower by id. Returns `Ok(None)` for an unknown id —
+    /// callers convert that into whatever they need (typically a 404).
+    /// Other database errors propagate as `Err`.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn get(
+        conn: &mut SqliteConnection,
+        id: RowerId,
+    ) -> Result<Option<Rower>, diesel::result::Error> {
+        rower::table
+            .find(id)
+            .select(Rower::as_select())
+            .first(conn)
+            .optional()
+    }
+
+    /// Persist all fields of `rower` to the matching row, bumping
+    /// `updated_at` to now. Used by the admin UI's inline-edit flow:
+    /// load via [`Rower::get`], mutate the editable fields, then call
+    /// `save`. Returns the freshly-loaded row so callers can render
+    /// the canonical state without an extra round trip.
+    ///
+    /// Distinct from [`Rower::promote_from_sheet`], which is the
+    /// promote-only sync path. `save` is the unrestricted path:
+    /// caller-supplied values land verbatim. Validate at the call site.
+    #[tracing::instrument(level = "debug", skip(conn, rower), err)]
+    pub fn save(
+        conn: &mut SqliteConnection,
+        rower: &Rower,
+    ) -> Result<Rower, diesel::result::Error> {
+        let mut next = rower.clone();
+        next.updated_at = chrono::Utc::now().naive_utc();
+        diesel::update(rower::table.filter(rower::id.eq(rower.id)))
+            .set(&next)
+            .returning(Rower::as_returning())
+            .get_result(conn)
+    }
+
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn count(conn: &mut SqliteConnection) -> Result<i64, diesel::result::Error> {
         rower::table.count().get_result(conn)
