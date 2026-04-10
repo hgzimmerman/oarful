@@ -11,10 +11,12 @@ use lineup_solver::{ProposedLineup, ProposedSolution, SolveResult, SolveStatus, 
 use maud::{html, Markup};
 
 use super::layout::page_header;
+use crate::handlers::solve::SolveKnobs;
 
 pub(crate) fn view_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
+    knobs: &SolveKnobs,
     result: &SolveResult,
 ) -> Markup {
     let available = snapshot.available_rowers().count();
@@ -26,14 +28,94 @@ pub(crate) fn view_content(
     html! {
         (page_header(&format!("Solve · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
+            (knobs_form(date, knobs))
             (status_banner(date, &result.status))
 
             @if result.status == SolveStatus::Satisfied {
-                (primary_panel(snapshot, date, &result.primary))
+                (primary_panel(snapshot, date, knobs, &result.primary))
 
                 @if !result.alternatives.is_empty() {
                     (alternatives_panel(snapshot, &result.alternatives))
                 }
+            }
+        }
+    }
+}
+
+/// Coach-tunable knobs (partial fill / novelty / alternatives / time
+/// budget). Submitting hx-gets the same `/solve/{date}` URL with the
+/// new query string, so the result is bookmarkable and the back
+/// button works.
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs) -> Markup {
+    let action = format!("/solve/{date}");
+    html! {
+        section class="bg-white rounded-lg shadow p-6" {
+            form method="get" action=(action)
+                 hx-get=(action)
+                 hx-target="#content"
+                 hx-push-url="true"
+                 hx-indicator="#solve-spinner"
+                 class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end" {
+                (knob_input(
+                    "partial",
+                    "Partial fill",
+                    knobs.partial as i64,
+                    Some(0),
+                    Some("0 = strict; N = up to N optional seats empty per boat"),
+                ))
+                (knob_input(
+                    "novelty",
+                    "Novelty",
+                    knobs.novelty as i64,
+                    Some(0),
+                    Some("S7 weight; 0 disables"),
+                ))
+                (knob_input(
+                    "alts",
+                    "Alternatives",
+                    knobs.alts as i64,
+                    Some(1),
+                    Some("Distinct lineups (incl. primary)"),
+                ))
+                (knob_input(
+                    "budget",
+                    "Time budget (s)",
+                    knobs.budget as i64,
+                    Some(1),
+                    Some("Per-solve cap; clamped ≥ 1s"),
+                ))
+                div class="flex items-center space-x-3" {
+                    button type="submit"
+                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                        "Re-solve"
+                    }
+                    span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
+                        "Solving…"
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn knob_input(
+    name: &str,
+    label: &str,
+    value: i64,
+    min: Option<i64>,
+    help: Option<&str>,
+) -> Markup {
+    html! {
+        div {
+            label for=(name) class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                (label)
+            }
+            input id=(name) name=(name) type="number"
+                  value=(value)
+                  min=[min.map(|m| m.to_string())]
+                  class="w-full border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
+            @if let Some(h) = help {
+                p class="text-xs text-slate-500 mt-1" { (h) }
             }
         }
     }
@@ -65,6 +147,7 @@ fn status_banner(date: NaiveDate, status: &SolveStatus) -> Markup {
 fn primary_panel(
     snapshot: &DbSnapshot,
     date: NaiveDate,
+    knobs: &SolveKnobs,
     primary: &ProposedSolution,
 ) -> Markup {
     let used: Vec<&ProposedLineup> = primary.lineups.iter().filter(|l| l.used).collect();
@@ -75,7 +158,14 @@ fn primary_panel(
         section class="bg-white rounded-lg shadow p-6" {
             div class="flex items-center justify-between mb-4" {
                 h2 class="text-xl font-bold text-slate-800" { "Primary lineup" }
+                // Hidden inputs carry the same knobs the view used so
+                // commit re-solves with identical params instead of
+                // silently reverting to defaults.
                 form method="post" action={"/commit/" (date)} {
+                    input type="hidden" name="partial" value=(knobs.partial);
+                    input type="hidden" name="novelty" value=(knobs.novelty);
+                    input type="hidden" name="alts" value=(knobs.alts);
+                    input type="hidden" name="budget" value=(knobs.budget);
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                         "Commit primary"
