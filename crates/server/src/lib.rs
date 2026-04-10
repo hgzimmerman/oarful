@@ -8,6 +8,7 @@ use axum::Router;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
 pub(crate) mod handlers;
+pub(crate) mod jwt;
 pub(crate) mod state;
 pub(crate) mod templates;
 
@@ -25,8 +26,7 @@ pub fn build_router(
     public_dir: &str,
 ) -> anyhow::Result<Router> {
     let state = AppState::new(master_conn_str, tenant_conn_str)?;
-    Ok(handlers::create_router()
+    Ok(handlers::create_router(state)
         .fallback_service(ServeDir::new(public_dir))
-        .with_state(state)
         .layer(TraceLayer::new_for_http()))
 }

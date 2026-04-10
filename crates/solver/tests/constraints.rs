@@ -79,6 +79,7 @@ fn rower(
         active: IntBool::TRUE,
         created_at: now,
         updated_at: now,
+        user_id: None,
     }
 }
 

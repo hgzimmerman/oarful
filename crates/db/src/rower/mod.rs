@@ -47,6 +47,8 @@ pub struct Rower {
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// FK to `app_user.id`. NULL until the rower claims their account.
+    pub user_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]

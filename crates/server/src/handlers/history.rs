@@ -5,20 +5,22 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Html,
+    Extension,
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
 
-use crate::{handlers::internal_error, state::AppState, templates};
+use crate::{jwt::Claims, handlers::internal_error, state::AppState, templates};
 
 pub(crate) async fn list_handler(
     State(state): State<AppState>,
     jar: CookieJar,
+    Extension(claims): Extension<Claims>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar).await?;
+    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
     let practices = state
         .db
         .with_conn(move |conn| Practice::list_committed(conn, team_id))
@@ -32,10 +34,11 @@ pub(crate) async fn list_handler(
 pub(crate) async fn detail_handler(
     State(state): State<AppState>,
     jar: CookieJar,
+    Extension(claims): Extension<Claims>,
     Path(date): Path<NaiveDate>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar).await?;
+    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
     let (snapshot, committed) = state
         .db
         .with_conn(move |conn| {

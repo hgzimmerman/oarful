@@ -14,6 +14,8 @@ use lineup_master_db::state::MasterDb;
 use lineup_master_db::tenant::{NewTenant, Tenant, TenantId};
 use tokio::sync::Semaphore;
 
+use crate::jwt::JwtKeys;
+
 #[derive(Clone)]
 pub(crate) struct AppState {
     /// Global tenant registry. Tiny, rarely queried.
@@ -28,6 +30,8 @@ pub(crate) struct AppState {
     /// Dedicated CPU pool for solver work, isolated from tokio's
     /// blocking pool.
     pub(crate) solver_pool: Arc<rayon::ThreadPool>,
+    /// JWT signing/verification keys.
+    pub(crate) jwt_keys: JwtKeys,
 }
 
 impl AppState {
@@ -66,12 +70,25 @@ impl AppState {
             .build()
             .map_err(|e| anyhow::anyhow!("building solver thread pool: {e}"))?;
 
+        // JWT secret: from env or random (dev-mode; tokens don't
+        // survive restarts).
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            use std::collections::hash_map::RandomState;
+            use std::hash::{BuildHasher, Hasher};
+            let s = RandomState::new();
+            let h = s.build_hasher().finish();
+            tracing::warn!("JWT_SECRET not set — using random secret (tokens won't survive restart)");
+            format!("dev-{h:x}")
+        });
+        let jwt_keys = JwtKeys::from_secret(jwt_secret.as_bytes());
+
         Ok(Self {
             master_db,
             db,
             tenant_id,
             solve_semaphore: Arc::new(Semaphore::new(solve_concurrency)),
             solver_pool: Arc::new(solver_pool),
+            jwt_keys,
         })
     }
 }

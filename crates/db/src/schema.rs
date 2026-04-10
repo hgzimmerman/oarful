@@ -20,6 +20,34 @@ diesel::table! {
         active -> Integer,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        user_id -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    app_user (id) {
+        id -> Integer,
+        email -> Text,
+        password_hash -> Nullable<Text>,
+        name -> Text,
+        status -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    user_role (user_id) {
+        user_id -> Integer,
+        role -> Text,
+    }
+}
+
+diesel::table! {
+    user_invite (token_hash) {
+        token_hash -> Text,
+        user_id -> Integer,
+        expires_at -> Timestamp,
     }
 }
 
@@ -119,6 +147,9 @@ diesel::table! {
 }
 
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
+diesel::joinable!(rower -> app_user (user_id));
+diesel::joinable!(user_role -> app_user (user_id));
+diesel::joinable!(user_invite -> app_user (user_id));
 diesel::joinable!(availability -> rower (rower_id));
 diesel::joinable!(availability -> team (team_id));
 diesel::joinable!(practice -> team (team_id));
@@ -142,4 +173,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     availability,
     lineup,
     lineup_seat,
+    app_user,
+    user_role,
+    user_invite,
 );

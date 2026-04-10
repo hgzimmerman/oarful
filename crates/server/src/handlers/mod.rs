@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 use crate::{state::AppState, templates};
 
+pub(crate) mod auth;
 pub(crate) mod boats;
 pub(crate) mod history;
 pub(crate) mod practices;
@@ -25,8 +26,15 @@ pub(crate) mod teams;
 
 /// Compose the full route table. Called from [`crate::build_router`] so
 /// the binary doesn't need to know about individual handlers.
-pub(crate) fn create_router() -> Router<AppState> {
-    Router::new()
+pub(crate) fn create_router(state: AppState) -> Router {
+    // Public routes — no auth required.
+    let public = Router::new()
+        .route("/login", get(auth::login_page).post(auth::login_handler))
+        .route("/logout", post(auth::logout_handler))
+        .with_state(state.clone());
+
+    // Protected routes — require a valid JWT cookie.
+    let protected = Router::new()
         .route("/", get(|| async { Redirect::permanent("/practices") }))
         .route("/practices", get(practices::list_handler))
         .route("/solve/{date}", get(solve::view_handler))
@@ -70,6 +78,13 @@ pub(crate) fn create_router() -> Router<AppState> {
         .route("/sync", get(sync::form_handler).post(sync::sync_handler))
         .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_auth,
+        ))
+        .with_state(state);
+
+    public.merge(protected)
 }
 
 /// Render `content` either as a full page (for a normal navigation) or
@@ -99,21 +114,26 @@ pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
 // Active-team context (cookie-based until JWT lands in Phase 3)
 // =====================================================================
 
-const TEAM_COOKIE: &str = "active_team_id";
-
-/// Extract the active team from the `active_team_id` cookie. Falls
-/// back to the first team in the DB if the cookie is missing or
-/// unparseable. Returns 500 only if there are no teams at all.
+/// Extract the active team. In auth mode, reads from the JWT claims
+/// (injected by the `require_auth` middleware). Falls back to the
+/// `active_team_id` cookie for backward compatibility during
+/// migration, then to the first team in the DB.
 pub(crate) async fn active_team(
     state: &AppState,
     jar: &CookieJar,
+    claims: Option<&crate::jwt::Claims>,
 ) -> Result<TeamId, StatusCode> {
-    if let Some(cookie) = jar.get(TEAM_COOKIE) {
+    // Prefer JWT claims if available (set by require_auth middleware).
+    if let Some(c) = claims {
+        return Ok(c.team_id());
+    }
+    // Legacy cookie fallback.
+    if let Some(cookie) = jar.get("active_team_id") {
         if let Ok(id) = cookie.value().parse::<TeamId>() {
             return Ok(id);
         }
     }
-    // Fallback: first team in the DB.
+    // Last resort: first team in the DB.
     let team = state
         .db
         .with_conn(|conn| lineup_db::team::Team::first(conn))
@@ -123,6 +143,15 @@ pub(crate) async fn active_team(
         tracing::error!("no teams in the database");
         StatusCode::INTERNAL_SERVER_ERROR
     })
+}
+
+/// Helper to extract Claims from request extensions (set by
+/// require_auth middleware). Returns None for unauthenticated
+/// requests (should only happen on public routes).
+pub(crate) fn extract_claims(
+    extensions: &axum::http::Extensions,
+) -> Option<crate::jwt::Claims> {
+    extensions.get::<crate::jwt::Claims>().cloned()
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,7 +166,7 @@ pub(crate) async fn switch_team_handler(
     Form(input): Form<TeamSwitchInput>,
 ) -> (CookieJar, Redirect) {
     let jar = jar.add(
-        axum_extra::extract::cookie::Cookie::build((TEAM_COOKIE, input.team_id.to_string()))
+        axum_extra::extract::cookie::Cookie::build(("active_team_id", input.team_id.to_string()))
             .path("/")
             .http_only(true),
     );

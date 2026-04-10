@@ -39,10 +39,11 @@ pub(crate) async fn form_handler(hx: HxRequest) -> Html<String> {
 pub(crate) async fn sync_handler(
     State(state): State<AppState>,
     jar: CookieJar,
+    axum::Extension(claims): axum::Extension<crate::jwt::Claims>,
     hx: HxRequest,
     Form(input): Form<SyncFormInput>,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&state, &jar).await?;
+    let team_id = super::active_team(&state, &jar, Some(&claims)).await?;
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
         let content = templates::sync::form_content(

@@ -5,6 +5,7 @@
 //! holding newtype IDs and `DbEnum`s, and a `queries.rs` with inherent-impl
 //! query functions that take `&mut SqliteConnection`.
 
+pub mod app_user;
 pub mod availability;
 pub mod boat;
 pub mod fixture;

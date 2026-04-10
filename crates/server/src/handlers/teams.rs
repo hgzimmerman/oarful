@@ -13,8 +13,9 @@ use crate::{handlers::internal_error, state::AppState, templates};
 pub(crate) async fn selector_handler(
     State(state): State<AppState>,
     jar: CookieJar,
+    axum::Extension(claims): axum::Extension<crate::jwt::Claims>,
 ) -> Result<Html<String>, StatusCode> {
-    let active = super::active_team(&state, &jar).await?;
+    let active = super::active_team(&state, &jar, Some(&claims)).await?;
     let teams = state
         .db
         .with_conn(|conn| Team::list_all(conn))
