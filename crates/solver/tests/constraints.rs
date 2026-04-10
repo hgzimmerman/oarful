@@ -272,7 +272,7 @@ fn s2_pair_affinity_seats_the_pair_together() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     let alice_part = partition_of(lineup, RowerId::new(1)).unwrap();
     let diego_part = partition_of(lineup, RowerId::new(4)).unwrap();
@@ -305,7 +305,7 @@ fn s3_seat_affinity_places_rower_in_preferred_seat() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     assert_eq!(
         rower_in_seat(lineup, 4),
@@ -359,7 +359,7 @@ fn s4_soft_side_prefers_on_side_placement() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     // Port seats in a Starboard-stroke 4+ are {1, 3}. HardA / HardB
     // are eligibility-filtered out of them entirely, so the only
@@ -434,7 +434,7 @@ fn s6_cox_cooldown_picks_the_cold_cox() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     let cox = rower_in_seat(lineup, 0);
     assert_eq!(
@@ -490,7 +490,7 @@ fn s6_cox_cooldown_prefers_least_recently_coxed() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     let cox = rower_in_seat(lineup, 0);
     assert_eq!(
@@ -520,7 +520,7 @@ fn s9_pair_strength_matches_strengths_per_partition() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     // For each partition, look up the two rowers' strengths and
     // assert they match.
@@ -562,7 +562,7 @@ fn s9b_bow_pair_gets_the_matched_strengths() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     // The bow partition (1, 2) should contain the Strong/Strong
     // pair. The Weak rower (#4) must land in partition (3, 4).
@@ -590,7 +590,7 @@ fn s10_pair_height_matches_heights_per_partition() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     for partition in [(1, 2), (3, 4)] {
         let a = rower_in_seat(lineup, partition.0);
@@ -636,7 +636,7 @@ fn s11_end_pair_skill_puts_experts_in_the_ends() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     let experts: [RowerId; 4] = [RowerId::new(1), RowerId::new(2), RowerId::new(3), RowerId::new(4)];
     for seat in [1, 2, 7, 8] {
@@ -677,7 +677,7 @@ fn s12_engine_room_strength_puts_strong_rowers_in_middle() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     let very_strong: [RowerId; 4] = [
         RowerId::new(1),
@@ -739,7 +739,7 @@ fn partial_fill_bonus_prefers_filling_optional_seats() {
 
     let result = solve(&snap, &req).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     // Assert seats 3 and 4 — the optional pair — are both
     // occupied. Without the bonus the solver is free to leave
@@ -792,7 +792,7 @@ fn partial_fill_bonus_is_inert_under_strict() {
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
     assert_eq!(
         lineup.seats.len(),
         5,
@@ -880,10 +880,12 @@ fn topn_alternatives_respect_tabu_min_diff() {
     assert_eq!(result.status, SolveStatus::Satisfied);
 
     // Build an iterator that walks [primary, alt1, alt2, ...] as
-    // Vec<ProposedLineup> slices so pairwise comparisons are
-    // straightforward.
-    let mut all: Vec<&Vec<ProposedLineup>> = vec![&result.lineups];
-    all.extend(result.alternatives.iter());
+    // &Vec<ProposedLineup> slices so pairwise comparisons are
+    // straightforward. Alternatives are `ProposedSolution`s now,
+    // so we project out their `lineups` field to match the
+    // primary's shape.
+    let mut all: Vec<&Vec<ProposedLineup>> = vec![&result.primary.lineups];
+    all.extend(result.alternatives.iter().map(|alt| &alt.lineups));
 
     // Every unordered pair of lineups must differ by at least
     // `tabu_min_diff` placements in each direction (so the
@@ -927,7 +929,7 @@ fn topn_one_is_identical_to_single_solve() {
         result.alternatives.len()
     );
     // And the primary is still populated as before.
-    assert!(!result.lineups.is_empty());
+    assert!(!result.primary.lineups.is_empty());
 }
 
 #[test]
@@ -956,7 +958,7 @@ fn topn_gracefully_caps_at_feasible_region() {
 
     let result = solve(&snap, &req).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    assert!(!result.lineups.is_empty(), "primary should still solve");
+    assert!(!result.primary.lineups.is_empty(), "primary should still solve");
     assert!(
         result.alternatives.is_empty(),
         "no alternative should satisfy tabu_min_diff = 10 on a 5-seat boat"
@@ -981,7 +983,7 @@ fn h2_designated_cox_never_rows() {
 
     let result = solve(&snap, &request(SolverConfig::default())).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    let lineup = single_used(&result.lineups);
+    let lineup = single_used(&result.primary.lineups);
 
     // Cox is in seat 0.
     assert_eq!(

@@ -319,24 +319,71 @@ pub(crate) const COX_COOLDOWN_DAYS: i64 = 14;
 #[derive(Debug, Clone)]
 pub struct SolveResult {
     /// Solver outcome for the *primary* (best) solution. When
-    /// `status != Satisfied`, `lineups` is empty and
-    /// `alternatives` is too — an unsatisfiable or timed-out
-    /// problem yields no lineups at all.
+    /// `status != Satisfied`, `primary` holds an empty
+    /// `ProposedSolution` and `alternatives` is empty — an
+    /// unsatisfiable or timed-out problem yields no lineups at
+    /// all.
     pub status: SolveStatus,
-    /// Primary (best) lineup set — one `ProposedLineup` per
-    /// candidate boat, with `used = true` for boats the solver
-    /// chose to field. This is the single-solution result: callers
-    /// that don't care about Top-N alternatives can stop here.
-    pub lineups: Vec<ProposedLineup>,
-    /// Additional distinct lineup sets, ranked best-first, each
+    /// The best solution the solver found. Holds both the
+    /// per-boat lineup assignments and the bucketed breakdown of
+    /// available rowers who didn't make it in. Callers that
+    /// don't care about Top-N alternatives can stop here.
+    pub primary: ProposedSolution,
+    /// Additional distinct solutions, ranked best-first, each
     /// guaranteed to differ from every preceding one (including
-    /// `lineups`) by at least [`SolveRequest::tabu_min_diff`]
+    /// `primary`) by at least [`SolveRequest::tabu_min_diff`]
     /// placements. Empty when [`SolveRequest::top_n`] is 1 (the
     /// default) or when the solver couldn't find any further
-    /// distinct feasible assignments under the tabu radius. Each
-    /// inner `Vec<ProposedLineup>` has the same shape as the
-    /// primary `lineups`: one entry per candidate boat.
-    pub alternatives: Vec<Vec<ProposedLineup>>,
+    /// distinct feasible assignments under the tabu radius.
+    /// Each entry carries its own `lineups` and `unplaced` so a
+    /// coach comparing alternatives can see both "who rows" and
+    /// "who sits out" per alternative without having to
+    /// recompute.
+    pub alternatives: Vec<ProposedSolution>,
+}
+
+/// A single self-contained proposal from the solver: one
+/// [`ProposedLineup`] per candidate boat *plus* the bucketed
+/// breakdown of available rowers who aren't in it. Used for
+/// both the primary solution and every Top-N alternative so the
+/// same shape works everywhere a coach would display, compare,
+/// or commit a lineup set.
+///
+/// Kept flat (rather than mashing everything onto `SolveResult`)
+/// because a coach's mental model is "show me options", where
+/// each option is (here's who rows + here's who sits out).
+/// Alternatives inherit the exact same shape as the primary,
+/// making iteration over all N solutions symmetric.
+#[derive(Debug, Clone, Default)]
+pub struct ProposedSolution {
+    /// One entry per candidate boat, with `used = true` for the
+    /// boats the solver chose to field in this solution. Boats
+    /// with `used = false` have empty `seats` — they were
+    /// candidates the solver rejected.
+    pub lineups: Vec<ProposedLineup>,
+    /// Available rowers who didn't make it into `lineups`,
+    /// bucketed by `can_scull` so the coach can redirect
+    /// sculling-eligible rowers to that team rather than
+    /// benching them. See [`UnplacedRowers`].
+    pub unplaced: UnplacedRowers,
+}
+
+/// Rowers who were available for sweep seating today but didn't
+/// land in a given lineup set. Split by `can_scull` so the
+/// coach can see at a glance who to redirect to the scullers
+/// team (`to_sculling`) versus who stays on the dock
+/// (`benched`). Both buckets preserve the stable iteration order
+/// of `DbSnapshot.available_rowers()`.
+#[derive(Debug, Clone, Default)]
+pub struct UnplacedRowers {
+    /// Rowers flagged `can_scull = true` who weren't placed.
+    /// These are overflow candidates for the sculling team — the
+    /// coach should funnel them there rather than bench them.
+    pub to_sculling: Vec<RowerId>,
+    /// Rowers without `can_scull` who weren't placed. They stay
+    /// on the dock today; the coach has to either shuffle the
+    /// fleet or live with it.
+    pub benched: Vec<RowerId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -410,7 +457,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     if boats.is_empty() {
         return Ok(SolveResult {
             status: SolveStatus::Satisfied,
-            lineups: vec![],
+            primary: ProposedSolution::default(),
             alternatives: vec![],
         });
     }
@@ -629,21 +676,24 @@ fn search_lineups(
             OptimisationResult::Unsatisfiable => {
                 return Ok(SolveResult {
                     status: SolveStatus::Unsatisfiable,
-                    lineups: vec![],
+                    primary: ProposedSolution::default(),
                     alternatives: vec![],
                 });
             }
             OptimisationResult::Unknown => {
                 return Ok(SolveResult {
                     status: SolveStatus::Timeout,
-                    lineups: vec![],
+                    primary: ProposedSolution::default(),
                     alternatives: vec![],
                 });
             }
         };
 
-    // Tabu re-solve loop for the remaining alternatives.
-    let mut alternatives: Vec<Vec<ProposedLineup>> = Vec::new();
+    // Tabu re-solve loop for the remaining alternatives. Each
+    // entry is a full `ProposedSolution` — lineups *and* its
+    // own unplaced-rowers breakdown — so a coach comparing
+    // alternatives sees both sides of each trade-off.
+    let mut alternatives: Vec<ProposedSolution> = Vec::new();
     if request.wants_alternatives() {
         // Post the first tabu constraint off the primary
         // placements, then loop `top_n - 1` times. Each
@@ -686,7 +736,12 @@ fn search_lineups(
                 );
                 let alt_placements =
                     collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                alternatives.push(alt_lineups);
+                let alt_unplaced =
+                    compute_unplaced(&builder.available, &alt_lineups);
+                alternatives.push(ProposedSolution {
+                    lineups: alt_lineups,
+                    unplaced: alt_unplaced,
+                });
 
                 // Prepare the next iteration: forbid the set we
                 // just returned. Skip the final iteration's tabu
@@ -707,11 +762,45 @@ fn search_lineups(
         }
     }
 
+    let primary_unplaced = compute_unplaced(&builder.available, &primary_lineups);
     Ok(SolveResult {
         status: primary_status,
-        lineups: primary_lineups,
+        primary: ProposedSolution {
+            lineups: primary_lineups,
+            unplaced: primary_unplaced,
+        },
         alternatives,
     })
+}
+
+/// Bucket the available rowers into "placed in a lineup", "can
+/// fall back to sculling", and "benched" given a set of
+/// ProposedLineups. The returned `UnplacedRowers` preserves the
+/// iteration order of `available` so repeated runs produce
+/// identical output (important for the baseline regression
+/// test).
+fn compute_unplaced(
+    available: &[&Rower],
+    lineups: &[ProposedLineup],
+) -> UnplacedRowers {
+    use std::collections::HashSet;
+    let placed: HashSet<RowerId> = lineups
+        .iter()
+        .filter(|l| l.used)
+        .flat_map(|l| l.seats.iter().map(|(_, r)| *r))
+        .collect();
+    let mut out = UnplacedRowers::default();
+    for rower in available {
+        if placed.contains(&rower.id) {
+            continue;
+        }
+        if rower.can_scull.as_bool() {
+            out.to_sculling.push(rower.id);
+        } else {
+            out.benched.push(rower.id);
+        }
+    }
+    out
 }
 
 /// Walk the `x[(r, b, s)]` assignment matrix and return the

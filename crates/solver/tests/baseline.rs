@@ -127,15 +127,16 @@ fn format_result(result: &SolveResult, snapshot: &DbSnapshot) -> String {
         return out;
     }
 
-    let used: Vec<&ProposedLineup> = result.lineups.iter().filter(|l| l.used).collect();
+    let used: Vec<&ProposedLineup> =
+        result.primary.lineups.iter().filter(|l| l.used).collect();
     let skipped: Vec<&ProposedLineup> =
-        result.lineups.iter().filter(|l| !l.used).collect();
+        result.primary.lineups.iter().filter(|l| !l.used).collect();
 
     writeln!(
         out,
         "fielded: {}/{}",
         used.len(),
-        result.lineups.len()
+        result.primary.lineups.len()
     )
     .unwrap();
 
@@ -145,6 +146,30 @@ fn format_result(result: &SolveResult, snapshot: &DbSnapshot) -> String {
         skipped.iter().map(|l| l.boat_name.as_str()).collect();
     skipped_names.sort_unstable();
     writeln!(out, "skipped: {}", skipped_names.join(", ")).unwrap();
+
+    // Unplaced-rowers breakdown. Always emit both lines — even
+    // when a bucket is empty — so the baseline file has a stable
+    // shape regardless of solve outcome. Sort each bucket by
+    // name so the output is deterministic across runs.
+    let mut to_sculling_names: Vec<String> = result
+        .primary
+        .unplaced
+        .to_sculling
+        .iter()
+        .map(|id| name_of(*id))
+        .collect();
+    to_sculling_names.sort();
+    writeln!(out, "to sculling: {}", to_sculling_names.join(", ")).unwrap();
+
+    let mut benched_names: Vec<String> = result
+        .primary
+        .unplaced
+        .benched
+        .iter()
+        .map(|id| name_of(*id))
+        .collect();
+    benched_names.sort();
+    writeln!(out, "benched: {}", benched_names.join(", ")).unwrap();
     writeln!(out).unwrap();
 
     // Sort fielded boats by boat_id so the order is stable. Seats

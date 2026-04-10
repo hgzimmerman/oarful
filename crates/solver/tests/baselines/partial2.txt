@@ -1,6 +1,8 @@
 status: Satisfied
 fielded: 1/3
 skipped: Artemis, Hestia
+to sculling: 
+benched: Lena, Mika
 
 boat 1: Persephone
   cox  Diego

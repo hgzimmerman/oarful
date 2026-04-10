@@ -115,9 +115,10 @@ fn run_one_with_label(
         SolveStatus::Unsatisfiable => "UNSAT",
         SolveStatus::Timeout => "timeout",
     };
-    let used = result.lineups.iter().filter(|l| l.used).count();
-    let total_lineups = result.lineups.len();
+    let used = result.primary.lineups.iter().filter(|l| l.used).count();
+    let total_lineups = result.primary.lineups.len();
     let placed: usize = result
+        .primary
         .lineups
         .iter()
         .filter(|l| l.used)

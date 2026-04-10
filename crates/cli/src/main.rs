@@ -224,8 +224,10 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
 
     match result.status {
         SolveStatus::Satisfied => {
-            let used: Vec<_> = result.lineups.iter().filter(|l| l.used).collect();
-            let skipped: Vec<_> = result.lineups.iter().filter(|l| !l.used).collect();
+            let used: Vec<_> =
+                result.primary.lineups.iter().filter(|l| l.used).collect();
+            let skipped: Vec<_> =
+                result.primary.lineups.iter().filter(|l| !l.used).collect();
             // `seats` includes the cox slot; subtract it for the "rowers
             // placed" count so cox isn't double-counted with rowers.
             let rowers_placed: usize = used
@@ -241,7 +243,7 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
                 "--- Solved in {:?}. Fielding {}/{} boats, {} rowers placed (+{} cox), {} on the dock. ---",
                 elapsed,
                 used.len(),
-                result.lineups.len(),
+                result.primary.lineups.len(),
                 rowers_placed,
                 coxes_placed,
                 benched,
@@ -262,17 +264,19 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
                 );
             }
             print_lineups(&snapshot, &used);
+            print_unplaced(&snapshot, &result.primary.unplaced);
 
             for (idx, alt) in result.alternatives.iter().enumerate() {
                 let rank = idx + 2; // primary is #1, alts start at #2
                 let alt_used: Vec<&ProposedLineup> =
-                    alt.iter().filter(|l| l.used).collect();
+                    alt.lineups.iter().filter(|l| l.used).collect();
                 println!(
                     "\n=== Alternative #{rank} ({}/{} boats fielded) ===",
                     alt_used.len(),
-                    alt.len()
+                    alt.lineups.len()
                 );
                 print_lineups(&snapshot, &alt_used);
+                print_unplaced(&snapshot, &alt.unplaced);
             }
 
             if commit {
@@ -294,6 +298,37 @@ async fn cmd_solve(db: &Db, opts: SolveOpts) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Render the unplaced-rowers breakdown for the primary
+/// lineup: who's being redirected to sculling vs who sits on
+/// the dock today. Silent when both buckets are empty (a rare
+/// "everyone got a seat" outcome — usually one of the two
+/// lists is non-empty on real fleets).
+fn print_unplaced(snapshot: &DbSnapshot, unplaced: &lineup_solver::UnplacedRowers) {
+    let name_of = |id: &lineup_db::rower::types::RowerId| -> String {
+        snapshot
+            .rowers
+            .iter()
+            .find(|r| r.id == *id)
+            .map(|r| r.name.clone())
+            .unwrap_or_else(|| format!("<unknown rower #{id}>"))
+    };
+    if !unplaced.to_sculling.is_empty() {
+        println!(
+            "\nTo sculling ({}):",
+            unplaced.to_sculling.len()
+        );
+        for id in &unplaced.to_sculling {
+            println!("  {}", name_of(id));
+        }
+    }
+    if !unplaced.benched.is_empty() {
+        println!("\nBenched ({}):", unplaced.benched.len());
+        for id in &unplaced.benched {
+            println!("  {}", name_of(id));
+        }
+    }
 }
 
 /// Pretty-print one set of fielded lineups (primary or an
