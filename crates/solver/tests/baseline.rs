@@ -96,7 +96,7 @@ fn request(partial_fill: PartialFillPolicy) -> SolveRequest {
         boats: Vec::new(),
         partial_fill,
         config: SolverConfig::default(),
-        time_budget: Some(std::time::Duration::from_secs(5)),
+        time_budget: Some(std::time::Duration::from_secs(10)),
         top_n: 1,
         tabu_min_diff: 2,
         reference_lineups: vec![],

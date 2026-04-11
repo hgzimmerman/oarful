@@ -1193,6 +1193,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "serde",
+ "serde_html_form",
  "tokio",
  "tower-http",
  "tracing",

@@ -16,9 +16,12 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
     );
 
     html! {
-        (page_header("Fleet", Some(&subtitle)))
-        div class="px-8 py-6 space-y-6" {
-            div class="flex justify-end max-w-5xl" {
+        header class="bg-white border-b border-slate-200 px-8 py-6" {
+            div class="flex items-center justify-between" {
+                div {
+                    h1 class="text-2xl font-bold text-slate-800" { "Fleet" }
+                    p class="text-sm text-slate-500 mt-1" { (subtitle) }
+                }
                 a href="/boats/new"
                   hx-get="/boats/new"
                   hx-target="#content"
@@ -27,6 +30,8 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
                     "Add boat"
                 }
             }
+        }
+        div class="px-8 py-6 space-y-6" {
 
             @if boats.is_empty() {
                 (empty_state("No boats on file."))

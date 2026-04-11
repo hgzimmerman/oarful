@@ -197,13 +197,15 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup) 
                         } else {
                             format!("s{}", seat.seat_position)
                         };
-                        @let name = snapshot
-                            .rowers
-                            .iter()
-                            .find(|r| r.id == seat.rower_id)
-                            .map(|r| r.name.as_str())
-                            .unwrap_or("<unknown>");
-                        tr class="border-b border-slate-100 last:border-0" {
+                        @let rower = snapshot.rowers.iter().find(|r| r.id == seat.rower_id);
+                        @let name = rower.map(|r| r.name.as_str()).unwrap_or("<unknown>");
+                        @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
+                        @let row_class = if is_designated_cox {
+                            "border-b border-slate-100 last:border-0 border-l-4 border-l-indigo-400"
+                        } else {
+                            "border-b border-slate-100 last:border-0"
+                        };
+                        tr class=(row_class) {
                             td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
                             td class="px-4 py-2 text-slate-800" { (name) }
                             td class="px-4 py-2 text-right w-16" {

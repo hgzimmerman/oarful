@@ -209,7 +209,7 @@ impl BoatFormData {
             name: String::new(),
             weight_class: "Medium".into(),
             boat_type: "Eight".into(),
-            stroke_side: "Starboard".into(),
+            stroke_side: "Port".into(),
             acquired_at: String::new(),
             manufactured_at: String::new(),
             relinquished_at: String::new(),

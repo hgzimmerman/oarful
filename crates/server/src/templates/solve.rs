@@ -364,11 +364,17 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
                         @let key = format!("{}:{}", lineup.boat_id, seat);
                         @let label = if *seat == 0 { "cox".to_string() } else { format!("s{seat}") };
                         @let rower = find_rower(snapshot, *rower_id);
+                        @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
+                        @let row_base = if is_designated_cox {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
+                        } else {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition"
+                        };
                         tr data-key=(key)
                            data-boat=(lineup.boat_id)
                            data-seat=(seat)
                            data-rower=(rower_id)
-                           class="border-b border-slate-100 last:border-0 cursor-pointer transition"
+                           class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
                            "@click"={"select('" (key) "')"} {
                             td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
@@ -410,11 +416,14 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Mark
                              data-boat="sculling"
                              data-seat="-1"
                              data-rower=(id)
-                             class="inline-block px-3 py-1 rounded border border-slate-200 cursor-pointer transition rower-content"
+                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
-                                (r.name)
+                                div class="font-medium text-slate-800 text-sm" { (r.name) }
+                                div class="text-xs text-slate-500" {
+                                    (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
+                                }
                             } @else {
                                 "#" (id)
                             }
@@ -435,11 +444,14 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Mark
                              data-boat="bench"
                              data-seat="-1"
                              data-rower=(id)
-                             class="inline-block px-3 py-1 rounded border border-slate-200 cursor-pointer transition rower-content"
+                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
-                                (r.name)
+                                div class="font-medium text-slate-800 text-sm" { (r.name) }
+                                div class="text-xs text-slate-500" {
+                                    (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
+                                }
                             } @else {
                                 "#" (id)
                             }
