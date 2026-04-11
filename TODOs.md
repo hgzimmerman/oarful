@@ -118,21 +118,23 @@ in the stats line: e.g. `Mdl · Int · Int · Port` where the
 distinct category names make each value unambiguous. Apply
 consistently on solve view seat rows and bench/sculling chips.
 
-#### Bow-loader cox weight penalty
+#### Bow-loader cox fit penalty
 
 Bow-loader coxed boats (4+s with `cox_position = Bow`) have a
-tight bow compartment. Heavy and especially very-heavy rowers
-physically struggle to fit in a bow-loader cox seat. The solver
-should penalize placing heavy rowers there and make it nearly
-impossible for very-heavy rowers.
+tight bow compartment. Tall rowers are the primary problem —
+height is the main constraint on fitting in the space. Weight
+matters somewhat too but is secondary.
 
 **Solver work.** In the objective function, add a penalty term
 when a rower assigned to the cox seat (position 0) of a
-bow-loader boat has weight class Heavy or above. Something like:
+bow-loader boat is tall or heavy. Height-based penalties should
+dominate, with weight as a smaller additional factor:
 
-- Heavy in bow-loader cox: moderate penalty (e.g. −3)
-- Very heavy (Tubby-class rower weight): high penalty (e.g. −8)
-- Light/Medium: no penalty
+- Tall rower in bow-loader cox: −5
+- Very tall: −8
+- Heavy rower: −1
+- Very heavy: −3
+- Short/light: no penalty
 
 This only applies when `boat.cox_position == Bow`. Stern-loader
 cox seats have no size constraint.
