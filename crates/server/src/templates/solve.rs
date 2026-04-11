@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use lineup_db::{
-    boat::types::BoatId,
+    boat::{types::BoatId, Boat},
     practice::Practice,
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
@@ -989,12 +989,11 @@ function swapLineup() {
 
 /// Boat card with clickable seat rows for the swap component.
 fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &DisplayFlags) -> Markup {
-    let seat_count = snapshot
+    let boat = snapshot
         .sweep_boats
         .iter()
-        .find(|b| b.id == lineup.boat_id)
-        .map(|b| b.seat_count)
-        .unwrap_or(0);
+        .find(|b| b.id == lineup.boat_id);
+    let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
     let mut seats = lineup.seats.clone();
     let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
     sort_seats_for_display(&mut seats, cox_at_top);
@@ -1030,7 +1029,9 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
                            class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
                            "@click"={"select('" (key) "')"} {
-                            td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
+                            td class="px-4 py-2 w-12" {
+                                (seat_badge(boat, *seat, &label))
+                            }
                             td class="px-4 py-2 rower-content" {
                                 @if let Some(r) = rower {
                                     div class="font-medium text-slate-800" { (r.name) }
@@ -1237,12 +1238,11 @@ fn boat_card(
     diff: Option<&DiffMap>,
     flags: &DisplayFlags,
 ) -> Markup {
-    let seat_count = snapshot
+    let boat = snapshot
         .sweep_boats
         .iter()
-        .find(|b| b.id == lineup.boat_id)
-        .map(|b| b.seat_count)
-        .unwrap_or(0);
+        .find(|b| b.id == lineup.boat_id);
+    let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
     let mut seats = lineup.seats.clone();
     let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
     sort_seats_for_display(&mut seats, cox_at_top);
@@ -1257,7 +1257,7 @@ fn boat_card(
                 tbody {
                     @for (seat, rower_id) in &seats {
                         @let seat_diff = diff.and_then(|d| d.get(&(lineup.boat_id, *seat)));
-                        (seat_row(snapshot, *seat, *rower_id, seat_diff, flags))
+                        (seat_row(snapshot, boat, *seat, *rower_id, seat_diff, flags))
                     }
                 }
             }
@@ -1267,6 +1267,7 @@ fn boat_card(
 
 fn seat_row(
     snapshot: &DbSnapshot,
+    boat: Option<&Boat>,
     seat: i32,
     rower_id: RowerId,
     diff: Option<&SeatDiff>,
@@ -1286,7 +1287,9 @@ fn seat_row(
     let rower = find_rower(snapshot, rower_id);
     html! {
         tr class=(row_class) {
-            td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
+            td class="px-4 py-2 w-12" {
+                (seat_badge(boat, seat, &label))
+            }
             td class="px-4 py-2" {
                 @if let Some(r) = rower {
                     div class="font-medium text-slate-800" {
@@ -1442,6 +1445,28 @@ fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
             -*s
         }
     });
+}
+
+/// Colored circle badge for a seat label. Port = red, starboard = green,
+/// cox = indigo (neutral). The label text is centered over the circle.
+fn seat_badge(boat: Option<&Boat>, seat: i32, label: &str) -> Markup {
+    let (bg, text_color) = if seat == 0 {
+        ("bg-indigo-100", "text-indigo-700")
+    } else if let Some(b) = boat {
+        use lineup_db::rower::types::Side;
+        match b.seat_side(seat) {
+            Some(Side::Port) => ("bg-red-100", "text-red-700"),
+            Some(Side::Starboard) => ("bg-green-100", "text-green-700"),
+            _ => ("bg-slate-100", "text-slate-500"),
+        }
+    } else {
+        ("bg-slate-100", "text-slate-500")
+    };
+    html! {
+        span class={"inline-flex items-center justify-center w-8 h-8 rounded-full font-mono text-xs font-semibold " (bg) " " (text_color)} {
+            (label)
+        }
+    }
 }
 
 fn find_rower(snapshot: &DbSnapshot, id: RowerId) -> Option<&Rower> {
