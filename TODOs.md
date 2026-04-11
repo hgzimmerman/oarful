@@ -362,6 +362,27 @@ by date range). Lower priority than the write instrumentation —
 the data is valuable even before there's a dedicated UI (queryable
 via SQLite directly).
 
+#### Boat usage tracking from committed lineups
+
+The sibling `boat_tracking` project tracks boat uses for
+depreciation/maintenance purposes. Rather than maintaining a
+separate logging workflow, derive boat usage from committed
+lineups — once a practice date has passed, each committed lineup
+counts as one use of that boat.
+
+**Approach:**
+- Query committed lineups with `practice.date < today`, grouped
+  by `boat_id`, to get a usage count and usage history.
+- Surface on the boat detail page: total uses, last used date,
+  usage over time (simple count, not a chart initially).
+- Salvage any useful schema or logic from `boat_tracking` (lives
+  in the adjacent directory) — particularly maintenance intervals,
+  damage reporting, or depreciation formulas if they exist.
+
+**No new data entry needed** — the lineup commit flow already
+records which boats were used on which dates. This is purely a
+read-side feature built on existing data.
+
 ### Parked
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
