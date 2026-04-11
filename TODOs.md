@@ -130,6 +130,32 @@ invited from the Users page. Need a bulk flow:
   active) so the coach can see who still needs an invite.
 - Use the existing Mailer trait (LogMailer for dev).
 
+#### Self-edit trust levels (tenant config)
+
+Controls what roster members can edit on their own profile.
+Three modes configured per-tenant:
+
+- **Low trust** — members can only see and edit: side preference,
+  designated cox, can scull. All other attributes (weight class,
+  form, strength, height) are visible but read-only. Coach sets
+  them.
+- **Medium trust** — members can see all attributes but only edit
+  the low-trust fields plus height. Weight/form/strength are
+  coach-controlled.
+- **High trust** — members can edit all attributes except `active`
+  (PD-controlled).
+
+Default: low trust (coaches know their team better than
+self-assessments).
+
+Implementation: add `self_edit_level` enum (low/medium/high) to
+the `team` table (not tenant — different teams within a club may
+have different trust levels). The attribute
+edit section conditionally renders fields as editable or
+read-only based on the level + the user's role (Coach+ always
+gets full edit). The profile update handler validates that only
+permitted fields changed.
+
 #### Email visibility tenant config
 
 Some teams want email addresses visible on the roster list and

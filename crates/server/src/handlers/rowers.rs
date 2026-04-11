@@ -92,7 +92,7 @@ pub(crate) async fn edit_attributes_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    require_coach_or_self(&tenant, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
         templates::rowers::attribute_edit_section(&rower, None).into_string(),
@@ -124,7 +124,7 @@ pub(crate) async fn update_handler(
     Path(id): Path<RowerId>,
     Form(input): Form<RowerEditInput>,
 ) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    require_coach_or_self(&tenant, id).await?;
     let mut rower = load(&tenant.db, id).await?;
 
     // Parse string enums into typed values. Any unknown variant gets
@@ -277,6 +277,20 @@ pub(crate) struct RowerDetail {
     pub(crate) seat_affinities: Vec<SeatAffinity>,
     pub(crate) pair_affinities: Vec<PairAffinity>,
     pub(crate) other_rowers: Vec<Rower>,
+}
+
+/// Allow if user is Coach+ or is editing their own rower profile.
+async fn require_coach_or_self(tenant: &TenantContext, rower_id: RowerId) -> Result<(), StatusCode> {
+    if tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach) {
+        return Ok(());
+    }
+    // Check if this rower is linked to the current user.
+    let user_id = tenant.claims.sub;
+    let rower = load(&tenant.db, rower_id).await?;
+    if rower.user_id == Some(user_id) {
+        return Ok(());
+    }
+    Err(StatusCode::FORBIDDEN)
 }
 
 pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {
