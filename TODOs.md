@@ -483,12 +483,14 @@ repo.
 ### Demo mode
 
 Self-service demo for prospective users — try the app without
-signing up for a real account.
+signing up for a real account. The "Try demo" button lives on the
+landing/marketing page (from the onboarding TODO above) so
+prospects can kick the tires before committing to a paid plan.
 
-**Ephemeral tenants.** A "Try demo" button on the login page
-creates a new tenant with a pre-seeded fixture (toy rowers, boats,
-a few practices with availability). The tenant gets a random slug
-and an auto-logged-in session (skip invite/registration flow).
+**Ephemeral tenants.** Clicking "Try demo" creates a new tenant
+with a pre-seeded fixture (toy rowers, boats, a few practices
+with availability). The tenant gets a random slug and an
+auto-logged-in session (skip invite/registration flow).
 
 **Lifecycle.** Ephemeral tenants are tagged with a `demo_expires_at`
 timestamp (e.g. 1 week from creation). A background cleanup job
