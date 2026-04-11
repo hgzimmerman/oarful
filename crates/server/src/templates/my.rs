@@ -1,10 +1,19 @@
 //! Self-service templates for authenticated rowers.
 
-use lineup_db::availability::Availability;
+use chrono::NaiveDate;
+use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
 use super::layout::page_header;
+
+/// A date row for the availability page: a scheduled practice or
+/// a date with existing availability, plus the rower's current
+/// response (if any).
+pub(crate) struct AvailabilityRow {
+    pub(crate) date: NaiveDate,
+    pub(crate) status: Option<AvailabilityStatus>,
+}
 
 // =====================================================================
 // Profile
@@ -105,15 +114,15 @@ fn select_field(name: &str, label: &str, options: &[(&str, bool)]) -> Markup {
 
 pub(crate) fn availability_content(
     rower: &Rower,
-    entries: &[Availability],
+    rows: &[AvailabilityRow],
 ) -> Markup {
     html! {
         (page_header("My availability", Some(&rower.name)))
         div class="px-8 py-6 max-w-3xl space-y-6" {
-            // Existing entries
-            @if entries.is_empty() {
+            // Upcoming practice dates with inline status dropdowns
+            @if rows.is_empty() {
                 div class="text-slate-500 italic" {
-                    "No upcoming availability on file."
+                    "No upcoming practices scheduled."
                 }
             } @else {
                 div class="bg-white rounded-lg shadow overflow-hidden" {
@@ -125,35 +134,32 @@ pub(crate) fn availability_content(
                             }
                         }
                         tbody {
-                            @for entry in entries {
-                                (availability_row(entry))
+                            @for row in rows {
+                                (availability_row(row))
                             }
                         }
                     }
                 }
             }
 
-            // Add / update form
+            // Fallback: add availability for an ad-hoc date
             section class="bg-white rounded-lg shadow p-6" {
-                h2 class="text-lg font-bold text-slate-800 mb-3" { "Set availability" }
+                h2 class="text-lg font-bold text-slate-800 mb-3" { "Other date" }
+                p class="text-sm text-slate-500 mb-3" {
+                    "Set availability for a date not listed above."
+                }
                 form method="post" action="/my/availability"
                      hx-post="/my/availability"
                      hx-target="#content"
                      class="flex items-end space-x-3" {
                     div {
-                        label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Date" }
-                        input id="date" name="date" type="date" required
+                        label for="adhoc-date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Date" }
+                        input id="adhoc-date" name="date" type="date" required
                               class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                     }
                     div {
-                        label for="status" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Status" }
-                        select id="status" name="status"
-                               class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
-                            option value="Yes" { "Yes — available" }
-                            option value="No" { "No — not attending" }
-                            option value="Maybe" { "Maybe — tentative" }
-                            option value="ScullingOnly" { "Sculling only" }
-                        }
+                        label for="adhoc-status" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Status" }
+                        (status_select("adhoc-status", None))
                     }
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
@@ -165,26 +171,43 @@ pub(crate) fn availability_content(
     }
 }
 
-fn availability_row(entry: &Availability) -> Markup {
-    let weekday = entry.date.format("%A").to_string();
-    let badge_class = match entry.status.to_string().as_str() {
-        "Yes" => "bg-emerald-100 text-emerald-800",
-        "No" => "bg-red-100 text-red-800",
-        "Maybe" => "bg-amber-100 text-amber-800",
-        "ScullingOnly" => "bg-blue-100 text-blue-800",
-        _ => "bg-slate-100 text-slate-600",
-    };
+fn availability_row(row: &AvailabilityRow) -> Markup {
+    let weekday = row.date.format("%A").to_string();
     html! {
         tr class="border-t border-slate-100" {
             td class="px-4 py-2" {
-                span class="font-medium text-slate-800" { (entry.date) }
+                span class="font-medium text-slate-800" { (row.date) }
                 span class="text-xs text-slate-500 ml-2" { (weekday) }
             }
             td class="px-4 py-2" {
-                span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
-                    (entry.status)
+                form method="post" action="/my/availability"
+                     hx-post="/my/availability"
+                     hx-target="#content"
+                     class="flex items-center gap-2" {
+                    input type="hidden" name="date" value=(row.date);
+                    (status_select(&format!("status-{}", row.date), row.status))
+                    button type="submit"
+                           class="text-xs text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide" {
+                        "Save"
+                    }
                 }
             }
+        }
+    }
+}
+
+fn status_select(id: &str, current: Option<AvailabilityStatus>) -> Markup {
+    let is = |s: AvailabilityStatus| current == Some(s);
+    html! {
+        select id=(id) name="status"
+               class="border border-slate-300 rounded px-2 py-1 text-sm focus:border-slate-500 focus:outline-none" {
+            @if current.is_none() {
+                option value="" disabled selected { "— no response —" }
+            }
+            option value="Yes" selected[is(AvailabilityStatus::Yes)] { "Yes — available" }
+            option value="No" selected[is(AvailabilityStatus::No)] { "No — not attending" }
+            option value="Maybe" selected[is(AvailabilityStatus::Maybe)] { "Maybe — tentative" }
+            option value="ScullingOnly" selected[is(AvailabilityStatus::ScullingOnly)] { "Sculling only" }
         }
     }
 }

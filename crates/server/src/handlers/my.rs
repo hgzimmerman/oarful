@@ -5,11 +5,14 @@
 //! - `GET /my/availability` — view + edit own availability
 //! - `POST /my/availability` — upsert one (date, status) entry
 
+use std::collections::BTreeMap;
+
 use axum::{http::StatusCode, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::availability::{types::AvailabilityStatus, Availability, NewAvailability};
+use lineup_db::practice::Practice;
 use lineup_db::rower::Rower;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
@@ -140,41 +143,45 @@ pub(crate) async fn availability_handler(
 ) -> Result<Html<String>, StatusCode> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let rower = load_my_rower(&tenant).await?;
+    let rower_id = rower.id;
 
-    let entries = tenant
+    let rows = tenant
         .db
         .with_conn(move |conn| {
-            // Show existing entries + upcoming dates with no response.
             let today = chrono::Utc::now().date_naive();
-            let dates = Availability::upcoming_dates(conn, team_id, today)?;
-            let map = Availability::map_for_team_date(conn, team_id, today)?;
-            // Include dates from the map that are for this rower.
-            let all_avail = dates
-                .into_iter()
-                .map(|date| {
-                    let status = map.get(&rower.id).copied();
-                    // Re-query per date for this specific rower.
-                    let _ = status; // We need per-date, not per-rower.
-                    (date, None::<AvailabilityStatus>)
-                })
-                .collect::<Vec<_>>();
-            // Actually, load all availability for this rower on this team.
-            use lineup_db::schema::availability;
+
+            // Gather all relevant dates: scheduled practices + dates
+            // that already have availability records for anyone.
+            let practice_dates = Practice::list_upcoming(conn, team_id, today)?;
+            let avail_dates = Availability::upcoming_dates(conn, team_id, today)?;
+            let mut all_dates: BTreeMap<NaiveDate, Option<AvailabilityStatus>> = BTreeMap::new();
+            for d in practice_dates.into_iter().chain(avail_dates) {
+                all_dates.entry(d).or_insert(None);
+            }
+
+            // Load this rower's existing responses and overlay.
             use diesel::prelude::*;
-            let rower_avail: Vec<Availability> = availability::table
-                .filter(availability::rower_id.eq(rower.id))
+            use lineup_db::schema::availability;
+            let my_avail: Vec<Availability> = availability::table
+                .filter(availability::rower_id.eq(rower_id))
                 .filter(availability::team_id.eq(team_id))
                 .filter(availability::date.ge(today))
-                .order(availability::date.asc())
                 .select(Availability::as_select())
                 .get_results(conn)?;
-            let _ = all_avail;
-            Ok(rower_avail)
+            for a in &my_avail {
+                all_dates.insert(a.date, Some(a.status));
+            }
+
+            let rows: Vec<templates::my::AvailabilityRow> = all_dates
+                .into_iter()
+                .map(|(date, status)| templates::my::AvailabilityRow { date, status })
+                .collect();
+            Ok(rows)
         })
         .await
         .map_err(internal_error)?;
 
-    let content = templates::my::availability_content(&rower, &entries);
+    let content = templates::my::availability_content(&rower, &rows);
     Ok(super::maybe_page("My availability", content, hx))
 }
 

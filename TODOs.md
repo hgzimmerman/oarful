@@ -69,6 +69,10 @@ can resume without re-deriving context.
 - **Practice scheduling UI** — date picker + "Create" button on
   `/practices`. Coach+ role-gated. Created practices appear in the
   list even before availability is synced.
+- **Practice-driven availability** — `/my/availability` now shows
+  upcoming scheduled practices with inline status dropdowns.
+  Rowers see all practices and can respond per-date without needing
+  the free-form date picker (kept as fallback for ad-hoc dates).
 
 ## Open work
 
@@ -138,38 +142,6 @@ This only applies when `boat.cox_position == Bow`. Stern-loader
 cox seats have no size constraint.
 
 **No UI changes needed** — purely solver-side scoring.
-
-#### Practice-driven availability on `/my/availability`
-
-The self-service availability page (`/my/availability`) currently
-shows a free-form date picker — rowers have to know which dates
-to respond for. When a coach creates a practice via the new
-scheduling UI, rowers have no way to discover it and mark
-attendance.
-
-**Goal:** Close the loop so coach creates practice → rowers see
-it and respond → coach solves lineup.
-
-**UI changes on `/my/availability`:**
-- Show a list of upcoming scheduled practices (from
-  `Practice::list_upcoming`) as rows with a status dropdown each
-  (Yes / No / Maybe / Sculling only).
-- Dates with no response yet show as "No response" with the
-  dropdown defaulting to that.
-- Submitting a dropdown upserts the availability record for that
-  (rower, team, date).
-- Keep the existing free-form date picker as a fallback for
-  ad-hoc dates not tied to a scheduled practice.
-
-**Backend:** The `Availability::upsert` method already exists.
-The main work is in the template: query `Practice::list_upcoming`
-and render a row per date with the rower's current status
-pre-selected (or "No response" if absent).
-
-**Coach/PD view:** Coaches may also want to set availability on
-behalf of rowers (e.g. from a text message). Consider a bulk
-availability editor on the practice detail or solve landing page
-— but that's a separate task.
 
 #### Walk-on rower addition from the solve view
 
