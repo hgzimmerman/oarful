@@ -312,17 +312,10 @@ pub(crate) fn seat_affinities_section(
                         }
                     }
                 }
-                div {
-                    label for="seat_weight" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                    input id="seat_weight" name="weight" type="number" min="-5" max="5" value="3"
-                          class="w-20 border border-slate-300 rounded px-2 py-1 font-mono text-sm";
-                }
+                (weight_slider("seat_weight", 3))
                 button type="submit"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded" {
                     "Add / update"
-                }
-                p class="text-xs text-slate-500 ml-auto self-center" {
-                    "−5..−1 = avoid · +1..+5 = prefer · 0 forbidden"
                 }
             }
         }
@@ -409,11 +402,7 @@ pub(crate) fn pair_affinities_section(
                         }
                     }
                 }
-                div {
-                    label for="pair_weight" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                    input id="pair_weight" name="weight" type="number" min="-5" max="5" value="3"
-                          class="w-20 border border-slate-300 rounded px-2 py-1 font-mono text-sm";
-                }
+                (weight_slider("pair_weight", 3))
                 button type="submit"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded" {
                     "Add / update"
@@ -435,6 +424,58 @@ fn enum_select(name: &str, options: &[(&str, &str, bool)]) -> Markup {
                     option value=(value) { (label) }
                 }
             }
+        }
+    }
+}
+
+/// Range slider for affinity weights (−5..−1, +1..+5). Shows a
+/// descriptive label that updates as the slider moves.
+fn weight_slider(id: &str, default: i32) -> Markup {
+    let label_fn = format!(
+        "function {id}_label(v) {{ \
+            var el = document.getElementById('{id}-label'); \
+            var m = {{ \
+                '-5':'Strongly avoid','-4':'Avoid','-3':'Moderately avoid', \
+                '-2':'Slightly avoid','-1':'Weakly avoid', \
+                '0':'⚠ Forbidden', \
+                '1':'Weakly prefer','2':'Slightly prefer','3':'Moderately prefer', \
+                '4':'Prefer','5':'Strongly prefer' \
+            }}; \
+            var txt = m[String(v)] || v; \
+            if (v === '0' || v === 0) {{ \
+                el.className = 'text-xs font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded'; \
+            }} else {{ \
+                el.className = 'text-xs font-semibold text-slate-700'; \
+            }} \
+            return txt; }}"
+    );
+    let (default_label, default_label_class) = match default {
+        -5 => ("Strongly avoid", "text-xs font-semibold text-slate-700"),
+        -4 => ("Avoid", "text-xs font-semibold text-slate-700"),
+        -3 => ("Moderately avoid", "text-xs font-semibold text-slate-700"),
+        -2 => ("Slightly avoid", "text-xs font-semibold text-slate-700"),
+        -1 => ("Weakly avoid", "text-xs font-semibold text-slate-700"),
+        0 => ("⚠ Forbidden", "text-xs font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded"),
+        1 => ("Weakly prefer", "text-xs font-semibold text-slate-700"),
+        2 => ("Slightly prefer", "text-xs font-semibold text-slate-700"),
+        3 => ("Moderately prefer", "text-xs font-semibold text-slate-700"),
+        4 => ("Prefer", "text-xs font-semibold text-slate-700"),
+        5 => ("Strongly prefer", "text-xs font-semibold text-slate-700"),
+        _ => ("?", "text-xs font-semibold text-slate-700"),
+    };
+    html! {
+        div class="flex-1 min-w-[12rem]" {
+            div class="flex items-center justify-between mb-1" {
+                span class="text-xs text-red-600 font-semibold" { "Avoid" }
+                span #(format!("{id}-label")) class=(default_label_class) {
+                    (default_label)
+                }
+                span class="text-xs text-emerald-600 font-semibold" { "Prefer" }
+            }
+            input id=(id) name="weight" type="range" min="-5" max="5" value=(default)
+                  class="w-full accent-blue-600"
+                  oninput={(format!("document.getElementById('{id}-label').textContent = {id}_label(this.value)"))};
+            script { (maud::PreEscaped(&label_fn)) }
         }
     }
 }
