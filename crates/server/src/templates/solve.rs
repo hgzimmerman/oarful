@@ -474,7 +474,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                 }
 
                 // Solver preset selector
-                div class="mb-4" {
+                div #preset-bar class="mb-4" {
                     div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                         "Solver preset"
                     }
@@ -492,9 +492,12 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             } else {
                                 "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
                             };
+                            @let preset_url = preset_url_with(date, knobs, value);
                             button type="button" class=(btn_class)
                                    title=(tip)
-                                   onclick={"document.getElementById('preset-input').value='" (*value) "'"} {
+                                   hx-get=(preset_url)
+                                   hx-target="#preset-bar"
+                                   hx-swap="outerHTML" {
                                 (label)
                             }
                         }
@@ -506,10 +509,13 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                 "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
                             };
                             @let delete_url = format!("/solver-profile/{}", name);
+                            @let preset_url = preset_url_with(date, knobs, name);
                             span class="relative inline-flex items-center" {
                                 button type="button" class=(btn_class)
                                        title=[description.as_deref()]
-                                       onclick={"document.getElementById('preset-input').value='" (name) "'"} {
+                                       hx-get=(preset_url)
+                                       hx-target="#preset-bar"
+                                       hx-swap="outerHTML" {
                                     (name)
                                 }
                                 button type="button"
@@ -525,7 +531,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             }
                         }
                     }
-                    input #preset-input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
+                    input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
                 }
 
                 // Existing knobs grid
@@ -581,6 +587,101 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     }
                 }
             }
+        }
+    }
+}
+
+/// Build a URL that switches the preset while carrying all other knobs.
+fn preset_url_with(date: NaiveDate, knobs: &SolveKnobs, new_preset: &str) -> String {
+    let mut parts = vec![
+        format!("preset={new_preset}"),
+        format!("partial={}", knobs.partial),
+        format!("novelty={}", knobs.novelty),
+        format!("alts={}", knobs.alts),
+        format!("budget={}", knobs.budget),
+    ];
+    if knobs.similarity > 0 {
+        parts.push(format!("similarity={}", knobs.similarity));
+    }
+    for b in &knobs.based_on {
+        parts.push(format!("based_on={b}"));
+    }
+    for l in &knobs.lock {
+        parts.push(format!("lock={l}"));
+    }
+    for w in &knobs.walkon {
+        parts.push(format!("walkon={w}"));
+    }
+    format!("/solve/{date}/preset-bar?{}", parts.join("&"))
+}
+
+/// Render just the preset bar section for HTMX `outerHTML` swaps.
+/// Called by the `GET /solve/{date}/preset-bar` endpoint.
+pub(crate) fn preset_bar(
+    date: NaiveDate,
+    knobs: &SolveKnobs,
+    custom_profiles: &[(String, Option<String>)],
+) -> Markup {
+    // Re-use the knobs_form rendering but extract just the preset bar.
+    // For now, render the full bar inline.
+    html! {
+        div #preset-bar class="mb-4" {
+            div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                "Solver preset"
+            }
+            div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
+                @let current = &knobs.preset;
+                @for (value, label, tip) in &[
+                    ("balanced", "Balanced", "Even-handed defaults — no emphasis on speed parity or stacking"),
+                    ("even_speed", "Even speed", "Boats matched in speed — talent spread evenly, flexible side placement"),
+                    ("tiered", "Tiered", "Top boat stacked — best rowers in key seats, skill gaps between boats OK"),
+                    ("random", "Random", "No soft preferences — only hard constraints, maximum variety"),
+                ] {
+                    @let is_active = current == value || (current.is_empty() && *value == "balanced");
+                    @let btn_class = if is_active {
+                        "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                    } else {
+                        "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                    };
+                    @let preset_url = preset_url_with(date, knobs, value);
+                    button type="button" class=(btn_class)
+                           title=(tip)
+                           hx-get=(preset_url)
+                           hx-target="#preset-bar"
+                           hx-swap="outerHTML" {
+                        (label)
+                    }
+                }
+                @for (name, description) in custom_profiles {
+                    @let is_active = current == name;
+                    @let btn_class = if is_active {
+                        "px-3 py-1.5 font-semibold bg-violet-700 text-white"
+                    } else {
+                        "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
+                    };
+                    @let delete_url = format!("/solver-profile/{}", name);
+                    @let preset_url = preset_url_with(date, knobs, name);
+                    span class="relative inline-flex items-center" {
+                        button type="button" class=(btn_class)
+                               title=[description.as_deref()]
+                               hx-get=(preset_url)
+                               hx-target="#preset-bar"
+                               hx-swap="outerHTML" {
+                            (name)
+                        }
+                        button type="button"
+                               class="text-xs text-violet-400 hover:text-red-600 ml-0.5 -mr-1"
+                               title="Delete this profile"
+                               hx-delete=(delete_url)
+                               hx-confirm={"Delete profile \"" (name) "\"?"}
+                               hx-swap="none"
+                               onclick={"event.stopPropagation(); setTimeout(()=>location.reload(), 200)"} {
+                            "×"
+                        }
+                    }
+                }
+            }
+            input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
         }
     }
 }

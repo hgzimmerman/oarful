@@ -44,6 +44,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/", get(|| async { Redirect::permanent("/practices") }))
         .route("/practices", get(practices::list_handler).post(practices::create_handler))
         .route("/solve/{date}", get(solve::view_handler))
+        .route("/solve/{date}/preset-bar", get(solve::preset_bar_handler))
         .route("/solver-profile", post(solve::save_profile_handler))
         .route("/solver-profile/{name}", delete(solve::delete_profile_handler))
         .route("/commit/{date}", post(solve::commit_handler))

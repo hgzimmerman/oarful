@@ -301,6 +301,36 @@ async fn build_baselines(
 
 /// Override availability to `No` for any rower IDs listed in
 /// `knobs.no_show`. Mutates the snapshot in place.
+/// `GET /solve/{date}/preset-bar` — HTMX partial returning just the
+/// preset selector bar with updated active state.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn preset_bar_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    Path(date): Path<NaiveDate>,
+    Query(knobs): Query<SolveKnobs>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    let custom_profiles = tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::solver_profile::SolverProfile::list_for_team(conn, team_id)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let profile_names: Vec<(String, Option<String>)> = custom_profiles
+        .iter()
+        .map(|p| (p.name.clone(), p.description.clone()))
+        .collect();
+
+    Ok(Html(
+        templates::solve::preset_bar(date, &knobs, &profile_names).into_string(),
+    ))
+}
+
 fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) -> SolverConfig {
     SolverConfig {
         skill_variance_weight: p.skill_variance_weight,
