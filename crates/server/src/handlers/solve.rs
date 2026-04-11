@@ -272,6 +272,7 @@ fn default_budget() -> u64 {
     DEFAULT_BUDGET_SECS
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn view_handler(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -330,6 +331,7 @@ pub(crate) async fn view_handler(
     ))
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn commit_handler(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -400,6 +402,7 @@ pub(crate) struct DirectCommitInput {
     seat: Vec<String>,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn commit_lineup_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,

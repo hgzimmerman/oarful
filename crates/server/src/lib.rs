@@ -5,12 +5,13 @@
 //! `DESIGN.md` in this crate for the architecture rationale.
 
 use axum::Router;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::services::ServeDir;
 
 pub(crate) mod extract;
 pub(crate) mod handlers;
 pub(crate) mod jwt;
 pub mod mailer;
+pub(crate) mod request_id;
 pub(crate) mod state;
 pub(crate) mod templates;
 pub(crate) mod tenant_cache;
@@ -32,5 +33,5 @@ pub fn build_router(
     let state = AppState::new(master_conn_str, tenant_conn_str, mailer)?;
     Ok(handlers::create_router(state)
         .fallback_service(ServeDir::new(public_dir))
-        .layer(TraceLayer::new_for_http()))
+        .layer(axum::middleware::from_fn(request_id::request_tracing)))
 }

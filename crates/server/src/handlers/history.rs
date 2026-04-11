@@ -16,6 +16,7 @@ use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
@@ -32,6 +33,7 @@ pub(crate) async fn list_handler(
     Ok(super::maybe_page("History", content, hx))
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn detail_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
@@ -68,6 +70,7 @@ pub(crate) struct NotesInput {
     pub(crate) notes: String,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn notes_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,

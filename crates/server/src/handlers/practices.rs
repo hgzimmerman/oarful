@@ -9,6 +9,7 @@ use lineup_db::availability::Availability;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,

@@ -27,6 +27,7 @@ use crate::{state::{AppState, TenantContext}, templates};
 // User list (PD only)
 // =====================================================================
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -65,6 +66,7 @@ pub(crate) struct InviteInput {
     pub(crate) role: String,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn invite_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
@@ -158,6 +160,7 @@ pub(crate) async fn invite_handler(
 // Resend invite (PD only)
 // =====================================================================
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn resend_invite_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
@@ -232,6 +235,7 @@ pub(crate) async fn resend_invite_handler(
 // =====================================================================
 
 /// `GET /invite/{token}` — password-set form.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn accept_page(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -255,6 +259,7 @@ pub(crate) struct AcceptInput {
 }
 
 /// `POST /invite/{token}` — set password + activate.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn accept_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,

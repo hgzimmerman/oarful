@@ -20,6 +20,7 @@ use crate::{handlers::internal_error, state::TenantContext, templates};
 // Profile
 // =====================================================================
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
@@ -30,6 +31,7 @@ pub(crate) async fn profile_handler(
     Ok(super::maybe_page("My profile", content, hx))
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn profile_update_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
@@ -130,6 +132,7 @@ fn parse_profile(input: &ProfileInput) -> Result<ParsedProfile, String> {
 // Availability
 // =====================================================================
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn availability_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
@@ -181,6 +184,7 @@ pub(crate) struct AvailabilityInput {
     pub(crate) status: String,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn availability_update_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,

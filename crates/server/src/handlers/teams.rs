@@ -10,6 +10,7 @@ use crate::{handlers::internal_error, state::TenantContext, templates};
 /// `GET /teams/selector` — returns the team dropdown markup. Called
 /// via `hx-trigger="load"` from the navbar placeholder so the layout
 /// template stays a pure function.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn selector_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,

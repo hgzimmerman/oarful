@@ -38,6 +38,7 @@ pub(crate) struct LoginInput {
 }
 
 /// `POST /login` — verify credentials, issue JWT cookie, redirect.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn login_handler(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -169,6 +170,7 @@ pub(crate) async fn login_handler(
 // =====================================================================
 
 /// `POST /logout` — clear the JWT cookie.
+#[tracing::instrument(level = "debug", skip_all)]
 pub(crate) async fn logout_handler(jar: CookieJar) -> impl IntoResponse {
     let jar = jar.remove(
         axum_extra::extract::cookie::Cookie::build(TOKEN_COOKIE).path("/"),

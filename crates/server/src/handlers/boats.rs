@@ -27,6 +27,7 @@ use lineup_db::app_user::Role;
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
 /// `GET /boats` — full fleet list.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -41,6 +42,7 @@ pub(crate) async fn list_handler(
 }
 
 /// `GET /boats/new` — empty creation form.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn new_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -51,6 +53,7 @@ pub(crate) async fn new_handler(
 }
 
 /// `POST /boats` — create a new boat from the form.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn create_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -91,6 +94,7 @@ pub(crate) async fn create_handler(
 }
 
 /// `GET /boats/{id}` — edit form pre-filled with current values.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn edit_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,
@@ -111,6 +115,7 @@ pub(crate) async fn edit_handler(
 /// `PUT /boats/{id}` — update an existing boat. Also accepts POST as
 /// a fallback for non-JS form submissions (HTML forms don't support
 /// PUT natively).
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn update_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,

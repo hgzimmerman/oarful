@@ -169,6 +169,7 @@ pub(crate) struct TeamSwitchInput {
 
 /// `POST /switch-team` — set the `active_team_id` cookie and redirect
 /// back to the practices dashboard.
+#[tracing::instrument(level = "debug", skip_all)]
 pub(crate) async fn switch_team_handler(
     jar: CookieJar,
     Form(input): Form<TeamSwitchInput>,

@@ -32,6 +32,7 @@ pub(crate) struct SyncFormInput {
     pub(crate) gid: u32,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn form_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -41,6 +42,7 @@ pub(crate) async fn form_handler(
     Ok(super::maybe_page("Sync sheet", content, hx))
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn sync_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,

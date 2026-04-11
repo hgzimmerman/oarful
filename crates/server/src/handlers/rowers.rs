@@ -34,6 +34,7 @@ use lineup_db::app_user::Role;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
@@ -49,6 +50,7 @@ pub(crate) async fn list_handler(
 
 /// Return one canonical static `<tr>` for the given rower. Used by
 /// the Cancel button to undo an in-progress edit.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn row_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -59,6 +61,7 @@ pub(crate) async fn row_handler(
 
 /// Return one editable `<tr>` for the given rower. Triggered by the
 /// Edit button on a static row.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn edit_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -88,6 +91,7 @@ pub(crate) struct RowerEditInput {
     pub(crate) is_designated_cox: Option<String>,
 }
 
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn update_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -211,6 +215,7 @@ async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
 // template module are exposed so handlers can call them directly.
 
 /// `GET /rowers/{id}` — full detail page.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -274,6 +279,7 @@ pub(crate) struct SeatAffinityDelete {
 }
 
 /// `POST /rowers/{id}/seat-affinity` — upsert one (rower, seat) row.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn seat_affinity_upsert_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -305,6 +311,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
 }
 
 /// `POST /rowers/{id}/seat-affinity/delete` — drop one (rower, seat).
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn seat_affinity_delete_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -355,6 +362,7 @@ pub(crate) struct PairAffinityDelete {
 }
 
 /// `POST /rowers/{id}/pair-affinity` — upsert one canonical pair.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn pair_affinity_upsert_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
@@ -379,6 +387,7 @@ pub(crate) async fn pair_affinity_upsert_handler(
 }
 
 /// `POST /rowers/{id}/pair-affinity/delete` — drop one canonical pair.
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn pair_affinity_delete_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
