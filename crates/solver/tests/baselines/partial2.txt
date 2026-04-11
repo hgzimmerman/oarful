@@ -6,11 +6,11 @@ benched: Grace, Ivan
 
 boat 1: Persephone
   cox  Lena
-  s1   Alice
-  s2   Erin
-  s3   Carla
-  s4   Diego
-  s5   Hana
-  s6   Bob
-  s7   Finn
-  s8   Mika
+  s1   Hana
+  s2   Bob
+  s3   Erin
+  s4   Alice
+  s5   Finn
+  s6   Mika
+  s7   Carla
+  s8   Diego

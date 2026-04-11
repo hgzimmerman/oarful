@@ -322,7 +322,7 @@ impl SolverConfig {
             height_balance_weight: 1,
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
-            partial_fill_bonus: 2,
+            partial_fill_bonus: 4,
             non_scull_retention_weight: 2,
             bow_cox_fit_weight: 1,
             top_boat_stacking_weight: 0,
