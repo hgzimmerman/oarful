@@ -64,8 +64,15 @@ pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
-                div class="bg-white rounded-lg shadow overflow-x-auto max-w-6xl" {
-                    table class="w-full text-sm min-w-[640px]" {
+                // Mobile: compact card list
+                div class="md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in rows {
+                        (mobile_row(row))
+                    }
+                }
+                // Desktop: full table
+                div class="hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl" {
+                    table class="w-full text-sm" {
                         thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
                             tr {
                                 th class="px-4 py-2" { "Name" }
@@ -85,6 +92,38 @@ pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Mobile card for one rower — name, side, account status.
+fn mobile_row(row: &RosterRow) -> Markup {
+    let r = &row.rower;
+    html! {
+        a href={"/rowers/" (r.id)}
+          hx-get={"/rowers/" (r.id)}
+          hx-target="#content"
+          hx-push-url="true"
+          class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition" {
+            div {
+                div class="font-medium text-blue-700" { (r.name) }
+                div class="text-xs text-slate-500" { (side_display_label(r)) }
+            }
+            div class="flex items-center gap-2" {
+                @match row.account_status.as_deref() {
+                    Some("active") => {
+                        span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" { "Active" }
+                    }
+                    Some("invited") => {
+                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" { "Invited" }
+                    }
+                    None => {
+                        span class="text-xs text-slate-400" { "No account" }
+                    }
+                    Some(_) => {}
+                }
+                span class="text-slate-400" { "→" }
             }
         }
     }
