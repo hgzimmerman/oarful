@@ -11,7 +11,7 @@ use super::layout::{empty_state, page_header};
 pub(crate) fn no_rower_content(title: &str, message: &str) -> Markup {
     html! {
         (page_header(title, None))
-        div class="px-8 py-6 max-w-3xl" {
+        div class="px-4 sm:px-8 py-6 max-w-3xl" {
             (empty_state(message))
         }
     }
@@ -41,7 +41,7 @@ pub(crate) fn profile_content_with_error(r: &Rower, error: &str) -> Markup {
 fn profile_inner(r: &Rower, error: Option<&str>) -> Markup {
     html! {
         (page_header("My profile", Some(&r.name)))
-        div class="px-8 py-6 max-w-2xl" {
+        div class="px-4 sm:px-8 py-6 max-w-2xl" {
             @if let Some(msg) = error {
                 div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                     (msg)
@@ -129,7 +129,7 @@ pub(crate) fn availability_content(
 ) -> Markup {
     html! {
         (page_header("My availability", Some(&rower.name)))
-        div class="px-8 py-6 max-w-3xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-3xl space-y-6" {
             // Upcoming practice dates with inline status dropdowns
             @if rows.is_empty() {
                 div class="text-slate-500 italic" {

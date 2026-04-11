@@ -60,12 +60,12 @@ pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
     let subtitle = format!("{} active members", rows.len());
     html! {
         (page_header("Roster", Some(&subtitle)))
-        div class="px-8 py-6" {
+        div class="px-4 sm:px-8 py-6" {
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
-                div class="bg-white rounded-lg shadow overflow-hidden max-w-6xl" {
-                    table class="w-full text-sm" {
+                div class="bg-white rounded-lg shadow overflow-x-auto max-w-6xl" {
+                    table class="w-full text-sm min-w-[640px]" {
                         thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
                             tr {
                                 th class="px-4 py-2" { "Name" }
@@ -160,7 +160,7 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
         r.weight_class, r.skill, r.strength, r.side,
     );
     html! {
-        header class="bg-white border-b border-slate-200 px-8 py-6" {
+        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
                 a href="/rowers"
                   hx-get="/rowers"

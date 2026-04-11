@@ -23,6 +23,8 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 script src="https://cdn.tailwindcss.com" {}
                 script src="/htmx.min.js" {}
                 script src="/alpine.min.js" defer {}
+                // Hide x-cloak elements until Alpine initializes
+                style { "[x-cloak] { display: none !important; }" }
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
                 (navbar(role))
@@ -40,40 +42,73 @@ fn navbar(role: Option<Role>) -> Markup {
     let is_pd = r.at_least(Role::ProgramDirector);
 
     html! {
-        nav class="bg-slate-800 text-white px-6 py-3 sticky top-0 z-40 shadow" {
-            ul class="flex items-center space-x-6" {
-                // Team name as the nav title — loaded via HTMX.
-                li class="font-bold text-lg mr-4"
-                   hx-get="/teams/selector"
-                   hx-trigger="load"
-                   hx-swap="innerHTML" {
+        nav class="bg-slate-800 text-white px-4 sm:px-6 py-3 sticky top-0 z-40 shadow"
+             x-data="{ open: false }" {
+            // Top bar: team name + hamburger on mobile, full links on desktop
+            div class="flex items-center justify-between" {
+                // Team name (left)
+                div class="font-bold text-lg"
+                    hx-get="/teams/selector"
+                    hx-trigger="load"
+                    hx-swap="innerHTML" {
                 }
 
-                // Everyone sees practices
-                (nav_link("/practices", "Practices"))
+                // Desktop nav links (hidden on mobile)
+                ul class="hidden md:flex items-center space-x-4" {
+                    (nav_link("/practices", "Practices"))
+                    @if is_coach {
+                        (nav_link("/boats", "Fleet"))
+                        (nav_link("/rowers", "Roster"))
+                        (nav_link("/sync", "Sync"))
+                    }
+                    @if is_pd {
+                        (nav_link("/teams", "Teams"))
+                        (nav_link("/users", "Users"))
+                    }
+                    li class="ml-4" {}
+                    (nav_link("/my/profile", "Profile"))
+                    (nav_link("/my/availability", "Availability"))
+                    li {
+                        form method="post" action="/logout" class="inline" {
+                            button type="submit" class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                                "Logout"
+                            }
+                        }
+                    }
+                }
 
-                // Coach+ sees fleet, roster, sync
+                // Hamburger button (mobile only)
+                button class="md:hidden p-2 rounded hover:bg-white/10"
+                       "@click"="open = !open"
+                       aria-label="Menu" {
+                    // Hamburger icon
+                    div class="w-5 h-0.5 bg-white mb-1" {}
+                    div class="w-5 h-0.5 bg-white mb-1" {}
+                    div class="w-5 h-0.5 bg-white" {}
+                }
+            }
+
+            // Mobile menu (toggles)
+            ul class="md:hidden flex-col space-y-1 pt-3"
+               x-show="open"
+               x-cloak
+               "@click"="open = false" {
+                (nav_link("/practices", "Practices"))
                 @if is_coach {
                     (nav_link("/boats", "Fleet"))
                     (nav_link("/rowers", "Roster"))
                     (nav_link("/sync", "Sync"))
                 }
-
-                // PD only
                 @if is_pd {
                     (nav_link("/teams", "Teams"))
                     (nav_link("/users", "Users"))
                 }
-
-                // Self-service — everyone
-                li class="ml-auto" {}
+                li class="border-t border-slate-700 my-1 pt-1" {}
                 (nav_link("/my/profile", "Profile"))
                 (nav_link("/my/availability", "Availability"))
-
-                // Logout
                 li {
                     form method="post" action="/logout" class="inline" {
-                        button type="submit" class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                        button type="submit" class="block w-full text-left px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
                             "Logout"
                         }
                     }
@@ -106,7 +141,7 @@ pub(crate) fn empty_state(message: &str) -> Markup {
 /// Generic page header: large title + optional subtitle.
 pub(crate) fn page_header(title: &str, subtitle: Option<&str>) -> Markup {
     html! {
-        header class="bg-white border-b border-slate-200 px-8 py-6" {
+        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             h1 class="text-2xl font-bold text-slate-800" { (title) }
             @if let Some(sub) = subtitle {
                 p class="text-sm text-slate-500 mt-1" { (sub) }

@@ -16,7 +16,7 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
     );
 
     html! {
-        header class="bg-white border-b border-slate-200 px-8 py-6" {
+        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center justify-between" {
                 div {
                     h1 class="text-2xl font-bold text-slate-800" { "Fleet" }
@@ -31,7 +31,7 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
                 }
             }
         }
-        div class="px-8 py-6 space-y-6" {
+        div class="px-4 sm:px-8 py-6 space-y-6" {
 
             @if boats.is_empty() {
                 (empty_state("No shells on file."))
@@ -123,7 +123,7 @@ pub(crate) fn form_content(
 
     html! {
         (page_header(title, None))
-        div class="px-8 py-6 max-w-2xl" {
+        div class="px-4 sm:px-8 py-6 max-w-2xl" {
             @if let Some(msg) = error {
                 div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                     strong { "Error. " } (msg)
