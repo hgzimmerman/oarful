@@ -7,6 +7,7 @@
 use axum::Router;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
+pub(crate) mod extract;
 pub(crate) mod handlers;
 pub(crate) mod jwt;
 pub mod mailer;

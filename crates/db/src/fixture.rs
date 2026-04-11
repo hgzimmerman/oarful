@@ -2,6 +2,7 @@
 //! empty database. This is intentionally small — 14 rowers, 3 sweep boats,
 //! one practice date, hand-authored availabilities.
 
+use crate::app_user::{AppUser, NewAppUser, Role};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
 use crate::boat::types::WeightClass as BoatWeightClass;
 use crate::boat::{Boat, NewBoat};
@@ -120,6 +121,27 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             ),
         )?;
     }
+
+    // --- dev user (ProgramDirector, password "12345") ---
+    //
+    // bcrypt at DEFAULT_COST is too slow for a fixture that runs on
+    // every fresh DB. Use cost 4 (the minimum) — this is a dev-only
+    // account, not production security.
+    let hash = bcrypt::hash("12345", 4)
+        .expect("bcrypt hash for fixture user");
+    let user = AppUser::create(
+        conn,
+        NewAppUser {
+            email: "coach@test.com".to_string(),
+            password_hash: Some(hash),
+            name: "Dev Coach".to_string(),
+            status: "active".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    )?;
+    AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
+
     Ok(())
 }
 

@@ -13,10 +13,11 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
-    Form,
 };
 use axum::Extension;
 use axum_extra::extract::{CookieJar, Query};
+
+use crate::extract::HtmlForm;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{
@@ -307,7 +308,7 @@ pub(crate) async fn commit_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(date): Path<NaiveDate>,
-    Form(knobs): Form<SolveKnobs>,
+    HtmlForm(knobs): HtmlForm<SolveKnobs>,
 ) -> Result<impl IntoResponse, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
@@ -376,7 +377,7 @@ pub(crate) async fn commit_lineup_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(date): Path<NaiveDate>,
-    Form(input): Form<DirectCommitInput>,
+    HtmlForm(input): HtmlForm<DirectCommitInput>,
 ) -> Result<impl IntoResponse, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;

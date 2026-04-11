@@ -17,3 +17,4 @@ diesel-derive-newtype.workspace = true
 diesel_migrations.workspace = true
 deadpool-diesel.workspace = true
 libsqlite3-sys.workspace = true
+bcrypt.workspace = true
