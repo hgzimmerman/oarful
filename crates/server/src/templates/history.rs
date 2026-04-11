@@ -70,10 +70,32 @@ pub(crate) fn detail_content(
     committed: &[CommittedLineup],
     force_cox_stern: bool,
 ) -> Markup {
+    // Detect stale rowers: committed but availability is no longer "Yes".
+    let stale_rowers: HashSet<RowerId> = committed
+        .iter()
+        .flat_map(|c| c.seats.iter().map(|s| s.rower_id))
+        .filter(|rid| {
+            !snapshot
+                .availability
+                .get(rid)
+                .map(|s| s.is_available_for_sweep())
+                .unwrap_or(false)
+        })
+        .collect();
+    let has_stale = !stale_rowers.is_empty();
+
     html! {
         (page_header(&format!("History · {date}"), None))
         div class="px-8 py-6 max-w-4xl space-y-4" {
             (notes_section(practice, date))
+
+            @if has_stale {
+                div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
+                    strong { "Availability changed. " }
+                    "One or more rowers in this lineup are no longer available. "
+                    "Highlighted rowers may need to be substituted."
+                }
+            }
 
             @if committed.is_empty() {
                 (empty_state("No lineups committed for this date."))
@@ -86,7 +108,7 @@ pub(crate) fn detail_content(
                     input type="hidden" name="based_on" value=(date);
                     input type="hidden" name="similarity" value="3";
                     @for c in committed {
-                        (lineup_block_with_noshow(snapshot, c, force_cox_stern))
+                        (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers))
                     }
                     div class="mt-4 flex justify-end" {
                         button type="submit"
@@ -152,7 +174,7 @@ fn notes_display_inner(notes: &str, date: NaiveDate) -> Markup {
     }
 }
 
-fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool) -> Markup {
+fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool, stale_rowers: &HashSet<RowerId>) -> Markup {
     let boat = snapshot
         .sweep_boats
         .iter()
@@ -188,14 +210,24 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                         @let rower = snapshot.rowers.iter().find(|r| r.id == seat.rower_id);
                         @let name = rower.map(|r| r.name.as_str()).unwrap_or("<unknown>");
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let row_class = if is_designated_cox {
+                        @let is_stale = stale_rowers.contains(&seat.rower_id);
+                        @let row_class = if is_stale {
+                            "border-b border-slate-100 last:border-0 bg-amber-50 border-l-4 border-l-amber-400"
+                        } else if is_designated_cox {
                             "border-b border-slate-100 last:border-0 border-l-4 border-l-indigo-400"
                         } else {
                             "border-b border-slate-100 last:border-0"
                         };
                         tr class=(row_class) {
                             td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
-                            td class="px-4 py-2 text-slate-800" { (name) }
+                            td class="px-4 py-2 text-slate-800" {
+                                (name)
+                                @if is_stale {
+                                    span class="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                                        "unavailable"
+                                    }
+                                }
+                            }
                             td class="px-4 py-2 text-right w-16" {
                                 label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
                                     input type="checkbox" name="no_show" value=(seat.rower_id)
