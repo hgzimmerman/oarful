@@ -17,11 +17,30 @@ pub(crate) struct PracticeRow {
 pub(crate) fn list_content(rows: &[PracticeRow]) -> Markup {
     html! {
         (page_header("Upcoming practices", Some("Pick a date to review attendance and generate a lineup.")))
-        div class="px-8 py-6" {
+        div class="px-8 py-6 max-w-3xl" {
+            // Add practice form
+            form method="post" action="/practices"
+                 hx-post="/practices"
+                 hx-target="#content"
+                 hx-push-url="true"
+                 class="flex items-end gap-3 mb-6" {
+                div {
+                    label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        "Add practice"
+                    }
+                    input id="date" name="date" type="date"
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                button type="submit"
+                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                    "Create"
+                }
+            }
+
             @if rows.is_empty() {
-                (empty_state("No upcoming availability on file. Sync the spreadsheet to populate this view."))
+                (empty_state("No upcoming availability on file. Sync the spreadsheet or add a practice date above."))
             } @else {
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200 max-w-3xl" {
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
                     @for row in rows {
                         (row_card(row))
                     }

@@ -66,6 +66,9 @@ can resume without re-deriving context.
   to use data attributes instead of innerHTML swap (fixes cross-DOM
   corruption). Added "move to bench" action for pulling rowers out
   of seats. Empty seats render as clickable placeholders.
+- **Practice scheduling UI** — date picker + "Create" button on
+  `/practices`. Coach+ role-gated. Created practices appear in the
+  list even before availability is synced.
 
 ## Open work
 
@@ -163,24 +166,6 @@ this solve session. Options:
 
 The transient approach is simpler and avoids surprise availability
 changes in the spreadsheet sync.
-
-#### Practice scheduling UI
-
-There's no way to create upcoming practices from the web UI. The
-`/practices` page shows dates derived from availability data, but
-coaches can't schedule a new practice date. Need:
-
-- A way to create a practice for a future date (simple date
-  picker + "Create practice" button on `/practices`)
-- Possibly recurring schedule support (e.g. "every Tuesday and
-  Saturday") so coaches don't have to create each date manually
-- Created practices should appear on `/practices` and be available
-  for rowers to set availability against
-
-Currently practices are implicitly created when availability is
-synced from the Google Sheet or when a lineup is committed. An
-explicit scheduling step would let the system drive the
-availability-collection workflow instead of relying on the sheet.
 
 #### Team management UI for Program Directors
 

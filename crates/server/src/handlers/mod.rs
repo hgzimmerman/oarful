@@ -42,7 +42,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
     // Protected routes — require a valid JWT cookie.
     let protected = Router::new()
         .route("/", get(|| async { Redirect::permanent("/practices") }))
-        .route("/practices", get(practices::list_handler))
+        .route("/practices", get(practices::list_handler).post(practices::create_handler))
         .route("/solve/{date}", get(solve::view_handler))
         .route("/commit/{date}", post(solve::commit_handler))
         .route("/commit-lineup/{date}", post(solve::commit_lineup_handler))
