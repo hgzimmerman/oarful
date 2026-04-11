@@ -94,6 +94,16 @@ Requires either storing unplaced rowers at commit time (new table
 or JSON column) or re-deriving them from the snapshot (load
 availability for the date, subtract placed rowers).
 
+#### Disambiguate rower attribute labels in lineup cards
+
+"Intermediate" appears in both skill and strength enums, making
+the compact stats line ambiguous. Rename "Skill" → "Form" in the
+UI (and possibly DB enum) to differentiate. Rename weight class
+"Medium" → "Middleweight" for clarity. Then use abbreviated labels
+in the stats line: e.g. `Mdl · Int · Int · Port` where the
+distinct category names make each value unambiguous. Apply
+consistently on solve view seat rows and bench/sculling chips.
+
 #### Role-gate rower attribute visibility in lineup cards
 
 The compact stats line (weight class, skill, strength, height) on
