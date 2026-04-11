@@ -457,6 +457,11 @@ involve multiple races across a day with shared resources.
   regatta, not per rower globally.
 - Rower table additions: `racing_gender` (nullable enum
   Man/Woman), `pronouns` (nullable text).
+- Team config: `default_racing_gender` (nullable) on the `team`
+  table. When set, pre-fills the racing gender field on new
+  rower creation and the self-service profile form. Simplifies
+  setup for single-gender teams (e.g. a mens team doesn't need
+  every rower to manually select "Man").
 
 **Solver approach:** This is a much harder combinatorial problem
 than practice lineups — it's essentially a resource-constrained
