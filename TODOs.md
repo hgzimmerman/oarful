@@ -160,6 +160,64 @@ prod. Add a `tailwind.config.js` that scans
 `crates/server/src/**/*.rs` for class names, and a build step that
 emits `crates/server/public/tailwind.css`.
 
+### Coach features
+
+#### Solver presets (profiles)
+
+The solve view already exposes `SolverConfig` knobs (partial fill,
+novelty, budget, alts), but tuning 14+ soft-constraint weights by
+hand is impractical. Add **preset profiles** — mutually-exclusive
+radio buttons on the solve form that set all weights in one click.
+
+**Built-in presets** (starting point, needs coach input):
+
+- **Even speed** — high skill-variance weight (S1), high
+  pair-strength balance (S9), low side-preference weight (S4).
+  Goal: boats that are as close to each other in speed as possible.
+  Good when few coaches are on the water and boats need to stay
+  together.
+- **Tiered / coached** — low skill-variance weight, high
+  end-pair-skill (S11) and engine-room-strength (S12) rewards.
+  Goal: concentrate talent into a top boat, let weaker boats be
+  coached independently. Good when each boat has a dedicated coach
+  and they don't need to stay together.
+- **Balanced** — the current defaults. Middle ground.
+
+**Custom profiles.** Let coaches create and save their own named
+weight sets. Stored per-team in a `solver_profile` table with one
+typed column per `SolverConfig` weight (not a JSON blob). All
+columns are `NOT NULL` with no defaults — the application always
+writes every field explicitly. When a new soft constraint is added
+in the future, the migration adds the column and backfills existing
+rows with 0 (disabled), preserving behaviour. Schema:
+
+```
+solver_profile (
+    id INTEGER PRIMARY KEY,
+    team_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    skill_variance_weight INTEGER NOT NULL,
+    pair_affinity_weight INTEGER NOT NULL,
+    ... (one column per SolverConfig field)
+    UNIQUE(team_id, name)
+)
+```
+
+The solve form shows built-in presets + any team-custom ones as
+radio buttons, with a "Custom" option that expands the full knobs
+form.
+
+**UI.** Segmented control (button group) above the existing knobs
+form — a row of styled buttons where the active one is filled and
+the rest are outlined (same semantics as radio buttons, but
+visually cleaner). Selecting a preset collapses the knobs and sets
+hidden fields. Selecting "Custom" expands the full knobs form for
+manual tuning. A "Save as preset" button on the custom view
+persists the current weights.
+
+**Solver side.** No solver changes needed — `SolverConfig` already
+supports all the weights. This is purely UI + storage.
+
 ### Parked
 
 #### #48 — Unsat / timeout diagnostics — solver + UI
