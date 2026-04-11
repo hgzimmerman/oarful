@@ -15,6 +15,7 @@ pub mod practice;
 pub mod rower;
 pub mod schema;
 pub mod seat_affinity;
+pub mod solver_profile;
 pub mod snapshot;
 pub mod state;
 pub mod team;

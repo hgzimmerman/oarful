@@ -195,13 +195,20 @@ impl SolveKnobs {
             } else {
                 PartialFillPolicy::Strict
             },
-            config: SolverConfig::from_preset(&self.preset).unwrap_or_default(),
+            config: self.resolve_config(),
             time_budget: Some(Duration::from_secs(self.budget.max(1))),
             top_n: self.alts.max(1),
             tabu_min_diff: 2,
             reference_lineups,
             locks: self.parse_locks(),
         }
+    }
+
+    /// Resolve the SolverConfig from the preset name. Built-in presets
+    /// are checked first; custom profiles are resolved later in the
+    /// handler (requires DB access).
+    fn resolve_config(&self) -> SolverConfig {
+        SolverConfig::from_preset(&self.preset).unwrap_or_default()
     }
 
     /// Parse `lock` query params into `SeatLock`s.
@@ -286,6 +293,26 @@ async fn build_baselines(
 
 /// Override availability to `No` for any rower IDs listed in
 /// `knobs.no_show`. Mutates the snapshot in place.
+fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) -> SolverConfig {
+    SolverConfig {
+        skill_variance_weight: p.skill_variance_weight,
+        pair_affinity_weight: p.pair_affinity_weight,
+        seat_affinity_weight: p.seat_affinity_weight,
+        side_preference_weight: p.side_preference_weight,
+        weight_class_slack_weight: p.weight_class_slack_weight,
+        cox_cooldown_penalty: p.cox_cooldown_penalty,
+        placement_reward_weight: p.placement_reward_weight,
+        pair_strength_weight: p.pair_strength_weight,
+        bow_pair_strength_weight: p.bow_pair_strength_weight,
+        height_balance_weight: p.height_balance_weight,
+        end_pair_skill_weight: p.end_pair_skill_weight,
+        engine_room_strength_weight: p.engine_room_strength_weight,
+        partial_fill_bonus: p.partial_fill_bonus,
+        non_scull_retention_weight: p.non_scull_retention_weight,
+        bow_cox_fit_weight: p.bow_cox_fit_weight,
+    }
+}
+
 fn apply_no_shows(snapshot: &mut DbSnapshot, knobs: &SolveKnobs) {
     use lineup_db::availability::types::AvailabilityStatus;
     use lineup_db::rower::types::RowerId;
@@ -334,13 +361,31 @@ pub(crate) async fn view_handler(
         .await
         .map_err(internal_error)?;
 
+    // Load custom solver profiles for this team (used by both the
+    // resolver and the template's preset selector).
+    let preset_name = knobs.preset.clone();
+    let custom_profiles = tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::solver_profile::SolverProfile::list_for_team(conn, team_id)
+        })
+        .await
+        .map_err(internal_error)?;
+
     // Only run the solver when explicitly requested via generate=1.
     if knobs.generate > 0 {
         apply_no_shows(&mut snapshot, &knobs);
         let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
 
         let _permit = acquire_solve_permit(&state).await?;
-        let request = knobs.to_request(date, &snapshot, baselines);
+        // Resolve config: check custom profiles first, then built-in presets.
+        let config = custom_profiles
+            .iter()
+            .find(|p| p.name == preset_name)
+            .map(|p| profile_to_config(p))
+            .unwrap_or_else(|| knobs.resolve_config());
+        let mut request = knobs.to_request(date, &snapshot, baselines);
+        request.config = config;
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
         let locked_seats = knobs.parse_locks().into_iter()
@@ -351,9 +396,10 @@ pub(crate) async fn view_handler(
             force_cox_stern: tenant.config.force_cox_stern,
             locked_seats,
         };
+        let profile_names: Vec<String> = custom_profiles.iter().map(|p| p.name.clone()).collect();
         let content = templates::solve::view_content(
             &snapshot, date, &knobs, &result, &committed_practices,
-            &flags,
+            &flags, &profile_names,
         );
         return Ok(super::maybe_page(
             &format!("Generate · {date}"),
@@ -363,8 +409,10 @@ pub(crate) async fn view_handler(
     }
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
+    let profile_names: Vec<String> = custom_profiles.iter().map(|p| p.name.clone()).collect();
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
+        &profile_names,
     );
     Ok(super::maybe_page(
         &format!("Generate · {date}"),
@@ -506,6 +554,66 @@ pub(crate) async fn commit_lineup_handler(
 /// touching tokio's blocking pool — DB queries via deadpool-diesel
 /// are unaffected regardless of how many concurrent solves are
 /// in flight.
+// =====================================================================
+// Save solver profile
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SaveProfileInput {
+    name: String,
+    preset: String,
+}
+
+/// `POST /solver-profile` — save the current preset as a custom profile.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn save_profile_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    axum::Form(input): axum::Form<SaveProfileInput>,
+) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    let name = input.name.trim().to_string();
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Resolve the config from the preset (built-in or default).
+    let config = SolverConfig::from_preset(&input.preset).unwrap_or_default();
+
+    let new_profile = lineup_db::solver_profile::NewSolverProfile {
+        team_id,
+        name,
+        skill_variance_weight: config.skill_variance_weight,
+        pair_affinity_weight: config.pair_affinity_weight,
+        seat_affinity_weight: config.seat_affinity_weight,
+        side_preference_weight: config.side_preference_weight,
+        weight_class_slack_weight: config.weight_class_slack_weight,
+        cox_cooldown_penalty: config.cox_cooldown_penalty,
+        placement_reward_weight: config.placement_reward_weight,
+        pair_strength_weight: config.pair_strength_weight,
+        bow_pair_strength_weight: config.bow_pair_strength_weight,
+        height_balance_weight: config.height_balance_weight,
+        end_pair_skill_weight: config.end_pair_skill_weight,
+        engine_room_strength_weight: config.engine_room_strength_weight,
+        partial_fill_bonus: config.partial_fill_bonus,
+        non_scull_retention_weight: config.non_scull_retention_weight,
+        bow_cox_fit_weight: config.bow_cox_fit_weight,
+    };
+
+    tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::solver_profile::SolverProfile::upsert(conn, new_profile)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Redirect back to the referring page (or practices).
+    Ok(Redirect::to("/practices"))
+}
+
 async fn run_solve(
     state: &AppState,
     snapshot: DbSnapshot,

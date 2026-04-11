@@ -39,6 +39,7 @@ pub(crate) fn landing_content(
     knobs: &SolveKnobs,
     committed_practices: &[Practice],
     has_committed: bool,
+    custom_profiles: &[String],
 ) -> Markup {
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -49,7 +50,7 @@ pub(crate) fn landing_content(
     html! {
         (page_header(&format!("Generate · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
-            (knobs_form(date, knobs, committed_practices, has_committed))
+            (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
             (manual_builder(snapshot, date))
         }
     }
@@ -305,6 +306,7 @@ pub(crate) fn view_content(
     result: &SolveResult,
     committed_practices: &[Practice],
     flags: &DisplayFlags,
+    custom_profiles: &[String],
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -315,7 +317,7 @@ pub(crate) fn view_content(
     html! {
         (page_header(&format!("Generate · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
-            (knobs_form(date, knobs, committed_practices, true))
+            (knobs_form(date, knobs, committed_practices, true, custom_profiles))
             (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
@@ -333,7 +335,7 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[String]) -> Markup {
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{date}");
     html! {
@@ -384,7 +386,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                         "Solver preset"
                     }
-                    div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm" {
+                    div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
                         @let current = &knobs.preset;
                         @for (value, label) in &[
                             ("balanced", "Balanced"),
@@ -401,6 +403,18 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             button type="button" class=(btn_class)
                                    onclick={"document.getElementById('preset-input').value='" (*value) "'"} {
                                 (label)
+                            }
+                        }
+                        @for name in custom_profiles {
+                            @let is_active = current == name;
+                            @let btn_class = if is_active {
+                                "px-3 py-1.5 font-semibold bg-violet-700 text-white"
+                            } else {
+                                "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
+                            };
+                            button type="button" class=(btn_class)
+                                   onclick={"document.getElementById('preset-input').value='" (name) "'"} {
+                                (name)
                             }
                         }
                     }

@@ -147,6 +147,30 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    solver_profile (id) {
+        id -> Integer,
+        team_id -> Integer,
+        name -> Text,
+        skill_variance_weight -> Integer,
+        pair_affinity_weight -> Integer,
+        seat_affinity_weight -> Integer,
+        side_preference_weight -> Integer,
+        weight_class_slack_weight -> Integer,
+        cox_cooldown_penalty -> Integer,
+        placement_reward_weight -> Integer,
+        pair_strength_weight -> Integer,
+        bow_pair_strength_weight -> Integer,
+        height_balance_weight -> Integer,
+        end_pair_skill_weight -> Integer,
+        engine_room_strength_weight -> Integer,
+        partial_fill_bonus -> Integer,
+        non_scull_retention_weight -> Integer,
+        bow_cox_fit_weight -> Integer,
+    }
+}
+
+diesel::joinable!(solver_profile -> team (team_id));
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
 diesel::joinable!(rower -> app_user (user_id));
 diesel::joinable!(user_role -> app_user (user_id));
@@ -177,4 +201,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     app_user,
     user_role,
     user_invite,
+    solver_profile,
 );
