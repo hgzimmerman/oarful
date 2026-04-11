@@ -49,7 +49,12 @@ async fn main() -> Result<()> {
 
     let db_path = std::env::var("DATABASE_URL").unwrap_or_else(|_| "lineup.sql".to_string());
     let db = Db::connect(&db_path)?;
-    db.with_conn(|conn| fixture::seed_if_empty(conn)).await?;
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--fleet-only") {
+        db.with_conn(|conn| fixture::seed_fleet_only(conn)).await?;
+    } else {
+        db.with_conn(|conn| fixture::seed_if_empty(conn)).await?;
+    }
 
     // Resolve team: use the first team in the DB. A real deployment
     // will expose a --team flag or team selector; for the fixture

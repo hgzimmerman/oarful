@@ -27,6 +27,45 @@ pub fn seed_if_empty(conn: &mut SqliteConnection) -> Result<(), diesel::result::
     conn.transaction(|conn| seed_all(conn))
 }
 
+/// Seed only the fleet (boats) + team + coach account, no rowers.
+/// Useful for testing the empty-roster flow. Checks for existing
+/// boats to avoid double-seeding.
+#[tracing::instrument(level = "info", skip(conn), err)]
+pub fn seed_fleet_only(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
+    use crate::schema::boat;
+    let boat_count: i64 = boat::table.count().get_result(conn)?;
+    if boat_count > 0 {
+        tracing::info!("Fleet already seeded, skipping");
+        return Ok(());
+    }
+    conn.transaction(|conn| {
+        tracing::info!("Seeding fleet-only fixture");
+        let now = chrono::Utc::now().naive_utc();
+        let _team = match Team::first(conn)? {
+            Some(t) => t,
+            None => Team::create(conn, NewTeam { name: "Sweep".to_string(), created_at: now })?,
+        };
+        for b in toy_boats() {
+            Boat::insert(conn, b)?;
+        }
+        // Dev coach account
+        let hash = "$2b$04$GM6z8WroCGjpPpOAzMpVwu3WOrWykUBFY40rmEXs.JJemMkBRsUXK";
+        let user = AppUser::create(
+            conn,
+            NewAppUser {
+                email: "coach@test.com".to_string(),
+                password_hash: Some(hash.to_string()),
+                name: "Dev Coach".to_string(),
+                status: "active".to_string(),
+                created_at: now,
+                updated_at: now,
+            },
+        )?;
+        AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
+        Ok(())
+    })
+}
+
 fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     tracing::info!("Seeding toy fixture");
 
