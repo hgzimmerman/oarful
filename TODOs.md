@@ -417,6 +417,11 @@ checks billing status on each request — suspended tenants see a
 Actions or similar). Deployment pipelines (k3s/k8s rollout) live
 in the separate private infra repo.
 
+**Source link.** AGPL requires making source available to network
+users. Add a link to the hosted repo (GitHub/etc.) somewhere in
+the UI — footer, about page, or login page. Blocked on hosting
+the repo publicly.
+
 **Licensing.** AGPL-3.0 LICENSE file and copyright notice shipped.
 The deployment manifests (k3s/k8s YAML, infrastructure-as-code)
 live in a separate private repo.
