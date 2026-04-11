@@ -23,9 +23,36 @@ pub(crate) async fn selector_handler(
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, StatusCode> {
     let active = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let role = tenant.claims.role().unwrap_or(Role::Member);
+    let is_pd = role.at_least(Role::ProgramDirector);
+    let is_coach = role.at_least(Role::Coach);
+
+    let user_id = tenant.claims.sub;
     let teams = tenant
         .db
-        .with_conn(|conn| Team::list_all(conn))
+        .with_conn(move |conn| {
+            if is_pd {
+                // PDs see all teams.
+                Team::list_all(conn)
+            } else if is_coach {
+                // Coaches see teams they're assigned to.
+                let team_ids = lineup_db::team::TeamMembership::team_ids_for_coach(conn, user_id)?;
+                let all = Team::list_all(conn)?;
+                Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+            } else {
+                // Members see teams their rower is in.
+                use lineup_db::rower::Rower;
+                let rower = Rower::find_by_user_id(conn, user_id)?;
+                if let Some(r) = rower {
+                    let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, r.id)?;
+                    let all = Team::list_all(conn)?;
+                    Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+                } else {
+                    // No linked rower — fall back to all (shouldn't normally happen).
+                    Team::list_all(conn)
+                }
+            }
+        })
         .await
         .map_err(internal_error)?;
     Ok(Html(

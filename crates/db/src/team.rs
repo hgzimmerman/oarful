@@ -182,6 +182,30 @@ impl TeamMembership {
         Ok(())
     }
 
+    /// All team IDs a coach (user) is assigned to.
+    pub fn team_ids_for_coach(
+        conn: &mut SqliteConnection,
+        user_id: i32,
+    ) -> Result<Vec<TeamId>, diesel::result::Error> {
+        use crate::schema::team_coach;
+        team_coach::table
+            .filter(team_coach::user_id.eq(user_id))
+            .select(team_coach::team_id)
+            .get_results(conn)
+    }
+
+    /// All team IDs a rower belongs to.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn team_ids_for_rower(
+        conn: &mut SqliteConnection,
+        rower_id: RowerId,
+    ) -> Result<Vec<TeamId>, diesel::result::Error> {
+        team_membership::table
+            .filter(team_membership::rower_id.eq(rower_id))
+            .select(team_membership::team_id)
+            .get_results(conn)
+    }
+
     /// All rower IDs on a team. Used to scope DbSnapshot rower lists.
     #[tracing::instrument(level = "debug", skip(conn), err)]
     pub fn rower_ids_for_team(
