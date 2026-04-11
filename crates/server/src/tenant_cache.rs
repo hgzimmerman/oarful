@@ -11,35 +11,47 @@ use lineup_db::state::Db;
 use lineup_master_db::state::MasterDb;
 use lineup_master_db::tenant::{Tenant, TenantId};
 
+#[derive(Clone)]
+struct CachedTenant {
+    db: Db,
+    attributes_public: bool,
+}
+
 pub(crate) struct TenantCache {
-    dbs: Mutex<HashMap<TenantId, Db>>,
+    tenants: Mutex<HashMap<TenantId, CachedTenant>>,
 }
 
 impl TenantCache {
     pub(crate) fn new() -> Self {
         Self {
-            dbs: Mutex::new(HashMap::new()),
+            tenants: Mutex::new(HashMap::new()),
         }
     }
 
     /// Pre-warm the cache with a known tenant. Called at startup for
     /// the default tenant so its first request doesn't pay the
     /// migration cost.
-    pub(crate) fn insert(&self, tenant_id: TenantId, db: Db) {
-        self.dbs.lock().unwrap().insert(tenant_id, db);
+    pub(crate) fn insert(&self, tenant_id: TenantId, db: Db, attributes_public: bool) {
+        self.tenants.lock().unwrap().insert(
+            tenant_id,
+            CachedTenant {
+                db,
+                attributes_public,
+            },
+        );
     }
 
-    /// Get the Db for a tenant, opening it on first access. Returns
-    /// an error if the tenant doesn't exist in the master DB or the
-    /// SQLite file can't be opened.
+    /// Get the Db and config for a tenant, opening it on first access.
+    /// Returns an error if the tenant doesn't exist in the master DB or
+    /// the SQLite file can't be opened.
     pub(crate) async fn get_or_connect(
         &self,
         tenant_id: TenantId,
         master_db: &MasterDb,
-    ) -> anyhow::Result<Db> {
+    ) -> anyhow::Result<(Db, bool)> {
         // Fast path: already cached.
-        if let Some(db) = self.dbs.lock().unwrap().get(&tenant_id) {
-            return Ok(db.clone());
+        if let Some(cached) = self.tenants.lock().unwrap().get(&tenant_id) {
+            return Ok((cached.db.clone(), cached.attributes_public));
         }
 
         // Slow path: look up the tenant's db_path in the master DB
@@ -55,10 +67,19 @@ impl TenantCache {
             "opening tenant database on first access"
         );
         let db = Db::connect(&tenant.db_path)?;
+        let attributes_public = tenant.are_attributes_public();
 
         // Insert into cache. Another request may have raced us — that's
         // fine, the first writer wins and the second Db gets dropped.
-        self.dbs.lock().unwrap().entry(tenant_id).or_insert(db.clone());
-        Ok(db)
+        let cached = CachedTenant {
+            db: db.clone(),
+            attributes_public,
+        };
+        self.tenants
+            .lock()
+            .unwrap()
+            .entry(tenant_id)
+            .or_insert(cached);
+        Ok((db, attributes_public))
     }
 }

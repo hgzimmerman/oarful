@@ -35,6 +35,23 @@ pub(crate) struct TenantContext {
     pub(crate) db: Db,
     pub(crate) tenant_id: TenantId,
     pub(crate) claims: Claims,
+    /// Whether rower attributes are visible to all members for this
+    /// tenant. When `false` (default), only Coach+ sees the stats line.
+    pub(crate) attributes_public: bool,
+}
+
+impl TenantContext {
+    /// Whether the current user should see rower attributes (weight
+    /// class, skill, strength). True when the tenant is transparent
+    /// or the user is Coach+.
+    pub(crate) fn show_attributes(&self) -> bool {
+        self.attributes_public
+            || self
+                .claims
+                .role()
+                .unwrap_or(lineup_db::app_user::Role::Member)
+                .at_least(lineup_db::app_user::Role::Coach)
+    }
 }
 
 impl AppState {
@@ -49,8 +66,9 @@ impl AppState {
 
         // Pre-warm the cache with the default tenant.
         let default_db = Db::connect(tenant_conn_str)?;
+        let default_tenant = lookup_tenant(master_conn_str, default_tenant_id)?;
         let tenant_cache = Arc::new(TenantCache::new());
-        tenant_cache.insert(default_tenant_id, default_db);
+        tenant_cache.insert(default_tenant_id, default_db, default_tenant.are_attributes_public());
 
         let solve_concurrency = std::env::var("SOLVE_CONCURRENCY")
             .ok()
@@ -91,13 +109,21 @@ impl AppState {
         })
     }
 
-    /// Resolve a tenant's Db from the cache, opening it on first
-    /// access. Used by the auth middleware and public invite routes.
-    pub(crate) async fn tenant_db(&self, tenant_id: TenantId) -> anyhow::Result<Db> {
+    /// Resolve a tenant's Db and config from the cache, opening it on
+    /// first access. Used by the auth middleware and public invite routes.
+    pub(crate) async fn tenant_db(&self, tenant_id: TenantId) -> anyhow::Result<(Db, bool)> {
         self.tenant_cache
             .get_or_connect(tenant_id, &self.master_db)
             .await
     }
+}
+
+fn lookup_tenant(master_conn_str: &str, id: TenantId) -> anyhow::Result<Tenant> {
+    use anyhow::Context;
+    let mut conn = lineup_master_db::connect_sync(master_conn_str)
+        .context("opening master DB for tenant lookup")?;
+    Tenant::get(&mut conn, id)?
+        .ok_or_else(|| anyhow::anyhow!("tenant {id} not found"))
 }
 
 fn ensure_default_tenant(

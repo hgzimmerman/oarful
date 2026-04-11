@@ -48,6 +48,7 @@ pub(crate) fn view_content(
     knobs: &SolveKnobs,
     result: &SolveResult,
     committed_practices: &[Practice],
+    show_attributes: bool,
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -62,10 +63,10 @@ pub(crate) fn view_content(
             (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
-                (primary_panel(snapshot, date, knobs, &result.primary))
+                (primary_panel(snapshot, date, knobs, &result.primary, show_attributes))
 
                 @if !result.alternatives.is_empty() {
-                    (alternatives_panel(snapshot, &result.primary, &result.alternatives))
+                    (alternatives_panel(snapshot, &result.primary, &result.alternatives, show_attributes))
                 }
             }
         }
@@ -260,6 +261,7 @@ fn primary_panel(
     date: NaiveDate,
     _knobs: &SolveKnobs,
     primary: &ProposedSolution,
+    show_attributes: bool,
 ) -> Markup {
     let used: Vec<&ProposedLineup> = primary.lineups.iter().filter(|l| l.used).collect();
     let skipped: Vec<&ProposedLineup> =
@@ -297,7 +299,7 @@ fn primary_panel(
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (swap_boat_card(snapshot, lineup))
+                        (swap_boat_card(snapshot, lineup, show_attributes))
                     }
                 }
             }
@@ -313,7 +315,7 @@ fn primary_panel(
             }
 
             // Bench / sculling swap targets
-            (swap_unplaced_block(snapshot, &primary.unplaced))
+            (swap_unplaced_block(snapshot, &primary.unplaced, show_attributes))
         }
 
         // Alpine swap logic — kept as a separate script block so it's
@@ -371,7 +373,7 @@ function swapLineup() {
 }
 
 /// Boat card with clickable seat rows for the swap component.
-fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
+fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, show_attributes: bool) -> Markup {
     let seat_count = snapshot
         .sweep_boats
         .iter()
@@ -410,9 +412,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
                             td class="px-4 py-2 rower-content" {
                                 @if let Some(r) = rower {
                                     div class="font-medium text-slate-800" { (r.name) }
-                                    div class="text-xs text-slate-500" {
-                                        (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
-                                    }
+                                    (rower_stats_line(r, show_attributes))
                                 } @else {
                                     span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
                                 }
@@ -427,7 +427,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
 }
 
 /// Bench / sculling rowers as clickable swap targets.
-fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Markup {
+fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, show_attributes: bool) -> Markup {
     if unplaced.to_sculling.is_empty() && unplaced.benched.is_empty() {
         return html! {};
     }
@@ -451,9 +451,7 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Mark
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                div class="text-xs text-slate-500" {
-                                    (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
-                                }
+                                (rower_stats_line(r, show_attributes))
                             } @else {
                                 "#" (id)
                             }
@@ -479,9 +477,7 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Mark
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                div class="text-xs text-slate-500" {
-                                    (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
-                                }
+                                (rower_stats_line(r, show_attributes))
                             } @else {
                                 "#" (id)
                             }
@@ -497,6 +493,7 @@ fn alternatives_panel(
     snapshot: &DbSnapshot,
     primary: &ProposedSolution,
     alternatives: &[ProposedSolution],
+    show_attributes: bool,
 ) -> Markup {
     html! {
         section class="bg-white rounded-lg shadow p-6"
@@ -515,7 +512,7 @@ fn alternatives_panel(
 
             div x-show="open" class="mt-4 space-y-6" {
                 @for (idx, alt) in alternatives.iter().enumerate() {
-                    (alternative_block(snapshot, primary, idx + 2, alt))
+                    (alternative_block(snapshot, primary, idx + 2, alt, show_attributes))
                 }
             }
         }
@@ -527,6 +524,7 @@ fn alternative_block(
     primary: &ProposedSolution,
     rank: usize,
     alt: &ProposedSolution,
+    show_attributes: bool,
 ) -> Markup {
     let diff = build_diff(primary, alt);
     let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
@@ -548,7 +546,7 @@ fn alternative_block(
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (boat_card(snapshot, lineup, Some(&diff)))
+                        (boat_card(snapshot, lineup, Some(&diff), show_attributes))
                     }
                 }
             }
@@ -606,6 +604,7 @@ fn boat_card(
     snapshot: &DbSnapshot,
     lineup: &ProposedLineup,
     diff: Option<&DiffMap>,
+    show_attributes: bool,
 ) -> Markup {
     let seat_count = snapshot
         .sweep_boats
@@ -626,7 +625,7 @@ fn boat_card(
                 tbody {
                     @for (seat, rower_id) in &seats {
                         @let seat_diff = diff.and_then(|d| d.get(&(lineup.boat_id, *seat)));
-                        (seat_row(snapshot, *seat, *rower_id, seat_diff))
+                        (seat_row(snapshot, *seat, *rower_id, seat_diff, show_attributes))
                     }
                 }
             }
@@ -639,6 +638,7 @@ fn seat_row(
     seat: i32,
     rower_id: RowerId,
     diff: Option<&SeatDiff>,
+    show_attributes: bool,
 ) -> Markup {
     let label = if seat == 0 {
         "cox".to_string()
@@ -663,9 +663,7 @@ fn seat_row(
                             span class="ml-1 text-xs text-amber-700" { "●" }
                         }
                     }
-                    div class="text-xs text-slate-500" {
-                        (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
-                    }
+                    (rower_stats_line(r, show_attributes))
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
                             div class="text-xs text-amber-700 italic" {
@@ -761,6 +759,28 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     );
     html! {
         td class={"w-2 p-0 " (color)} style=(gradient) { "\u{00a0}" }
+    }
+}
+
+/// Compact stats line for a rower. When `show_attributes` is false,
+/// only shows side preference (non-sensitive); otherwise shows the
+/// full weight class / skill / strength / side breakdown.
+fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
+    if show_attributes {
+        html! {
+            div class="text-xs text-slate-500" {
+                (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
+            }
+        }
+    } else {
+        use lineup_db::rower::types::Side;
+        if r.side != Side::Either {
+            html! {
+                div class="text-xs text-slate-500" { (r.side) }
+            }
+        } else {
+            html! {}
+        }
     }
 }
 

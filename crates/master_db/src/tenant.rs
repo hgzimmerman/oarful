@@ -60,6 +60,9 @@ pub struct Tenant {
     pub slug: String,
     pub db_path: String,
     pub created_at: NaiveDateTime,
+    /// Whether rower attributes (weight class, skill, strength) are
+    /// visible to all members. `0` = Coach+ only (default), `1` = public.
+    pub attributes_public: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -72,6 +75,10 @@ pub struct NewTenant {
 }
 
 impl Tenant {
+    pub fn are_attributes_public(&self) -> bool {
+        self.attributes_public != 0
+    }
+
     pub fn list_all(
         conn: &mut SqliteConnection,
     ) -> Result<Vec<Tenant>, diesel::result::Error> {

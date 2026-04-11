@@ -312,6 +312,7 @@ pub(crate) async fn view_handler(
 
         let content = templates::solve::view_content(
             &snapshot, date, &knobs, &result, &committed_practices,
+            tenant.show_attributes(),
         );
         return Ok(super::maybe_page(
             &format!("Generate · {date}"),

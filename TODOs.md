@@ -36,6 +36,23 @@ can resume without re-deriving context.
   → `require_at_least_role`.
 - **Mailer trait** + `LogMailer` for invite delivery. Resend invite
   button + role column on user list.
+- **Side preference visual indicator** on seat rows (colored bar +
+  opacity scaling with side_strength)
+- **Visual distinction for designated coxswains** (border + "COX"
+  chip on seat rows)
+- **Boats page layout** — "Add boat" button moved inline with header
+- **Fix default stroke side** — new boat form defaults to Port
+- **Show full rower cards for bench/sculling** on solve view (compact
+  stats line on unplaced rower chips)
+- **Lazy solve landing page** — `/solve/{date}` renders knobs first,
+  solver runs on explicit Generate click
+- **Fix self-service nav** — dev user linked to toy rower in fixture
+- **Per-request tracing + handler instrumentation** — TraceLayer
+  middleware with request ID, method, path, user/team ID spans;
+  `#[tracing::instrument]` on handlers
+- **Role-gate rower attribute visibility** — tenant-level
+  `attributes_public` flag (default private); Coach+ always sees
+  full stats, Members see only side preference unless tenant opts in
 
 ## Open work
 
@@ -104,39 +121,6 @@ in the stats line: e.g. `Mdl · Int · Int · Port` where the
 distinct category names make each value unambiguous. Apply
 consistently on solve view seat rows and bench/sculling chips.
 
-#### Role-gate rower attribute visibility in lineup cards
-
-The compact stats line (weight class, skill, strength, height) on
-seat rows is sensitive — members shouldn't see each other's ratings.
-Only coaches and above should see the full stats. Side preference
-(port/starboard/either) is non-sensitive and always visible.
-
-Requires threading the user's role into the template rendering.
-The layout/page already has access to claims via the auth
-middleware; pass `role` (or a `is_coach_plus` bool) through to
-`boat_card` / `seat_row` and conditionally render the stats line.
-
-#### Side preference visual indicator on rower cards
-
-Show a colored bar on the right edge of each rower's seat row
-indicating their side preference. Port = one color (e.g. red),
-starboard = another (e.g. green), `Either` = no bar. The bar's
-opacity or width scales with `side_strength` (0 = invisible,
-5/HARD = fully saturated). This gives coaches an at-a-glance
-read on who's flexible and who's locked to a side.
-
-The model is `side: Side` (Port/Starboard/Either) +
-`side_strength: SideStrength` (0–5, where 5 = hard constraint).
-The visual just maps both fields to color + intensity.
-
-#### Visual distinction for designated coxswains
-
-Designated coxswains should be visually distinct in lineup cards
-so coaches can spot them at a glance. Add a more pronounced border
-or badge (e.g. `border-l-4 border-indigo-500` or a small "COX"
-chip) on the seat row when the rower is `is_designated_cox`. Apply
-on both the solve view lineup cards and the history detail view.
-
 #### Cox position: bow-loader vs stern-loader display order
 
 Coxes in 8s sit behind stroke (seat 8), but coxed 4s can be
@@ -177,42 +161,6 @@ Two issues with the manual swap UI:
    - Empty seats should be visually distinct and clickable as swap
      targets so a benched rower can be placed into them.
 
-#### Show full rower cards for bench/sculling on solve view
-
-The benched and sculling rowers in the swap UI only show names —
-no weight class, skill, strength, or side info. This makes it hard
-to decide who to swap in. Render the same compact stats line
-(`weight · skill · strength · side`) that seated rowers get, either
-as a tooltip or inline on the pill/chip.
-
-#### Practices → solve landing page
-
-Clicking a date on `/practices` navigates directly to `/solve/{date}`
-which immediately runs the solver. This is jarring — the coach
-should land on a pre-solve page where they can review attendance,
-adjust knobs, select baselines, and then explicitly trigger the
-solve. Options:
-
-- A dedicated `/practices/{date}` landing page showing attendance +
-  a "Solve" button that navigates to `/solve/{date}`.
-- Or make `/solve/{date}` lazy — render the knobs form and
-  attendance summary first, only run the solver when the coach
-  clicks "Solve". Currently the view handler runs the solver on
-  every GET.
-
-#### Fix self-service nav for non-rower users
-
-The "My profile" and "My availability" nav links are visible to all
-authenticated users, but return 404 if the user has no linked rower
-record (e.g. a PD who doesn't row). Two fixes:
-
-1. **Nav**: hide profile/availability links when the user has no
-   linked rower. The auth middleware or a nav-builder helper would
-   need to check `Rower::find_by_user_id` and pass a flag to the
-   layout template.
-2. **Fixture**: link the dev user to one of the toy rowers so the
-   self-service pages are testable out of the box.
-
 #### Practice scheduling UI
 
 There's no way to create upcoming practices from the web UI. The
@@ -243,19 +191,6 @@ but there's no CRUD page. Need:
 - Ability to add/remove rowers from a team
 - Role-gated to ProgramDirector+
 
-#### Boats page layout — move "Add boat" button inline with header
-
-The "Add boat" button sits below the page header/subtitle, wasting
-horizontal space. Move it to the right side of the header row
-(same pattern as the solve view's "Re-solve" button or the user
-list's inline invite form).
-
-#### Fix default stroke side on new boat form
-
-The new boat form (`/boats/new`) defaults stroke side to Starboard.
-Most boats are port-rigged (stroke on port). Change the default to
-Port in `BoatFormData::empty()` in `crates/server/src/handlers/boats.rs`.
-
 ### Polish
 
 #### #54 — Print-friendly stylesheet for solve / history views
@@ -274,21 +209,6 @@ it unclickable / uncopyable as a real link.
 Add an `ORIGIN` env var (e.g. `http://localhost:3000`). Store it on
 `AppState`. The invite handler prepends it to produce a full URL
 for both the mailer call and the UI result page display.
-
-#### Per-request tracing and handler instrumentation
-
-Add structured tracing spans per request so logs are correlated.
-
-- **Request-level span**: middleware that creates a span with
-  request ID, method, path, user ID (from JWT), team ID. Use
-  `tower_http::trace::TraceLayer` (already in deps) or a custom
-  middleware.
-- **Handler instrumentation**: `#[tracing::instrument]` on
-  handlers with useful fields (date, rower_id, etc.) so slow
-  handlers or errors are traceable.
-- **Solver timing**: log wall-clock time for each solve call
-  (already partially there via the semaphore logging, but a
-  dedicated span with elapsed would be cleaner).
 
 ### Productionization
 

@@ -5,6 +5,7 @@ diesel::table! {
         slug -> Text,
         db_path -> Text,
         created_at -> Timestamp,
+        attributes_public -> Integer,
     }
 }
 
