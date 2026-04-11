@@ -1,9 +1,16 @@
-//! Team selector and management. Currently just the navbar dropdown;
-//! full team CRUD lands later with the Program Director admin views.
+//! Team selector and management.
 
-use axum::{http::StatusCode, response::Html, Extension};
+use axum::{
+    extract::Path,
+    http::StatusCode,
+    response::Html,
+    Extension, Form,
+};
 use axum_extra::extract::CookieJar;
-use lineup_db::team::Team;
+use axum_htmx::HxRequest;
+use lineup_db::app_user::Role;
+use lineup_db::team::{Team, TeamId};
+use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
@@ -24,4 +31,84 @@ pub(crate) async fn selector_handler(
     Ok(Html(
         templates::teams::selector(&teams, active).into_string(),
     ))
+}
+
+/// `GET /teams` — list all teams (PD only).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn list_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let teams = tenant
+        .db
+        .with_conn(|conn| Team::list_all(conn))
+        .await
+        .map_err(internal_error)?;
+    let content = templates::teams::list_content(&teams);
+    Ok(super::maybe_page_authed("Teams", content, hx, &tenant))
+}
+
+/// `GET /teams/{id}` — team detail + config (PD only).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn detail_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<TeamId>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let team = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let content = templates::teams::detail_content(&team);
+    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct TeamUpdateInput {
+    name: String,
+    self_edit_level: String,
+}
+
+/// `POST /teams/{id}` — update team config (PD only).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn update_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<TeamId>,
+    hx: HxRequest,
+    Form(input): Form<TeamUpdateInput>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let name = input.name.trim().to_string();
+    let level = input.self_edit_level.clone();
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    tenant
+        .db
+        .with_conn(move |conn| {
+            use diesel::prelude::*;
+            use lineup_db::schema::team;
+            diesel::update(team::table.find(id))
+                .set((
+                    team::name.eq(&name),
+                    team::self_edit_level.eq(&level),
+                ))
+                .execute(conn)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Re-load and re-render.
+    let team = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let content = templates::teams::detail_content(&team);
+    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }

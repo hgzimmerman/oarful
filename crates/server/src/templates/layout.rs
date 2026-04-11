@@ -57,6 +57,7 @@ fn navbar(role: Option<Role>) -> Markup {
 
                 // PD only
                 @if is_pd {
+                    (nav_link("/teams", "Teams"))
                     (nav_link("/users", "Users"))
                 }
 
