@@ -162,13 +162,15 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
-                a href="/rowers"
-                  hx-get="/rowers"
-                  hx-target="#content"
-                  hx-push-url="true"
-                  class="text-slate-400 hover:text-slate-700"
-                  title="Back to roster" {
-                    "←"
+                @if perms.can_edit_affinities {
+                    a href="/rowers"
+                      hx-get="/rowers"
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="text-slate-400 hover:text-slate-700"
+                      title="Back to roster" {
+                        "←"
+                    }
                 }
                 h1 class="text-2xl font-bold text-slate-800" { (r.name) }
             }
