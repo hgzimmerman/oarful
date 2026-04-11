@@ -38,6 +38,15 @@ The MVP plus several rounds of follow-ups landed across commits
     refactor to `Extension<TenantContext>`)
   - Phase 5: rower self-service (`/my/profile`, `/my/availability`,
     rower↔user linking, solver role-gated to Coach+)
+- **#48** Pre-solve diagnostics for unsatisfiable lineups
+- **#51** Practice notes editor (textarea on history detail + list
+  preview, `POST /history/{date}/notes`)
+- **Role gating** completed per permission matrix: boats PD+, sync
+  Coach+, rower edits Coach+, notes Coach+. Renamed `require_role`
+  → `require_at_least_role`.
+- **Mailer trait** + `LogMailer` for invite delivery, wired into
+  `invite_handler`. Resend invite button on user list for pending
+  invites. Role column added to user list view.
 
 ## Open work
 
@@ -155,20 +164,11 @@ emits `crates/server/public/tailwind.css`.
 
 #### #48 — Unsat / timeout diagnostics — solver + UI
 
-Two-part fix:
-
-1. **Solver work first.** Today `SolveResult { status: Unsatisfiable,
-   primary: empty, alternatives: empty }` carries no diagnostic
-   detail. Extend the solver to surface *why* a model is infeasible
-   — at minimum which hard constraint(s) contributed. Approaches:
-   - Thread Pumpkin's conflict explanation through `SolveResult`.
-   - Or run a relaxation pass: re-solve with each hard constraint
-     individually disabled, report which removal unblocks.
-   - For `Timeout`: surface best-found-so-far.
-2. **UI component.** Replace the one-liner `status_banner` with a
-   richer error that explains the failure and offers next steps.
-
-Parked because the solver-side work needs a deeper Pumpkin API dive.
+**Pre-solve diagnostics shipped** (2026-04-10): cheap eligibility
+checks (no cox, not enough rowers, unfillable seats, all boats
+unfillable) run before Pumpkin and surface in the UI banner. The
+deeper relaxation-pass / Pumpkin unsat-core work remains parked
+for a future session.
 
 ## Follow-ups not yet tracked as tasks
 
@@ -183,13 +183,33 @@ formal tasks:
 - **Invite URL with tenant slug** — change `/invite/{token}` to
   `/invite/{slug}/{token}` so public invite acceptance resolves the
   correct tenant DB without auth.
-- **Role gating on remaining endpoints** — currently only solver
-  (Coach+) and /users (PD+) are gated. Per the permission matrix,
-  boats/edit should be PD+, sync should be Coach+, rower edits
-  should be Coach+.
 - **Rower self-service guard rails** — coaches can lock specific
   profile fields so members can't change them (deferred from Phase
   5).
+
+### Per-team roles
+
+Currently roles are global per user (`user_role(user_id, role)`).
+Real-world scenario: a Program Director rows on the morning team
+and coaches the afternoon team — same person, same day, different
+role per team.
+
+**Design direction.** Move roles from `user_role` to a
+`team_membership(user_id, team_id, role)` table. The active team
+(from JWT / cookie) determines which role `require_at_least_role`
+checks. This touches:
+
+- Schema: `team_membership` table replaces `user_role`
+- JWT claims: embed the per-team role (or resolve it per-request)
+- `require_at_least_role`: read role from `TenantContext` which
+  already carries the active team
+- Invite flow: invites target a specific team + role
+- Team switching: switching teams also switches the effective role
+- UI: the user list should show role per-team, not globally
+
+Needs more refinement before implementation — the interaction with
+multi-tenancy (team within a tenant vs. team across tenants) and
+the migration path from the current global-role model need thought.
 
 ## Suggested next moves
 
@@ -198,6 +218,4 @@ If picking up from a fresh session:
 1. **#63** seat locks — foundational, unblocks #61.
 2. **#61** no-show handling — lands on top of #63.
 3. **#62** manual swap — independent, "commit first, edit committed".
-4. **#51** practice notes — quick win.
-5. **Remaining role gating** — tighten permissions per the matrix.
-6. Then productionization (#55, #56) and polish (#54).
+4. Then productionization (#55, #56) and polish (#54).
