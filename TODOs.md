@@ -108,6 +108,43 @@ can resume without re-deriving context.
 
 ### Coach features
 
+#### Smart boat pill interactions
+
+Boat pills in the lineup editor have context-dependent behavior
+based on selection state:
+
+**Click an unselected pill (no prior selection):**
+- Adds an empty boat card to the lineup. No rowers moved.
+
+**Click a live (populated) pill (no prior selection):**
+- Unloads the boat — all rowers/cox return to the pool. Card
+  hidden.
+
+**Select a live pill, then click an unselected pill:**
+- Swap/transfer: move rowers from the live boat into the new
+  boat. Seat mapping by position:
+  - Stern pair stays stern, bow pair stays bow, cox stays cox.
+  - If resizing (8→4): middle seats go to bench.
+  - If resizing (4→8): middle seats left empty.
+  - If rigging differs (port↔starboard): swap pairs within
+    their partition so rowers stay on their preferred side.
+  - Original boat is unloaded after transfer.
+
+**Select a live pill, then click another live pill:**
+- Swap all rowers between the two boats (or swap their visual
+  positions). This may need an undo button since it's a large
+  change.
+
+**Edge cases:**
+- Coxed ↔ coxless: cox goes to bench on downgrade, empty cox
+  seat on upgrade.
+- Very different sizes (2→8): only bow pair transfers, rest
+  empty.
+
+Implementation: client-side in Alpine. Boat pills get a
+"selected" state (like rower selection) with a visual indicator.
+Second click resolves the action.
+
 #### Proactive stale lineup notification
 
 When a rower changes availability for a date that has a committed
