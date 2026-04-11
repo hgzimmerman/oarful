@@ -106,6 +106,11 @@ pub(crate) struct SolveKnobs {
     /// Combined with `based_on` + `similarity` for no-show re-solve.
     #[serde(default)]
     pub(crate) no_show: Vec<String>,
+    /// When present and non-zero, triggers the solver. Without this,
+    /// the solve page shows knobs + existing lineups but doesn't run
+    /// the solver — the coach clicks "Generate" to trigger it.
+    #[serde(default)]
+    pub(crate) generate: i32,
 }
 
 impl Default for SolveKnobs {
@@ -118,6 +123,7 @@ impl Default for SolveKnobs {
             based_on: vec![],
             similarity: 0,
             no_show: vec![],
+            generate: 0,
         }
     }
 }
@@ -276,28 +282,49 @@ pub(crate) async fn view_handler(
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (mut snapshot, committed_practices) = tenant
+    let (mut snapshot, committed_practices, has_committed) = tenant
         .db
         .with_conn(move |conn| {
             let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;
             let practices = Practice::list_committed(conn, team_id)?;
-            Ok((snapshot, practices))
+            let has_committed = Practice::find_by_date(conn, team_id, date)?
+                .map(|p| {
+                    use lineup_db::lineup::Lineup;
+                    Lineup::for_practice(conn, p.id)
+                        .map(|l| !l.is_empty())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+            Ok((snapshot, practices, has_committed))
         })
         .await
         .map_err(internal_error)?;
 
-    apply_no_shows(&mut snapshot, &knobs);
-    let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
+    // Only run the solver when explicitly requested via generate=1.
+    if knobs.generate > 0 {
+        apply_no_shows(&mut snapshot, &knobs);
+        let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
 
-    let _permit = acquire_solve_permit(&state).await?;
-    let request = knobs.to_request(date, &snapshot, baselines);
-    let result = run_solve(&state, snapshot.clone(), request).await?;
+        let _permit = acquire_solve_permit(&state).await?;
+        let request = knobs.to_request(date, &snapshot, baselines);
+        let result = run_solve(&state, snapshot.clone(), request).await?;
 
-    let content = templates::solve::view_content(
-        &snapshot, date, &knobs, &result, &committed_practices,
+        let content = templates::solve::view_content(
+            &snapshot, date, &knobs, &result, &committed_practices,
+        );
+        return Ok(super::maybe_page(
+            &format!("Generate · {date}"),
+            content,
+            hx,
+        ));
+    }
+
+    // Landing page: show knobs + "Generate" / "Re-generate" button.
+    let content = templates::solve::landing_content(
+        &snapshot, date, &knobs, &committed_practices, has_committed,
     );
     Ok(super::maybe_page(
-        &format!("Solve · {date}"),
+        &format!("Generate · {date}"),
         content,
         hx,
     ))

@@ -16,7 +16,7 @@ pub(crate) struct PracticeRow {
 
 pub(crate) fn list_content(rows: &[PracticeRow]) -> Markup {
     html! {
-        (page_header("Upcoming practices", Some("Pick a date to generate a lineup.")))
+        (page_header("Upcoming practices", Some("Pick a date to review attendance and generate a lineup.")))
         div class="px-8 py-6" {
             @if rows.is_empty() {
                 (empty_state("No upcoming availability on file. Sync the spreadsheet to populate this view."))

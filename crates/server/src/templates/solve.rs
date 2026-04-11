@@ -19,6 +19,29 @@ use maud::{html, Markup};
 use super::layout::page_header;
 use crate::handlers::solve::SolveKnobs;
 
+/// Landing page before the solver runs. Shows knobs with a
+/// "Generate" button (or "Re-generate" if lineups already exist).
+pub(crate) fn landing_content(
+    snapshot: &DbSnapshot,
+    date: NaiveDate,
+    knobs: &SolveKnobs,
+    committed_practices: &[Practice],
+    has_committed: bool,
+) -> Markup {
+    let available = snapshot.available_rowers().count();
+    let subtitle = format!(
+        "{available} rowers available · {boats} candidate boats",
+        boats = snapshot.sweep_boats.len(),
+    );
+
+    html! {
+        (page_header(&format!("Generate · {date}"), Some(&subtitle)))
+        div class="px-8 py-6 space-y-6 max-w-6xl" {
+            (knobs_form(date, knobs, committed_practices, has_committed))
+        }
+    }
+}
+
 pub(crate) fn view_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
@@ -33,9 +56,9 @@ pub(crate) fn view_content(
     );
 
     html! {
-        (page_header(&format!("Solve · {date}"), Some(&subtitle)))
+        (page_header(&format!("Generate · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
-            (knobs_form(date, knobs, committed_practices))
+            (knobs_form(date, knobs, committed_practices, true))
             (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
@@ -53,7 +76,8 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice]) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool) -> Markup {
+    let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{date}");
     html! {
         section class="bg-white rounded-lg shadow p-6" {
@@ -105,7 +129,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice]) -> Ma
                         "Partial fill",
                         knobs.partial as i64,
                         Some(0),
-                        Some("0 = strict; N = up to N optional seats empty per boat"),
+                        Some("0 = strict; N = empty seats allowed"),
                     ))
                     (knob_input(
                         "novelty",
@@ -128,14 +152,19 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice]) -> Ma
                         Some(1),
                         Some("Per-solve cap; clamped ≥ 1s"),
                     ))
-                    div class="flex items-center space-x-3" {
-                        button type="submit"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
-                            "Re-solve"
+                    input type="hidden" name="generate" value="1";
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
+                        div class="flex items-center space-x-3" {
+                            button type="submit"
+                                   class="whitespace-nowrap bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                                (button_label)
+                            }
+                            span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
+                                "Generating…"
+                            }
                         }
-                        span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
-                            "Solving…"
-                        }
+                        p class="text-xs mt-1 invisible" { "\u{00a0}" }
                     }
                 }
             }
@@ -160,7 +189,7 @@ fn knob_input(
                   min=[min.map(|m| m.to_string())]
                   class="w-full border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
             @if let Some(h) = help {
-                p class="text-xs text-slate-500 mt-1" { (h) }
+                p class="text-xs text-slate-500 mt-1 whitespace-nowrap overflow-hidden text-ellipsis" title=(h) { (h) }
             }
         }
     }
