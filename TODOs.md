@@ -143,6 +143,35 @@ cox seats have no size constraint.
 
 **No UI changes needed** — purely solver-side scoring.
 
+#### Availability reminder emails
+
+Coach action: select one or more upcoming practice dates and send
+a reminder email to all team rowers who haven't responded yet.
+
+**UI.** On `/practices`, checkboxes per date + a "Send reminders"
+button (Coach+ gated). Alternatively, a per-date "Remind" button
+on each practice row. Shows a confirmation with the count of
+recipients before sending.
+
+**Backend.** For each selected date, query rowers on the team who
+have no `availability` row for that `(rower_id, team_id, date)`.
+Join against `rower` to get email addresses. Call the `Mailer`
+trait for each recipient.
+
+**Mailer.** Add a `send_reminder` method to the `Mailer` trait
+(alongside the existing `send_invite`). The `LogMailer` impl
+logs the reminder the same way it logs invites. The method
+signature should take `to_email`, `to_name`, and a list of
+practice dates they haven't responded to.
+
+**Email content.** Something like: "Your coach needs your
+availability for [dates]. Please respond at [link to
+/my/availability]."
+
+No real email provider needed yet — `LogMailer` covers it.
+Swap in a real implementation (e.g. Resend, SES) later via
+the same trait.
+
 #### Walk-on rower addition from the solve view
 
 A rower shows up to practice without having set their availability
