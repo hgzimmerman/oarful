@@ -600,24 +600,48 @@ impl<'a> ModelBuilder<'a> {
     /// under partial fill. For each eligible (rower, boat_0, seat),
     /// pushes `-weight * (skill_ordinal + strength_ordinal)` scaled
     /// by the x variable.
+    /// S16 — boat stacking differentiation. When weight > 0 (tiered),
+    /// rewards placing strong rowers in boat 0 (the top boat). When
+    /// weight < 0 (even speed), rewards placing strong rowers in
+    /// boats 1+ (non-top boats) to spread talent. This formulation
+    /// never penalizes placement vs benching — it only affects which
+    /// boat a rower goes in.
     pub(crate) fn post_s16_top_boat_stacking(&mut self) {
-        if self.cfg.top_boat_stacking_weight == 0 {
+        if self.cfg.top_boat_stacking_weight == 0 || self.boats.len() < 2 {
             return;
         }
-        let b_idx = 0;
-        if b_idx >= self.boats.len() {
-            return;
-        }
-        let boat = self.boats[b_idx];
         let w = self.cfg.top_boat_stacking_weight;
 
-        for seat in 1..=boat.seat_count {
-            for (r_idx, rower) in self.available.iter().enumerate() {
-                if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                    let quality = rower.skill.ordinal() + rower.strength.ordinal();
-                    let coef = -w * quality;
-                    if coef != 0 {
-                        self.obj_terms.push(var.scaled(coef));
+        if w > 0 {
+            // Tiered: reward placing strong rowers in boat 0.
+            let boat = self.boats[0];
+            for seat in 1..=boat.seat_count {
+                for (r_idx, rower) in self.available.iter().enumerate() {
+                    if let Some(&var) = self.x.get(&(r_idx, 0, seat)) {
+                        let quality = rower.skill.ordinal() + rower.strength.ordinal();
+                        let coef = -w * quality;
+                        if coef != 0 {
+                            self.obj_terms.push(var.scaled(coef));
+                        }
+                    }
+                }
+            }
+        } else {
+            // Even speed: reward placing strong rowers in boats 1+
+            // (spreading talent away from the top boat). Use |w| as
+            // the reward magnitude.
+            let aw = -w; // positive
+            for b_idx in 1..self.boats.len() {
+                let boat = self.boats[b_idx];
+                for seat in 1..=boat.seat_count {
+                    for (r_idx, rower) in self.available.iter().enumerate() {
+                        if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
+                            let quality = rower.skill.ordinal() + rower.strength.ordinal();
+                            let coef = -aw * quality;
+                            if coef != 0 {
+                                self.obj_terms.push(var.scaled(coef));
+                            }
+                        }
                     }
                 }
             }
