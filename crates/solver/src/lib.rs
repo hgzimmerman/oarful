@@ -306,8 +306,8 @@ impl SolverConfig {
     pub fn balanced() -> Self {
         Self {
             skill_variance_weight: 1,
-            pair_affinity_weight: 1,
-            seat_affinity_weight: 1,
+            pair_affinity_weight: 3,
+            seat_affinity_weight: 3,
             side_preference_weight: 1,
             weight_class_slack_weight: 1,
             cox_cooldown_penalty: 5,
