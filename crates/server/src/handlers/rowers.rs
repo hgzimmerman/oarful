@@ -17,6 +17,7 @@ use axum::{
     response::Html,
     Extension, Form,
 };
+use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::pair_affinity::PairAffinity;
 use lineup_db::rower::{
@@ -34,16 +35,25 @@ use crate::{handlers::internal_error, state::TenantContext, templates};
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let rowers = tenant
         .db
-        .with_conn(|conn| Rower::list_active(conn))
+        .with_conn(move |conn| {
+            let team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
+            let all_active = Rower::list_active(conn)?;
+            Ok(all_active
+                .into_iter()
+                .filter(|r| team_rower_ids.contains(&r.id))
+                .collect::<Vec<_>>())
+        })
         .await
         .map_err(internal_error)?;
     let content = templates::rowers::list_content(&rowers);
-    Ok(super::maybe_page("Rowers", content, hx))
+    Ok(super::maybe_page("Roster", content, hx))
 }
 
 /// `GET /rowers/{id}/attributes` — read-only attribute section partial.

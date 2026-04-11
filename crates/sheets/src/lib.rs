@@ -262,6 +262,9 @@ fn sync_row(
         }
     };
 
+    // Ensure team membership (idempotent).
+    lineup_db::team::TeamMembership::add(conn, team_id, rower.id)?;
+
     // Upsert per-date availability.
     for (col_idx, date) in date_columns {
         let cell = record.get(*col_idx).unwrap_or("").trim();
