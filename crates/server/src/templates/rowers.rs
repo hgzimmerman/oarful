@@ -113,7 +113,11 @@ fn static_row(row: &RosterRow) -> Markup {
 /// affinity sections are also exposed as standalone partials so the
 /// CRUD handlers can return just the affected `<section>` for HTMX
 /// `outerHTML` swaps.
-pub(crate) fn detail_content(detail: &RowerDetail) -> Markup {
+/// Render the rower detail page. `can_edit_affinities` controls
+/// whether the affinity add/delete forms are shown (Coach+ only).
+/// Attribute editing is always available for the rower's own profile
+/// and for Coach+.
+pub(crate) fn detail_content(detail: &RowerDetail, can_edit_affinities: bool) -> Markup {
     let r = &detail.rower;
     let subtitle = format!(
         "{} · {} · {} · {}",
@@ -136,8 +140,8 @@ pub(crate) fn detail_content(detail: &RowerDetail) -> Markup {
         }
         div class="px-8 py-6 max-w-4xl space-y-6" {
             (attribute_section(r, None))
-            (seat_affinities_section(detail, None))
-            (pair_affinities_section(detail, None))
+            (seat_affinities_section(detail, None, can_edit_affinities))
+            (pair_affinities_section(detail, None, can_edit_affinities))
         }
     }
 }
@@ -277,6 +281,7 @@ fn kv(label: &str, value: &str) -> Markup {
 pub(crate) fn seat_affinities_section(
     detail: &RowerDetail,
     error: Option<&str>,
+    can_edit: bool,
 ) -> Markup {
     let r = &detail.rower;
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
@@ -310,14 +315,16 @@ pub(crate) fn seat_affinities_section(
                             tr class="border-t border-slate-100" {
                                 td class="py-1 font-mono" { "s" (aff.seat_position) }
                                 td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
-                                td class="py-1 text-right" {
-                                    button type="button"
-                                           class="text-xs text-red-600 hover:text-red-800"
-                                           hx-post=(delete_url)
-                                           hx-vals={"{\"seat_position\": " (aff.seat_position) "}"}
-                                           hx-target="#seat-affinities"
-                                           hx-swap="outerHTML" {
-                                        "Delete"
+                                @if can_edit {
+                                    td class="py-1 text-right" {
+                                        button type="button"
+                                               class="text-xs text-red-600 hover:text-red-800"
+                                               hx-post=(delete_url)
+                                               hx-vals={"{\"seat_position\": " (aff.seat_position) "}"}
+                                               hx-target="#seat-affinities"
+                                               hx-swap="outerHTML" {
+                                            "Delete"
+                                        }
                                     }
                                 }
                             }
@@ -326,8 +333,12 @@ pub(crate) fn seat_affinities_section(
                 }
             }
 
-            // Add form: a tiny inline upsert. Submitting an existing
-            // seat overwrites its weight (the db helper is an upsert).
+            @if !can_edit && detail.seat_affinities.is_empty() {
+                div class="text-sm text-slate-500 italic" { "No seat preferences set by your coach." }
+            }
+
+            // Add form — only for coaches
+            @if can_edit {
             form hx-post=(upsert_url)
                  hx-target="#seat-affinities"
                  hx-swap="outerHTML"
@@ -347,6 +358,7 @@ pub(crate) fn seat_affinities_section(
                     "Add / update"
                 }
             }
+            } // @if can_edit
         }
     }
 }
@@ -356,6 +368,7 @@ pub(crate) fn seat_affinities_section(
 pub(crate) fn pair_affinities_section(
     detail: &RowerDetail,
     error: Option<&str>,
+    can_edit: bool,
 ) -> Markup {
     let r = &detail.rower;
     let upsert_url = format!("/rowers/{}/pair-affinity", r.id);
@@ -402,14 +415,16 @@ pub(crate) fn pair_affinities_section(
                             tr class="border-t border-slate-100" {
                                 td class="py-1" { (lookup(partner_id)) }
                                 td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
-                                td class="py-1 text-right" {
-                                    button type="button"
-                                           class="text-xs text-red-600 hover:text-red-800"
-                                           hx-post=(delete_url)
-                                           hx-vals={"{\"partner_id\": " (partner_id) "}"}
-                                           hx-target="#pair-affinities"
-                                           hx-swap="outerHTML" {
-                                        "Delete"
+                                @if can_edit {
+                                    td class="py-1 text-right" {
+                                        button type="button"
+                                               class="text-xs text-red-600 hover:text-red-800"
+                                               hx-post=(delete_url)
+                                               hx-vals={"{\"partner_id\": " (partner_id) "}"}
+                                               hx-target="#pair-affinities"
+                                               hx-swap="outerHTML" {
+                                            "Delete"
+                                        }
                                     }
                                 }
                             }
@@ -418,6 +433,11 @@ pub(crate) fn pair_affinities_section(
                 }
             }
 
+            @if !can_edit && detail.pair_affinities.is_empty() {
+                div class="text-sm text-slate-500 italic" { "No pair affinities set by your coach." }
+            }
+
+            @if can_edit {
             form hx-post=(upsert_url)
                  hx-target="#pair-affinities"
                  hx-swap="outerHTML"
@@ -437,6 +457,7 @@ pub(crate) fn pair_affinities_section(
                     "Add / update"
                 }
             }
+            } // @if can_edit
         }
     }
 }

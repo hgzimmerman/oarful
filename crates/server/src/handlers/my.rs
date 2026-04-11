@@ -17,7 +17,7 @@ use lineup_db::rower::Rower;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::internal_error, handlers::rowers::load_detail, state::TenantContext, templates};
 
 // =====================================================================
 // Profile
@@ -39,7 +39,10 @@ pub(crate) async fn profile_handler(
             return Ok(super::maybe_page("My profile", content, hx));
         }
     };
-    let content = templates::my::profile_content(&rower);
+    // Reuse the rower detail page with affinities read-only.
+    let rower_id = rower.id;
+    let detail = load_detail(&tenant.db, rower_id).await?;
+    let content = templates::rowers::detail_content(&detail, false);
     Ok(super::maybe_page("My profile", content, hx))
 }
 

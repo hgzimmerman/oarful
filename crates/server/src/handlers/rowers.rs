@@ -261,7 +261,7 @@ pub(crate) async fn detail_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(&tenant.db, id).await?;
-    let content = templates::rowers::detail_content(&detail);
+    let content = templates::rowers::detail_content(&detail, true);
     Ok(super::maybe_page(
         &format!("Rower · {}", detail.rower.name),
         content,
@@ -279,7 +279,7 @@ pub(crate) struct RowerDetail {
     pub(crate) other_rowers: Vec<Rower>,
 }
 
-async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {
+pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {
     let maybe = db
         .with_conn(move |conn| {
             let Some(rower) = Rower::get(conn, id)? else {
@@ -372,7 +372,7 @@ async fn seat_section_response(
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(db, id).await?;
     Ok(Html(
-        templates::rowers::seat_affinities_section(&detail, None).into_string(),
+        templates::rowers::seat_affinities_section(&detail, None, true).into_string(),
     ))
 }
 
@@ -383,7 +383,7 @@ async fn seat_section_with_error(
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(db, id).await?;
     Ok(Html(
-        templates::rowers::seat_affinities_section(&detail, Some(msg)).into_string(),
+        templates::rowers::seat_affinities_section(&detail, Some(msg), true).into_string(),
     ))
 }
 
@@ -448,7 +448,7 @@ async fn pair_section_response(
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(db, id).await?;
     Ok(Html(
-        templates::rowers::pair_affinities_section(&detail, None).into_string(),
+        templates::rowers::pair_affinities_section(&detail, None, true).into_string(),
     ))
 }
 
@@ -459,7 +459,7 @@ async fn pair_section_with_error(
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(db, id).await?;
     Ok(Html(
-        templates::rowers::pair_affinities_section(&detail, Some(msg)).into_string(),
+        templates::rowers::pair_affinities_section(&detail, Some(msg), true).into_string(),
     ))
 }
 
