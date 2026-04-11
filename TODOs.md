@@ -242,6 +242,35 @@ but there's no CRUD page. Need:
 
 ### Polish
 
+#### Mobile-responsive pass
+
+In practice, coaches use this on their phone at the boathouse.
+The current layout is desktop-first — multi-column grids, wide
+tables, and inline forms that don't work well on narrow viewports.
+
+**Priority order (by real-world usage):**
+1. **Solve view** — the most critical mobile screen. Boat cards,
+   seat rows, swap interactions, knobs form, and the bench/sculling
+   pool all need to work in a single-column touch-friendly layout.
+2. **History detail** — reviewing committed lineups + marking
+   no-shows on the go.
+3. **Practices list** — picking a date to solve.
+4. **`/my/availability`** — rowers responding from their phone.
+5. **Rower list + detail** — less urgent but still used.
+
+**Approach:**
+- Tailwind responsive utilities (`sm:`, `md:` breakpoints) on
+  existing classes — most of the grid/flex layouts just need
+  single-column fallbacks.
+- Boat cards: stack to full-width on small screens.
+- Knobs form: stack inputs vertically instead of 5-column grid.
+- Tables: consider horizontal scroll or card-based layout for
+  narrow screens.
+- Swap interactions: ensure touch targets are large enough
+  (minimum 44px) and the selection hint is visible without
+  scrolling.
+- Test on 375px width (iPhone SE) as the baseline.
+
 #### #54 — Print-friendly stylesheet for solve / history views
 
 `@media print` rules (or `/print/{date}` route) that hides navbar,
