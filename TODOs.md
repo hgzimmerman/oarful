@@ -446,7 +446,11 @@ involve multiple races across a day with shared resources.
 
 **Data model additions:**
 
-- `regatta` table: name, date, trailer boat list.
+- `regatta` table: name, date, trailer boat list. A regatta
+  can draw rowers from multiple teams within the tenant (e.g.
+  mens + womens teams both attend the same regatta). Model as
+  a many-to-many `regatta_team` join table. The eligible rower
+  pool is the union of all linked teams' rosters.
 - `race` table: regatta_id, category, start_time, boat_class
   (4+, 8, etc.).
 - `race_entry` table: race_id, boat_id, seat assignments.
