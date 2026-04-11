@@ -146,6 +146,7 @@ fn walkon_section(date: NaiveDate, unavailable: &[&Rower], knobs: &SolveKnobs) -
             }
         }
     }
+}
 
 /// Manual lineup builder: boat selector + empty boat cards + rower pool.
 /// The coach can place rowers by hand and either commit directly or
@@ -947,7 +948,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
 
 /// Bench / sculling rowers as clickable swap targets. The bench
 /// container is always rendered so `toBench` can add pills to it.
-fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: DisplayFlags) -> Markup {
+fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: &DisplayFlags) -> Markup {
     html! {
         div class="mt-4 pt-4 border-t border-slate-200 text-sm space-y-2" {
             @if !unplaced.to_sculling.is_empty() {
