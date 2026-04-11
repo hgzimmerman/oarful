@@ -29,7 +29,16 @@ pub(crate) async fn profile_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let rower = load_my_rower(&tenant).await?;
+    let rower = match try_load_my_rower(&tenant).await? {
+        Some(r) => r,
+        None => {
+            let content = templates::my::no_rower_content(
+                "My profile",
+                "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
+            );
+            return Ok(super::maybe_page("My profile", content, hx));
+        }
+    };
     let content = templates::my::profile_content(&rower);
     Ok(super::maybe_page("My profile", content, hx))
 }
@@ -142,7 +151,16 @@ pub(crate) async fn availability_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let rower = load_my_rower(&tenant).await?;
+    let rower = match try_load_my_rower(&tenant).await? {
+        Some(r) => r,
+        None => {
+            let content = templates::my::no_rower_content(
+                "My availability",
+                "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
+            );
+            return Ok(super::maybe_page("My availability", content, hx));
+        }
+    };
     let rower_id = rower.id;
 
     let rows = tenant
@@ -237,6 +255,17 @@ pub(crate) async fn availability_update_handler(
 // =====================================================================
 // Helpers
 // =====================================================================
+
+/// Try to load the rower linked to the authenticated user. Returns
+/// None if the user has no linked rower record.
+async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, StatusCode> {
+    let user_id = tenant.claims.sub;
+    tenant
+        .db
+        .with_conn(move |conn| Rower::find_by_user_id(conn, user_id))
+        .await
+        .map_err(internal_error)
+}
 
 /// Load the rower linked to the authenticated user. Returns 404 if
 /// the user doesn't have a linked rower record.

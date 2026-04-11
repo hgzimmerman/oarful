@@ -5,7 +5,17 @@ use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
-use super::layout::page_header;
+use super::layout::{empty_state, page_header};
+
+/// Shown when the authenticated user has no linked rower record.
+pub(crate) fn no_rower_content(title: &str, message: &str) -> Markup {
+    html! {
+        (page_header(title, None))
+        div class="px-8 py-6 max-w-3xl" {
+            (empty_state(message))
+        }
+    }
+}
 
 /// A date row for the availability page: a scheduled practice or
 /// a date with existing availability, plus the rower's current
