@@ -40,19 +40,35 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let rowers = tenant
+    let rows = tenant
         .db
         .with_conn(move |conn| {
+            use lineup_db::app_user::AppUser;
             let team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
             let all_active = Rower::list_active(conn)?;
-            Ok(all_active
+            let rowers: Vec<Rower> = all_active
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
-                .collect::<Vec<_>>())
+                .collect();
+            let mut rows = Vec::with_capacity(rowers.len());
+            for r in rowers {
+                let account_status = if let Some(uid) = r.user_id {
+                    AppUser::get(conn, lineup_db::app_user::UserId::new(uid))?
+                        .and_then(|u| u.parsed_status())
+                        .map(|s| s.as_str().to_string())
+                } else {
+                    None
+                };
+                rows.push(templates::rowers::RosterRow {
+                    rower: r,
+                    account_status,
+                });
+            }
+            Ok(rows)
         })
         .await
         .map_err(internal_error)?;
-    let content = templates::rowers::list_content(&rowers);
+    let content = templates::rowers::list_content(&rows);
     Ok(super::maybe_page("Roster", content, hx))
 }
 

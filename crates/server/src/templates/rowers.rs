@@ -13,12 +13,19 @@ use maud::{html, Markup};
 use super::layout::{empty_state, page_header};
 use crate::handlers::rowers::RowerDetail;
 
-pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
-    let subtitle = format!("{} active members", rowers.len());
+/// A roster row with the rower data + their account status.
+pub(crate) struct RosterRow {
+    pub(crate) rower: Rower,
+    /// None = no user account, Some("active"), Some("invited"), etc.
+    pub(crate) account_status: Option<String>,
+}
+
+pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
+    let subtitle = format!("{} active members", rows.len());
     html! {
         (page_header("Roster", Some(&subtitle)))
         div class="px-8 py-6" {
-            @if rowers.is_empty() {
+            @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 div class="bg-white rounded-lg shadow overflow-hidden max-w-6xl" {
@@ -32,11 +39,12 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
                                 th class="px-4 py-2" { "Side" }
                                 th class="px-4 py-2" { "Cox" }
                                 th class="px-4 py-2" { "Scull" }
+                                th class="px-4 py-2" { "Account" }
                             }
                         }
                         tbody {
-                            @for r in rowers {
-                                (static_row(r))
+                            @for row in rows {
+                                (static_row(row))
                             }
                         }
                     }
@@ -48,7 +56,8 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
 
 /// Read-only `<tr>` for one rower with a Details link to the full
 /// detail/edit page.
-fn static_row(r: &Rower) -> Markup {
+fn static_row(row: &RosterRow) -> Markup {
+    let r = &row.rower;
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
             td class="px-4 py-2 font-medium" {
@@ -71,6 +80,25 @@ fn static_row(r: &Rower) -> Markup {
             }
             td class="px-4 py-2" {
                 @if r.can_scull.as_bool() { "yes" } @else { "—" }
+            }
+            td class="px-4 py-2" {
+                @match row.account_status.as_deref() {
+                    Some("active") => {
+                        span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" { "Active" }
+                    }
+                    Some("invited") => {
+                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" { "Invited" }
+                    }
+                    Some("disabled") => {
+                        span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full" { "Disabled" }
+                    }
+                    Some(other) => {
+                        span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full" { (other) }
+                    }
+                    None => {
+                        span class="text-xs text-slate-400" { "No account" }
+                    }
+                }
             }
         }
     }
