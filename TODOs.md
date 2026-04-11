@@ -78,6 +78,11 @@ can resume without re-deriving context.
   pool on the landing page. Coach can place rowers by hand, commit
   directly, or click Generate to let the solver fill the rest
   (placements become seat locks automatically).
+- **Walk-on rower addition** — "+ Add walk-on" dropdown on the solve
+  landing page listing unavailable roster members. Selecting one adds
+  a transient availability override (no DB write). Walk-ons appear in
+  the available pool for both manual builder and solver. Carried as
+  `walkon` query params across re-solves.
 - **Stale lineup detection** — history detail cross-references committed
   seats against current availability. Warning banner + amber highlight
   with "unavailable" badge on rowers whose status changed.
@@ -140,34 +145,6 @@ availability for [dates]. Please respond at [link to
 No real email provider needed yet — `LogMailer` covers it.
 Swap in a real implementation (e.g. Resend, SES) later via
 the same trait.
-
-#### Walk-on rower addition from the solve view
-
-A rower shows up to practice without having set their availability
-to "present." The coach needs to include them from the solve/edit
-view without leaving the page. Two paths after adding:
-
-1. **Manual swap** — the walk-on appears in the bench/sculling
-   pool and the coach clicks them into a seat.
-2. **Re-solve with walk-on** — the walk-on is added to the
-   available set, and the solver re-runs with similarity
-   prioritized so existing placements stay stable.
-
-**UI.** A "+ Add rower" button or typeahead on the solve view that
-lists roster members not currently marked available. Selecting one
-either:
-- Adds them to the bench pool (for manual swap), or
-- Toggles a checkbox that includes them in the next re-solve.
-
-**Backend.** Temporarily override the rower's availability for
-this solve session. Options:
-- Patch `DbSnapshot.availability` in the handler before solving
-  (no DB write — transient for this request).
-- Or upsert a real availability record so it persists (cleaner
-  audit trail but more side-effects).
-
-The transient approach is simpler and avoids surprise availability
-changes in the spreadsheet sync.
 
 #### Team management UI for Program Directors
 

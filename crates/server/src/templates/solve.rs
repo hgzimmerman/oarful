@@ -47,14 +47,105 @@ pub(crate) fn landing_content(
         boats = snapshot.sweep_boats.len(),
     );
 
+    // Roster members not currently available (candidates for walk-on).
+    let unavailable: Vec<&Rower> = snapshot
+        .rowers
+        .iter()
+        .filter(|r| r.active.as_bool())
+        .filter(|r| {
+            !snapshot
+                .availability
+                .get(&r.id)
+                .map(|s| s.is_available_for_sweep())
+                .unwrap_or(false)
+        })
+        .collect();
+
     html! {
         (page_header(&format!("Generate · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
+            (walkon_section(date, &unavailable, knobs))
             (manual_builder(snapshot, date))
         }
     }
 }
+
+/// "+ Add walk-on" section: a dropdown of unavailable roster members.
+/// Selecting one adds a `walkon` param and reloads the page so the
+/// rower appears in the available pool.
+fn walkon_section(date: NaiveDate, unavailable: &[&Rower], knobs: &SolveKnobs) -> Markup {
+    if unavailable.is_empty() && knobs.walkon.is_empty() {
+        return html! {};
+    }
+    let action = format!("/solve/{date}");
+    html! {
+        section class="bg-white rounded-lg shadow p-4" {
+            div class="flex items-end gap-3 flex-wrap" {
+                // Already-added walk-ons shown as pills
+                @if !knobs.walkon.is_empty() {
+                    div class="flex flex-wrap gap-1.5 items-center mr-2" {
+                        span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Walk-ons:" }
+                        @for id_str in &knobs.walkon {
+                            span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
+                                @if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
+                                    @if let Some(r) = unavailable.iter().find(|r| r.id == id) {
+                                        (r.name)
+                                    } @else {
+                                        "#" (id_str)
+                                    }
+                                } @else {
+                                    (id_str)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Add walk-on dropdown
+                @if !unavailable.is_empty() {
+                    form method="get" action=(action)
+                         hx-get=(action)
+                         hx-target="#content"
+                         hx-push-url="true"
+                         class="flex items-end gap-2" {
+                        // Carry existing knobs through
+                        input type="hidden" name="partial" value=(knobs.partial);
+                        input type="hidden" name="novelty" value=(knobs.novelty);
+                        input type="hidden" name="alts" value=(knobs.alts);
+                        input type="hidden" name="budget" value=(knobs.budget);
+                        @if !knobs.preset.is_empty() {
+                            input type="hidden" name="preset" value=(&knobs.preset);
+                        }
+                        @for l in &knobs.lock {
+                            input type="hidden" name="lock" value=(l);
+                        }
+                        @for w in &knobs.walkon {
+                            input type="hidden" name="walkon" value=(w);
+                        }
+                        div {
+                            label for="new-walkon" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                                "+ Add walk-on"
+                            }
+                            select id="new-walkon" name="walkon"
+                                   class="border border-slate-300 rounded px-2 py-1.5 text-sm focus:border-slate-500 focus:outline-none" {
+                                @for r in unavailable {
+                                    // Skip rowers already added as walk-ons.
+                                    @if !knobs.walkon.contains(&r.id.as_int().to_string()) {
+                                        option value=(r.id) { (r.name) }
+                                    }
+                                }
+                            }
+                        }
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded shadow transition" {
+                            "Add"
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 /// Manual lineup builder: boat selector + empty boat cards + rower pool.
 /// The coach can place rowers by hand and either commit directly or
@@ -467,9 +558,12 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         Some("Per-solve cap; clamped ≥ 1s"),
                     ))
                     input type="hidden" name="generate" value="1";
-                    // Carry seat locks through re-solves.
+                    // Carry seat locks and walk-ons through re-solves.
                     @for l in &knobs.lock {
                         input type="hidden" name="lock" value=(l);
+                    }
+                    @for w in &knobs.walkon {
+                        input type="hidden" name="walkon" value=(w);
                     }
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }

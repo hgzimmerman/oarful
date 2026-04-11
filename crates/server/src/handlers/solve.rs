@@ -119,6 +119,13 @@ pub(crate) struct SolveKnobs {
     /// Overrides the default SolverConfig when present.
     #[serde(default)]
     pub(crate) preset: String,
+    /// Walk-on rower IDs (as strings — parsed to `RowerId` in
+    /// `apply_walkons`). Rowers who showed up without having set
+    /// availability. Their availability is transiently overridden to
+    /// "Yes" for this solve session (no DB write). Deserialized from
+    /// repeated `walkon=<rower_id>` query params.
+    #[serde(default)]
+    pub(crate) walkon: Vec<String>,
 }
 
 impl Default for SolveKnobs {
@@ -134,6 +141,7 @@ impl Default for SolveKnobs {
             generate: 0,
             lock: vec![],
             preset: String::new(),
+            walkon: vec![],
         }
     }
 }
@@ -324,6 +332,19 @@ fn apply_no_shows(snapshot: &mut DbSnapshot, knobs: &SolveKnobs) {
     }
 }
 
+/// Override walk-on rowers' availability to "Yes" so the solver
+/// includes them. Transient — no DB write.
+fn apply_walkons(snapshot: &mut DbSnapshot, knobs: &SolveKnobs) {
+    use lineup_db::availability::types::AvailabilityStatus;
+    use lineup_db::rower::types::RowerId;
+
+    for id_str in &knobs.walkon {
+        if let Ok(id) = id_str.parse::<RowerId>() {
+            snapshot.availability.insert(id, AvailabilityStatus::Yes);
+        }
+    }
+}
+
 fn default_alts() -> usize {
     DEFAULT_ALTS
 }
@@ -360,6 +381,9 @@ pub(crate) async fn view_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    // Apply walk-on overrides before anything reads availability.
+    apply_walkons(&mut snapshot, &knobs);
 
     // Load custom solver profiles for this team (used by both the
     // resolver and the template's preset selector).
