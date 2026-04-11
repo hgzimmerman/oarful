@@ -351,6 +351,7 @@ impl SolverConfig {
             engine_room_strength_weight: 3,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
+            placement_reward_weight: 3,
             ..Self::balanced()
         }
     }
