@@ -355,16 +355,16 @@ impl SolverConfig {
         }
     }
 
-    /// **Random** — no soft constraints at all. The solver only
-    /// enforces hard requirements (side eligibility, cox, weight-class
-    /// walls, seat locks). Placement is essentially arbitrary among
-    /// feasible solutions, giving maximum variety.
+    /// **Random** — most soft constraints off. The solver only
+    /// enforces hard requirements plus side preferences (without
+    /// side respect, lineups are unusable). Placement is otherwise
+    /// arbitrary, giving maximum variety.
     pub fn random() -> Self {
         Self {
             skill_variance_weight: 0,
             pair_affinity_weight: 0,
             seat_affinity_weight: 0,
-            side_preference_weight: 0,
+            side_preference_weight: 1, // keep — wrong-side lineups are unusable
             weight_class_slack_weight: 0,
             cox_cooldown_penalty: 0,
             placement_reward_weight: 1, // keep this so the solver fields boats
