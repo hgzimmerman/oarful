@@ -1493,7 +1493,7 @@ fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
 
 /// Human-readable seat label: "cox", "bow" (seat 1), "str" (stroke
 /// seat = seat_count), or "s{n}" for everything in between.
-fn seat_label(seat: i32, seat_count: i32) -> String {
+pub(crate) fn seat_label(seat: i32, seat_count: i32) -> String {
     if seat == 0 {
         "cox".to_string()
     } else if seat == 1 {
@@ -1507,7 +1507,7 @@ fn seat_label(seat: i32, seat_count: i32) -> String {
 
 /// Colored circle badge for a seat label. Port = red, starboard = green,
 /// cox = indigo (neutral). The label text is centered over the circle.
-fn seat_badge(boat: Option<&Boat>, seat: i32, label: &str) -> Markup {
+pub(crate) fn seat_badge(boat: Option<&Boat>, seat: i32, label: &str) -> Markup {
     let (bg, text_color) = if seat == 0 {
         ("bg-indigo-100", "text-indigo-700")
     } else if let Some(b) = boat {

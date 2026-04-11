@@ -12,7 +12,7 @@ use lineup_db::{
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
-use super::solve::side_indicator;
+use super::solve::{seat_badge, seat_label, side_indicator};
 
 pub(crate) fn list_content(practices: &[Practice]) -> Markup {
     html! {
@@ -201,12 +201,9 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
             }
             table class="w-full text-sm" {
                 tbody {
+                    @let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
                     @for seat in &seats {
-                        @let label = if seat.seat_position == 0 {
-                            "cox".to_string()
-                        } else {
-                            format!("s{}", seat.seat_position)
-                        };
+                        @let label = seat_label(seat.seat_position, seat_count);
                         @let rower = snapshot.rowers.iter().find(|r| r.id == seat.rower_id);
                         @let name = rower.map(|r| r.name.as_str()).unwrap_or("<unknown>");
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
@@ -219,7 +216,9 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                             "border-b border-slate-100 last:border-0"
                         };
                         tr class=(row_class) {
-                            td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
+                            td class="px-4 py-2 w-12" {
+                                (seat_badge(boat, seat.seat_position, &label))
+                            }
                             td class="px-4 py-2 text-slate-800" {
                                 (name)
                                 @if is_stale {
