@@ -142,31 +142,6 @@ pub(crate) fn availability_content(
                 }
             }
 
-            // Fallback: add availability for an ad-hoc date
-            section class="bg-white rounded-lg shadow p-6" {
-                h2 class="text-lg font-bold text-slate-800 mb-3" { "Other date" }
-                p class="text-sm text-slate-500 mb-3" {
-                    "Set availability for a date not listed above."
-                }
-                form method="post" action="/my/availability"
-                     hx-post="/my/availability"
-                     hx-target="#content"
-                     class="flex items-end space-x-3" {
-                    div {
-                        label for="adhoc-date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Date" }
-                        input id="adhoc-date" name="date" type="date" required
-                              class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
-                    }
-                    div {
-                        label for="adhoc-status" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Status" }
-                        (status_select("adhoc-status", None))
-                    }
-                    button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
-                        "Save"
-                    }
-                }
-            }
         }
     }
 }
