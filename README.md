@@ -13,7 +13,8 @@ constraints via a Pumpkin CP solver.
 cargo run -p lineup_cli -- solve 2026-04-11
 
 # 2. Start the server (creates master.db for tenant registry)
-cargo run -p lineup_server
+#    Set JWT_SECRET so tokens survive restarts (avoids re-login).
+JWT_SECRET=dev cargo run -p lineup_server
 ```
 
 Open `http://127.0.0.1:3000` and log in:
