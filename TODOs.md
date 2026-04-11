@@ -69,6 +69,10 @@ can resume without re-deriving context.
 - **Practice scheduling UI** — date picker + "Create" button on
   `/practices`. Coach+ role-gated. Created practices appear in the
   list even before availability is synced.
+- **Bow-loader cox fit penalty (S14)** — penalises tall/heavy rowers
+  in bow-loader cox seats. Height: Tall −5, VeryTall −8. Weight:
+  Heavy −1. Stern-loaders unaffected. Configurable via
+  `bow_cox_fit_weight` in SolverConfig.
 - **Disambiguate rower attribute labels** — "Skill" renamed to "Form"
   in UI labels. Weight class shows Lightweight/Middleweight/Heavyweight.
   Compact stats line uses abbreviated labels (Lt/Md/Hv · Nov/Int/Mst/Exp
@@ -113,29 +117,6 @@ backfill new columns with 0. "Save as preset" button persists
 current weights.
 
 No solver changes needed — purely UI + storage.
-
-#### Bow-loader cox fit penalty
-
-Bow-loader coxed boats (4+s with `cox_position = Bow`) have a
-tight bow compartment. Tall rowers are the primary problem —
-height is the main constraint on fitting in the space. Weight
-matters somewhat too but is secondary.
-
-**Solver work.** In the objective function, add a penalty term
-when a rower assigned to the cox seat (position 0) of a
-bow-loader boat is tall or heavy. Height-based penalties should
-dominate, with weight as a smaller additional factor:
-
-- Tall rower in bow-loader cox: −5
-- Very tall: −8
-- Heavy rower: −1
-- Very heavy: −3
-- Short/light: no penalty
-
-This only applies when `boat.cox_position == Bow`. Stern-loader
-cox seats have no size constraint.
-
-**No UI changes needed** — purely solver-side scoring.
 
 #### Availability reminder emails
 

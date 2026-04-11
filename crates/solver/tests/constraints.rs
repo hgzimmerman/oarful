@@ -185,6 +185,7 @@ fn silent_config() -> SolverConfig {
         // can_scull flags into their assertions; the retention
         // test opts it back in explicitly.
         non_scull_retention_weight: 0,
+        bow_cox_fit_weight: 0,
     }
 }
 

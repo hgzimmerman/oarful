@@ -277,6 +277,13 @@ pub struct SolverConfig {
     /// (side, skill, weight-class) that might make placing a
     /// specific sweep-only rower uneconomical.
     pub non_scull_retention_weight: i32,
+    /// S14 bow-loader cox fit penalty. Penalises tall and heavy
+    /// rowers in the cox seat of bow-loader boats, where the
+    /// compartment is tight. Height is the primary factor; weight
+    /// is secondary. Penalties are applied per-rower based on
+    /// their height and weight ordinals. Default **1** (use the
+    /// penalty table as-is).
+    pub bow_cox_fit_weight: i32,
 }
 
 impl Default for SolverConfig {
@@ -296,6 +303,7 @@ impl Default for SolverConfig {
             engine_room_strength_weight: 1,
             partial_fill_bonus: 1,
             non_scull_retention_weight: 2,
+            bow_cox_fit_weight: 1,
         }
     }
 }
@@ -675,6 +683,7 @@ fn build_model<'a>(
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s13_non_scull_retention()?;
+    m.post_s14_bow_cox_fit()?;
     m.post_reference_similarity(&request.reference_lineups)?;
 
     // Hard constraints: H1 seat fill + partial-fill cap, H2

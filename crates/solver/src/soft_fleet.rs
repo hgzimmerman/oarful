@@ -328,4 +328,55 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
+    /// S14 — bow-loader cox fit penalty. Penalises tall and heavy
+    /// rowers in the cox seat (position 0) of bow-loader boats.
+    /// Height is the primary factor; weight is secondary.
+    ///
+    /// Penalty table (multiplied by `bow_cox_fit_weight`):
+    /// - Tall: 5, Very tall: 8
+    /// - Heavy: 1, (very heavy rowers don't exist in the current
+    ///   `RowerWeightClass` enum, but if added: 3)
+    ///
+    /// Only applies when `boat.cox_position == CoxPosition::Bow`.
+    /// Stern-loader cox seats have no size constraint.
+    pub(crate) fn post_s14_bow_cox_fit(&mut self) -> Result<()> {
+        use lineup_db::boat::types::CoxPosition;
+        use lineup_db::rower::types::Height;
+
+        if self.cfg.bow_cox_fit_weight == 0 {
+            return Ok(());
+        }
+        let w = self.cfg.bow_cox_fit_weight;
+
+        for (b_idx, boat) in self.boats.iter().enumerate() {
+            if !boat.has_cox.as_bool() || boat.cox_position != CoxPosition::Bow {
+                continue;
+            }
+            for (r_idx, rower) in self.available.iter().enumerate() {
+                let Some(&var) = self.x.get(&(r_idx, b_idx, 0)) else {
+                    continue;
+                };
+
+                let height_penalty = match rower.height {
+                    Height::Tall => 5,
+                    Height::VeryTall => 8,
+                    _ => 0,
+                };
+                let weight_penalty = match rower.weight_class.ordinal() {
+                    3 => 1, // Heavy
+                    _ => 0,
+                };
+                let total = height_penalty + weight_penalty;
+                if total == 0 {
+                    continue;
+                }
+                let scaled = total * w;
+                if scaled == 0 {
+                    continue;
+                }
+                self.obj_terms.push(var.scaled(scaled));
+            }
+        }
+        Ok(())
+    }
 }
