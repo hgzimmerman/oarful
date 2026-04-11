@@ -25,7 +25,7 @@ use lineup_db::rower::{types::Side, Rower};
 use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
 
-use crate::{PartialFillPolicy, SolverConfig};
+use crate::{Diagnostic, PartialFillPolicy, SeatLock, SolverConfig};
 
 /// Owns every piece of mutable state the Pumpkin model needs during
 /// construction. Methods incrementally add variables and post
@@ -264,6 +264,76 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("posting rower-at-most-one constraint: {e:?}"))?;
         }
         Ok(())
+    }
+
+    /// Post seat-lock hard constraints. For each valid lock, forces
+    /// `x[r, b, s] = 1` and `use[b] = 1`. Invalid locks (unknown
+    /// rower/boat, missing x variable) are collected as diagnostics
+    /// and skipped.
+    pub(crate) fn post_seat_locks(
+        &mut self,
+        locks: &[SeatLock],
+    ) -> Result<Vec<Diagnostic>> {
+        let mut diags = Vec::new();
+        for lock in locks {
+            // Resolve rower index.
+            let r_idx = match self.available.iter().position(|r| r.id == lock.rower_id) {
+                Some(i) => i,
+                None => {
+                    diags.push(Diagnostic::InvalidLock {
+                        rower_name: format!("#{}", lock.rower_id),
+                        boat_name: format!("#{}", lock.boat_id),
+                        seat: lock.seat,
+                        reason: "rower not available".into(),
+                    });
+                    continue;
+                }
+            };
+            // Resolve boat index.
+            let b_idx = match self.boats.iter().position(|b| b.id == lock.boat_id) {
+                Some(i) => i,
+                None => {
+                    diags.push(Diagnostic::InvalidLock {
+                        rower_name: self.available[r_idx].name.clone(),
+                        boat_name: format!("#{}", lock.boat_id),
+                        seat: lock.seat,
+                        reason: "boat not in candidate fleet".into(),
+                    });
+                    continue;
+                }
+            };
+            // Check x variable exists (rower is eligible for seat).
+            let Some(&var) = self.x.get(&(r_idx, b_idx, lock.seat)) else {
+                diags.push(Diagnostic::InvalidLock {
+                    rower_name: self.available[r_idx].name.clone(),
+                    boat_name: self.boats[b_idx].name.clone(),
+                    seat: lock.seat,
+                    reason: "rower not eligible for this seat".into(),
+                });
+                continue;
+            };
+            // Force x[r, b, s] = 1.
+            let tag = self.solver.new_constraint_tag();
+            self.solver
+                .add_constraint(pumpkin_constraints::equals(
+                    vec![var.scaled(1)],
+                    1,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("posting seat-lock x=1: {e:?}"))?;
+            // Force use[b] = 1.
+            let tag = self.solver.new_constraint_tag();
+            self.solver
+                .add_constraint(pumpkin_constraints::equals(
+                    vec![self.use_b[b_idx].scaled(1)],
+                    1,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("posting seat-lock use=1: {e:?}"))?;
+        }
+        Ok(diags)
     }
 
     /// Partial-fill bonus — rewards each optional seat that the

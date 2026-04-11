@@ -260,6 +260,16 @@ fn diagnostic_message(d: &Diagnostic) -> String {
              no fleet combination is possible."
                 .to_string()
         }
+        Diagnostic::InvalidLock {
+            rower_name,
+            boat_name,
+            seat,
+            reason,
+        } => {
+            format!(
+                "Seat lock skipped: {rower_name} in seat {seat} on {boat_name} — {reason}."
+            )
+        }
     }
 }
 

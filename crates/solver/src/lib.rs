@@ -38,7 +38,15 @@ use std::ops::ControlFlow;
 use decode::decode_solution;
 use model::ModelBuilder;
 
+/// A pre-pinned (rower, boat, seat) assignment the solver must
+/// respect. The solver forces `x[r, b, s] = 1` and `use[b] = 1`.
 #[derive(Debug, Clone)]
+pub struct SeatLock {
+    pub rower_id: RowerId,
+    pub boat_id: BoatId,
+    pub seat: i32,
+}
+
 pub struct SolveRequest {
     pub date: NaiveDate,
     /// Fleet the solver may *consider* fielding today. The solver chooses
@@ -126,6 +134,12 @@ pub struct SolveRequest {
     /// - **Carry-forward:** a previous practice's lineup with
     ///   negative weight, adapted to different attendance.
     pub reference_lineups: Vec<ReferenceLineup>,
+    /// Pre-pinned seat assignments. Each lock forces the named rower
+    /// into the named seat on the named boat. The solver posts
+    /// `x[r, b, s] = 1` and `use[b] = 1` for each lock. Invalid
+    /// locks (unknown rower/boat, ineligible seat) are surfaced as
+    /// diagnostics and skipped. Empty by default.
+    pub locks: Vec<SeatLock>,
 }
 
 /// A set of placements from a committed lineup, scored as a group
@@ -467,6 +481,14 @@ pub enum Diagnostic {
     /// Every candidate boat was forced unused because at least one
     /// of its required seats is unfillable — no fleet can be fielded.
     AllBoatsUnfillable,
+    /// A seat lock refers to a rower/boat/seat combination that
+    /// doesn't exist or isn't eligible. The lock is skipped.
+    InvalidLock {
+        rower_name: String,
+        boat_name: String,
+        seat: i32,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -545,10 +567,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     }
 
     // --- Phase 1b: pre-solve diagnostics ---
-    let diagnostics = pre_solve_diagnostics(&boats, &available);
+    let mut diagnostics = pre_solve_diagnostics(&boats, &available);
 
     // --- Phase 2: build the model ---
-    let (builder, objective) = build_model(snapshot, request, boats, available)?;
+    let (builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     // --- Phase 3: search ---
     search_lineups(builder, objective, request, diagnostics)
@@ -653,6 +675,7 @@ fn build_model<'a>(
     request: &SolveRequest,
     boats: Vec<&'a Boat>,
     available: Vec<&'a Rower>,
+    lock_diags: &mut Vec<Diagnostic>,
 ) -> Result<(ModelBuilder<'a>, DomainId)> {
     // All mutable solver state lives on a single `ModelBuilder`.
     // Its methods post whole constraint blocks (variable
@@ -673,6 +696,11 @@ fn build_model<'a>(
     // `ModelBuilder::create_variables` for the full eligibility
     // rules and per-rower aggregation rationale.
     m.create_variables();
+
+    // Seat locks — force specific (rower, boat, seat) placements.
+    // Must run after create_variables so x vars exist, but before
+    // other constraints so the locks are visible to propagation.
+    lock_diags.extend(m.post_seat_locks(&request.locks)?);
 
     // Fleet-level soft constraints: S4 wrong-side aggregation,
     // S6 cox cooldown, S7 novelty vs recent lineups, S13

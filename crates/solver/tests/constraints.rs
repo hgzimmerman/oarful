@@ -204,6 +204,7 @@ fn request(config: SolverConfig) -> SolveRequest {
         top_n: 1,
         tabu_min_diff: 2,
         reference_lineups: vec![],
+        locks: vec![],
     }
 }
 

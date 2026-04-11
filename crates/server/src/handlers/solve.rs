@@ -190,6 +190,7 @@ impl SolveKnobs {
             top_n: self.alts.max(1),
             tabu_min_diff: 2,
             reference_lineups,
+            locks: vec![],
         }
     }
 }
