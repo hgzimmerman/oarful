@@ -1,7 +1,14 @@
 //! History list + detail templates.
 
+use std::collections::HashSet;
+
 use chrono::NaiveDate;
-use lineup_db::{lineup::CommittedLineup, practice::Practice, snapshot::DbSnapshot};
+use lineup_db::{
+    lineup::CommittedLineup,
+    practice::Practice,
+    rower::{types::RowerId, Rower},
+    snapshot::DbSnapshot,
+};
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
@@ -88,6 +95,7 @@ pub(crate) fn detail_content(
                         }
                     }
                 }
+                (unplaced_section(snapshot, committed))
             }
         }
     }
@@ -138,35 +146,6 @@ fn notes_display_inner(notes: &str, date: NaiveDate) -> Markup {
                     class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
                 {
                     "Save notes"
-                }
-            }
-        }
-    }
-}
-
-fn lineup_block(snapshot: &DbSnapshot, committed: &CommittedLineup) -> Markup {
-    let boat_name = snapshot
-        .sweep_boats
-        .iter()
-        .find(|b| b.id == committed.lineup.boat_id)
-        .map(|b| b.name.as_str())
-        .unwrap_or("<unknown boat>");
-    let mut seats = committed.seats.clone();
-    seats.sort_by_key(|s| s.seat_position);
-
-    html! {
-        div class="bg-white rounded-lg shadow overflow-hidden" {
-            div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
-                strong { (boat_name) }
-                span class="text-xs text-slate-500 ml-2" {
-                    "committed " (committed.lineup.created_at)
-                }
-            }
-            table class="w-full text-sm" {
-                tbody {
-                    @for seat in &seats {
-                        (seat_row(snapshot, seat.seat_position, seat.rower_id))
-                    }
                 }
             }
         }
@@ -233,26 +212,56 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
     }
 }
 
-fn seat_row(
-    snapshot: &DbSnapshot,
-    seat_position: i32,
-    rower_id: lineup_db::rower::types::RowerId,
-) -> Markup {
-    let label = if seat_position == 0 {
-        "cox".to_string()
-    } else {
-        format!("s{seat_position}")
-    };
-    let name = snapshot
-        .rowers
+/// Show rowers who were available but not placed in any committed
+/// lineup — re-derived from the snapshot by subtracting placed rowers.
+fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Markup {
+    let placed: HashSet<RowerId> = committed
         .iter()
-        .find(|r| r.id == rower_id)
-        .map(|r| r.name.as_str())
-        .unwrap_or("<unknown>");
+        .flat_map(|c| c.seats.iter().map(|s| s.rower_id))
+        .collect();
+
+    let mut to_sculling: Vec<&Rower> = Vec::new();
+    let mut benched: Vec<&Rower> = Vec::new();
+
+    for r in snapshot.available_rowers() {
+        if placed.contains(&r.id) {
+            continue;
+        }
+        if r.can_scull.as_bool() {
+            to_sculling.push(r);
+        } else {
+            benched.push(r);
+        }
+    }
+
+    if to_sculling.is_empty() && benched.is_empty() {
+        return html! {};
+    }
+
     html! {
-        tr class="border-b border-slate-100 last:border-0" {
-            td class="px-4 py-2 text-slate-500 font-mono text-xs w-12" { (label) }
-            td class="px-4 py-2 text-slate-800" { (name) }
+        div class="bg-white rounded-lg shadow p-4 text-sm space-y-2" {
+            @if !to_sculling.is_empty() {
+                div {
+                    strong class="text-slate-700" { "To sculling: " }
+                    span class="text-slate-600" {
+                        @for (i, r) in to_sculling.iter().enumerate() {
+                            @if i > 0 { ", " }
+                            (r.name)
+                        }
+                    }
+                }
+            }
+            @if !benched.is_empty() {
+                div {
+                    strong class="text-slate-700" { "Benched: " }
+                    span class="text-slate-600" {
+                        @for (i, r) in benched.iter().enumerate() {
+                            @if i > 0 { ", " }
+                            (r.name)
+                        }
+                    }
+                }
+            }
         }
     }
 }

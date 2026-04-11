@@ -59,6 +59,9 @@ can resume without re-deriving context.
 - **Cox position: bow-loader vs stern-loader display order** — per-boat
   `cox_position` enum (Bow/Stern) + tenant-level `force_cox_stern`
   flag. Seats render stern→bow; bow-loaders show cox at the bottom.
+- **Show benched/sculling rowers on history detail** — re-derived from
+  snapshot by subtracting placed rowers from available. Displayed as
+  name lists below the committed lineup cards.
 
 ## Open work
 
@@ -95,18 +98,6 @@ backfill new columns with 0. "Save as preset" button persists
 current weights.
 
 No solver changes needed — purely UI + storage.
-
-#### Show benched/sculling rowers on history detail view
-
-The history detail page only shows committed lineups (who's in a
-boat). It doesn't show who was available but didn't get a seat —
-the benched and sculling-redirect rowers are invisible. Add a
-section similar to the solve view's unplaced block so the coach
-can see the full picture of who was there that day.
-
-Requires either storing unplaced rowers at commit time (new table
-or JSON column) or re-deriving them from the snapshot (load
-availability for the date, subtract placed rowers).
 
 #### Disambiguate rower attribute labels in lineup cards
 
