@@ -136,6 +136,34 @@ cox seats have no size constraint.
 
 **No UI changes needed** — purely solver-side scoring.
 
+#### Walk-on rower addition from the solve view
+
+A rower shows up to practice without having set their availability
+to "present." The coach needs to include them from the solve/edit
+view without leaving the page. Two paths after adding:
+
+1. **Manual swap** — the walk-on appears in the bench/sculling
+   pool and the coach clicks them into a seat.
+2. **Re-solve with walk-on** — the walk-on is added to the
+   available set, and the solver re-runs with similarity
+   prioritized so existing placements stay stable.
+
+**UI.** A "+ Add rower" button or typeahead on the solve view that
+lists roster members not currently marked available. Selecting one
+either:
+- Adds them to the bench pool (for manual swap), or
+- Toggles a checkbox that includes them in the next re-solve.
+
+**Backend.** Temporarily override the rower's availability for
+this solve session. Options:
+- Patch `DbSnapshot.availability` in the handler before solving
+  (no DB write — transient for this request).
+- Or upsert a real availability record so it persists (cleaner
+  audit trail but more side-effects).
+
+The transient approach is simpler and avoids surprise availability
+changes in the spreadsheet sync.
+
 #### Practice scheduling UI
 
 There's no way to create upcoming practices from the web UI. The
