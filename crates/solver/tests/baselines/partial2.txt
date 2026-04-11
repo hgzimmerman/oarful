@@ -1,16 +1,20 @@
 status: Satisfied
-fielded: 1/3
-skipped: Artemis, Hestia
+fielded: 2/3
+skipped: Artemis
 to sculling: 
-benched: Carla, Grace
+benched: 
 
 boat 1: Persephone
   cox  Lena
-  s1   Alice
-  s2   Diego
-  s3   Finn
-  s4   Ivan
-  s5   Hana
-  s6   Bob
-  s7   Erin
-  s8   Mika
+  s1   Hana
+  s2   Bob
+  s5   Finn
+  s6   Mika
+  s7   Diego
+  s8   Ivan
+
+boat 3: Hestia
+  s1   Grace
+  s2   Carla
+  s3   Erin
+  s4   Alice

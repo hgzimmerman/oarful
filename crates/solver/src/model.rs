@@ -389,15 +389,24 @@ impl<'a> ModelBuilder<'a> {
 
     /// H6 — global fleet capacity prune:
     ///
-    ///   `Σ_b (seats_total[b] · use[b]) ≤ num_available`
+    ///   `Σ_b (min_seats[b] · use[b]) ≤ num_available`
+    ///
+    /// `min_seats` is the minimum number of seats that MUST be
+    /// filled when the boat is fielded: `seats_total` minus the
+    /// number of optional seats that partial fill allows to be
+    /// empty. Under `Strict`, `min_seats == seats_total`.
     ///
     /// Without this, the solver explores many infeasible fleet
     /// configurations (e.g. "field 6 eights = 54 seats" with only
     /// 20 rowers available) before individual H1/H2 constraints
     /// prune them. The explicit global bound is a cheap prune that
     /// collapses the search space by an order of magnitude on
-    /// realistic club fleets — see the bench notes in the README.
-    pub(crate) fn post_h6_fleet_capacity(&mut self) -> Result<()> {
+    /// realistic club fleets.
+    pub(crate) fn post_h6_fleet_capacity(
+        &mut self,
+        partial_fill: crate::PartialFillPolicy,
+    ) -> Result<()> {
+        let k = partial_fill.max_empty();
         let capacity_terms: Vec<_> = self
             .boats
             .iter()
@@ -405,7 +414,12 @@ impl<'a> ModelBuilder<'a> {
             .map(|(b_idx, boat)| {
                 let seats_total =
                     boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
-                self.use_b[b_idx].scaled(seats_total)
+                // Subtract the number of optional seats that can be
+                // left empty (capped by k and the boat's optional count).
+                let n_opt = optional_seats(boat).len() as i32;
+                let can_skip = k.min(n_opt);
+                let min_seats = seats_total - can_skip;
+                self.use_b[b_idx].scaled(min_seats)
             })
             .collect();
         let tag = self.solver.new_constraint_tag();

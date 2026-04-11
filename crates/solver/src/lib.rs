@@ -808,7 +808,7 @@ fn build_model<'a>(
     // ModelBuilder for the per-constraint rationale.
     m.post_h1_seat_fill(request.partial_fill)?;
     m.post_h2_at_most_one()?;
-    m.post_h6_fleet_capacity()?;
+    m.post_h6_fleet_capacity(request.partial_fill)?;
     m.post_h5_s5_weight_class()?;
     // Partial-fill bonus rewards each occupied optional seat
     // under non-strict partial-fill policies. Inert (no-op) under
