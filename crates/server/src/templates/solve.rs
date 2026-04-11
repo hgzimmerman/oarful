@@ -1014,7 +1014,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
                 tbody {
                     @for (seat, rower_id) in &seats {
                         @let key = format!("{}:{}", lineup.boat_id, seat);
-                        @let label = if *seat == 0 { "cox".to_string() } else { format!("s{seat}") };
+                        @let label = seat_label(*seat, seat_count);
                         @let rower = find_rower(snapshot, *rower_id);
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
                         @let is_locked = flags.locked_seats.contains(&(*rower_id, lineup.boat_id, *seat));
@@ -1285,11 +1285,8 @@ fn seat_row(
     diff: Option<&SeatDiff>,
     flags: &DisplayFlags,
 ) -> Markup {
-    let label = if seat == 0 {
-        "cox".to_string()
-    } else {
-        format!("s{seat}")
-    };
+    let sc = boat.map(|b| b.seat_count).unwrap_or(0);
+    let label = seat_label(seat, sc);
     let is_changed = matches!(diff, Some(SeatDiff::Changed { .. }) | Some(SeatDiff::New));
     let row_class = if is_changed {
         "border-b border-slate-100 last:border-0 bg-amber-50"
@@ -1492,6 +1489,20 @@ fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
             -*s
         }
     });
+}
+
+/// Human-readable seat label: "cox", "bow" (seat 1), "str" (stroke
+/// seat = seat_count), or "s{n}" for everything in between.
+fn seat_label(seat: i32, seat_count: i32) -> String {
+    if seat == 0 {
+        "cox".to_string()
+    } else if seat == 1 {
+        "bow".to_string()
+    } else if seat == seat_count && seat_count > 1 {
+        "str".to_string()
+    } else {
+        format!("s{seat}")
+    }
 }
 
 /// Colored circle badge for a seat label. Port = red, starboard = green,
