@@ -109,7 +109,7 @@ pub(crate) fn detail_content(
                     input type="hidden" name="based_on" value=(date);
                     input type="hidden" name="similarity" value="3";
                     @for c in committed {
-                        (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers))
+                        (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
                     }
                     div class="mt-4 flex justify-end" {
                         button type="submit"
@@ -121,7 +121,7 @@ pub(crate) fn detail_content(
             } @else {
                 // Read-only view for members — no checkboxes or re-solve.
                 @for c in committed {
-                    (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers))
+                    (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
                 }
                 (unplaced_section(snapshot, committed))
             }
@@ -180,7 +180,7 @@ fn notes_display_inner(notes: &str, date: NaiveDate) -> Markup {
     }
 }
 
-fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool, stale_rowers: &HashSet<RowerId>) -> Markup {
+fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool, stale_rowers: &HashSet<RowerId>, is_coach: bool) -> Markup {
     let boat = snapshot
         .sweep_boats
         .iter()
@@ -233,11 +233,13 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                                     }
                                 }
                             }
-                            td class="px-4 py-2 text-right w-16" {
-                                label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
-                                    input type="checkbox" name="no_show" value=(seat.rower_id)
-                                          class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
-                                    "No-show"
+                            @if is_coach {
+                                td class="px-4 py-2 text-right w-16" {
+                                    label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
+                                        input type="checkbox" name="no_show" value=(seat.rower_id)
+                                              class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
+                                        "No-show"
+                                    }
                                 }
                             }
                             (side_indicator(rower))
