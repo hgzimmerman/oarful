@@ -56,14 +56,13 @@ use lineup_db::app_user::Role;
 /// budget, so the marginal quality gained by going above 1s is at
 /// best invisible to the coach. Drop to 1s; let the user crank it up
 /// via the knob form when they care.
-const DEFAULT_BUDGET_SECS: u64 = 1;
+const DEFAULT_BUDGET_SECS: u64 = 3;
 
-/// Default number of distinct lineups (primary + alternatives).
-/// Alternatives are a marquee UI feature, so we keep the default at
-/// 3 even though it triples the per-request wall time — the
-/// `DEFAULT_BUDGET_SECS` decision above already accounts for the
-/// multiplier.
-const DEFAULT_ALTS: usize = 3;
+/// Default number of *additional* alternatives beyond the primary.
+/// The UI shows this directly (0 = primary only, 1-3 = extra lineups).
+/// The solver receives `top_n = alts + 1`. Default 0 — alternatives
+/// burn time budget and the coach usually just wants one good lineup.
+const DEFAULT_ALTS: usize = 0;
 
 /// Coach-tunable solver knobs. Round-trips through both the URL query
 /// string (for `GET /solve/{date}?...`) and the commit form body (as
@@ -205,7 +204,7 @@ impl SolveKnobs {
             },
             config: self.resolve_config(),
             time_budget: Some(Duration::from_secs(self.budget.max(1))),
-            top_n: self.alts.max(1),
+            top_n: (self.alts + 1).max(1),
             tabu_min_diff: 2,
             reference_lineups,
             locks: self.parse_locks(),

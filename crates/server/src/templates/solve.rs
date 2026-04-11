@@ -534,36 +534,86 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
                 }
 
-                // Existing knobs grid
-                div class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end" {
-                    (knob_input(
-                        "partial",
-                        "Partial fill",
-                        knobs.partial as i64,
-                        Some(0),
-                        Some("0 = strict; N = empty seats allowed"),
-                    ))
-                    (knob_input(
-                        "novelty",
-                        "Novelty",
-                        knobs.novelty as i64,
-                        Some(0),
-                        Some("Avoidance weight; 0 disables"),
-                    ))
-                    (knob_input(
-                        "alts",
-                        "Alternatives",
-                        knobs.alts as i64,
-                        Some(1),
-                        Some("Distinct lineups (incl. primary)"),
-                    ))
-                    (knob_input(
-                        "budget",
-                        "Time budget (s)",
-                        knobs.budget as i64,
-                        Some(1),
-                        Some("Per-solve cap; clamped ≥ 1s"),
-                    ))
+                // Solver knobs
+                div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end" {
+                    // Partial fill — segmented (Off / 1 / 2)
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            "Partial fill"
+                        }
+                        div class="inline-flex rounded border border-slate-300 overflow-hidden text-sm" {
+                            @for (val, lbl) in &[(0, "Off"), (1, "1 empty"), (2, "2 empty")] {
+                                @let active = knobs.partial == *val;
+                                @let cls = if active {
+                                    "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                                } else {
+                                    "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                                };
+                                button type="submit" name="partial" value=(val) class=(cls) {
+                                    (lbl)
+                                }
+                            }
+                        }
+                        // Hidden fallback when Generate (not a partial button) is clicked
+                        input type="hidden" name="partial" value=(knobs.partial);
+                        p class="text-xs text-slate-500 mt-1" { "Empty optional seats per boat" }
+                    }
+
+                    // Alternatives — segmented (0 / 1 / 2 / 3)
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            "Alternatives"
+                        }
+                        div class="inline-flex rounded border border-slate-300 overflow-hidden text-sm" {
+                            @for n in 0..=3i64 {
+                                @let active = knobs.alts as i64 == n;
+                                @let cls = if active {
+                                    "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                                } else {
+                                    "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                                };
+                                button type="submit" name="alts" value=(n) class=(cls) {
+                                    (n)
+                                }
+                            }
+                        }
+                        input type="hidden" name="alts" value=(knobs.alts);
+                        p class="text-xs text-slate-500 mt-1" { "Extra lineups to compare" }
+                    }
+
+                    // Time budget — slider 1-10
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            "Time budget"
+                        }
+                        div class="flex items-center gap-2" {
+                            input name="budget" type="range" min="1" max="10"
+                                  value=(knobs.budget)
+                                  class="flex-1 accent-blue-600"
+                                  oninput="document.getElementById('budget-val').textContent = this.value + 's'";
+                            span #budget-val class="text-sm font-mono text-slate-700 w-8" {
+                                (knobs.budget) "s"
+                            }
+                        }
+                        p class="text-xs text-slate-500 mt-1" { "Per-alternative solve cap" }
+                    }
+
+                    // Novelty — slider 0-5
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            "Novelty"
+                        }
+                        div class="flex items-center gap-2" {
+                            input name="novelty" type="range" min="0" max="5"
+                                  value=(knobs.novelty)
+                                  class="flex-1 accent-blue-600"
+                                  oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value";
+                            span #novelty-val class="text-sm font-mono text-slate-700 w-8" {
+                                @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
+                            }
+                        }
+                        p class="text-xs text-slate-500 mt-1" { "Avoid repeating recent lineups" }
+                    }
                     input type="hidden" name="generate" value="1";
                     // Carry seat locks and walk-ons through re-solves.
                     @for l in &knobs.lock {
