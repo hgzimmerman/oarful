@@ -52,12 +52,12 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
 fn static_row(r: &Rower) -> Markup {
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
-            td class="px-4 py-2 font-medium text-slate-800" {
+            td class="px-4 py-2 font-medium" {
                 a href={"/rowers/" (r.id)}
                   hx-get={"/rowers/" (r.id)}
                   hx-target="#content"
                   hx-push-url="true"
-                  class="hover:underline" {
+                  class="text-blue-700 hover:text-blue-900 underline" {
                     (r.name)
                 }
             }
