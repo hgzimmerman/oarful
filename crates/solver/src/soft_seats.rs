@@ -595,12 +595,15 @@ impl<'a> ModelBuilder<'a> {
     /// fire equally for all boats and the solver distributes talent
     /// evenly. Only meaningful when `top_boat_stacking_weight > 0`
     /// (the tiered preset enables it, balanced does not).
+    /// S16 — top-boat stacking bonus. Works directly on x variables
+    /// (not trait maps) so it sees all seats including optional ones
+    /// under partial fill. For each eligible (rower, boat_0, seat),
+    /// pushes `-weight * (skill_ordinal + strength_ordinal)` scaled
+    /// by the x variable.
     pub(crate) fn post_s16_top_boat_stacking(&mut self) {
         if self.cfg.top_boat_stacking_weight == 0 {
             return;
         }
-        // Only the first boat (b_idx=0) gets the bonus. After greedy
-        // fleet selection, this is the largest boat.
         let b_idx = 0;
         if b_idx >= self.boats.len() {
             return;
@@ -608,13 +611,15 @@ impl<'a> ModelBuilder<'a> {
         let boat = self.boats[b_idx];
         let w = self.cfg.top_boat_stacking_weight;
 
-        // Bonus for every rowing seat's skill and strength.
         for seat in 1..=boat.seat_count {
-            if let Some(&skill_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
-                self.obj_terms.push(skill_var.scaled(-w));
-            }
-            if let Some(&str_var) = self.seat_strength_by_seat.get(&(b_idx, seat)) {
-                self.obj_terms.push(str_var.scaled(-w));
+            for (r_idx, rower) in self.available.iter().enumerate() {
+                if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
+                    let quality = rower.skill.ordinal() + rower.strength.ordinal();
+                    let coef = -w * quality;
+                    if coef != 0 {
+                        self.obj_terms.push(var.scaled(coef));
+                    }
+                }
             }
         }
     }
