@@ -115,6 +115,10 @@ pub(crate) struct SolveKnobs {
     /// Repeated query param: `lock=1:2:8&lock=3:2:0`.
     #[serde(default)]
     pub(crate) lock: Vec<String>,
+    /// Solver preset name. One of: balanced, even_speed, tiered, random.
+    /// Overrides the default SolverConfig when present.
+    #[serde(default)]
+    pub(crate) preset: String,
 }
 
 impl Default for SolveKnobs {
@@ -129,6 +133,7 @@ impl Default for SolveKnobs {
             no_show: vec![],
             generate: 0,
             lock: vec![],
+            preset: String::new(),
         }
     }
 }
@@ -190,7 +195,7 @@ impl SolveKnobs {
             } else {
                 PartialFillPolicy::Strict
             },
-            config: SolverConfig::default(),
+            config: SolverConfig::from_preset(&self.preset).unwrap_or_default(),
             time_budget: Some(Duration::from_secs(self.budget.max(1))),
             top_n: self.alts.max(1),
             tabu_min_diff: 2,

@@ -69,6 +69,10 @@ can resume without re-deriving context.
 - **Practice scheduling UI** — date picker + "Create" button on
   `/practices`. Coach+ role-gated. Created practices appear in the
   list even before availability is synced.
+- **Solver presets** — segmented control on the knobs form with four
+  built-in presets: Balanced (default), Even speed, Tiered, Random.
+  Each sets SolverConfig weights for different coaching scenarios.
+  Custom profiles (DB storage) deferred to follow-up.
 - **Manual lineup builder** — boat selector + empty boat cards + rower
   pool on the landing page. Coach can place rowers by hand, commit
   directly, or click Generate to let the solver fill the rest
@@ -95,22 +99,13 @@ can resume without re-deriving context.
 
 ### Coach features
 
-#### Solver presets (profiles)
+#### Custom solver profiles (follow-up to presets)
 
-Preset weight configurations for different coaching scenarios.
-Segmented control (button group) on the solve form.
-
-**Built-in presets:**
-- **Even speed** — high S1/S9, low S4. Boats stay together.
-- **Tiered / coached** — low S1, high S11/S12. Top boat stacked.
-- **Balanced** — current defaults.
-
-**Custom profiles.** `solver_profile` table with one typed column
-per `SolverConfig` weight (NOT NULL, no defaults). Future migrations
-backfill new columns with 0. "Save as preset" button persists
-current weights.
-
-No solver changes needed — purely UI + storage.
+`solver_profile` table with one typed column per `SolverConfig`
+weight (NOT NULL, no defaults). Future migrations backfill new
+columns with 0. "Save as preset" button persists current weights.
+Profile names appear in the preset selector alongside the built-in
+presets.
 
 #### Availability reminder emails
 

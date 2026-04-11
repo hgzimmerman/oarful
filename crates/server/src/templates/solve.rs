@@ -379,6 +379,34 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     }
                 }
 
+                // Solver preset selector
+                div class="mb-4" {
+                    div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                        "Solver preset"
+                    }
+                    div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm" {
+                        @let current = &knobs.preset;
+                        @for (value, label) in &[
+                            ("balanced", "Balanced"),
+                            ("even_speed", "Even speed"),
+                            ("tiered", "Tiered"),
+                            ("random", "Random"),
+                        ] {
+                            @let is_active = current == value || (current.is_empty() && *value == "balanced");
+                            @let btn_class = if is_active {
+                                "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                            } else {
+                                "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                            };
+                            button type="button" class=(btn_class)
+                                   onclick={"document.getElementById('preset-input').value='" (*value) "'"} {
+                                (label)
+                            }
+                        }
+                    }
+                    input #preset-input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
+                }
+
                 // Existing knobs grid
                 div class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end" {
                     (knob_input(

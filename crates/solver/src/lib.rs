@@ -300,8 +300,10 @@ pub struct SolverConfig {
     pub bow_cox_fit_weight: i32,
 }
 
-impl Default for SolverConfig {
-    fn default() -> Self {
+impl SolverConfig {
+    /// **Balanced** — even-handed defaults. No particular emphasis
+    /// on boat speed parity or top-boat stacking.
+    pub fn balanced() -> Self {
         Self {
             skill_variance_weight: 1,
             pair_affinity_weight: 1,
@@ -319,6 +321,79 @@ impl Default for SolverConfig {
             non_scull_retention_weight: 2,
             bow_cox_fit_weight: 1,
         }
+    }
+
+    /// **Even speed** — boats should be as close in speed as possible.
+    /// High skill-variance penalty keeps talent spread evenly. High
+    /// pair-strength balance means no boat gets all the strong rowers.
+    /// Low side preference gives the solver more flexibility to balance.
+    pub fn even_speed() -> Self {
+        Self {
+            skill_variance_weight: 3,
+            pair_strength_weight: 3,
+            bow_pair_strength_weight: 3,
+            height_balance_weight: 2,
+            side_preference_weight: 0,
+            end_pair_skill_weight: 0,
+            engine_room_strength_weight: 0,
+            ..Self::balanced()
+        }
+    }
+
+    /// **Tiered / coached** — top boat stacked with the best rowers.
+    /// Low skill-variance penalty lets talent concentrate. High
+    /// end-pair skill and engine-room strength rewards place the
+    /// strongest rowers in the most impactful seats.
+    pub fn tiered() -> Self {
+        Self {
+            skill_variance_weight: 0,
+            end_pair_skill_weight: 3,
+            engine_room_strength_weight: 3,
+            pair_strength_weight: 0,
+            bow_pair_strength_weight: 1,
+            ..Self::balanced()
+        }
+    }
+
+    /// **Random** — no soft constraints at all. The solver only
+    /// enforces hard requirements (side eligibility, cox, weight-class
+    /// walls, seat locks). Placement is essentially arbitrary among
+    /// feasible solutions, giving maximum variety.
+    pub fn random() -> Self {
+        Self {
+            skill_variance_weight: 0,
+            pair_affinity_weight: 0,
+            seat_affinity_weight: 0,
+            side_preference_weight: 0,
+            weight_class_slack_weight: 0,
+            cox_cooldown_penalty: 0,
+            placement_reward_weight: 1, // keep this so the solver fields boats
+            pair_strength_weight: 0,
+            bow_pair_strength_weight: 0,
+            height_balance_weight: 0,
+            end_pair_skill_weight: 0,
+            engine_room_strength_weight: 0,
+            partial_fill_bonus: 1, // keep so partial-fill still prefers filling
+            non_scull_retention_weight: 0,
+            bow_cox_fit_weight: 0,
+        }
+    }
+
+    /// Look up a preset by name. Returns `None` for unknown names.
+    pub fn from_preset(name: &str) -> Option<Self> {
+        match name {
+            "balanced" => Some(Self::balanced()),
+            "even_speed" => Some(Self::even_speed()),
+            "tiered" => Some(Self::tiered()),
+            "random" => Some(Self::random()),
+            _ => None,
+        }
+    }
+}
+
+impl Default for SolverConfig {
+    fn default() -> Self {
+        Self::balanced()
     }
 }
 
