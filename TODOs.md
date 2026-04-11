@@ -71,7 +71,9 @@ can resume without re-deriving context.
   list even before availability is synced.
 - **#63 Solver-side seat locks** — `SeatLock` struct on `SolveRequest`,
   posts `x[r,b,s]=1` + `use[b]=1` per lock. Invalid locks surfaced
-  as `Diagnostic::InvalidLock` and skipped. UI TODO remains.
+  as `Diagnostic::InvalidLock` and skipped. UI: lock/unlock icons per
+  seat row, violet highlight on locked seats, locks carried as query
+  params and hidden form inputs across re-solves.
 - **Bow-loader cox fit penalty (S14)** — penalises tall/heavy rowers
   in bow-loader cox seats. Height: Tall +3, VeryTall +5. Weight:
   Heavy +1. Stern-loaders unaffected. Configurable via
@@ -88,17 +90,6 @@ can resume without re-deriving context.
 ## Open work
 
 ### Coach features
-
-#### #63 — Seat lock UI on solve view
-
-Solver-side seat locks shipped (see "Already shipped"). The
-remaining work is the UI:
-
-**UI.** Lock icon per seat on `/solve/{date}`. Click toggles a
-lock and re-solves. Locks passed as query params (e.g.
-`lock=rower_id:boat_id:seat`). Locked seats visually distinct
-(different bg, lock icon). Locks survive re-solve — the form
-carries them as hidden inputs.
 
 #### Solver presets (profiles)
 

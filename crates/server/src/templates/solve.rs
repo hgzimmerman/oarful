@@ -2,7 +2,7 @@
 //! alternatives (Alpine-toggled), the unplaced-rowers breakdown, and
 //! the commit button.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use lineup_db::{
@@ -20,10 +20,13 @@ use super::layout::page_header;
 use crate::handlers::solve::SolveKnobs;
 
 /// Display flags threaded through lineup card rendering.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct DisplayFlags {
     pub(crate) show_attributes: bool,
     pub(crate) force_cox_stern: bool,
+    /// Locked (rower_id, boat_id, seat) triples. Used to render lock
+    /// icons and distinct styling on locked seats.
+    pub(crate) locked_seats: HashSet<(RowerId, BoatId, i32)>,
 }
 
 /// Landing page before the solver runs. Shows knobs with a
@@ -55,7 +58,7 @@ pub(crate) fn view_content(
     knobs: &SolveKnobs,
     result: &SolveResult,
     committed_practices: &[Practice],
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -161,6 +164,10 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         Some("Per-solve cap; clamped ≥ 1s"),
                     ))
                     input type="hidden" name="generate" value="1";
+                    // Carry seat locks through re-solves.
+                    @for l in &knobs.lock {
+                        input type="hidden" name="lock" value=(l);
+                    }
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
                         div class="flex items-center space-x-3" {
@@ -278,7 +285,7 @@ fn primary_panel(
     date: NaiveDate,
     _knobs: &SolveKnobs,
     primary: &ProposedSolution,
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     let used: Vec<&ProposedLineup> = primary.lineups.iter().filter(|l| l.used).collect();
     let skipped: Vec<&ProposedLineup> =
@@ -444,6 +451,25 @@ function swapLineup() {
                 inp.value = el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower;
                 container.appendChild(inp);
             });
+        },
+        /** Toggle a seat lock and re-solve. Finds the knobs form and
+         *  adds/removes a hidden input for the lock, then submits. */
+        toggleLock(lockVal) {
+            var form = document.querySelector('form[hx-get]');
+            if (!form) return;
+            // Check if this lock already exists.
+            var existing = form.querySelector('input[name="lock"][value="' + lockVal + '"]');
+            if (existing) {
+                existing.remove(); // unlock
+            } else {
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'lock';
+                inp.value = lockVal;
+                form.appendChild(inp);
+            }
+            // Trigger the form submission (HTMX re-solve).
+            htmx.trigger(form, 'submit');
         }
     };
 }
@@ -453,7 +479,7 @@ function swapLineup() {
 }
 
 /// Boat card with clickable seat rows for the swap component.
-fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: DisplayFlags) -> Markup {
+fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &DisplayFlags) -> Markup {
     let seat_count = snapshot
         .sweep_boats
         .iter()
@@ -477,12 +503,16 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: Display
                         @let label = if *seat == 0 { "cox".to_string() } else { format!("s{seat}") };
                         @let rower = find_rower(snapshot, *rower_id);
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let row_base = if is_designated_cox {
+                        @let is_locked = flags.locked_seats.contains(&(*rower_id, lineup.boat_id, *seat));
+                        @let row_base = if is_locked {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-violet-50 border-l-4 border-l-violet-400"
+                        } else if is_designated_cox {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
                         } else {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition"
                         };
                         @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
+                        @let lock_val = format!("{}:{}:{}", rower_id, lineup.boat_id, seat);
                         tr data-key=(key)
                            data-boat=(lineup.boat_id)
                            data-seat=(seat)
@@ -498,6 +528,15 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: Display
                                     (rower_stats_line(r, flags.show_attributes))
                                 } @else {
                                     span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
+                                }
+                            }
+                            td class="w-8 text-center" {
+                                button type="button"
+                                       class="text-xs hover:text-violet-700"
+                                       title=(if is_locked { "Unlock seat" } else { "Lock seat" })
+                                       data-lock=(lock_val)
+                                       "@click.stop"="toggleLock($event.currentTarget.dataset.lock)" {
+                                    @if is_locked { "🔒" } @else { "🔓" }
                                 }
                             }
                             (side_indicator(rower))
@@ -576,7 +615,7 @@ fn alternatives_panel(
     snapshot: &DbSnapshot,
     primary: &ProposedSolution,
     alternatives: &[ProposedSolution],
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     html! {
         section class="bg-white rounded-lg shadow p-6"
@@ -607,7 +646,7 @@ fn alternative_block(
     primary: &ProposedSolution,
     rank: usize,
     alt: &ProposedSolution,
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     let diff = build_diff(primary, alt);
     let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
@@ -687,7 +726,7 @@ fn boat_card(
     snapshot: &DbSnapshot,
     lineup: &ProposedLineup,
     diff: Option<&DiffMap>,
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     let seat_count = snapshot
         .sweep_boats
@@ -722,7 +761,7 @@ fn seat_row(
     seat: i32,
     rower_id: RowerId,
     diff: Option<&SeatDiff>,
-    flags: DisplayFlags,
+    flags: &DisplayFlags,
 ) -> Markup {
     let label = if seat == 0 {
         "cox".to_string()

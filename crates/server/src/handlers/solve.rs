@@ -111,6 +111,10 @@ pub(crate) struct SolveKnobs {
     /// the solver — the coach clicks "Generate" to trigger it.
     #[serde(default)]
     pub(crate) generate: i32,
+    /// Seat locks. Each value is `rower_id:boat_id:seat_position`.
+    /// Repeated query param: `lock=1:2:8&lock=3:2:0`.
+    #[serde(default)]
+    pub(crate) lock: Vec<String>,
 }
 
 impl Default for SolveKnobs {
@@ -124,6 +128,7 @@ impl Default for SolveKnobs {
             similarity: 0,
             no_show: vec![],
             generate: 0,
+            lock: vec![],
         }
     }
 }
@@ -190,8 +195,30 @@ impl SolveKnobs {
             top_n: self.alts.max(1),
             tabu_min_diff: 2,
             reference_lineups,
-            locks: vec![],
+            locks: self.parse_locks(),
         }
+    }
+
+    /// Parse `lock` query params into `SeatLock`s.
+    /// Each value is `rower_id:boat_id:seat_position`.
+    fn parse_locks(&self) -> Vec<lineup_solver::SeatLock> {
+        self.lock
+            .iter()
+            .filter_map(|entry| {
+                let parts: Vec<&str> = entry.splitn(3, ':').collect();
+                if parts.len() != 3 {
+                    return None;
+                }
+                let rower_id = parts[0].parse().ok()?;
+                let boat_id = parts[1].parse().ok()?;
+                let seat = parts[2].parse().ok()?;
+                Some(lineup_solver::SeatLock {
+                    rower_id,
+                    boat_id,
+                    seat,
+                })
+            })
+            .collect()
     }
 }
 
@@ -311,13 +338,17 @@ pub(crate) async fn view_handler(
         let request = knobs.to_request(date, &snapshot, baselines);
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
+        let locked_seats = knobs.parse_locks().into_iter()
+            .map(|l| (l.rower_id, l.boat_id, l.seat))
+            .collect();
         let flags = templates::solve::DisplayFlags {
             show_attributes: tenant.show_attributes(),
             force_cox_stern: tenant.config.force_cox_stern,
+            locked_seats,
         };
         let content = templates::solve::view_content(
             &snapshot, date, &knobs, &result, &committed_practices,
-            flags,
+            &flags,
         );
         return Ok(super::maybe_page(
             &format!("Generate · {date}"),
