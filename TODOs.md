@@ -172,6 +172,45 @@ No real email provider needed yet — `LogMailer` covers it.
 Swap in a real implementation (e.g. Resend, SES) later via
 the same trait.
 
+#### Manual lineup builder + partial seed → solver
+
+The solve view currently requires running the solver to produce a
+lineup. Coaches should be able to build lineups entirely by hand,
+or seed a partial lineup and let the solver fill the rest.
+
+**Manual-only flow:**
+1. Coach selects which boats to field (checkbox list of available
+   boats on the solve landing page).
+2. For each selected boat, an empty boat card appears with
+   clickable empty seats.
+3. Coach clicks a seat, then clicks a rower from the available
+   pool to place them. The available pool shows all rostered
+   rowers for the date.
+4. Coach can commit the lineup as-is (partially or fully filled)
+   without ever running the solver.
+
+**Partial seed → solver flow:**
+1. Coach manually places a few key rowers (e.g. "Alice in stroke
+   of Persephone, Bob coxing Artemis").
+2. Coach clicks "Generate" — the solver treats manually placed
+   rowers as locked seats (#63 seat locks) and fills the rest.
+3. The solver also respects the coach's boat selection: only
+   boats the coach selected (or that have seed placements) are
+   candidates.
+
+**Interaction with seat locks (#63):** The manual placements
+become the locks passed to `SolveRequest.locks`. This means #63
+is a prerequisite for the seed→solver flow, but the manual-only
+flow (no solver) can ship independently.
+
+**UI considerations:**
+- The solve landing page needs a boat selector (multi-select or
+  checkbox list of in-service sweep boats).
+- Empty boat cards need the same swap interaction as filled ones
+  (click seat → click rower from pool).
+- The "Generate" button should be optional — "Commit lineup" works
+  without solving if the coach is happy with manual placements.
+
 #### Stale lineup detection on availability change
 
 When a rower changes their availability to "No" (or any
