@@ -172,6 +172,34 @@ No real email provider needed yet — `LogMailer` covers it.
 Swap in a real implementation (e.g. Resend, SES) later via
 the same trait.
 
+#### Stale lineup detection on availability change
+
+When a rower changes their availability to "No" (or any
+non-available status) after a lineup has already been committed
+for that date, the committed lineup is now stale — it includes
+someone who won't be there.
+
+**Detection.** On the history detail view, cross-reference
+committed seat assignments against current availability. Any
+rower whose availability is no longer "Yes" gets flagged.
+
+**UI on history detail.**
+- Stale lineups get a warning banner: "Availability changed since
+  this lineup was committed."
+- Affected rowers are highlighted in their seat row (e.g. amber
+  background + "availability changed" badge).
+- Two actions offered:
+  1. "Re-solve" link pre-filled with the committed lineup as
+     baseline + similarity prioritized, with the stale rower(s)
+     excluded.
+  2. Coach can manually swap via the solve view.
+
+**Optional: proactive notification.** When a rower changes
+availability for a date that has a committed lineup, surface a
+warning in the UI (e.g. a badge on the history nav item or a
+toast). Could also trigger a reminder email to the coach. Lower
+priority than the detection/display work.
+
 #### Walk-on rower addition from the solve view
 
 A rower shows up to practice without having set their availability
