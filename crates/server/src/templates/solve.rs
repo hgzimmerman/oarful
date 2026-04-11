@@ -388,6 +388,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup) -> Markup {
                                     span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
                                 }
                             }
+                            (side_indicator(rower))
                         }
                     }
                 }
@@ -687,6 +688,53 @@ fn name_list(snapshot: &DbSnapshot, ids: &[RowerId]) -> Markup {
                 "#" (id)
             }
         }
+    }
+}
+
+/// Narrow colored cell on the right edge of a seat row indicating
+/// the rower's side preference. Port = red, starboard = green,
+/// Either = empty. Opacity scales with side_strength (HARD/0 = full,
+/// soft 1 = faintest, soft 5 = strong).
+pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
+    use lineup_db::rower::types::Side;
+    let Some(r) = rower else {
+        return html! { td class="w-1" {} };
+    };
+    let (color, opacity) = match r.side {
+        Side::Port => {
+            let op = if r.side_strength.is_hard() {
+                "opacity-100"
+            } else {
+                match r.side_strength.as_int() {
+                    1 => "opacity-20",
+                    2 => "opacity-40",
+                    3 => "opacity-60",
+                    4 => "opacity-80",
+                    _ => "opacity-100",
+                }
+            };
+            ("bg-red-500", op)
+        }
+        Side::Starboard => {
+            let op = if r.side_strength.is_hard() {
+                "opacity-100"
+            } else {
+                match r.side_strength.as_int() {
+                    1 => "opacity-20",
+                    2 => "opacity-40",
+                    3 => "opacity-60",
+                    4 => "opacity-80",
+                    _ => "opacity-100",
+                }
+            };
+            ("bg-green-500", op)
+        }
+        Side::Either => {
+            return html! { td class="w-1" {} };
+        }
+    };
+    html! {
+        td class={"w-1 " (color) " " (opacity)} {}
     }
 }
 

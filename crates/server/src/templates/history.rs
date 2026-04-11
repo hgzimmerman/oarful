@@ -5,6 +5,7 @@ use lineup_db::{lineup::CommittedLineup, practice::Practice, snapshot::DbSnapsho
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
+use super::solve::side_indicator;
 
 pub(crate) fn list_content(practices: &[Practice]) -> Markup {
     html! {
@@ -215,6 +216,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup) 
                                     "No-show"
                                 }
                             }
+                            (side_indicator(rower))
                         }
                     }
                 }
