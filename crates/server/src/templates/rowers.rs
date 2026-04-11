@@ -272,7 +272,7 @@ pub(crate) fn seat_affinities_section(
                     thead class="text-left text-xs uppercase text-slate-500" {
                         tr {
                             th class="py-1 w-24" { "Seat" }
-                            th class="py-1 w-24" { "Weight" }
+                            th class="py-1" { "Preference" }
                             th class="py-1" { "" }
                         }
                     }
@@ -280,7 +280,7 @@ pub(crate) fn seat_affinities_section(
                         @for aff in &detail.seat_affinities {
                             tr class="border-t border-slate-100" {
                                 td class="py-1 font-mono" { "s" (aff.seat_position) }
-                                td class="py-1 font-mono" { (aff.weight) }
+                                td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
                                 td class="py-1 text-right" {
                                     button type="button"
                                            class="text-xs text-red-600 hover:text-red-800"
@@ -363,7 +363,7 @@ pub(crate) fn pair_affinities_section(
                     thead class="text-left text-xs uppercase text-slate-500" {
                         tr {
                             th class="py-1" { "Partner" }
-                            th class="py-1 w-24" { "Weight" }
+                            th class="py-1" { "Preference" }
                             th class="py-1" { "" }
                         }
                     }
@@ -372,7 +372,7 @@ pub(crate) fn pair_affinities_section(
                             @let partner_id = if aff.rower_a_id == r.id { aff.rower_b_id } else { aff.rower_a_id };
                             tr class="border-t border-slate-100" {
                                 td class="py-1" { (lookup(partner_id)) }
-                                td class="py-1 font-mono" { (aff.weight) }
+                                td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
                                 td class="py-1 text-right" {
                                     button type="button"
                                            class="text-xs text-red-600 hover:text-red-800"
@@ -428,55 +428,81 @@ fn enum_select(name: &str, options: &[(&str, &str, bool)]) -> Markup {
     }
 }
 
-/// Range slider for affinity weights (−5..−1, +1..+5). Shows a
-/// descriptive label that updates as the slider moves.
+/// Range slider for affinity weights. The UI presents a 1–10 scale
+/// (Strongly avoid → Strongly prefer) which maps to the solver's
+/// -5..+5 range with 0 skipped. The hidden form input sends the
+/// mapped solver value.
 fn weight_slider(id: &str, default: i32) -> Markup {
-    let label_fn = format!(
-        "function {id}_label(v) {{ \
-            var el = document.getElementById('{id}-label'); \
-            var m = {{ \
-                '-5':'Strongly avoid','-4':'Avoid','-3':'Moderately avoid', \
-                '-2':'Slightly avoid','-1':'Weakly avoid', \
-                '0':'⚠ Forbidden', \
-                '1':'Weakly prefer','2':'Slightly prefer','3':'Moderately prefer', \
-                '4':'Prefer','5':'Strongly prefer' \
+    // Solver value (-5..+5, no 0) → slider position (1..10).
+    let slider_pos = if default > 0 { default + 5 } else { default + 6 };
+    let default_label = weight_label(slider_pos);
+
+    // JS: map slider position (1..10) → solver value, update label.
+    let js = format!(
+        "function {id}_update(pos) {{ \
+            var sv = pos <= 5 ? pos - 6 : pos - 5; \
+            document.getElementById('{id}-hidden').value = sv; \
+            var labels = {{ \
+                1:'Strongly avoid',2:'Avoid',3:'Moderately avoid', \
+                4:'Slightly avoid',5:'Weakly avoid', \
+                6:'Weakly prefer',7:'Slightly prefer',8:'Moderately prefer', \
+                9:'Prefer',10:'Strongly prefer' \
             }}; \
-            var txt = m[String(v)] || v; \
-            if (v === '0' || v === 0) {{ \
-                el.className = 'text-xs font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded'; \
-            }} else {{ \
-                el.className = 'text-xs font-semibold text-slate-700'; \
-            }} \
-            return txt; }}"
+            document.getElementById('{id}-label').textContent = labels[pos] || pos; \
+        }}"
     );
-    let (default_label, default_label_class) = match default {
-        -5 => ("Strongly avoid", "text-xs font-semibold text-slate-700"),
-        -4 => ("Avoid", "text-xs font-semibold text-slate-700"),
-        -3 => ("Moderately avoid", "text-xs font-semibold text-slate-700"),
-        -2 => ("Slightly avoid", "text-xs font-semibold text-slate-700"),
-        -1 => ("Weakly avoid", "text-xs font-semibold text-slate-700"),
-        0 => ("⚠ Forbidden", "text-xs font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded"),
-        1 => ("Weakly prefer", "text-xs font-semibold text-slate-700"),
-        2 => ("Slightly prefer", "text-xs font-semibold text-slate-700"),
-        3 => ("Moderately prefer", "text-xs font-semibold text-slate-700"),
-        4 => ("Prefer", "text-xs font-semibold text-slate-700"),
-        5 => ("Strongly prefer", "text-xs font-semibold text-slate-700"),
-        _ => ("?", "text-xs font-semibold text-slate-700"),
-    };
+
     html! {
         div class="flex-1 min-w-[12rem]" {
             div class="flex items-center justify-between mb-1" {
                 span class="text-xs text-red-600 font-semibold" { "Avoid" }
-                span #(format!("{id}-label")) class=(default_label_class) {
+                span #(format!("{id}-label")) class="text-xs font-semibold text-slate-700" {
                     (default_label)
                 }
                 span class="text-xs text-emerald-600 font-semibold" { "Prefer" }
             }
-            input id=(id) name="weight" type="range" min="-5" max="5" value=(default)
+            input type="range" min="1" max="10" value=(slider_pos)
                   class="w-full accent-blue-600"
-                  oninput={(format!("document.getElementById('{id}-label').textContent = {id}_label(this.value)"))};
-            script { (maud::PreEscaped(&label_fn)) }
+                  oninput={(format!("{id}_update(Number(this.value))"))};
+            input #(format!("{id}-hidden")) type="hidden" name="weight" value=(default);
+            script { (maud::PreEscaped(&js)) }
         }
+    }
+}
+
+/// Format a solver weight value (-5..+5) as a human-readable label
+/// with the numeric value in parentheses, e.g. "Moderately prefer (+3)".
+fn format_weight(w: i32) -> String {
+    let label = match w {
+        -5 => "Strongly avoid",
+        -4 => "Avoid",
+        -3 => "Moderately avoid",
+        -2 => "Slightly avoid",
+        -1 => "Weakly avoid",
+        1 => "Weakly prefer",
+        2 => "Slightly prefer",
+        3 => "Moderately prefer",
+        4 => "Prefer",
+        5 => "Strongly prefer",
+        _ => "?",
+    };
+    let sign = if w > 0 { "+" } else { "" };
+    format!("{label} ({sign}{w})")
+}
+
+fn weight_label(slider_pos: i32) -> &'static str {
+    match slider_pos {
+        1 => "Strongly avoid",
+        2 => "Avoid",
+        3 => "Moderately avoid",
+        4 => "Slightly avoid",
+        5 => "Weakly avoid",
+        6 => "Weakly prefer",
+        7 => "Slightly prefer",
+        8 => "Moderately prefer",
+        9 => "Prefer",
+        10 => "Strongly prefer",
+        _ => "?",
     }
 }
 
