@@ -30,7 +30,6 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
                                 th class="px-4 py-2" { "Form" }
                                 th class="px-4 py-2" { "Strength" }
                                 th class="px-4 py-2" { "Side" }
-                                th class="px-4 py-2" { "Side str" }
                                 th class="px-4 py-2" { "Cox" }
                                 th class="px-4 py-2" { "Scull" }
                             }
@@ -64,8 +63,7 @@ fn static_row(r: &Rower) -> Markup {
             td class="px-4 py-2" { (r.weight_class) }
             td class="px-4 py-2" { (r.skill) }
             td class="px-4 py-2" { (r.strength) }
-            td class="px-4 py-2" { (r.side) }
-            td class="px-4 py-2 font-mono text-xs" { (r.side_strength) }
+            td class="px-4 py-2" { (side_display_label(r)) }
             td class="px-4 py-2" {
                 @if r.is_designated_cox.as_bool() { "designated" }
                 @else if r.can_cox.as_bool() { "yes" }
@@ -141,7 +139,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
                 (kv("Weight", &r.weight_class.to_string()))
                 (kv("Form", &r.skill.to_string()))
                 (kv("Strength", &r.strength.to_string()))
-                (kv("Side", side_display_label(r)))
+                (kv("Side", &side_display_label(r)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Can scull", if r.can_scull.as_bool() { "yes" } else { "—" }))
@@ -531,23 +529,26 @@ function sideSliderUpdate(v) {
     }
 }
 
-/// Human-readable side label for the read-only attribute summary.
-fn side_display_label(r: &Rower) -> &'static str {
+/// Human-readable side label with numeric value, e.g. "Strong port (-4)".
+fn side_display_label(r: &Rower) -> String {
     use lineup_db::rower::types::Side;
-    match r.side {
-        Side::Either => "Either",
+    let pos: i32 = match r.side {
+        Side::Either => 0,
         Side::Port => {
             let s = r.side_strength.as_int();
-            if s == 0 { return "Hard port"; }
-            let pos = -(6 - s).min(5).max(1);
-            side_slider_label(pos)
+            if s == 0 { -5 } else { -(6 - s).min(5).max(1) }
         }
         Side::Starboard => {
             let s = r.side_strength.as_int();
-            if s == 0 { return "Hard starboard"; }
-            let pos = (6 - s).min(5).max(1);
-            side_slider_label(pos)
+            if s == 0 { 5 } else { (6 - s).min(5).max(1) }
         }
+    };
+    let label = side_slider_label(pos);
+    if pos == 0 {
+        label.to_string()
+    } else {
+        let sign = if pos > 0 { "+" } else { "" };
+        format!("{label} ({sign}{pos})")
     }
 }
 
