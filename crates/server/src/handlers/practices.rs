@@ -14,6 +14,7 @@ use lineup_db::app_user::Role;
 use std::collections::BTreeSet;
 
 use lineup_db::availability::Availability;
+use lineup_db::lineup::Lineup;
 use lineup_db::practice::Practice;
 use serde::Deserialize;
 
@@ -42,10 +43,18 @@ pub(crate) async fn list_handler(
                     .values()
                     .filter(|s| s.is_available_for_sweep())
                     .count();
+                let has_committed = Practice::find_by_date(conn, team_id, date)?
+                    .map(|p| {
+                        Lineup::for_practice(conn, p.id)
+                            .map(|l| !l.is_empty())
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false);
                 rows.push(templates::practices::PracticeRow {
                     date,
                     yes_count,
                     total_responses: map.len(),
+                    has_committed,
                 });
             }
             Ok(rows)

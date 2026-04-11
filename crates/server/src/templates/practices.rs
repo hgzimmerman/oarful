@@ -12,6 +12,8 @@ pub(crate) struct PracticeRow {
     pub(crate) yes_count: usize,
     /// Everyone who responded (Yes / No / Maybe / ScullingOnly).
     pub(crate) total_responses: usize,
+    /// Whether a lineup has been committed for this date.
+    pub(crate) has_committed: bool,
 }
 
 pub(crate) fn list_content(rows: &[PracticeRow]) -> Markup {
@@ -60,7 +62,14 @@ fn row_card(row: &PracticeRow) -> Markup {
           hx-target="#content"
           hx-push-url="true" {
             div {
-                div class="font-semibold text-slate-800" { (row.date) }
+                div class="flex items-center gap-2" {
+                    span class="font-semibold text-slate-800" { (row.date) }
+                    @if row.has_committed {
+                        span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" {
+                            "Committed"
+                        }
+                    }
+                }
                 div class="text-sm text-slate-500" { (weekday) }
             }
             div class="text-right" {
