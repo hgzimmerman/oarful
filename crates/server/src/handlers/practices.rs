@@ -11,10 +11,9 @@ use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::{NaiveDate, Utc};
 use lineup_db::app_user::Role;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use lineup_db::availability::Availability;
-use lineup_db::lineup::Lineup;
 use lineup_db::practice::Practice;
 use serde::Deserialize;
 
@@ -36,6 +35,12 @@ pub(crate) async fn list_handler(
             let practice_dates = Practice::list_upcoming(conn, team_id, today)?;
             let all_dates: BTreeSet<_> = avail_dates.into_iter().chain(practice_dates).collect();
 
+            // One query: which of our upcoming dates have committed lineups?
+            let date_vec: Vec<_> = all_dates.iter().copied().collect();
+            let committed_dates: HashSet<_> = Practice::committed_dates(conn, team_id, &date_vec)?
+                .into_iter()
+                .collect();
+
             let mut rows = Vec::with_capacity(all_dates.len());
             for date in all_dates {
                 let map = Availability::map_for_team_date(conn, team_id, date)?;
@@ -43,18 +48,11 @@ pub(crate) async fn list_handler(
                     .values()
                     .filter(|s| s.is_available_for_sweep())
                     .count();
-                let has_committed = Practice::find_by_date(conn, team_id, date)?
-                    .map(|p| {
-                        Lineup::for_practice(conn, p.id)
-                            .map(|l| !l.is_empty())
-                            .unwrap_or(false)
-                    })
-                    .unwrap_or(false);
                 rows.push(templates::practices::PracticeRow {
                     date,
                     yes_count,
                     total_responses: map.len(),
-                    has_committed,
+                    has_committed: committed_dates.contains(&date),
                 });
             }
             Ok(rows)

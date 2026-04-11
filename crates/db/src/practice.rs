@@ -116,6 +116,22 @@ impl Practice {
             .get_results(conn)
     }
 
+    /// Which of the given dates have at least one committed lineup?
+    /// Returns only the dates that match, as a set-friendly vec.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn committed_dates(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        dates: &[NaiveDate],
+    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+        practice::table
+            .filter(practice::team_id.eq(team_id))
+            .filter(practice::date.eq_any(dates))
+            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .select(practice::date)
+            .get_results(conn)
+    }
+
     /// Update the notes on an existing practice row.
     #[tracing::instrument(level = "debug", skip(conn), err)]
     pub fn update_notes(
