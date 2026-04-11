@@ -874,10 +874,13 @@ function swapLineup() {
             // Swap rower identity (id + name) between the two slots.
             var tmpRower = elA.dataset.rower;
             var tmpName = elA.dataset.name;
+            var tmpStats = elA.dataset.stats || '';
             elA.dataset.rower = elB.dataset.rower;
             elA.dataset.name = elB.dataset.name;
+            elA.dataset.stats = elB.dataset.stats || '';
             elB.dataset.rower = tmpRower;
             elB.dataset.name = tmpName;
+            elB.dataset.stats = tmpStats;
             // Re-render the visible content for both slots.
             this.renderSlot(elA);
             this.renderSlot(elB);
@@ -920,6 +923,7 @@ function swapLineup() {
         renderSlot(el) {
             var rowerId = el.dataset.rower;
             var rowerName = el.dataset.name;
+            var stats = el.dataset.stats || '';
             var content = el.querySelector('.rower-content');
             // Bench/sculling pills: the element itself is the content container.
             if (!content) content = el.tagName === 'SPAN' ? el : null;
@@ -928,9 +932,13 @@ function swapLineup() {
                 // Empty seat
                 content.innerHTML = '<span class="text-slate-400 italic">\u2014 empty \u2014</span>';
             } else {
-                content.innerHTML = '<div class="font-medium text-slate-800' +
+                var html = '<div class="font-medium text-slate-800' +
                     (el.tagName === 'SPAN' ? ' text-sm' : '') + '">' +
                     this.esc(rowerName || '#' + rowerId) + '</div>';
+                if (stats) {
+                    html += '<div class="text-xs text-slate-500">' + this.esc(stats) + '</div>';
+                }
+                content.innerHTML = html;
             }
         },
         esc(s) {
@@ -1047,12 +1055,17 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
                             "border-b border-slate-100 last:border-0 cursor-pointer transition"
                         };
                         @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
+                        @let stats_text = rower.map(|r| format!(
+                            "{} · {} · {} · {}",
+                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                        )).unwrap_or_default();
                         @let lock_val = format!("{}:{}:{}", rower_id_str, lineup.boat_id, seat);
                         tr data-key=(key)
                            data-boat=(lineup.boat_id)
                            data-seat=(seat)
                            data-rower=(rower_id_str)
                            data-name=(rower_name)
+                           data-stats=(stats_text)
                            class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
                            "@click"={"select('" (key) "')"} {
@@ -1106,11 +1119,16 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: 
                         @let key = format!("sculling:{}", id);
                         @let rower = find_rower(snapshot, *id);
                         @let rname = rower.map(|r| r.name.as_str()).unwrap_or("");
+                        @let rstats = rower.map(|r| format!(
+                            "{} · {} · {} · {}",
+                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                        )).unwrap_or_default();
                         span data-key=(key)
                              data-boat="sculling"
                              data-seat="-1"
                              data-rower=(id)
                              data-name=(rname)
+                             data-stats=(rstats)
                              class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
@@ -1133,11 +1151,16 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: 
                     @let key = format!("bench:{}", id);
                     @let rower = find_rower(snapshot, *id);
                     @let rname = rower.map(|r| r.name.as_str()).unwrap_or("");
+                    @let rstats = rower.map(|r| format!(
+                        "{} · {} · {} · {}",
+                        r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                    )).unwrap_or_default();
                     span data-key=(key)
                          data-boat="bench"
                          data-seat="-1"
                          data-rower=(id)
                          data-name=(rname)
+                         data-stats=(rstats)
                          class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
                          ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                          "@click"={"select('" (key) "')"} {
