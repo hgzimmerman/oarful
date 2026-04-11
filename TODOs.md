@@ -117,6 +117,34 @@ to the coach. Lower priority than the detection/display (which
 shipped), but would close the feedback loop so the coach doesn't
 have to manually check the history page.
 
+#### Batch invite from roster
+
+The coach syncs a sheet → rowers appear on the roster with emails
+but no user accounts. Currently each rower must be individually
+invited from the Users page. Need a bulk flow:
+
+- A "Send invites" button on the roster page (Coach+ gated) that
+  creates AppUser accounts + sends invites for all roster members
+  who have an email but no linked user account.
+- Show invite status per rower on the roster (uninvited / pending /
+  active) so the coach can see who still needs an invite.
+- Use the existing Mailer trait (LogMailer for dev).
+
+#### Email visibility tenant config
+
+Some teams want email addresses visible on the roster list and
+detail pages; others consider them private. Add a tenant-level
+boolean `emails_visible` (default false). When true, the roster
+list shows an Email column and the detail page shows the email.
+When false, emails are hidden from the UI for regular members
+but still visible to Coach+ and PD roles (they need them for
+invites and communication). Always used internally for invites
+and sync matching regardless of visibility setting.
+
+Follows the same pattern as `attributes_public` — cached in
+TenantConfig, threaded through TenantContext. The visibility
+check combines the tenant flag with the user's role.
+
 #### Availability reminder emails
 
 Coach action: select one or more upcoming practice dates and send
