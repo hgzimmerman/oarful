@@ -86,7 +86,7 @@ pub(crate) fn detail_content(
     let has_stale = !stale_rowers.is_empty();
 
     html! {
-        (page_header(&format!("History · {date}"), None))
+        (page_header(&format!("Lineups · {date}"), None))
         div class="px-8 py-6 max-w-4xl space-y-4" {
             @if is_coach {
                 (notes_section(practice, date))

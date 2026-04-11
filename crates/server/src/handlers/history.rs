@@ -30,7 +30,7 @@ pub(crate) async fn list_handler(
         .map_err(internal_error)?;
 
     let content = templates::history::list_content(&practices);
-    Ok(super::maybe_page_authed("History", content, hx, &tenant))
+    Ok(super::maybe_page_authed("Lineups", content, hx, &tenant))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -65,7 +65,7 @@ pub(crate) async fn detail_handler(
         is_coach,
     );
     Ok(super::maybe_page_authed(
-        &format!("History · {date}"),
+        &format!("Lineups · {date}"),
         content,
         hx,
         &tenant,
