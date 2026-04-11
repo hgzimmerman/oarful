@@ -42,7 +42,12 @@ fn navbar(role: Option<Role>) -> Markup {
     html! {
         nav class="bg-slate-800 text-white px-6 py-3 sticky top-0 z-40 shadow" {
             ul class="flex items-center space-x-6" {
-                li class="font-bold text-lg mr-4" { "Lineup Generator" }
+                // Team name as the nav title — loaded via HTMX.
+                li class="font-bold text-lg mr-4"
+                   hx-get="/teams/selector"
+                   hx-trigger="load"
+                   hx-swap="innerHTML" {
+                }
 
                 // Everyone sees practices and history
                 (nav_link("/practices", "Practices"))
@@ -62,15 +67,9 @@ fn navbar(role: Option<Role>) -> Markup {
                 }
 
                 // Self-service — everyone
+                li class="ml-auto" {}
                 (nav_link("/my/profile", "Profile"))
                 (nav_link("/my/availability", "Availability"))
-
-                // Team selector
-                li class="ml-auto"
-                   hx-get="/teams/selector"
-                   hx-trigger="load"
-                   hx-swap="innerHTML" {
-                }
 
                 // Logout
                 li {
