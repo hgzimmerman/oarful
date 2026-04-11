@@ -77,9 +77,8 @@ pub(crate) struct SolveKnobs {
     /// that many empty optional seats permitted per boat.
     #[serde(default)]
     pub(crate) partial: i32,
-    /// S7 novelty factor. Higher = more aggressive penalty against
-    /// recently-used `(rower, boat, seat)` triples. `0` disables the
-    /// term.
+    /// Novelty weight. Higher = more aggressive penalty against
+    /// recently-used `(rower, boat, seat)` triples. `0` disables.
     #[serde(default)]
     pub(crate) novelty: i32,
     /// Number of distinct lineups to surface (primary + alternatives).
@@ -90,6 +89,17 @@ pub(crate) struct SolveKnobs {
     /// a zero budget as "no propagation at all".
     #[serde(default = "default_budget")]
     pub(crate) budget: u64,
+    /// Dates of committed practices to use as baselines. Each checked
+    /// practice becomes a reference lineup with negative weight so the
+    /// solver prefers reproducing it. Deserialized from repeated
+    /// `based_on=YYYY-MM-DD` query params.
+    #[serde(default)]
+    pub(crate) based_on: Vec<String>,
+    /// Similarity weight for baseline references. Higher = stronger
+    /// preference for matching the baseline lineups. `0` disables
+    /// even if `based_on` is non-empty.
+    #[serde(default)]
+    pub(crate) similarity: i32,
 }
 
 impl Default for SolveKnobs {
@@ -99,6 +109,8 @@ impl Default for SolveKnobs {
             novelty: 0,
             alts: DEFAULT_ALTS,
             budget: DEFAULT_BUDGET_SECS,
+            based_on: vec![],
+            similarity: 0,
         }
     }
 }
@@ -110,7 +122,12 @@ impl SolveKnobs {
     /// [`ReferenceLineup`] with positive weight so the solver
     /// avoids repeating it. Cox seats are excluded (S6 handles
     /// cox rotation separately).
-    fn to_request(&self, date: NaiveDate, snapshot: &DbSnapshot) -> SolveRequest {
+    fn to_request(
+        &self,
+        date: NaiveDate,
+        snapshot: &DbSnapshot,
+        baselines: Vec<lineup_solver::ReferenceLineup>,
+    ) -> SolveRequest {
         use std::collections::BTreeMap;
         use lineup_solver::{ReferenceLineup, ReferencePlacement};
 
@@ -118,16 +135,13 @@ impl SolveKnobs {
         let mut reference_lineups = Vec::new();
 
         if novelty_weight > 0 {
-            // Group recent placements by (practice_date, boat_id),
-            // mirroring the old S7 grouping. Each group becomes one
-            // ReferenceLineup with positive weight (avoid).
             let mut groups: BTreeMap<
                 (NaiveDate, lineup_db::boat::types::BoatId),
                 Vec<ReferencePlacement>,
             > = BTreeMap::new();
             for p in &snapshot.recent_placements {
                 if p.is_cox || p.seat_position == 0 {
-                    continue; // cox rotation handled by S6
+                    continue;
                 }
                 groups
                     .entry((p.practice_date, p.boat_id))
@@ -146,6 +160,10 @@ impl SolveKnobs {
             }
         }
 
+        // Append caller-provided baselines (negative weight =
+        // prefer similarity).
+        reference_lineups.extend(baselines);
+
         SolveRequest {
             date,
             boats: vec![],
@@ -161,6 +179,63 @@ impl SolveKnobs {
             reference_lineups,
         }
     }
+}
+
+/// Build baseline reference lineups from the `based_on` dates in the
+/// knobs. Each checked practice's committed lineup becomes one
+/// `ReferenceLineup` with negative weight (prefer similarity).
+async fn build_baselines(
+    knobs: &SolveKnobs,
+    db: &lineup_db::state::Db,
+    team_id: lineup_db::team::TeamId,
+) -> Result<Vec<lineup_solver::ReferenceLineup>, StatusCode> {
+    use lineup_solver::{ReferenceLineup, ReferencePlacement};
+
+    let similarity = knobs.similarity.max(0);
+    if similarity == 0 || knobs.based_on.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let dates: Vec<NaiveDate> = knobs
+        .based_on
+        .iter()
+        .filter_map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        .collect();
+    if dates.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let refs = db
+        .with_conn(move |conn| {
+            let mut refs = Vec::new();
+            for date in &dates {
+                let Some(practice) = Practice::find_by_date(conn, team_id, *date)? else {
+                    continue;
+                };
+                let committed = Lineup::for_practice(conn, practice.id)?;
+                let placements: Vec<ReferencePlacement> = committed
+                    .iter()
+                    .flat_map(|c| {
+                        c.seats.iter().map(|s| ReferencePlacement {
+                            rower_id: s.rower_id,
+                            boat_id: c.lineup.boat_id,
+                            seat: s.seat_position,
+                        })
+                    })
+                    .collect();
+                if !placements.is_empty() {
+                    refs.push(ReferenceLineup {
+                        placements,
+                        weight: -similarity,
+                    });
+                }
+            }
+            Ok(refs)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(refs)
 }
 
 fn default_alts() -> usize {
@@ -181,17 +256,25 @@ pub(crate) async fn view_handler(
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let snapshot = tenant
+    let (snapshot, committed_practices) = tenant
         .db
-        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
+        .with_conn(move |conn| {
+            let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;
+            let practices = Practice::list_committed(conn, team_id)?;
+            Ok((snapshot, practices))
+        })
         .await
         .map_err(internal_error)?;
 
+    let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
+
     let _permit = acquire_solve_permit(&state).await?;
-    let request = knobs.to_request(date, &snapshot);
+    let request = knobs.to_request(date, &snapshot, baselines);
     let result = run_solve(&state, snapshot.clone(), request).await?;
 
-    let content = templates::solve::view_content(&snapshot, date, &knobs, &result);
+    let content = templates::solve::view_content(
+        &snapshot, date, &knobs, &result, &committed_practices,
+    );
     Ok(super::maybe_page(
         &format!("Solve · {date}"),
         content,
@@ -214,7 +297,8 @@ pub(crate) async fn commit_handler(
         .await
         .map_err(internal_error)?;
 
-    let mut request = knobs.to_request(date, &snapshot);
+    let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
+    let mut request = knobs.to_request(date, &snapshot, baselines);
     request.top_n = 1;
 
     let _permit = acquire_solve_permit(&state).await?;

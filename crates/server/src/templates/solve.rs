@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use lineup_db::{
     boat::types::BoatId,
+    practice::Practice,
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
@@ -23,6 +24,7 @@ pub(crate) fn view_content(
     date: NaiveDate,
     knobs: &SolveKnobs,
     result: &SolveResult,
+    committed_practices: &[Practice],
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -33,7 +35,7 @@ pub(crate) fn view_content(
     html! {
         (page_header(&format!("Solve · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
-            (knobs_form(date, knobs))
+            (knobs_form(date, knobs, committed_practices))
             (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
@@ -51,7 +53,7 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice]) -> Markup {
     let action = format!("/solve/{date}");
     html! {
         section class="bg-white rounded-lg shadow p-6" {
@@ -59,43 +61,81 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs) -> Markup {
                  hx-get=(action)
                  hx-target="#content"
                  hx-push-url="true"
-                 hx-indicator="#solve-spinner"
-                 class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end" {
-                (knob_input(
-                    "partial",
-                    "Partial fill",
-                    knobs.partial as i64,
-                    Some(0),
-                    Some("0 = strict; N = up to N optional seats empty per boat"),
-                ))
-                (knob_input(
-                    "novelty",
-                    "Novelty",
-                    knobs.novelty as i64,
-                    Some(0),
-                    Some("S7 weight; 0 disables"),
-                ))
-                (knob_input(
-                    "alts",
-                    "Alternatives",
-                    knobs.alts as i64,
-                    Some(1),
-                    Some("Distinct lineups (incl. primary)"),
-                ))
-                (knob_input(
-                    "budget",
-                    "Time budget (s)",
-                    knobs.budget as i64,
-                    Some(1),
-                    Some("Per-solve cap; clamped ≥ 1s"),
-                ))
-                div class="flex items-center space-x-3" {
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
-                        "Re-solve"
+                 hx-indicator="#solve-spinner" {
+
+                // Based-on checkbox list + similarity weight
+                @if !practices.is_empty() {
+                    div class="mb-4" {
+                        div class="flex flex-wrap gap-4 items-end" {
+                            fieldset class="flex-1" {
+                                legend class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                                    "Based on"
+                                }
+                                div class="flex flex-wrap gap-3" {
+                                    @for p in practices.iter().take(8) {
+                                        @let date_str = p.date.format("%Y-%m-%d").to_string();
+                                        @let weekday = p.date.format("%a").to_string();
+                                        @let checked = knobs.based_on.contains(&date_str);
+                                        label class="inline-flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer" {
+                                            input type="checkbox" name="based_on" value=(date_str)
+                                                  checked[checked]
+                                                  class="rounded border-slate-300 text-blue-600 focus:ring-blue-500";
+                                            (p.date) " (" (weekday) ")"
+                                        }
+                                    }
+                                }
+                            }
+                            div class="w-28" {
+                                (knob_input(
+                                    "similarity",
+                                    "Similarity",
+                                    knobs.similarity as i64,
+                                    Some(0),
+                                    Some("0 = off"),
+                                ))
+                            }
+                        }
                     }
-                    span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
-                        "Solving…"
+                }
+
+                // Existing knobs grid
+                div class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end" {
+                    (knob_input(
+                        "partial",
+                        "Partial fill",
+                        knobs.partial as i64,
+                        Some(0),
+                        Some("0 = strict; N = up to N optional seats empty per boat"),
+                    ))
+                    (knob_input(
+                        "novelty",
+                        "Novelty",
+                        knobs.novelty as i64,
+                        Some(0),
+                        Some("Avoidance weight; 0 disables"),
+                    ))
+                    (knob_input(
+                        "alts",
+                        "Alternatives",
+                        knobs.alts as i64,
+                        Some(1),
+                        Some("Distinct lineups (incl. primary)"),
+                    ))
+                    (knob_input(
+                        "budget",
+                        "Time budget (s)",
+                        knobs.budget as i64,
+                        Some(1),
+                        Some("Per-solve cap; clamped ≥ 1s"),
+                    ))
+                    div class="flex items-center space-x-3" {
+                        button type="submit"
+                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                            "Re-solve"
+                        }
+                        span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
+                            "Solving…"
+                        }
                     }
                 }
             }
@@ -208,6 +248,10 @@ fn primary_panel(
                     input type="hidden" name="novelty" value=(knobs.novelty);
                     input type="hidden" name="alts" value=(knobs.alts);
                     input type="hidden" name="budget" value=(knobs.budget);
+                    input type="hidden" name="similarity" value=(knobs.similarity);
+                    @for d in &knobs.based_on {
+                        input type="hidden" name="based_on" value=(d);
+                    }
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                         "Commit primary"
