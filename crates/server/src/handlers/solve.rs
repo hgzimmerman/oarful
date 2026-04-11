@@ -456,7 +456,7 @@ pub(crate) async fn view_handler(
             &flags, &profile_names,
         );
         return Ok(super::maybe_page_authed(
-            &format!("Generate · {date}"),
+            &format!("Set Lineups · {date}"),
             content,
             hx,
             &tenant,
@@ -470,7 +470,7 @@ pub(crate) async fn view_handler(
         &profile_names,
     );
     Ok(super::maybe_page_authed(
-        &format!("Generate · {date}"),
+        &format!("Set Lineups · {date}"),
         content,
         hx,
         &tenant,

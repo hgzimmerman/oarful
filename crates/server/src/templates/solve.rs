@@ -62,7 +62,7 @@ pub(crate) fn landing_content(
         .collect();
 
     html! {
-        (page_header(&format!("Generate · {date}"), Some(&subtitle)))
+        (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
             (walkon_section(date, &unavailable, knobs))
@@ -407,7 +407,7 @@ pub(crate) fn view_content(
     );
 
     html! {
-        (page_header(&format!("Generate · {date}"), Some(&subtitle)))
+        (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, true, custom_profiles))
             (status_banner(date, &result.status, &result.diagnostics))
