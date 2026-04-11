@@ -471,6 +471,41 @@ approach: assign rowers to races first, then schedule boats).
 Very large scope — park until practice lineups are mature and
 there's real demand from clubs doing regattas.
 
+### Streaming alternatives (stretch goal)
+
+Return the primary lineup immediately and stream alternatives
+as they complete, rather than blocking until all are done.
+
+**HTMX 2.0 (current):** Feasible via the SSE extension
+(`htmx-ext-sse`). Requires a separate SSE connection — the
+initial request returns the primary lineup + an SSE connect
+div. A background solver task feeds alternatives through a
+channel; the SSE endpoint streams them as HTML fragments.
+
+**HTMX 4.0 (early-mid 2026):** Native streaming via
+`fetch() + ReadableStream`. Any `text/event-stream` response
+works without an extension. Also enables POST-based SSE.
+Migration from 2.0 SSE extension would be a simplification
+(drop extension, keep same SSE endpoint).
+
+**Chunked transfer:** Not viable on HTMX 2.0 (XHR buffers
+the whole response). HTMX 4.0's fetch migration fixes this.
+
+**Backend.** The solver already produces alternatives
+sequentially (tabu re-solve loop). Wrap in an async channel:
+send primary immediately, then each alternative as it
+completes. The handler becomes an SSE endpoint that yields
+events from the channel.
+
+**UI.** The alternatives panel renders a "Computing
+alternatives..." placeholder, then each alternative card
+appears as it arrives via SSE swap.
+
+**Recommendation:** Implement on HTMX 2.0 SSE extension now.
+Migrate to HTMX 4.0 native streaming when it stabilizes.
+Low priority — only matters when alternatives > 0 and the
+per-alternative budget is long enough to notice the delay.
+
 ### Discord integration (long-term)
 
 Low priority — don't start until most other work is done.
