@@ -71,7 +71,7 @@ pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
                     }
                 }
                 // Desktop: full table
-                div class="hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl" {
+                div class="hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" {
                     table class="w-full text-sm" {
                         thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
                             tr {
@@ -215,7 +215,7 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
             }
             p class="text-sm text-slate-500 mt-1" { (subtitle) }
         }
-        div class="px-8 py-6 max-w-4xl space-y-6" {
+        div class="px-8 py-6 max-w-4xl mx-auto space-y-6" {
             (attribute_section(r, None, &perms))
             (seat_affinities_section(detail, None, perms.can_edit_affinities))
             (pair_affinities_section(detail, None, perms.can_edit_affinities))

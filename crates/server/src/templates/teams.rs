@@ -48,7 +48,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
     let subtitle = format!("{} teams", teams.len());
     html! {
         (page_header("Teams", Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 max-w-3xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             // Create team form
             form method="post" action="/teams"
                  hx-post="/teams"
@@ -97,7 +97,7 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
     let action = format!("/teams/{}", team.id);
     html! {
         (page_header(&team.name, Some("Team settings")))
-        div class="px-4 sm:px-8 py-6 max-w-2xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto space-y-6" {
             a href="/teams"
               hx-get="/teams"
               hx-target="#content"

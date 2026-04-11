@@ -49,7 +49,7 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
 
 fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
     html! {
-        div class="max-w-5xl" {
+        div class="max-w-5xl mx-auto" {
             h2 class="text-lg font-bold text-slate-800 mb-2" { (heading) }
             div class="bg-white rounded-lg shadow overflow-hidden" {
                 table class="w-full text-sm" {
@@ -123,7 +123,7 @@ pub(crate) fn form_content(
 
     html! {
         (page_header(title, None))
-        div class="px-4 sm:px-8 py-6 max-w-2xl" {
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
             @if let Some(msg) = error {
                 div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                     strong { "Error. " } (msg)

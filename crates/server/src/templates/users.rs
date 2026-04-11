@@ -13,7 +13,7 @@ pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unl
     let subtitle = format!("{} users", users.len());
     html! {
         (page_header("Users", Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 max-w-4xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
             // Invite form
             section class="bg-white rounded-lg shadow p-6" {
                 h2 class="text-lg font-bold text-slate-800 mb-4" { "Invite a new user" }
@@ -158,7 +158,7 @@ pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>) -> Markup {
 pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Markup {
     html! {
         (page_header("Invite", None))
-        div class="px-4 sm:px-8 py-6 max-w-2xl" {
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
             @if let Some(msg) = error {
                 div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900 mb-4" {
                     strong { "Error. " } (msg)

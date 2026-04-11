@@ -20,7 +20,7 @@ pub(crate) fn list_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
 
     html! {
         (page_header("Practices", None))
-        div class="px-4 sm:px-8 py-6 max-w-3xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             // Add practice form (Coach+ only)
             @if is_coach {
                 form method="post" action="/practices"

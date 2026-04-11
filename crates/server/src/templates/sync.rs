@@ -21,7 +21,7 @@ pub(crate) fn form_content(
             "Sync sheet",
             Some("Pull roster and availability from a publicly-shared Google Sheet."),
         ))
-        div class="px-4 sm:px-8 py-6 max-w-3xl space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             @if let Some(ts) = last_synced {
                 div class="text-xs text-slate-500" {
                     "Last synced: "
