@@ -465,9 +465,14 @@ pub(crate) async fn view_handler(
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
     let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
+    let flags = templates::solve::DisplayFlags {
+        show_attributes: tenant.show_attributes(),
+        force_cox_stern: tenant.config.force_cox_stern,
+        locked_seats: std::collections::HashSet::new(),
+    };
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
-        &profile_names,
+        &profile_names, &flags,
     );
     Ok(super::maybe_page_authed(
         &format!("Set Lineups · {date}"),

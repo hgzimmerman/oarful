@@ -29,6 +29,487 @@ pub(crate) struct DisplayFlags {
     pub(crate) locked_seats: HashSet<(RowerId, BoatId, i32)>,
 }
 
+/// A boat in the unified lineup editor, with optional seat assignments.
+pub(crate) struct EditorBoat<'a> {
+    pub(crate) boat: &'a Boat,
+    /// Seat assignments: (seat_position, Option<rower_id>). All seats
+    /// are present; None = empty.
+    pub(crate) seats: Vec<(i32, Option<RowerId>)>,
+    /// Whether this boat is active (shown with cards). Inactive boats
+    /// are toggled off in the boat selector.
+    pub(crate) active: bool,
+}
+
+/// Data for the unified lineup editor.
+pub(crate) struct EditorData<'a> {
+    pub(crate) boats: Vec<EditorBoat<'a>>,
+    pub(crate) pool: Vec<&'a Rower>,
+    pub(crate) sculling: Vec<&'a Rower>,
+}
+
+impl<'a> EditorData<'a> {
+    /// Build from a snapshot with no solver result — all boats empty,
+    /// all available rowers in pool.
+    pub(crate) fn empty(snapshot: &'a DbSnapshot) -> Self {
+        let boats = snapshot.sweep_boats.iter().map(|b| {
+            let has_cox = b.has_cox.as_bool();
+            let mut seats = Vec::new();
+            if has_cox { seats.push((0, None)); }
+            for s in 1..=b.seat_count { seats.push((s, None)); }
+            EditorBoat { boat: b, seats, active: true }
+        }).collect();
+        let pool: Vec<&Rower> = snapshot.available_rowers().collect();
+        Self { boats, pool, sculling: vec![] }
+    }
+
+    /// Build from a solver result — used boats have seats filled,
+    /// unused boats are inactive, unplaced rowers in pool/sculling.
+    pub(crate) fn from_solve(
+        snapshot: &'a DbSnapshot,
+        primary: &lineup_solver::ProposedSolution,
+    ) -> Self {
+        let filled_map: HashMap<BoatId, HashMap<i32, RowerId>> = primary
+            .lineups
+            .iter()
+            .map(|l| {
+                let seat_map: HashMap<i32, RowerId> = l.seats.iter().copied().collect();
+                (l.boat_id, seat_map)
+            })
+            .collect();
+
+        let boats = snapshot.sweep_boats.iter().map(|b| {
+            let lineup = primary.lineups.iter().find(|l| l.boat_id == b.id);
+            let active = lineup.map(|l| l.used).unwrap_or(false);
+            let seat_map = filled_map.get(&b.id);
+            let has_cox = b.has_cox.as_bool();
+            let mut seats = Vec::new();
+            if has_cox {
+                seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
+            }
+            for s in 1..=b.seat_count {
+                seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
+            }
+            EditorBoat { boat: b, seats, active }
+        }).collect();
+
+        let pool: Vec<&Rower> = primary.unplaced.benched.iter()
+            .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
+            .collect();
+        let sculling: Vec<&Rower> = primary.unplaced.to_sculling.iter()
+            .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
+            .collect();
+
+        Self { boats, pool, sculling }
+    }
+}
+
+/// Unified lineup editor — renders boat selector, boat cards with
+/// seats (filled or empty), and the rower pool. Used for both the
+/// pre-generate landing and the post-generate result.
+pub(crate) fn lineup_editor(
+    snapshot: &DbSnapshot,
+    date: NaiveDate,
+    editor: &EditorData,
+    flags: &DisplayFlags,
+    knobs: &SolveKnobs,
+) -> Markup {
+    let commit_action = format!("/commit-lineup/{date}");
+
+    html! {
+        section class="bg-white rounded-lg shadow p-4 sm:p-6"
+               x-data="lineupEditor()" {
+
+            div class="flex items-center justify-between mb-4 flex-wrap gap-2" {
+                h2 class="text-xl font-bold text-slate-800" { "Lineup" }
+                div class="flex items-center gap-2" {
+                    template x-if="selected" {
+                        span class="text-xs text-blue-600" {
+                            "Click another to swap"
+                            " · "
+                            button type="button"
+                                   class="underline text-amber-600 hover:text-amber-800"
+                                   "@click"="toBench(selected)" {
+                                "bench"
+                            }
+                            " · or click again to cancel"
+                        }
+                    }
+                    form method="post" action=(commit_action) x-ref="commitForm" {
+                        div x-ref="seatInputs" {}
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                            "Commit lineup"
+                        }
+                    }
+                }
+            }
+
+            // Boat selector pills
+            div class="flex flex-wrap gap-2 mb-4" {
+                @for eb in &editor.boats {
+                    @let bid = eb.boat.id.as_int();
+                    @let active_class = if eb.active {
+                        "px-3 py-1 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer"
+                    } else {
+                        "px-3 py-1 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
+                    };
+                    button type="button" class=(active_class)
+                           data-boat-id=(bid)
+                           "@click"={"toggleBoat(" (bid) ")"} {
+                        (eb.boat.name)
+                        " ("
+                        (eb.boat.seat_count)
+                        @if eb.boat.has_cox.as_bool() { "+" }
+                        ")"
+                    }
+                }
+            }
+
+            // Boat cards
+            div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" {
+                @for eb in &editor.boats {
+                    @if eb.active {
+                        (editor_boat_card(snapshot, eb, flags))
+                    }
+                }
+            }
+
+            // Rower pool
+            div class="pt-4 border-t border-slate-200 text-sm space-y-2" {
+                @if !editor.sculling.is_empty() {
+                    div {
+                        strong class="text-slate-700" { "To sculling " }
+                    }
+                    div class="flex flex-wrap gap-2 mt-1" {
+                        @for r in &editor.sculling {
+                            @let key = format!("sculling:{}", r.id);
+                            @let stats = format!(
+                                "{} · {} · {} · {}",
+                                r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                            );
+                            span data-key=(key)
+                                 data-boat="sculling"
+                                 data-seat="-1"
+                                 data-rower=(r.id)
+                                 data-name=(r.name)
+                                 data-stats=(stats)
+                                 class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                                 ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                                 "@click"={"select('" (key) "')"} {
+                                div class="font-medium text-slate-800 text-sm" { (r.name) }
+                                div class="text-xs text-slate-500" { (stats) }
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    strong class="text-slate-700" { "Available " }
+                    span class="text-xs text-slate-500" { "(click to place in a seat)" }
+                }
+                div #bench-pills class="flex flex-wrap gap-2 mt-1" {
+                    @for r in &editor.pool {
+                        @let key = format!("bench:{}", r.id);
+                        @let stats = format!(
+                            "{} · {} · {} · {}",
+                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                        );
+                        span data-key=(key)
+                             data-boat="bench"
+                             data-seat="-1"
+                             data-rower=(r.id)
+                             data-name=(r.name)
+                             data-stats=(stats)
+                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                             ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                             "@click"={"select('" (key) "')"} {
+                            div class="font-medium text-slate-800 text-sm" { (r.name) }
+                            div class="text-xs text-slate-500" { (stats) }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Unified Alpine editor logic
+        script {
+            (maud::PreEscaped(editor_js(knobs)))
+        }
+    }
+}
+
+/// Render one boat card in the unified editor.
+fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags) -> Markup {
+    let boat = eb.boat;
+    let seat_count = boat.seat_count;
+    let cox_at_top = cox_first(snapshot, boat.id, flags.force_cox_stern);
+    let mut seats = eb.seats.clone();
+    seats.sort_by_key(|(s, _)| {
+        if *s == 0 {
+            if cox_at_top { i32::MIN } else { i32::MAX }
+        } else {
+            -*s
+        }
+    });
+
+    html! {
+        div class="border border-slate-200 rounded-lg overflow-hidden"
+             data-editor-boat=(boat.id)
+             data-hidden="false" {
+            div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
+                strong class="text-slate-800" { (boat.name) }
+                span class="text-xs text-slate-500 ml-2" {
+                    "(" (seat_count) "+"
+                    ", " (rig_label(boat))
+                    ")"
+                }
+            }
+            table class="w-full text-sm" {
+                tbody {
+                    @for (seat, maybe_rower) in &seats {
+                        @let key = format!("{}:{}", boat.id, seat);
+                        @let label = seat_label(*seat, seat_count);
+                        @let rower = maybe_rower.and_then(|id| find_rower(snapshot, id));
+                        @let rower_id_str = maybe_rower.map(|id| id.as_int().to_string()).unwrap_or_default();
+                        @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
+                        @let stats_text = rower.map(|r| format!(
+                            "{} · {} · {} · {}",
+                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                        )).unwrap_or_default();
+                        @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
+                        @let is_locked = maybe_rower.map(|rid| flags.locked_seats.contains(&(rid, boat.id, *seat))).unwrap_or(false);
+                        @let is_empty = maybe_rower.is_none();
+                        @let row_base = if is_empty {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-slate-50"
+                        } else if is_locked {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-violet-50 border-l-4 border-l-violet-400"
+                        } else if is_designated_cox {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
+                        } else {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition"
+                        };
+                        @let lock_val = format!("{}:{}:{}", rower_id_str, boat.id, seat);
+                        tr data-key=(key)
+                           data-boat=(boat.id)
+                           data-seat=(seat)
+                           data-rower=(rower_id_str)
+                           data-name=(rower_name)
+                           data-stats=(stats_text)
+                           class=(row_base)
+                           ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
+                           "@click"={"select('" (key) "')"} {
+                            td class="px-4 py-2 w-12" {
+                                (seat_badge(Some(boat), *seat, &label))
+                            }
+                            td class="px-4 py-2 rower-content" {
+                                @if let Some(r) = rower {
+                                    div class="font-medium text-slate-800" { (r.name) }
+                                    (rower_stats_line(r, flags.show_attributes))
+                                } @else if is_empty {
+                                    span class="text-slate-400 italic" { "\u{2014} empty \u{2014}" }
+                                } @else {
+                                    span class="text-slate-400 italic" { "unknown" }
+                                }
+                            }
+                            @if !is_empty {
+                                td class="w-8 text-center" {
+                                    button type="button"
+                                           class="text-xs hover:text-violet-700"
+                                           title=(if is_locked { "Unlock seat" } else { "Lock seat" })
+                                           data-lock=(lock_val)
+                                           "@click.stop"="toggleLock($event.currentTarget.dataset.lock)" {
+                                        @if is_locked { "🔒" } @else { "🔓" }
+                                    }
+                                }
+                            } @else {
+                                td class="w-8" {}
+                            }
+                            (side_indicator(rower))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Alpine JS for the unified lineup editor.
+fn editor_js(knobs: &SolveKnobs) -> String {
+    format!(r#"
+function lineupEditor() {{
+    return {{
+        selected: null,
+        init() {{ this.rebuildInputs(); }},
+        select(key) {{
+            if (!this.selected) {{
+                this.selected = key;
+            }} else if (this.selected === key) {{
+                this.selected = null;
+            }} else {{
+                this.doSwap(this.selected, key);
+                this.selected = null;
+            }}
+        }},
+        doSwap(a, b) {{
+            var elA = this.$root.querySelector('[data-key="' + a + '"]');
+            var elB = this.$root.querySelector('[data-key="' + b + '"]');
+            if (!elA || !elB) return;
+            var tmpRower = elA.dataset.rower;
+            var tmpName = elA.dataset.name;
+            var tmpStats = elA.dataset.stats || '';
+            elA.dataset.rower = elB.dataset.rower;
+            elA.dataset.name = elB.dataset.name;
+            elA.dataset.stats = elB.dataset.stats || '';
+            elB.dataset.rower = tmpRower;
+            elB.dataset.name = tmpName;
+            elB.dataset.stats = tmpStats;
+            this.renderSlot(elA);
+            this.renderSlot(elB);
+            this.rebuildInputs();
+        }},
+        toBench(key) {{
+            var el = this.$root.querySelector('[data-key="' + key + '"]');
+            if (!el || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+            var rowerId = el.dataset.rower;
+            var rowerName = el.dataset.name;
+            var rowerStats = el.dataset.stats || '';
+            if (!rowerId) return;
+            el.dataset.rower = '';
+            el.dataset.name = '';
+            el.dataset.stats = '';
+            this.renderSlot(el);
+            this.addPoolPill(rowerId, rowerName, rowerStats);
+            this.selected = null;
+            this.rebuildInputs();
+        }},
+        addPoolPill(rowerId, rowerName, rowerStats) {{
+            var container = this.$root.querySelector('#bench-pills');
+            if (!container) return;
+            var key = 'bench:' + rowerId;
+            var span = document.createElement('span');
+            span.dataset.key = key;
+            span.dataset.boat = 'bench';
+            span.dataset.seat = '-1';
+            span.dataset.rower = rowerId;
+            span.dataset.name = rowerName || '';
+            span.dataset.stats = rowerStats || '';
+            span.className = 'inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50';
+            span.setAttribute('@click', "select('" + key + "')");
+            span.setAttribute(':class', "selected === '" + key + "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'");
+            var html = '<div class="font-medium text-slate-800 text-sm">' + this.esc(rowerName || '#' + rowerId) + '</div>';
+            if (rowerStats) html += '<div class="text-xs text-slate-500">' + this.esc(rowerStats) + '</div>';
+            span.innerHTML = html;
+            container.appendChild(span);
+        }},
+        renderSlot(el) {{
+            var rowerId = el.dataset.rower;
+            var rowerName = el.dataset.name;
+            var stats = el.dataset.stats || '';
+            var content = el.querySelector('.rower-content');
+            if (!content) content = el.tagName === 'SPAN' ? el : null;
+            if (!content) return;
+            if (!rowerId) {{
+                content.innerHTML = '<span class="text-slate-400 italic">\u2014 empty \u2014</span>';
+            }} else {{
+                var html = '<div class="font-medium text-slate-800' +
+                    (el.tagName === 'SPAN' ? ' text-sm' : '') + '">' +
+                    this.esc(rowerName || '#' + rowerId) + '</div>';
+                if (stats) html += '<div class="text-xs text-slate-500">' + this.esc(stats) + '</div>';
+                content.innerHTML = html;
+            }}
+        }},
+        toggleBoat(boatId) {{
+            var card = this.$root.querySelector('[data-editor-boat="' + boatId + '"]');
+            var pill = this.$root.querySelector('[data-boat-id="' + boatId + '"]');
+            if (!card) return;
+            var isHidden = card.dataset.hidden === 'true';
+            if (isHidden) {{
+                // Show the boat.
+                card.style.display = '';
+                card.dataset.hidden = 'false';
+                if (pill) pill.className = 'px-3 py-1 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
+            }} else {{
+                // Bench all rowers from this boat, then hide.
+                var rows = Array.from(card.querySelectorAll('tr[data-rower]'));
+                var self = this;
+                rows.forEach(function(row) {{
+                    var rid = row.dataset.rower;
+                    if (rid) {{
+                        var rn = row.dataset.name;
+                        var rs = row.dataset.stats || '';
+                        row.dataset.rower = '';
+                        row.dataset.name = '';
+                        row.dataset.stats = '';
+                        self.renderSlot(row);
+                        self.addPoolPill(rid, rn, rs);
+                    }}
+                }});
+                card.style.display = 'none';
+                card.dataset.hidden = 'true';
+                if (pill) pill.className = 'px-3 py-1 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
+            }}
+            this.rebuildInputs();
+        }},
+        esc(s) {{
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }},
+        toggleLock(lockVal) {{
+            var form = document.querySelector('form[hx-get]');
+            if (!form) return;
+            var existing = form.querySelector('input[name="lock"][value="' + lockVal + '"]');
+            var btn = this.$root.querySelector('[data-lock="' + lockVal + '"]');
+            var row = btn ? btn.closest('tr') : null;
+            if (existing) {{
+                existing.remove();
+                if (btn) btn.textContent = '\uD83D\uDD13';
+                if (row) row.classList.remove('bg-violet-50', 'border-l-4', 'border-l-violet-400');
+            }} else {{
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'lock';
+                inp.value = lockVal;
+                form.appendChild(inp);
+                if (btn) btn.textContent = '\uD83D\uDD12';
+                if (row) row.classList.add('bg-violet-50', 'border-l-4', 'border-l-violet-400');
+            }}
+        }},
+        rebuildInputs() {{
+            var container = this.$refs.seatInputs;
+            if (!container) return;
+            container.innerHTML = '';
+            var placements = [];
+            this.$root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {{
+                if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+                if (!el.dataset.rower) return;
+                var val = el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower;
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'seat';
+                inp.value = val;
+                container.appendChild(inp);
+                placements.push(el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
+            }});
+            // Inject placements as locks into the knobs form for Generate.
+            var knobsForm = document.querySelector('form[hx-get]');
+            if (knobsForm) {{
+                knobsForm.querySelectorAll('input[name="lock"].manual-lock').forEach(function(el) {{ el.remove(); }});
+                placements.forEach(function(lockVal) {{
+                    var inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.name = 'lock';
+                    inp.value = lockVal;
+                    inp.className = 'manual-lock';
+                    knobsForm.appendChild(inp);
+                }});
+            }}
+        }}
+    }};
+}}
+"#)
+}
+
 /// Landing page before the solver runs. Shows knobs with a
 /// "Generate" button (or "Re-generate" if lineups already exist),
 /// plus a manual lineup builder with boat selection and an
@@ -40,6 +521,7 @@ pub(crate) fn landing_content(
     committed_practices: &[Practice],
     has_committed: bool,
     custom_profiles: &[(String, Option<String>)],
+    flags: &DisplayFlags,
 ) -> Markup {
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -61,12 +543,14 @@ pub(crate) fn landing_content(
         })
         .collect();
 
+    let editor = EditorData::empty(snapshot);
+
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
             (walkon_section(date, &unavailable, knobs))
-            (manual_builder(snapshot, date))
+            (lineup_editor(snapshot, date, &editor, flags, knobs))
         }
     }
 }
@@ -406,18 +890,21 @@ pub(crate) fn view_content(
         boats = snapshot.sweep_boats.len(),
     );
 
+    let editor = if result.status == SolveStatus::Satisfied {
+        EditorData::from_solve(snapshot, &result.primary)
+    } else {
+        EditorData::empty(snapshot)
+    };
+
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, true, custom_profiles))
             (status_banner(date, &result.status, &result.diagnostics))
+            (lineup_editor(snapshot, date, &editor, flags, knobs))
 
-            @if result.status == SolveStatus::Satisfied {
-                (primary_panel(snapshot, date, knobs, &result.primary, flags))
-
-                @if !result.alternatives.is_empty() {
-                    (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
-                }
+            @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
+                (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
             }
         }
     }
