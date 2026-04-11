@@ -121,7 +121,7 @@ pub(crate) fn lineup_editor(
 
             div class="flex items-center justify-between mb-4 flex-wrap gap-2" {
                 h2 class="text-xl font-bold text-slate-800" { "Lineup" }
-                div class="flex items-center gap-2" {
+                div class="flex items-center gap-2 no-print" {
                     template x-if="selected" {
                         span class="text-xs text-blue-600" {
                             "Click another to swap"
@@ -145,7 +145,7 @@ pub(crate) fn lineup_editor(
             }
 
             // Boat selector pills
-            div class="flex flex-wrap gap-2 mb-4" {
+            div class="flex flex-wrap gap-2 mb-4 no-print" {
                 @for eb in &editor.boats {
                     @let bid = eb.boat.id.as_int();
                     @let active_class = if eb.active {
@@ -253,7 +253,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     });
 
     html! {
-        div class="border border-slate-200 rounded-lg overflow-hidden"
+        div class="border border-slate-200 rounded-lg overflow-hidden print-break"
              data-editor-boat=(boat.id)
              data-hidden="false" {
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
@@ -548,8 +548,10 @@ pub(crate) fn landing_content(
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
-            (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
-            (walkon_section(date, &unavailable, knobs))
+            div class="no-print" {
+                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
+                (walkon_section(date, &unavailable, knobs))
+            }
             (lineup_editor(snapshot, date, &editor, flags, knobs))
         }
     }
@@ -656,7 +658,9 @@ pub(crate) fn view_content(
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
-            (knobs_form(date, knobs, committed_practices, true, custom_profiles))
+            div class="no-print" {
+                (knobs_form(date, knobs, committed_practices, true, custom_profiles))
+            }
             (status_banner(date, &result.status, &result.diagnostics))
             (lineup_editor(snapshot, date, &editor, flags, knobs))
 

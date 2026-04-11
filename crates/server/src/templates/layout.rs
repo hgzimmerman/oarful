@@ -25,6 +25,21 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
                 style { "[x-cloak] { display: none !important; }" }
+                // Print-friendly overrides: hide chrome, expand content
+                style { r#"
+                    @media print {
+                        nav, .no-print { display: none !important; }
+                        body { background: white !important; }
+                        main { padding: 0 !important; }
+                        .bg-white { box-shadow: none !important; }
+                        /* Page-break between boat cards */
+                        .print-break { break-inside: avoid; page-break-inside: avoid; }
+                        /* Remove sticky positioning */
+                        .sticky { position: static !important; }
+                        /* Ensure text is black for readability */
+                        * { color-adjust: exact; -webkit-print-color-adjust: exact; }
+                    }
+                "# }
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
                 (navbar(role))

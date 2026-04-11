@@ -89,7 +89,7 @@ pub(crate) fn detail_content(
         (page_header(&format!("Lineups · {date}"), None))
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-4" {
             @if is_coach {
-                (notes_section(practice, date))
+                div class="no-print" { (notes_section(practice, date)) }
             }
 
             @if has_stale {
@@ -111,7 +111,7 @@ pub(crate) fn detail_content(
                     @for c in committed {
                         (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
                     }
-                    div class="mt-4 flex justify-end" {
+                    div class="mt-4 flex justify-end no-print" {
                         button type="submit"
                                class="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition font-semibold" {
                             "Re-solve without no-shows"
@@ -198,7 +198,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
     });
 
     html! {
-        div class="bg-white rounded-lg shadow overflow-hidden" {
+        div class="bg-white rounded-lg shadow overflow-hidden print-break" {
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
                 strong { (boat_name) }
                 span class="text-xs text-slate-500 ml-2" {
@@ -234,7 +234,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                                 }
                             }
                             @if is_coach {
-                                td class="px-4 py-2 text-right w-16" {
+                                td class="px-4 py-2 text-right w-16 no-print" {
                                     label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
                                         input type="checkbox" name="no_show" value=(seat.rower_id)
                                               class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
