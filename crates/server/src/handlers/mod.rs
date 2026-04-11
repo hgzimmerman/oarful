@@ -114,23 +114,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
     public.merge(protected)
 }
 
-/// Render `content` either as a full page (for a normal navigation) or
-/// as the bare inner content (when HTMX is doing an in-place swap).
-/// Every visual handler should return through here so the HTMX and
-/// non-HTMX paths stay in sync.
-pub(crate) fn maybe_page(
-    title: &str,
-    content: Markup,
-    HxRequest(is_htmx): HxRequest,
-) -> Html<String> {
-    // No role context — navbar shows all links. Used by public routes
-    // or when the tenant context isn't available.
-    if is_htmx {
-        Html(content.into_string())
-    } else {
-        Html(templates::layout::page(title, content, None).into_string())
-    }
-}
 
 pub(crate) fn maybe_page_authed(
     title: &str,

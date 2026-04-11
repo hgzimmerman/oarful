@@ -280,33 +280,6 @@ pub(crate) struct RowerDetail {
     pub(crate) other_rowers: Vec<Rower>,
 }
 
-/// Determine the DetailPermissions for the current user viewing/editing this rower.
-async fn resolve_perms(
-    tenant: &TenantContext,
-    db: &lineup_db::state::Db,
-    rower_id: RowerId,
-    team_id: lineup_db::team::TeamId,
-) -> Result<templates::rowers::DetailPermissions, StatusCode> {
-    use lineup_db::team::{SelfEditLevel, Team};
-
-    if tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach) {
-        return Ok(templates::rowers::DetailPermissions::coach());
-    }
-    // Check if this rower is linked to the current user.
-    let rower = load(db, rower_id).await?;
-    if rower.user_id == Some(tenant.claims.sub) {
-        let team = db
-            .with_conn(move |conn| Team::get(conn, team_id))
-            .await
-            .map_err(internal_error)?;
-        let level = team
-            .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
-            .unwrap_or(SelfEditLevel::Low);
-        return Ok(templates::rowers::DetailPermissions::member(level));
-    }
-    Err(StatusCode::FORBIDDEN)
-}
-
 /// Allow if user is Coach+ or is editing their own rower profile.
 async fn require_coach_or_self(tenant: &TenantContext, rower_id: RowerId) -> Result<(), StatusCode> {
     if tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach) {
