@@ -43,26 +43,26 @@ fn profile_inner(r: &Rower, error: Option<&str>) -> Markup {
                  class="bg-white rounded-lg shadow p-6 space-y-4" {
                 div class="grid grid-cols-2 gap-4" {
                     (select_field("weight_class", "Weight class", &[
-                        ("Light", r.weight_class == lineup_db::rower::types::RowerWeightClass::Light),
-                        ("Medium", r.weight_class == lineup_db::rower::types::RowerWeightClass::Medium),
-                        ("Heavy", r.weight_class == lineup_db::rower::types::RowerWeightClass::Heavy),
+                        ("Light", "Lightweight", r.weight_class == lineup_db::rower::types::RowerWeightClass::Light),
+                        ("Medium", "Middleweight", r.weight_class == lineup_db::rower::types::RowerWeightClass::Medium),
+                        ("Heavy", "Heavyweight", r.weight_class == lineup_db::rower::types::RowerWeightClass::Heavy),
                     ]))
-                    (select_field("skill", "Skill", &[
-                        ("Novice", r.skill == lineup_db::rower::types::Skill::Novice),
-                        ("Intermediate", r.skill == lineup_db::rower::types::Skill::Intermediate),
-                        ("Master", r.skill == lineup_db::rower::types::Skill::Master),
-                        ("Expert", r.skill == lineup_db::rower::types::Skill::Expert),
+                    (select_field("skill", "Form", &[
+                        ("Novice", "Novice", r.skill == lineup_db::rower::types::Skill::Novice),
+                        ("Intermediate", "Intermediate", r.skill == lineup_db::rower::types::Skill::Intermediate),
+                        ("Master", "Master", r.skill == lineup_db::rower::types::Skill::Master),
+                        ("Expert", "Expert", r.skill == lineup_db::rower::types::Skill::Expert),
                     ]))
                     (select_field("strength", "Strength", &[
-                        ("Weak", r.strength == lineup_db::rower::types::Strength::Weak),
-                        ("Intermediate", r.strength == lineup_db::rower::types::Strength::Intermediate),
-                        ("Strong", r.strength == lineup_db::rower::types::Strength::Strong),
-                        ("VeryStrong", r.strength == lineup_db::rower::types::Strength::VeryStrong),
+                        ("Weak", "Weak", r.strength == lineup_db::rower::types::Strength::Weak),
+                        ("Intermediate", "Intermediate", r.strength == lineup_db::rower::types::Strength::Intermediate),
+                        ("Strong", "Strong", r.strength == lineup_db::rower::types::Strength::Strong),
+                        ("VeryStrong", "Very strong", r.strength == lineup_db::rower::types::Strength::VeryStrong),
                     ]))
                     (select_field("side", "Preferred side", &[
-                        ("Port", r.side == lineup_db::rower::types::Side::Port),
-                        ("Starboard", r.side == lineup_db::rower::types::Side::Starboard),
-                        ("Either", r.side == lineup_db::rower::types::Side::Either),
+                        ("Port", "Port", r.side == lineup_db::rower::types::Side::Port),
+                        ("Starboard", "Starboard", r.side == lineup_db::rower::types::Side::Starboard),
+                        ("Either", "Either", r.side == lineup_db::rower::types::Side::Either),
                     ]))
                     div {
                         label for="side_strength" class="block text-sm font-semibold text-slate-700 mb-1" { "Side strength (0=hard lock, 5=flexible)" }
@@ -90,17 +90,17 @@ fn profile_inner(r: &Rower, error: Option<&str>) -> Markup {
     }
 }
 
-fn select_field(name: &str, label: &str, options: &[(&str, bool)]) -> Markup {
+fn select_field(name: &str, label: &str, options: &[(&str, &str, bool)]) -> Markup {
     html! {
         div {
             label for=(name) class="block text-sm font-semibold text-slate-700 mb-1" { (label) }
             select id=(name) name=(name)
                    class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
-                @for (value, selected) in options {
+                @for (value, display, selected) in options {
                     @if *selected {
-                        option value=(value) selected { (value) }
+                        option value=(value) selected { (display) }
                     } @else {
-                        option value=(value) { (value) }
+                        option value=(value) { (display) }
                     }
                 }
             }

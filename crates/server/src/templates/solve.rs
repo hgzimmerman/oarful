@@ -843,7 +843,7 @@ fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
     if show_attributes {
         html! {
             div class="text-xs text-slate-500" {
-                (r.weight_class) " · " (r.skill) " · " (r.strength) " · " (r.side)
+                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (r.side)
             }
         }
     } else {

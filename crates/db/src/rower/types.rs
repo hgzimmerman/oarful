@@ -72,12 +72,23 @@ impl RowerWeightClass {
     }
 }
 
+impl RowerWeightClass {
+    /// Abbreviated label for compact stats lines.
+    pub fn short(&self) -> &'static str {
+        match self {
+            Self::Light => "Lt",
+            Self::Medium => "Md",
+            Self::Heavy => "Hv",
+        }
+    }
+}
+
 impl std::fmt::Display for RowerWeightClass {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Light => "Light",
-            Self::Medium => "Medium",
-            Self::Heavy => "Heavy",
+            Self::Light => "Lightweight",
+            Self::Medium => "Middleweight",
+            Self::Heavy => "Heavyweight",
         })
     }
 }
@@ -113,6 +124,19 @@ impl Skill {
             Self::Intermediate => 2,
             Self::Master => 3,
             Self::Expert => 4,
+        }
+    }
+}
+
+impl Skill {
+    /// Abbreviated label for compact stats lines. Uses "Form" category
+    /// name to disambiguate from Strength's "Intermediate".
+    pub fn short(&self) -> &'static str {
+        match self {
+            Self::Novice => "Nov",
+            Self::Intermediate => "Int",
+            Self::Master => "Mst",
+            Self::Expert => "Exp",
         }
     }
 }
@@ -164,13 +188,25 @@ impl Strength {
     }
 }
 
+impl Strength {
+    /// Abbreviated label for compact stats lines.
+    pub fn short(&self) -> &'static str {
+        match self {
+            Self::Weak => "Wk",
+            Self::Intermediate => "Int",
+            Self::Strong => "Str",
+            Self::VeryStrong => "V.Str",
+        }
+    }
+}
+
 impl std::fmt::Display for Strength {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Weak => "Weak",
             Self::Intermediate => "Intermediate",
             Self::Strong => "Strong",
-            Self::VeryStrong => "VeryStrong",
+            Self::VeryStrong => "Very strong",
         })
     }
 }

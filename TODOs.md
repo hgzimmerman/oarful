@@ -69,6 +69,10 @@ can resume without re-deriving context.
 - **Practice scheduling UI** — date picker + "Create" button on
   `/practices`. Coach+ role-gated. Created practices appear in the
   list even before availability is synced.
+- **Disambiguate rower attribute labels** — "Skill" renamed to "Form"
+  in UI labels. Weight class shows Lightweight/Middleweight/Heavyweight.
+  Compact stats line uses abbreviated labels (Lt/Md/Hv · Nov/Int/Mst/Exp
+  · Wk/Int/Str/V.Str · Side). DB enum values unchanged.
 - **Practice-driven availability** — `/my/availability` now shows
   upcoming scheduled practices with inline status dropdowns.
   Rowers see all practices and can respond per-date without needing
@@ -109,16 +113,6 @@ backfill new columns with 0. "Save as preset" button persists
 current weights.
 
 No solver changes needed — purely UI + storage.
-
-#### Disambiguate rower attribute labels in lineup cards
-
-"Intermediate" appears in both skill and strength enums, making
-the compact stats line ambiguous. Rename "Skill" → "Form" in the
-UI (and possibly DB enum) to differentiate. Rename weight class
-"Medium" → "Middleweight" for clarity. Then use abbreviated labels
-in the stats line: e.g. `Mdl · Int · Int · Port` where the
-distinct category names make each value unambiguous. Apply
-consistently on solve view seat rows and bench/sculling chips.
 
 #### Bow-loader cox fit penalty
 

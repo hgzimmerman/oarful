@@ -27,7 +27,7 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
                             tr {
                                 th class="px-4 py-2" { "Name" }
                                 th class="px-4 py-2" { "Weight" }
-                                th class="px-4 py-2" { "Skill" }
+                                th class="px-4 py-2" { "Form" }
                                 th class="px-4 py-2" { "Strength" }
                                 th class="px-4 py-2" { "Side" }
                                 th class="px-4 py-2" { "Side str" }
@@ -135,7 +135,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
             }
             dl class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
                 (kv("Weight", &r.weight_class.to_string()))
-                (kv("Skill", &r.skill.to_string()))
+                (kv("Form", &r.skill.to_string()))
                 (kv("Strength", &r.strength.to_string()))
                 (kv("Side", &format!("{} ({})", r.side, r.side_strength)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
@@ -183,35 +183,35 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
                     (enum_select("weight_class", &[
-                        ("Light", RowerWeightClass::Light == r.weight_class),
-                        ("Medium", RowerWeightClass::Medium == r.weight_class),
-                        ("Heavy", RowerWeightClass::Heavy == r.weight_class),
+                        ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
+                        ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
+                        ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
                     ]))
                 }
                 div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Skill" }
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
                     (enum_select("skill", &[
-                        ("Novice", Skill::Novice == r.skill),
-                        ("Intermediate", Skill::Intermediate == r.skill),
-                        ("Master", Skill::Master == r.skill),
-                        ("Expert", Skill::Expert == r.skill),
+                        ("Novice", "Novice", Skill::Novice == r.skill),
+                        ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
+                        ("Master", "Master", Skill::Master == r.skill),
+                        ("Expert", "Expert", Skill::Expert == r.skill),
                     ]))
                 }
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
                     (enum_select("strength", &[
-                        ("Weak", Strength::Weak == r.strength),
-                        ("Intermediate", Strength::Intermediate == r.strength),
-                        ("Strong", Strength::Strong == r.strength),
-                        ("VeryStrong", Strength::VeryStrong == r.strength),
+                        ("Weak", "Weak", Strength::Weak == r.strength),
+                        ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
+                        ("Strong", "Strong", Strength::Strong == r.strength),
+                        ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
                     ]))
                 }
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Side" }
                     (enum_select("side", &[
-                        ("Port", Side::Port == r.side),
-                        ("Starboard", Side::Starboard == r.side),
-                        ("Either", Side::Either == r.side),
+                        ("Port", "Port", Side::Port == r.side),
+                        ("Starboard", "Starboard", Side::Starboard == r.side),
+                        ("Either", "Either", Side::Either == r.side),
                     ]))
                 }
                 div {
@@ -423,15 +423,16 @@ pub(crate) fn pair_affinities_section(
     }
 }
 
-fn enum_select(name: &str, options: &[(&str, bool)]) -> Markup {
+/// Render a `<select>` with `(db_value, display_label, is_selected)` options.
+fn enum_select(name: &str, options: &[(&str, &str, bool)]) -> Markup {
     html! {
         select name=(name)
                class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
-            @for (value, selected) in options {
+            @for (value, label, selected) in options {
                 @if *selected {
-                    option value=(value) selected { (value) }
+                    option value=(value) selected { (label) }
                 } @else {
-                    option value=(value) { (value) }
+                    option value=(value) { (label) }
                 }
             }
         }
