@@ -691,50 +691,47 @@ fn name_list(snapshot: &DbSnapshot, ids: &[RowerId]) -> Markup {
     }
 }
 
-/// Narrow colored cell on the right edge of a seat row indicating
-/// the rower's side preference. Port = red, starboard = green,
-/// Either = empty. Opacity scales with side_strength (HARD/0 = full,
-/// soft 1 = faintest, soft 5 = strong).
+/// Colored right-edge bar indicating side preference. Port = red,
+/// starboard = green, Either = empty. Notches (gray lines from the
+/// bottom) convey strength: more notches = weaker preference.
+/// HARD/5 = solid, 4 = 1 notch, 3 = 2, 2 = 3, 1 = 4.
 pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     use lineup_db::rower::types::Side;
     let Some(r) = rower else {
-        return html! { td class="w-1" {} };
+        return html! {};
     };
-    let (color, opacity) = match r.side {
-        Side::Port => {
-            let op = if r.side_strength.is_hard() {
-                "opacity-100"
-            } else {
-                match r.side_strength.as_int() {
-                    1 => "opacity-20",
-                    2 => "opacity-40",
-                    3 => "opacity-60",
-                    4 => "opacity-80",
-                    _ => "opacity-100",
-                }
-            };
-            ("bg-red-500", op)
-        }
-        Side::Starboard => {
-            let op = if r.side_strength.is_hard() {
-                "opacity-100"
-            } else {
-                match r.side_strength.as_int() {
-                    1 => "opacity-20",
-                    2 => "opacity-40",
-                    3 => "opacity-60",
-                    4 => "opacity-80",
-                    _ => "opacity-100",
-                }
-            };
-            ("bg-green-500", op)
-        }
-        Side::Either => {
-            return html! { td class="w-1" {} };
-        }
+    let color = match r.side {
+        Side::Port => "bg-red-400",
+        Side::Starboard => "bg-green-500",
+        Side::Either => return html! {},
     };
+    let notches = if r.side_strength.is_hard() {
+        0
+    } else {
+        (5 - r.side_strength.as_int()).max(0)
+    };
+    if notches == 0 {
+        return html! {
+            td class={"w-2 p-0 " (color)} { "\u{00a0}" }
+        };
+    }
+    // Notches centered vertically: use a repeating gradient sized to
+    // the notch block height, positioned at center.
+    let notch_h = 2; // px per gray line
+    let gap = 3;     // px between lines
+    let block_h = notches * (notch_h + gap) - gap; // total notch block height
+    let mut stops = Vec::new();
+    for i in 0..notches {
+        let start = i * (notch_h + gap);
+        let end = start + notch_h;
+        stops.push(format!("#cbd5e1 {start}px,#cbd5e1 {end}px,transparent {end}px"));
+    }
+    let gradient = format!(
+        "background-image:linear-gradient(to bottom,{});background-size:100% {block_h}px;background-repeat:no-repeat;background-position:center",
+        stops.join(",")
+    );
     html! {
-        td class={"w-1 " (color) " " (opacity)} {}
+        td class={"w-2 p-0 " (color)} style=(gradient) { "\u{00a0}" }
     }
 }
 
