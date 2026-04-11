@@ -3,12 +3,13 @@
 use std::collections::HashMap;
 
 use lineup_db::app_user::{AppUser, Role, UserId};
+use lineup_db::rower::Rower;
 use maud::{html, Markup, DOCTYPE};
 
 use super::layout::page_header;
 
 /// User list with invite form (PD-only page).
-pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>) -> Markup {
+pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unlinked_rowers: &[Rower]) -> Markup {
     let subtitle = format!("{} users", users.len());
     html! {
         (page_header("Users", Some(&subtitle)))
@@ -40,6 +41,47 @@ pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>) -> 
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
                         "Send invite"
+                    }
+                }
+            }
+
+            // Create from roster — members with email but no account
+            @if !unlinked_rowers.is_empty() {
+                section class="bg-white rounded-lg shadow p-6" {
+                    h2 class="text-lg font-bold text-slate-800 mb-2" { "Create account from roster" }
+                    p class="text-sm text-slate-500 mb-4" {
+                        (unlinked_rowers.len()) " roster member"
+                        @if unlinked_rowers.len() != 1 { "s" }
+                        " with email but no account."
+                    }
+                    form method="post" action="/users/invite"
+                         class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end" {
+                        div class="md:col-span-1" {
+                            label for="roster_member" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                                "Roster member"
+                            }
+                            select id="roster_member"
+                                   class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+                                   onchange="var opt = this.selectedOptions[0]; document.getElementById('roster_name').value = opt.dataset.name || ''; document.getElementById('roster_email').value = opt.dataset.email || '';" {
+                                option value="" { "Select a member…" }
+                                @for r in unlinked_rowers {
+                                    @let email = r.email.as_deref().unwrap_or("");
+                                    option value=(r.id)
+                                           data-name=(r.name)
+                                           data-email=(email) {
+                                        (r.name) " (" (email) ")"
+                                    }
+                                }
+                            }
+                        }
+                        // Hidden fields pre-filled from the dropdown
+                        input #roster_name type="hidden" name="name" value="";
+                        input #roster_email type="hidden" name="email" value="";
+                        input type="hidden" name="role" value="Member";
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                            "Create & invite"
+                        }
                     }
                 }
             }

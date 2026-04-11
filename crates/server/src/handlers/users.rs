@@ -33,7 +33,7 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let (users, roles) = tenant
+    let (users, roles, unlinked_rowers) = tenant
         .db
         .with_conn(|conn| {
             let users = app_user::table
@@ -47,11 +47,16 @@ pub(crate) async fn list_handler(
                 .into_iter()
                 .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
                 .collect();
-            Ok((users, roles))
+            // Roster members with email but no linked user account.
+            let unlinked: Vec<Rower> = Rower::list_active(conn)?
+                .into_iter()
+                .filter(|r| r.user_id.is_none() && r.email.is_some())
+                .collect();
+            Ok((users, roles, unlinked))
         })
         .await
         .map_err(super::internal_error)?;
-    let content = templates::users::list_content(&users, &roles);
+    let content = templates::users::list_content(&users, &roles, &unlinked_rowers);
     Ok(super::maybe_page("Users", content, hx))
 }
 
