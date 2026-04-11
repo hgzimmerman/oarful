@@ -33,6 +33,37 @@ pub(crate) async fn selector_handler(
     ))
 }
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct CreateTeamInput {
+    name: String,
+}
+
+/// `POST /teams` — create a new team (PD only).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn create_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    Form(input): Form<CreateTeamInput>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let name = input.name.trim().to_string();
+    if name.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let now = chrono::Utc::now().naive_utc();
+    let team = tenant
+        .db
+        .with_conn(move |conn| {
+            Team::create(conn, lineup_db::team::NewTeam { name, created_at: now })
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Redirect to the new team's detail page.
+    let content = templates::teams::detail_content(&team);
+    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+}
+
 /// `GET /teams` — list all teams (PD only).
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(

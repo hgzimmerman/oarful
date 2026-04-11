@@ -101,7 +101,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/my/availability",
             get(my::availability_handler).post(my::availability_update_handler),
         )
-        .route("/teams", get(teams::list_handler))
+        .route("/teams", get(teams::list_handler).post(teams::create_handler))
         .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
         .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))

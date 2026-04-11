@@ -48,7 +48,26 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
     let subtitle = format!("{} teams", teams.len());
     html! {
         (page_header("Teams", Some(&subtitle)))
-        div class="px-8 py-6 max-w-3xl" {
+        div class="px-8 py-6 max-w-3xl space-y-6" {
+            // Create team form
+            form method="post" action="/teams"
+                 hx-post="/teams"
+                 hx-target="#content"
+                 hx-push-url="true"
+                 class="flex items-end gap-3" {
+                div {
+                    label for="team_name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        "New team"
+                    }
+                    input id="team_name" name="name" type="text" required placeholder="Team name"
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                button type="submit"
+                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                    "Create"
+                }
+            }
+
             @if teams.is_empty() {
                 div class="text-slate-500 italic" { "No teams." }
             } @else {
