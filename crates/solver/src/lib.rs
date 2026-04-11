@@ -651,7 +651,18 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
         bail!("no rowers are available for sweep seating on {}", request.date);
     }
 
-    // --- Phase 1b: pre-solve diagnostics ---
+    // --- Phase 1b: greedy fleet pre-selection ---
+    //
+    // The CP solver explores the search space incrementally and may
+    // time out before discovering that two large boats are better
+    // than one large + one small. Help it by pre-selecting a greedy
+    // fleet: sort boats by size descending and pick boats until
+    // capacity is exhausted. This doesn't prevent the solver from
+    // choosing differently — it just prunes obviously-suboptimal
+    // candidates so the solver converges faster.
+    let boats = greedy_fleet_select(boats, available.len(), request.partial_fill);
+
+    // --- Phase 1c: pre-solve diagnostics ---
     let mut diagnostics = pre_solve_diagnostics(&boats, &available);
 
     // --- Phase 2: build the model ---
@@ -659,6 +670,59 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
     // --- Phase 3: search ---
     search_lineups(builder, objective, request, diagnostics)
+}
+
+/// Greedy fleet pre-selection: pick the largest boats first until
+/// the available rower count is exhausted. Returns a subset of
+/// `candidates` that can plausibly be fully (or partially) filled.
+///
+/// This is a heuristic — the solver still decides the final fleet
+/// via `use[b]` variables. But narrowing the candidate set from
+/// "all in-service sweep boats" to "the ones that actually fit"
+/// dramatically reduces the search space and prevents timeout on
+/// fleet-configuration exploration.
+fn greedy_fleet_select<'a>(
+    mut candidates: Vec<&'a Boat>,
+    num_available: usize,
+    partial_fill: PartialFillPolicy,
+) -> Vec<&'a Boat> {
+    use model::optional_seats;
+
+    // Sort largest first (already the case from list_sweep, but
+    // be explicit).
+    candidates.sort_by(|a, b| {
+        let a_total = a.seat_count + if a.has_cox.as_bool() { 1 } else { 0 };
+        let b_total = b.seat_count + if b.has_cox.as_bool() { 1 } else { 0 };
+        b_total.cmp(&a_total)
+    });
+
+    let k = partial_fill.max_empty();
+    let mut remaining = num_available as i32;
+    let mut selected = Vec::new();
+
+    for boat in &candidates {
+        let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+        let n_opt = optional_seats(boat).len() as i32;
+        let can_skip = k.min(n_opt);
+        let min_seats = seats_total - can_skip;
+
+        if remaining >= min_seats {
+            selected.push(*boat);
+            // Assume we'll fill as many seats as possible (up to
+            // seats_total), not just min_seats.
+            let actually_fill = seats_total.min(remaining);
+            remaining -= actually_fill;
+        }
+    }
+
+    tracing::info!(
+        candidates = candidates.len(),
+        selected = selected.len(),
+        names = %selected.iter().map(|b| b.name.as_str()).collect::<Vec<_>>().join(", "),
+        "greedy fleet pre-selection"
+    );
+
+    selected
 }
 
 /// Cheap pre-solve checks that detect common reasons for

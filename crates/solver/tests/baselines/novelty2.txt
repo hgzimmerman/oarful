@@ -1,6 +1,6 @@
 status: Satisfied
-fielded: 1/3
-skipped: Artemis, Hestia
+fielded: 1/1
+skipped: 
 to sculling: 
 benched: Grace, Ivan
 
