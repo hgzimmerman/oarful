@@ -85,8 +85,8 @@ fn summary_panel(s: &SyncSummary) -> Markup {
                 (stat("Rows read", s.rows_read))
                 (stat("Sweep", s.sweep_rows))
                 (stat("Sculling", s.sculling_rows))
-                (stat("Rowers created", s.rowers_created))
-                (stat("Rowers updated", s.rowers_updated))
+                (stat("Members created", s.rowers_created))
+                (stat("Members updated", s.rowers_updated))
                 (stat("Availability upserted", s.availabilities_upserted))
             }
 

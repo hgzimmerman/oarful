@@ -14,12 +14,12 @@ use super::layout::{empty_state, page_header};
 use crate::handlers::rowers::RowerDetail;
 
 pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
-    let subtitle = format!("{} active rowers", rowers.len());
+    let subtitle = format!("{} active members", rowers.len());
     html! {
-        (page_header("Rowers", Some(&subtitle)))
+        (page_header("Roster", Some(&subtitle)))
         div class="px-8 py-6" {
             @if rowers.is_empty() {
-                (empty_state("No rowers on file. Sync the spreadsheet to populate the roster."))
+                (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 div class="bg-white rounded-lg shadow overflow-hidden max-w-6xl" {
                     table class="w-full text-sm" {

@@ -39,8 +39,8 @@ fn navbar() -> Markup {
                 li class="font-bold text-lg mr-4" { "Lineup Generator" }
                 (nav_link("/practices", "Practices"))
                 (nav_link("/history", "History"))
-                (nav_link("/boats", "Boats"))
-                (nav_link("/rowers", "Rowers"))
+                (nav_link("/boats", "Fleet"))
+                (nav_link("/rowers", "Roster"))
                 (nav_link("/sync", "Sync"))
                 (nav_link("/users", "Users"))
                 (nav_link("/my/profile", "Profile"))

@@ -10,7 +10,7 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
     let in_service: Vec<&Boat> = boats.iter().filter(|b| b.in_service()).collect();
     let relinquished: Vec<&Boat> = boats.iter().filter(|b| !b.in_service()).collect();
     let subtitle = format!(
-        "{} in service · {} relinquished",
+        "{} shells in service · {} relinquished",
         in_service.len(),
         relinquished.len(),
     );
@@ -27,14 +27,14 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
                   hx-target="#content"
                   hx-push-url="true"
                   class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
-                    "Add boat"
+                    "Add shell"
                 }
             }
         }
         div class="px-8 py-6 space-y-6" {
 
             @if boats.is_empty() {
-                (empty_state("No boats on file."))
+                (empty_state("No shells on file."))
             } @else {
                 @if !in_service.is_empty() {
                     (boat_table("In service", &in_service))
@@ -117,8 +117,8 @@ pub(crate) fn form_content(
     error: Option<&str>,
 ) -> Markup {
     let (title, action, submit_label) = match mode {
-        FormMode::New => ("New boat", "/boats".to_string(), "Create"),
-        FormMode::Edit(id) => ("Edit boat", format!("/boats/{id}"), "Save"),
+        FormMode::New => ("New shell", "/boats".to_string(), "Create"),
+        FormMode::Edit(id) => ("Edit shell", format!("/boats/{id}"), "Save"),
     };
 
     html! {

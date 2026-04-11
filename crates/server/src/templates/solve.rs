@@ -43,7 +43,7 @@ pub(crate) fn landing_content(
 ) -> Markup {
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
-        "{available_count} rowers available · {boats} candidate boats",
+        "{available_count} members available · {boats} candidate shells",
         boats = snapshot.sweep_boats.len(),
     );
 
@@ -203,7 +203,7 @@ fn manual_builder(snapshot: &DbSnapshot, date: NaiveDate) -> Markup {
             // Available rower pool
             div class="pt-4 border-t border-slate-200 text-sm" {
                 div class="mb-2" {
-                    strong class="text-slate-700" { "Available rowers " }
+                    strong class="text-slate-700" { "Available members " }
                     span class="text-xs text-slate-500" { "(click to select, then click a seat)" }
                 }
                 div #rower-pool class="flex flex-wrap gap-2" {
@@ -402,7 +402,7 @@ pub(crate) fn view_content(
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
-        "{available} rowers available · {boats} candidate boats",
+        "{available} members available · {boats} candidate shells",
         boats = snapshot.sweep_boats.len(),
     );
 
