@@ -31,7 +31,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 /// `crate::sql_types::*` by convention.
 pub mod sql_types {
     pub use super::availability::types::AvailabilityStatusMapping;
-    pub use super::boat::types::WeightClassMapping;
+    pub use super::boat::types::{CoxPositionMapping, WeightClassMapping};
     pub use super::rower::types::{
         HeightMapping, RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
     };

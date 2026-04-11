@@ -195,6 +195,22 @@ pub(crate) fn form_content(
                     }
                 }
 
+                // Cox position — only meaningful for coxed boats < 8.
+                // The server forces Stern for 8s regardless.
+                div {
+                    label for="cox_position" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Cox position"
+                    }
+                    select id="cox_position" name="cox_position"
+                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                        (sel_opt("Bow", &data.cox_position))
+                        (sel_opt("Stern", &data.cox_position))
+                    }
+                    p class="text-xs text-slate-500 mt-1" {
+                        "Bow-loader or stern-loader. Ignored for eights (always stern) and coxless boats."
+                    }
+                }
+
                 // Dates
                 div class="grid grid-cols-3 gap-4" {
                     (date_field("acquired_at", "Acquired", &data.acquired_at))

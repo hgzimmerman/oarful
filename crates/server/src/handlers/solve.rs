@@ -310,9 +310,13 @@ pub(crate) async fn view_handler(
         let request = knobs.to_request(date, &snapshot, baselines);
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
+        let flags = templates::solve::DisplayFlags {
+            show_attributes: tenant.show_attributes(),
+            force_cox_stern: tenant.config.force_cox_stern,
+        };
         let content = templates::solve::view_content(
             &snapshot, date, &knobs, &result, &committed_practices,
-            tenant.show_attributes(),
+            flags,
         );
         return Ok(super::maybe_page(
             &format!("Generate · {date}"),

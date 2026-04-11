@@ -4,7 +4,7 @@
 
 use crate::app_user::{AppUser, NewAppUser, Role};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
-use crate::boat::types::WeightClass as BoatWeightClass;
+use crate::boat::types::{CoxPosition, WeightClass as BoatWeightClass};
 use crate::boat::{Boat, NewBoat};
 use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
@@ -156,6 +156,7 @@ fn toy_boats() -> Vec<NewBoat> {
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
+            cox_position: CoxPosition::Stern,
         },
         NewBoat {
             name: "Artemis".into(),
@@ -166,6 +167,7 @@ fn toy_boats() -> Vec<NewBoat> {
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
+            cox_position: CoxPosition::Bow,
         },
         NewBoat {
             name: "Hestia".into(),
@@ -176,6 +178,7 @@ fn toy_boats() -> Vec<NewBoat> {
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Port,
+            cox_position: CoxPosition::Stern,
         },
     ]
 }

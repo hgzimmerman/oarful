@@ -12,7 +12,7 @@ use tokio::sync::Semaphore;
 
 use crate::jwt::{Claims, JwtKeys};
 use crate::mailer::Mailer;
-use crate::tenant_cache::TenantCache;
+use crate::tenant_cache::{TenantCache, TenantConfig};
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -35,9 +35,7 @@ pub(crate) struct TenantContext {
     pub(crate) db: Db,
     pub(crate) tenant_id: TenantId,
     pub(crate) claims: Claims,
-    /// Whether rower attributes are visible to all members for this
-    /// tenant. When `false` (default), only Coach+ sees the stats line.
-    pub(crate) attributes_public: bool,
+    pub(crate) config: TenantConfig,
 }
 
 impl TenantContext {
@@ -45,7 +43,7 @@ impl TenantContext {
     /// class, skill, strength). True when the tenant is transparent
     /// or the user is Coach+.
     pub(crate) fn show_attributes(&self) -> bool {
-        self.attributes_public
+        self.config.attributes_public
             || self
                 .claims
                 .role()
@@ -68,7 +66,11 @@ impl AppState {
         let default_db = Db::connect(tenant_conn_str)?;
         let default_tenant = lookup_tenant(master_conn_str, default_tenant_id)?;
         let tenant_cache = Arc::new(TenantCache::new());
-        tenant_cache.insert(default_tenant_id, default_db, default_tenant.are_attributes_public());
+        tenant_cache.insert(
+            default_tenant_id,
+            default_db,
+            TenantConfig::from_tenant(&default_tenant),
+        );
 
         let solve_concurrency = std::env::var("SOLVE_CONCURRENCY")
             .ok()
@@ -111,7 +113,10 @@ impl AppState {
 
     /// Resolve a tenant's Db and config from the cache, opening it on
     /// first access. Used by the auth middleware and public invite routes.
-    pub(crate) async fn tenant_db(&self, tenant_id: TenantId) -> anyhow::Result<(Db, bool)> {
+    pub(crate) async fn tenant_db(
+        &self,
+        tenant_id: TenantId,
+    ) -> anyhow::Result<(Db, TenantConfig)> {
         self.tenant_cache
             .get_or_connect(tenant_id, &self.master_db)
             .await

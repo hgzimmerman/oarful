@@ -63,6 +63,9 @@ pub struct Tenant {
     /// Whether rower attributes (weight class, skill, strength) are
     /// visible to all members. `0` = Coach+ only (default), `1` = public.
     pub attributes_public: i32,
+    /// When `1`, always display the coxswain at the top of the lineup
+    /// (stern position) regardless of per-boat `cox_position`.
+    pub force_cox_stern: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -77,6 +80,10 @@ pub struct NewTenant {
 impl Tenant {
     pub fn are_attributes_public(&self) -> bool {
         self.attributes_public != 0
+    }
+
+    pub fn force_cox_stern(&self) -> bool {
+        self.force_cox_stern != 0
     }
 
     pub fn list_all(

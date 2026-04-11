@@ -56,6 +56,9 @@ can resume without re-deriving context.
 - **Rower attribute editing on detail view** — moved from inline list
   row edit to HTMX section swap on `/rowers/{id}`. List view is now
   read-only with clickable name linking to detail page.
+- **Cox position: bow-loader vs stern-loader display order** — per-boat
+  `cox_position` enum (Bow/Stern) + tenant-level `force_cox_stern`
+  flag. Seats render stern→bow; bow-loaders show cox at the bottom.
 
 ## Open work
 
@@ -115,23 +118,26 @@ in the stats line: e.g. `Mdl · Int · Int · Port` where the
 distinct category names make each value unambiguous. Apply
 consistently on solve view seat rows and bench/sculling chips.
 
-#### Cox position: bow-loader vs stern-loader display order
+#### Bow-loader cox weight penalty
 
-Coxes in 8s sit behind stroke (seat 8), but coxed 4s can be
-bow-loaders (cox at bow, ahead of seat 1) or stern-loaders (cox
-behind stroke). Currently the cox (seat 0) is always displayed
-first, which is wrong for stern-loaders.
+Bow-loader coxed boats (4+s with `cox_position = Bow`) have a
+tight bow compartment. Heavy and especially very-heavy rowers
+physically struggle to fit in a bow-loader cox seat. The solver
+should penalize placing heavy rowers there and make it nearly
+impossible for very-heavy rowers.
 
-**Schema change**: add `cox_position` enum (`Bow` | `Stern`) to
-the `boat` table. Default `Stern` for 8s, `Bow` for 4+s (but
-editable per boat).
+**Solver work.** In the objective function, add a penalty term
+when a rower assigned to the cox seat (position 0) of a
+bow-loader boat has weight class Heavy or above. Something like:
 
-**Display**: render seats top-to-bottom as stern → bow. For a
-stern-loader: cox, s8, s7, ..., s1. For a bow-loader: s8, s7,
-..., s1, cox. This matches the physical layout of the boat.
+- Heavy in bow-loader cox: moderate penalty (e.g. −3)
+- Very heavy (Tubby-class rower weight): high penalty (e.g. −8)
+- Light/Medium: no penalty
 
-**Solver**: no impact — seat 0 is still the cox seat regardless
-of physical position. This is purely display ordering.
+This only applies when `boat.cox_position == Bow`. Stern-loader
+cox seats have no size constraint.
+
+**No UI changes needed** — purely solver-side scoring.
 
 #### Fix bench ↔ boat swaps + support pulling rowers to bench
 

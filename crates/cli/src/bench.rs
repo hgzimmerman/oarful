@@ -292,6 +292,11 @@ fn push_boat(
     has_cox: bool,
     stroke_side: Side,
 ) {
+    let cox_position = if seat_count >= 8 {
+        lineup_db::boat::types::CoxPosition::Stern
+    } else {
+        lineup_db::boat::types::CoxPosition::Bow
+    };
     boats.push(Boat {
         id: BoatId::new(*id),
         name: name.to_string(),
@@ -303,6 +308,7 @@ fn push_boat(
         manufactured_at: None,
         relinquished_at: None,
         stroke_side,
+        cox_position,
     });
     *id += 1;
 }

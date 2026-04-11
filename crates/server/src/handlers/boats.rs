@@ -14,7 +14,7 @@ use axum::{
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::boat::{
-    types::{BoatId, WeightClass},
+    types::{BoatId, CoxPosition, WeightClass},
     Boat, NewBoat,
 };
 use lineup_db::rower::types::Side;
@@ -84,6 +84,7 @@ pub(crate) async fn create_handler(
                     acquired_at: parsed.acquired_at,
                     manufactured_at: parsed.manufactured_at,
                     stroke_side: parsed.stroke_side,
+                    cox_position: parsed.cox_position,
                 },
             )
         })
@@ -188,6 +189,7 @@ pub(crate) struct BoatFormInput {
     pub(crate) weight_class: String,
     pub(crate) boat_type: String,
     pub(crate) stroke_side: String,
+    pub(crate) cox_position: String,
     #[serde(default)]
     pub(crate) acquired_at: String,
     #[serde(default)]
@@ -203,6 +205,7 @@ pub(crate) struct BoatFormData {
     pub(crate) weight_class: String,
     pub(crate) boat_type: String,
     pub(crate) stroke_side: String,
+    pub(crate) cox_position: String,
     pub(crate) acquired_at: String,
     pub(crate) manufactured_at: String,
     pub(crate) relinquished_at: String,
@@ -215,6 +218,7 @@ impl BoatFormData {
             weight_class: "Medium".into(),
             boat_type: "Eight".into(),
             stroke_side: "Port".into(),
+            cox_position: "Stern".into(),
             acquired_at: String::new(),
             manufactured_at: String::new(),
             relinquished_at: String::new(),
@@ -227,6 +231,7 @@ impl BoatFormData {
             weight_class: input.weight_class.clone(),
             boat_type: input.boat_type.clone(),
             stroke_side: input.stroke_side.clone(),
+            cox_position: input.cox_position.clone(),
             acquired_at: input.acquired_at.clone(),
             manufactured_at: input.manufactured_at.clone(),
             relinquished_at: input.relinquished_at.clone(),
@@ -244,6 +249,7 @@ impl BoatFormData {
                 Side::Either => "Starboard", // shouldn't happen, fallback
             }
             .into(),
+            cox_position: boat.cox_position.to_string(),
             acquired_at: boat
                 .acquired_at
                 .map(|d| d.format("%Y-%m-%d").to_string())
@@ -284,6 +290,7 @@ struct ParsedBoat {
     has_cox: bool,
     oars_per_seat: i32,
     stroke_side: Side,
+    cox_position: CoxPosition,
     acquired_at: Option<NaiveDate>,
     manufactured_at: Option<NaiveDate>,
     relinquished_at: Option<NaiveDate>,
@@ -322,6 +329,17 @@ fn parse_input(input: &BoatFormInput) -> Result<ParsedBoat, String> {
         other => return Err(format!("invalid stroke side: {other} (must be Port or Starboard)")),
     };
 
+    // 8s are always stern-loaded; for smaller coxed boats, parse the input.
+    let cox_position = if seat_count >= 8 {
+        CoxPosition::Stern
+    } else {
+        match input.cox_position.as_str() {
+            "Bow" => CoxPosition::Bow,
+            "Stern" => CoxPosition::Stern,
+            _ => CoxPosition::Bow, // default for 4+
+        }
+    };
+
     let acquired_at = parse_optional_date(&input.acquired_at)
         .map_err(|e| format!("acquired date: {e}"))?;
     let manufactured_at = parse_optional_date(&input.manufactured_at)
@@ -336,6 +354,7 @@ fn parse_input(input: &BoatFormInput) -> Result<ParsedBoat, String> {
         has_cox,
         oars_per_seat,
         stroke_side,
+        cox_position,
         acquired_at,
         manufactured_at,
         relinquished_at,

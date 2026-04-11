@@ -61,6 +61,7 @@ pub(crate) fn detail_content(
     date: NaiveDate,
     practice: Option<&Practice>,
     committed: &[CommittedLineup],
+    force_cox_stern: bool,
 ) -> Markup {
     html! {
         (page_header(&format!("History · {date}"), None))
@@ -78,7 +79,7 @@ pub(crate) fn detail_content(
                     input type="hidden" name="based_on" value=(date);
                     input type="hidden" name="similarity" value="3";
                     @for c in committed {
-                        (lineup_block_with_noshow(snapshot, c))
+                        (lineup_block_with_noshow(snapshot, c, force_cox_stern))
                     }
                     div class="mt-4 flex justify-end" {
                         button type="submit"
@@ -172,15 +173,22 @@ fn lineup_block(snapshot: &DbSnapshot, committed: &CommittedLineup) -> Markup {
     }
 }
 
-fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup) -> Markup {
-    let boat_name = snapshot
+fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool) -> Markup {
+    let boat = snapshot
         .sweep_boats
         .iter()
-        .find(|b| b.id == committed.lineup.boat_id)
-        .map(|b| b.name.as_str())
-        .unwrap_or("<unknown boat>");
+        .find(|b| b.id == committed.lineup.boat_id);
+    let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown boat>");
+    let cox_at_top = force_cox_stern
+        || boat.map(|b| b.cox_position.cox_first()).unwrap_or(true);
     let mut seats = committed.seats.clone();
-    seats.sort_by_key(|s| s.seat_position);
+    seats.sort_by_key(|s| {
+        if s.seat_position == 0 {
+            if cox_at_top { i32::MIN } else { i32::MAX }
+        } else {
+            -s.seat_position
+        }
+    });
 
     html! {
         div class="bg-white rounded-lg shadow overflow-hidden" {

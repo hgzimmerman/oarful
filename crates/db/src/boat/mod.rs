@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::{BoatId, WeightClass};
+use types::{BoatId, CoxPosition, WeightClass};
 
 use crate::rower::types::Side;
 use crate::types::IntBool;
@@ -41,6 +41,7 @@ pub struct Boat {
     pub manufactured_at: Option<chrono::NaiveDate>,
     pub relinquished_at: Option<chrono::NaiveDate>,
     pub stroke_side: Side,
+    pub cox_position: CoxPosition,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -54,6 +55,7 @@ pub struct NewBoat {
     pub acquired_at: Option<chrono::NaiveDate>,
     pub manufactured_at: Option<chrono::NaiveDate>,
     pub stroke_side: Side,
+    pub cox_position: CoxPosition,
 }
 
 impl Boat {

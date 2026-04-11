@@ -66,6 +66,7 @@ diesel::table! {
         manufactured_at -> Nullable<Date>,
         relinquished_at -> Nullable<Date>,
         stroke_side -> SideMapping,
+        cox_position -> CoxPositionMapping,
     }
 }
 

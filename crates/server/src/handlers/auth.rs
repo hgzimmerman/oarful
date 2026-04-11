@@ -65,7 +65,7 @@ pub(crate) async fn login_handler(
 
     let mut matches = Vec::new();
     for t in &tenants {
-        let Ok((db, _)) = state.tenant_db(t.id).await else {
+        let Ok((db, _config)) = state.tenant_db(t.id).await else {
             continue;
         };
         let email_clone = email.clone();
@@ -206,7 +206,7 @@ pub(crate) async fn require_auth(
 
     // Resolve the tenant DB for this request.
     let tenant_id = claims.tenant_id();
-    let (db, attributes_public) = match state.tenant_db(tenant_id).await {
+    let (db, config) = match state.tenant_db(tenant_id).await {
         Ok(pair) => pair,
         Err(err) => {
             tracing::error!(?err, %tenant_id, "failed to resolve tenant DB");
@@ -218,7 +218,7 @@ pub(crate) async fn require_auth(
         db,
         tenant_id,
         claims,
-        attributes_public,
+        config,
     };
     req.extensions_mut().insert(ctx);
     next.run(req).await

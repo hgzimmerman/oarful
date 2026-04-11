@@ -240,7 +240,7 @@ pub(crate) async fn accept_page(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Html<String>, StatusCode> {
-    let (db, _) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
+    let (db, _config) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
     let valid = validate_invite(&db, &token).await?;
     if !valid {
         return Ok(Html(
@@ -288,7 +288,7 @@ pub(crate) async fn accept_handler(
     .map_err(super::internal_error)?
     .map_err(super::internal_error)?;
 
-    let (db, _) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
+    let (db, _config) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
     let token_for_db = token.clone();
     let result = db
         .with_conn(move |conn| {

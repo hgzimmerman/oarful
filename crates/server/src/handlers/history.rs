@@ -57,7 +57,9 @@ pub(crate) async fn detail_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::history::detail_content(&snapshot, date, practice.as_ref(), &committed);
+    let content = templates::history::detail_content(
+        &snapshot, date, practice.as_ref(), &committed, tenant.config.force_cox_stern,
+    );
     Ok(super::maybe_page(
         &format!("History · {date}"),
         content,

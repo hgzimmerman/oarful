@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::boat::{
-    types::{BoatId, WeightClass},
+    types::{BoatId, CoxPosition, WeightClass},
     Boat,
 };
 use lineup_db::pair_affinity::PairAffinity;
@@ -114,6 +114,7 @@ fn four_boat(id: i32, name: &str) -> Boat {
         manufactured_at: None,
         relinquished_at: None,
         stroke_side: Side::Starboard,
+        cox_position: CoxPosition::Bow,
     }
 }
 
@@ -131,6 +132,7 @@ fn eight_boat(id: i32, name: &str) -> Boat {
         manufactured_at: None,
         relinquished_at: None,
         stroke_side: Side::Starboard,
+        cox_position: CoxPosition::Stern,
     }
 }
 

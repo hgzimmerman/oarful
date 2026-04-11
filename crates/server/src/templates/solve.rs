@@ -19,6 +19,13 @@ use maud::{html, Markup};
 use super::layout::page_header;
 use crate::handlers::solve::SolveKnobs;
 
+/// Display flags threaded through lineup card rendering.
+#[derive(Clone, Copy)]
+pub(crate) struct DisplayFlags {
+    pub(crate) show_attributes: bool,
+    pub(crate) force_cox_stern: bool,
+}
+
 /// Landing page before the solver runs. Shows knobs with a
 /// "Generate" button (or "Re-generate" if lineups already exist).
 pub(crate) fn landing_content(
@@ -48,7 +55,7 @@ pub(crate) fn view_content(
     knobs: &SolveKnobs,
     result: &SolveResult,
     committed_practices: &[Practice],
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -63,10 +70,10 @@ pub(crate) fn view_content(
             (status_banner(date, &result.status, &result.diagnostics))
 
             @if result.status == SolveStatus::Satisfied {
-                (primary_panel(snapshot, date, knobs, &result.primary, show_attributes))
+                (primary_panel(snapshot, date, knobs, &result.primary, flags))
 
                 @if !result.alternatives.is_empty() {
-                    (alternatives_panel(snapshot, &result.primary, &result.alternatives, show_attributes))
+                    (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
                 }
             }
         }
@@ -261,7 +268,7 @@ fn primary_panel(
     date: NaiveDate,
     _knobs: &SolveKnobs,
     primary: &ProposedSolution,
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     let used: Vec<&ProposedLineup> = primary.lineups.iter().filter(|l| l.used).collect();
     let skipped: Vec<&ProposedLineup> =
@@ -299,7 +306,7 @@ fn primary_panel(
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (swap_boat_card(snapshot, lineup, show_attributes))
+                        (swap_boat_card(snapshot, lineup, flags))
                     }
                 }
             }
@@ -315,7 +322,7 @@ fn primary_panel(
             }
 
             // Bench / sculling swap targets
-            (swap_unplaced_block(snapshot, &primary.unplaced, show_attributes))
+            (swap_unplaced_block(snapshot, &primary.unplaced, flags))
         }
 
         // Alpine swap logic — kept as a separate script block so it's
@@ -373,7 +380,7 @@ function swapLineup() {
 }
 
 /// Boat card with clickable seat rows for the swap component.
-fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, show_attributes: bool) -> Markup {
+fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: DisplayFlags) -> Markup {
     let seat_count = snapshot
         .sweep_boats
         .iter()
@@ -381,7 +388,8 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, show_attribute
         .map(|b| b.seat_count)
         .unwrap_or(0);
     let mut seats = lineup.seats.clone();
-    seats.sort_by_key(|(s, _)| *s);
+    let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
+    sort_seats_for_display(&mut seats, cox_at_top);
 
     html! {
         div class="border border-slate-200 rounded-lg overflow-hidden" {
@@ -412,7 +420,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, show_attribute
                             td class="px-4 py-2 rower-content" {
                                 @if let Some(r) = rower {
                                     div class="font-medium text-slate-800" { (r.name) }
-                                    (rower_stats_line(r, show_attributes))
+                                    (rower_stats_line(r, flags.show_attributes))
                                 } @else {
                                     span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
                                 }
@@ -427,7 +435,7 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, show_attribute
 }
 
 /// Bench / sculling rowers as clickable swap targets.
-fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, show_attributes: bool) -> Markup {
+fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: DisplayFlags) -> Markup {
     if unplaced.to_sculling.is_empty() && unplaced.benched.is_empty() {
         return html! {};
     }
@@ -451,7 +459,7 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, show_at
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                (rower_stats_line(r, show_attributes))
+                                (rower_stats_line(r, flags.show_attributes))
                             } @else {
                                 "#" (id)
                             }
@@ -477,7 +485,7 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, show_at
                              "@click"={"select('" (key) "')"} {
                             @if let Some(r) = rower {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                (rower_stats_line(r, show_attributes))
+                                (rower_stats_line(r, flags.show_attributes))
                             } @else {
                                 "#" (id)
                             }
@@ -493,7 +501,7 @@ fn alternatives_panel(
     snapshot: &DbSnapshot,
     primary: &ProposedSolution,
     alternatives: &[ProposedSolution],
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     html! {
         section class="bg-white rounded-lg shadow p-6"
@@ -512,7 +520,7 @@ fn alternatives_panel(
 
             div x-show="open" class="mt-4 space-y-6" {
                 @for (idx, alt) in alternatives.iter().enumerate() {
-                    (alternative_block(snapshot, primary, idx + 2, alt, show_attributes))
+                    (alternative_block(snapshot, primary, idx + 2, alt, flags))
                 }
             }
         }
@@ -524,7 +532,7 @@ fn alternative_block(
     primary: &ProposedSolution,
     rank: usize,
     alt: &ProposedSolution,
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     let diff = build_diff(primary, alt);
     let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
@@ -546,7 +554,7 @@ fn alternative_block(
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
-                        (boat_card(snapshot, lineup, Some(&diff), show_attributes))
+                        (boat_card(snapshot, lineup, Some(&diff), flags))
                     }
                 }
             }
@@ -604,7 +612,7 @@ fn boat_card(
     snapshot: &DbSnapshot,
     lineup: &ProposedLineup,
     diff: Option<&DiffMap>,
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     let seat_count = snapshot
         .sweep_boats
@@ -613,7 +621,8 @@ fn boat_card(
         .map(|b| b.seat_count)
         .unwrap_or(0);
     let mut seats = lineup.seats.clone();
-    seats.sort_by_key(|(s, _)| *s);
+    let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
+    sort_seats_for_display(&mut seats, cox_at_top);
 
     html! {
         div class="border border-slate-200 rounded-lg overflow-hidden" {
@@ -625,7 +634,7 @@ fn boat_card(
                 tbody {
                     @for (seat, rower_id) in &seats {
                         @let seat_diff = diff.and_then(|d| d.get(&(lineup.boat_id, *seat)));
-                        (seat_row(snapshot, *seat, *rower_id, seat_diff, show_attributes))
+                        (seat_row(snapshot, *seat, *rower_id, seat_diff, flags))
                     }
                 }
             }
@@ -638,7 +647,7 @@ fn seat_row(
     seat: i32,
     rower_id: RowerId,
     diff: Option<&SeatDiff>,
-    show_attributes: bool,
+    flags: DisplayFlags,
 ) -> Markup {
     let label = if seat == 0 {
         "cox".to_string()
@@ -663,7 +672,7 @@ fn seat_row(
                             span class="ml-1 text-xs text-amber-700" { "●" }
                         }
                     }
-                    (rower_stats_line(r, show_attributes))
+                    (rower_stats_line(r, flags.show_attributes))
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
                             div class="text-xs text-amber-700 italic" {
@@ -782,6 +791,34 @@ fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
             html! {}
         }
     }
+}
+
+/// Whether the cox (seat 0) should be displayed first for this boat.
+/// True when the tenant forces stern display or the boat is stern-loaded.
+fn cox_first(snapshot: &DbSnapshot, boat_id: BoatId, force_cox_stern: bool) -> bool {
+    if force_cox_stern {
+        return true;
+    }
+    snapshot
+        .sweep_boats
+        .iter()
+        .find(|b| b.id == boat_id)
+        .map(|b| b.cox_position.cox_first())
+        .unwrap_or(true)
+}
+
+/// Sort seats for display: stern → bow. When `cox_first` is true,
+/// cox (seat 0) comes before all numbered seats; otherwise it comes
+/// after them.
+fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
+    seats.sort_by_key(|(s, _)| {
+        if *s == 0 {
+            if cox_at_top { i32::MIN } else { i32::MAX }
+        } else {
+            // Numbered seats display high→low (stern→bow): s8, s7, ..., s1
+            -*s
+        }
+    });
 }
 
 fn find_rower(snapshot: &DbSnapshot, id: RowerId) -> Option<&Rower> {

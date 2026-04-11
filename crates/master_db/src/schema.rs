@@ -6,6 +6,7 @@ diesel::table! {
         db_path -> Text,
         created_at -> Timestamp,
         attributes_public -> Integer,
+        force_cox_stern -> Integer,
     }
 }
 
