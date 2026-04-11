@@ -202,9 +202,20 @@ pub(crate) async fn availability_handler(
                 all_dates.insert(a.date, Some(a.status));
             }
 
+            // Which dates have committed lineups?
+            let date_vec: Vec<_> = all_dates.keys().copied().collect();
+            let committed_dates: std::collections::HashSet<_> =
+                Practice::committed_dates(conn, team_id, &date_vec)?
+                    .into_iter()
+                    .collect();
+
             let rows: Vec<templates::my::AvailabilityRow> = all_dates
                 .into_iter()
-                .map(|(date, status)| templates::my::AvailabilityRow { date, status })
+                .map(|(date, status)| templates::my::AvailabilityRow {
+                    date,
+                    status,
+                    has_committed: committed_dates.contains(&date),
+                })
                 .collect();
             Ok(rows)
         })

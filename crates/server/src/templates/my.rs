@@ -23,6 +23,7 @@ pub(crate) fn no_rower_content(title: &str, message: &str) -> Markup {
 pub(crate) struct AvailabilityRow {
     pub(crate) date: NaiveDate,
     pub(crate) status: Option<AvailabilityStatus>,
+    pub(crate) has_committed: bool,
 }
 
 // =====================================================================
@@ -161,8 +162,19 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
     html! {
         tr class="border-t border-slate-100" {
             td class="px-4 py-2" {
-                span class="font-medium text-slate-800" { (row.date) }
-                span class="text-xs text-slate-500 ml-2" { (weekday) }
+                div class="flex items-center gap-2" {
+                    span class="font-medium text-slate-800" { (row.date) }
+                    span class="text-xs text-slate-500" { (weekday) }
+                    @if row.has_committed {
+                        a href={"/history/" (row.date)}
+                          hx-get={"/history/" (row.date)}
+                          hx-target="#content"
+                          hx-push-url="true"
+                          class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full hover:bg-emerald-200" {
+                            "View lineup"
+                        }
+                    }
+                }
             }
             td class="px-4 py-2" {
                 form method="post" action="/my/availability"
