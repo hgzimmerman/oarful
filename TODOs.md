@@ -340,6 +340,34 @@ Replace CDN with local `tailwind.config.js` scanning
 
 ### Infrastructure
 
+#### Persistent sync URL + periodic polling
+
+The Google Sheet sync currently requires the coach to paste the
+sheet ID and tab ID every time. Save the sync configuration so
+it can be re-used and optionally polled automatically.
+
+**Saved config.** Store `sheet_id` and `tab_id` (GID) on the
+team (or a `sync_config` table keyed by team). The sync page
+pre-fills from the saved config. Updating the fields overwrites
+the saved config.
+
+**Manual re-sync.** A one-click "Re-sync" button on `/sync`
+that uses the saved config without re-entering IDs.
+
+**Periodic polling.** An optional background task that re-syncs
+on a schedule (e.g. every 30 minutes, configurable). Only runs
+if a sync config exists for the team. Uses the same sync logic
+as the manual flow. Logs results; surfaces last-sync timestamp
+and any errors on the sync page.
+
+**Considerations:**
+- Polling requires a background task runtime (tokio::spawn with
+  a timer, or a cron-like scheduler). Keep it simple — a loop
+  with `tokio::time::interval` is sufficient.
+- Rate-limit to avoid hammering Google's export endpoint.
+- The sync page should show last-sync time and status (success /
+  error / never synced).
+
 #### Audit log
 
 Track who changed what and when. Useful for coaches reviewing
