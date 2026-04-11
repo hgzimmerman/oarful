@@ -21,7 +21,7 @@ use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::pair_affinity::PairAffinity;
 use lineup_db::rower::{
-    types::{RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
+    types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
     Rower,
 };
 use lineup_db::seat_affinity::SeatAffinity;
@@ -91,6 +91,7 @@ pub(crate) struct RowerEditInput {
     pub(crate) weight_class: String,
     pub(crate) skill: String,
     pub(crate) strength: String,
+    pub(crate) height: String,
     pub(crate) side: String,
     pub(crate) side_strength: i32,
     #[serde(default)]
@@ -126,6 +127,7 @@ pub(crate) async fn update_handler(
     rower.weight_class = typed.weight_class;
     rower.skill = typed.skill;
     rower.strength = typed.strength;
+    rower.height = typed.height;
     rower.side = typed.side;
     rower.side_strength = typed.side_strength;
     rower.can_cox = IntBool::new(typed.can_cox);
@@ -148,6 +150,7 @@ struct ParsedEdit {
     weight_class: RowerWeightClass,
     skill: Skill,
     strength: Strength,
+    height: Height,
     side: Side,
     side_strength: SideStrength,
     can_cox: bool,
@@ -176,6 +179,13 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
         "VeryStrong" => Strength::VeryStrong,
         other => return Err(format!("invalid strength: {other}")),
     };
+    let height = match input.height.as_str() {
+        "Short" => Height::Short,
+        "Medium" => Height::Medium,
+        "Tall" => Height::Tall,
+        "VeryTall" => Height::VeryTall,
+        other => return Err(format!("invalid height: {other}")),
+    };
     let side = match input.side.as_str() {
         "Port" => Side::Port,
         "Starboard" => Side::Starboard,
@@ -196,6 +206,7 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
         weight_class,
         skill,
         strength,
+        height,
         side,
         side_strength,
         can_cox: input.can_cox.is_some(),

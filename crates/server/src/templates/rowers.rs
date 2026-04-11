@@ -5,7 +5,7 @@
 //! and pair affinities are editable via HTMX section swaps.
 
 use lineup_db::rower::{
-    types::{RowerWeightClass, Skill, Strength},
+    types::{Height, RowerWeightClass, Skill, Strength},
     Rower,
 };
 use maud::{html, Markup};
@@ -139,6 +139,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
                 (kv("Weight", &r.weight_class.to_string()))
                 (kv("Form", &r.skill.to_string()))
                 (kv("Strength", &r.strength.to_string()))
+                (kv("Height", &r.height.to_string()))
                 (kv("Side", &side_display_label(r)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
@@ -206,6 +207,15 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
                         ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
                         ("Strong", "Strong", Strength::Strong == r.strength),
                         ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
+                    ]))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                    (enum_select("height", &[
+                        ("Short", "Short", Height::Short == r.height),
+                        ("Medium", "Medium", Height::Medium == r.height),
+                        ("Tall", "Tall", Height::Tall == r.height),
+                        ("VeryTall", "Very tall", Height::VeryTall == r.height),
                     ]))
                 }
                 div class="col-span-2" {

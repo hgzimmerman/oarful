@@ -251,7 +251,7 @@ impl std::fmt::Display for Height {
             Self::Short => "Short",
             Self::Medium => "Medium",
             Self::Tall => "Tall",
-            Self::VeryTall => "VeryTall",
+            Self::VeryTall => "Very tall",
         })
     }
 }
