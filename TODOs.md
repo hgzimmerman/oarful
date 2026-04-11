@@ -47,6 +47,10 @@ The MVP plus several rounds of follow-ups landed across commits
 - **Mailer trait** + `LogMailer` for invite delivery, wired into
   `invite_handler`. Resend invite button on user list for pending
   invites. Role column added to user list view.
+- **#61** No-show handling + carry-forward via unified reference
+  lineups (replaced S7/S14 with signed-weight mechanism). "Based
+  on" checkbox list + similarity knob on solve view. No-show
+  checkboxes on history detail.
 
 ## Open work
 
@@ -83,26 +87,21 @@ and re-solves. Locks visually distinct (different bg, lock icon).
 
 ### Coach features
 
-#### #61 — No-show handling: re-solve with minimal disruption
+#### #61 — No-show handling: re-solve with minimal disruption — SHIPPED
 
-Coach use case: a rower fails to show up after a lineup is committed.
-Mark them as no-show and regenerate with least disruption.
+Implemented via approach 2 (baseline similarity), which turned out
+to be more flexible than seat locks and independent of #63.
 
-**UI.** On `/history/{date}` add a "no-show" toggle per rower.
-Marking no-show overrides availability to `No`, offers a "Re-solve"
-button. After re-solve, show a diff against the previous lineup.
+**What shipped (2026-04-10):**
 
-**Disruption minimization.** Two approaches:
-
-1. **Lock all unaffected rowers** (depends on #63). For a no-show
-   in seat X of boat Y, lock every other (rower, boat, seat) from
-   the previous lineup. Cleanest approach.
-2. **Reward similarity to baseline** as a new soft constraint (S14).
-   More flexible but needs solver work.
-
-Start with approach 1.
-
-**Depends on:** #63 for approach 1; nothing for approach 2.
+- Unified reference-lineup mechanism (replaces old S7 novelty +
+  new S14 baseline into a single signed-weight system)
+- Carry-forward UI: "Based on" checkbox list on the solve view
+  lets coaches select prior committed practices as baselines
+- No-show UI: history detail view has per-rower "no-show"
+  checkboxes + "Re-solve without no-shows" button that navigates
+  to solve with baseline + availability overrides
+- `axum-extra` query feature for repeated query param support
 
 #### #62 — Manual rower swap in lineups
 
@@ -273,7 +272,8 @@ the migration path from the current global-role model need thought.
 
 If picking up from a fresh session:
 
-1. **#63** seat locks — foundational, unblocks #61.
-2. **#61** no-show handling — lands on top of #63.
-3. **#62** manual swap — independent, "commit first, edit committed".
+1. **#62** manual swap — independent, "commit first, edit committed".
+2. **#63** seat locks — still useful for "pin Alice in stroke"
+   coach use case, but no longer blocks #61.
+3. Solver presets / profiles (segmented control UI).
 4. Then productionization (#55, #56) and polish (#54).

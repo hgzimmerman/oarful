@@ -252,6 +252,9 @@ fn primary_panel(
                     @for d in &knobs.based_on {
                         input type="hidden" name="based_on" value=(d);
                     }
+                    @for id in &knobs.no_show {
+                        input type="hidden" name="no_show" value=(id);
+                    }
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                         "Commit primary"

@@ -10,13 +10,13 @@
 use std::time::Duration;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     Form,
 };
 use axum::Extension;
-use axum_extra::extract::CookieJar;
+use axum_extra::extract::{CookieJar, Query};
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{
@@ -100,6 +100,11 @@ pub(crate) struct SolveKnobs {
     /// even if `based_on` is non-empty.
     #[serde(default)]
     pub(crate) similarity: i32,
+    /// Rower IDs to mark as no-show. Their availability is overridden
+    /// to `No` before solving, so they're excluded from the lineup.
+    /// Combined with `based_on` + `similarity` for no-show re-solve.
+    #[serde(default)]
+    pub(crate) no_show: Vec<String>,
 }
 
 impl Default for SolveKnobs {
@@ -111,6 +116,7 @@ impl Default for SolveKnobs {
             budget: DEFAULT_BUDGET_SECS,
             based_on: vec![],
             similarity: 0,
+            no_show: vec![],
         }
     }
 }
@@ -238,6 +244,19 @@ async fn build_baselines(
     Ok(refs)
 }
 
+/// Override availability to `No` for any rower IDs listed in
+/// `knobs.no_show`. Mutates the snapshot in place.
+fn apply_no_shows(snapshot: &mut DbSnapshot, knobs: &SolveKnobs) {
+    use lineup_db::availability::types::AvailabilityStatus;
+    use lineup_db::rower::types::RowerId;
+
+    for id_str in &knobs.no_show {
+        if let Ok(id) = id_str.parse::<RowerId>() {
+            snapshot.availability.insert(id, AvailabilityStatus::No);
+        }
+    }
+}
+
 fn default_alts() -> usize {
     DEFAULT_ALTS
 }
@@ -256,7 +275,7 @@ pub(crate) async fn view_handler(
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (snapshot, committed_practices) = tenant
+    let (mut snapshot, committed_practices) = tenant
         .db
         .with_conn(move |conn| {
             let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;
@@ -266,6 +285,7 @@ pub(crate) async fn view_handler(
         .await
         .map_err(internal_error)?;
 
+    apply_no_shows(&mut snapshot, &knobs);
     let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
 
     let _permit = acquire_solve_permit(&state).await?;
@@ -291,12 +311,13 @@ pub(crate) async fn commit_handler(
 ) -> Result<impl IntoResponse, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let snapshot = tenant
+    let mut snapshot = tenant
         .db
         .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
         .await
         .map_err(internal_error)?;
 
+    apply_no_shows(&mut snapshot, &knobs);
     let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
     let mut request = knobs.to_request(date, &snapshot, baselines);
     request.top_n = 1;
