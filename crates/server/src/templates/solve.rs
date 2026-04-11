@@ -1002,7 +1002,13 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
         div class="border border-slate-200 rounded-lg overflow-hidden" {
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
                 strong class="text-slate-800" { (lineup.boat_name) }
-                span class="text-xs text-slate-500 ml-2" { "(" (seat_count) "+)" }
+                span class="text-xs text-slate-500 ml-2" {
+                    "(" (seat_count) "+"
+                    @if let Some(b) = boat {
+                        ", " (rig_label(b))
+                    }
+                    ")"
+                }
             }
             table class="w-full text-sm" {
                 tbody {
@@ -1251,7 +1257,13 @@ fn boat_card(
         div class="border border-slate-200 rounded-lg overflow-hidden" {
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
                 strong class="text-slate-800" { (lineup.boat_name) }
-                span class="text-xs text-slate-500 ml-2" { "(" (seat_count) "+)" }
+                span class="text-xs text-slate-500 ml-2" {
+                    "(" (seat_count) "+"
+                    @if let Some(b) = boat {
+                        ", " (rig_label(b))
+                    }
+                    ")"
+                }
             }
             table class="w-full text-sm" {
                 tbody {
@@ -1416,6 +1428,22 @@ fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
         } else {
             html! {}
         }
+    }
+}
+
+/// Short rig description for boat card headers, e.g. "port-rigged".
+///
+/// TODO: `stroke_side` reuses `rower::types::Side` which includes
+/// `Either` — boats should have a dedicated `BoatRigSide` enum
+/// (Port/Starboard only, no Either) that better captures rigging
+/// semantics. The SQL CHECK already forbids Either on boats, but
+/// the Rust type doesn't enforce it.
+fn rig_label(b: &Boat) -> &'static str {
+    use lineup_db::rower::types::Side;
+    match b.stroke_side {
+        Side::Port => "port-rigged",
+        Side::Starboard => "starboard-rigged",
+        Side::Either => "unrigged", // unreachable per SQL CHECK
     }
 }
 
