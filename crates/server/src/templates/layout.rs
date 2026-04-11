@@ -49,9 +49,8 @@ fn navbar(role: Option<Role>) -> Markup {
                    hx-swap="innerHTML" {
                 }
 
-                // Everyone sees practices and history
+                // Everyone sees practices
                 (nav_link("/practices", "Practices"))
-                (nav_link("/history", "History"))
 
                 // Coach+ sees fleet, roster, sync
                 @if is_coach {

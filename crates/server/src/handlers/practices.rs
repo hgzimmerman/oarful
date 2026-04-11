@@ -27,32 +27,49 @@ pub(crate) async fn list_handler(
 ) -> Result<Html<String>, StatusCode> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
-    let summaries = tenant
+    let is_coach = tenant.claims.role()
+        .unwrap_or(lineup_db::app_user::Role::Member)
+        .at_least(lineup_db::app_user::Role::Coach);
+
+    let rows = tenant
         .db
         .with_conn(move |conn| {
-            // Merge dates from availability records and explicitly created practices.
+            // Upcoming: merge availability dates + explicitly created practices.
             let avail_dates = Availability::upcoming_dates(conn, team_id, today)?;
             let practice_dates = Practice::list_upcoming(conn, team_id, today)?;
-            let all_dates: BTreeSet<_> = avail_dates.into_iter().chain(practice_dates).collect();
+            let upcoming: BTreeSet<_> = avail_dates.into_iter().chain(practice_dates).collect();
 
-            // One query: which of our upcoming dates have committed lineups?
+            // Past: committed practices (newest first, but we'll sort later).
+            let past_committed = Practice::list_committed(conn, team_id)?;
+            let past_dates: BTreeSet<_> = past_committed
+                .iter()
+                .map(|p| p.date)
+                .filter(|d| *d < today)
+                .collect();
+
+            // All dates, with committed status.
+            let all_dates: BTreeSet<_> = upcoming.iter().chain(past_dates.iter()).copied().collect();
             let date_vec: Vec<_> = all_dates.iter().copied().collect();
             let committed_dates: HashSet<_> = Practice::committed_dates(conn, team_id, &date_vec)?
                 .into_iter()
                 .collect();
 
             let mut rows = Vec::with_capacity(all_dates.len());
-            for date in all_dates {
-                let map = Availability::map_for_team_date(conn, team_id, date)?;
-                let yes_count = map
-                    .values()
-                    .filter(|s| s.is_available_for_sweep())
-                    .count();
+            for date in all_dates.iter().rev() {
+                // For upcoming dates, load availability counts.
+                let (yes_count, total_responses) = if *date >= today {
+                    let map = Availability::map_for_team_date(conn, team_id, *date)?;
+                    let yes = map.values().filter(|s| s.is_available_for_sweep()).count();
+                    (yes, map.len())
+                } else {
+                    (0, 0)
+                };
                 rows.push(templates::practices::PracticeRow {
-                    date,
+                    date: *date,
                     yes_count,
-                    total_responses: map.len(),
-                    has_committed: committed_dates.contains(&date),
+                    total_responses,
+                    has_committed: committed_dates.contains(date),
+                    is_upcoming: *date >= today,
                 });
             }
             Ok(rows)
@@ -60,7 +77,7 @@ pub(crate) async fn list_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::practices::list_content(&summaries);
+    let content = templates::practices::list_content(&rows, is_coach);
     Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
 }
 
