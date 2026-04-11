@@ -953,22 +953,32 @@ function swapLineup() {
         },
         /** Toggle a seat lock and re-solve. Finds the knobs form and
          *  adds/removes a hidden input for the lock, then submits. */
+        /** Toggle a seat lock. Updates the hidden input in the knobs
+         *  form and the visual state of the seat row. Does NOT re-solve
+         *  — the lock takes effect on the next Generate click. */
         toggleLock(lockVal) {
             var form = document.querySelector('form[hx-get]');
             if (!form) return;
-            // Check if this lock already exists.
             var existing = form.querySelector('input[name="lock"][value="' + lockVal + '"]');
+            var btn = this.$root.querySelector('[data-lock="' + lockVal + '"]');
+            var row = btn ? btn.closest('tr') : null;
             if (existing) {
-                existing.remove(); // unlock
+                existing.remove();
+                if (btn) btn.textContent = '\uD83D\uDD13'; // 🔓
+                if (row) {
+                    row.classList.remove('bg-violet-50', 'border-l-4', 'border-l-violet-400');
+                }
             } else {
                 var inp = document.createElement('input');
                 inp.type = 'hidden';
                 inp.name = 'lock';
                 inp.value = lockVal;
                 form.appendChild(inp);
+                if (btn) btn.textContent = '\uD83D\uDD12'; // 🔒
+                if (row) {
+                    row.classList.add('bg-violet-50', 'border-l-4', 'border-l-violet-400');
+                }
             }
-            // Trigger the form submission (HTMX re-solve).
-            htmx.trigger(form, 'submit');
         }
     };
 }
