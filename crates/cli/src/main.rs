@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Vec<String> = std::env::args().skip(1).filter(|a| !a.starts_with("--fleet")).collect();
     match args.first().map(String::as_str) {
         Some("solve") => {
             let opts = parse_solve_args(&args[1..])?;
