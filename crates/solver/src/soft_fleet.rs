@@ -333,9 +333,8 @@ impl<'a> ModelBuilder<'a> {
     /// Height is the primary factor; weight is secondary.
     ///
     /// Penalty table (multiplied by `bow_cox_fit_weight`):
-    /// - Tall: 5, Very tall: 8
-    /// - Heavy: 1, (very heavy rowers don't exist in the current
-    ///   `RowerWeightClass` enum, but if added: 3)
+    /// - Tall: 3, Very tall: 5
+    /// - Heavy: 1
     ///
     /// Only applies when `boat.cox_position == CoxPosition::Bow`.
     /// Stern-loader cox seats have no size constraint.
@@ -358,8 +357,8 @@ impl<'a> ModelBuilder<'a> {
                 };
 
                 let height_penalty = match rower.height {
-                    Height::Tall => 5,
-                    Height::VeryTall => 8,
+                    Height::Tall => 3,
+                    Height::VeryTall => 5,
                     _ => 0,
                 };
                 let weight_penalty = match rower.weight_class.ordinal() {

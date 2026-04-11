@@ -70,8 +70,8 @@ can resume without re-deriving context.
   `/practices`. Coach+ role-gated. Created practices appear in the
   list even before availability is synced.
 - **Bow-loader cox fit penalty (S14)** — penalises tall/heavy rowers
-  in bow-loader cox seats. Height: Tall −5, VeryTall −8. Weight:
-  Heavy −1. Stern-loaders unaffected. Configurable via
+  in bow-loader cox seats. Height: Tall +3, VeryTall +5. Weight:
+  Heavy +1. Stern-loaders unaffected. Configurable via
   `bow_cox_fit_weight` in SolverConfig.
 - **Disambiguate rower attribute labels** — "Skill" renamed to "Form"
   in UI labels. Weight class shows Lightweight/Middleweight/Heavyweight.
