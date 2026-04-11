@@ -417,10 +417,9 @@ checks billing status on each request — suspended tenants see a
 Actions or similar). Deployment pipelines (k3s/k8s rollout) live
 in the separate private infra repo.
 
-**Licensing.** Add AGPL-3.0 LICENSE file to the repo. Add license
-headers or a notice in the README. The deployment manifests
-(k3s/k8s YAML, infrastructure-as-code) live in a separate private
-repo.
+**Licensing.** AGPL-3.0 LICENSE file and copyright notice shipped.
+The deployment manifests (k3s/k8s YAML, infrastructure-as-code)
+live in a separate private repo.
 
 ### Demo mode
 
