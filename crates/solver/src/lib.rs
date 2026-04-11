@@ -311,13 +311,13 @@ impl SolverConfig {
             side_preference_weight: 2,
             weight_class_slack_weight: 1,
             cox_cooldown_penalty: 5,
-            placement_reward_weight: 1,
+            placement_reward_weight: 5,
             pair_strength_weight: 1,
             bow_pair_strength_weight: 2,
             height_balance_weight: 1,
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
-            partial_fill_bonus: 1,
+            partial_fill_bonus: 2,
             non_scull_retention_weight: 2,
             bow_cox_fit_weight: 1,
         }
@@ -351,7 +351,6 @@ impl SolverConfig {
             engine_room_strength_weight: 3,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
-            placement_reward_weight: 3,
             ..Self::balanced()
         }
     }
@@ -911,11 +910,51 @@ fn search_lineups(
         }
     };
 
+    tracing::info!(
+        boats = builder.boats.len(),
+        rowers = builder.available.len(),
+        x_vars = builder.x.len(),
+        obj_terms = builder.obj_terms.len(),
+        "starting primary solve"
+    );
+
     // Primary solve — determines the overall result status.
     let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
     let (primary_status, primary_lineups, primary_placements) =
         match primary_opt {
-            OptimisationResult::Optimal(sol) | OptimisationResult::Satisfiable(sol) => {
+            OptimisationResult::Optimal(sol) => {
+                let obj_val = sol.get_integer_value(objective);
+                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+                    let used = sol.get_integer_value(builder.use_b[i]);
+                    format!("{}={}", b.name, used)
+                }).collect();
+                tracing::info!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve OPTIMAL"
+                );
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements =
+                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                (SolveStatus::Satisfied, lineups, placements)
+            }
+            OptimisationResult::Satisfiable(sol) => {
+                let obj_val = sol.get_integer_value(objective);
+                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+                    let used = sol.get_integer_value(builder.use_b[i]);
+                    format!("{}={}", b.name, used)
+                }).collect();
+                tracing::info!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve SATISFIABLE (not proven optimal)"
+                );
                 let lineups = decode_solution(
                     &builder.x,
                     &builder.use_b,
@@ -928,6 +967,16 @@ fn search_lineups(
                 (SolveStatus::Satisfied, lineups, placements)
             }
             OptimisationResult::Stopped(sol, _) => {
+                let obj_val = sol.get_integer_value(objective);
+                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+                    let used = sol.get_integer_value(builder.use_b[i]);
+                    format!("{}={}", b.name, used)
+                }).collect();
+                tracing::warn!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve TIMED OUT — returning best-so-far"
+                );
                 let lineups = decode_solution(
                     &builder.x,
                     &builder.use_b,
