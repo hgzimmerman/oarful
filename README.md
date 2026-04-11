@@ -34,6 +34,7 @@ The dev user is a ProgramDirector with full access.
 | `PUBLIC_DIR` | `crates/server/public` | Static assets directory |
 | `JWT_SECRET` | random (dev) | Secret for signing JWT tokens; set in production |
 | `SOLVE_CONCURRENCY` | CPU count | Max concurrent solver runs |
+| `ORIGIN` | *(none)* | Base URL for full invite links (e.g. `http://localhost:3000`) |
 
 ## Project structure
 

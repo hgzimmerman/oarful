@@ -139,7 +139,8 @@ pub(crate) async fn invite_handler(
 
     match result {
         Ok(_user_id) => {
-            let invite_url = format!("/invite/{token}");
+            let invite_path = format!("/invite/{token}");
+            let invite_url = state.full_url(&invite_path);
 
             // Best-effort delivery — failure is logged but doesn't
             // block the invite (the UI still shows the link).
@@ -207,7 +208,8 @@ pub(crate) async fn resend_invite_handler(
         .await
         .map_err(super::internal_error)?;
 
-    let invite_url = format!("/invite/{token}");
+    let invite_path = format!("/invite/{token}");
+    let invite_url = state.full_url(&invite_path);
     if let Err(err) = state
         .mailer
         .send_invite(&user.email, &user.name, &invite_url)

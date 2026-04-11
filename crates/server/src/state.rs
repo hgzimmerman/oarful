@@ -25,6 +25,10 @@ pub(crate) struct AppState {
     pub(crate) solver_pool: Arc<rayon::ThreadPool>,
     pub(crate) jwt_keys: JwtKeys,
     pub(crate) mailer: Arc<dyn Mailer>,
+    /// Base URL for generating full links (e.g. "http://localhost:3000").
+    /// Read from the `ORIGIN` env var. None if not set — invite URLs
+    /// will be relative paths.
+    pub(crate) origin: Option<url::Url>,
 }
 
 /// Bundle of per-request tenant state injected into request
@@ -100,6 +104,24 @@ impl AppState {
         });
         let jwt_keys = JwtKeys::from_secret(jwt_secret.as_bytes());
 
+        let origin = std::env::var("ORIGIN").ok().and_then(|s| {
+            let s = s.trim().to_string();
+            if s.is_empty() { return None; }
+            match url::Url::parse(&s) {
+                Ok(u) => {
+                    tracing::info!(%u, "using ORIGIN for full URLs");
+                    Some(u)
+                }
+                Err(e) => {
+                    tracing::warn!(%s, %e, "ORIGIN is not a valid URL — ignoring");
+                    None
+                }
+            }
+        });
+        if origin.is_none() {
+            tracing::info!("ORIGIN not set — invite URLs will be relative paths");
+        }
+
         Ok(Self {
             master_db,
             tenant_cache,
@@ -108,7 +130,21 @@ impl AppState {
             solver_pool: Arc::new(solver_pool),
             jwt_keys,
             mailer,
+            origin,
         })
+    }
+
+    /// Build a full URL from a relative path. Returns the path as-is
+    /// if ORIGIN is not configured.
+    pub(crate) fn full_url(&self, path: &str) -> String {
+        match &self.origin {
+            Some(base) => {
+                let mut u = base.clone();
+                u.set_path(path);
+                u.to_string()
+            }
+            None => path.to_string(),
+        }
     }
 
     /// Resolve a tenant's Db and config from the cache, opening it on

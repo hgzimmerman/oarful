@@ -268,15 +268,6 @@ expands alternatives, drops backgrounds, one boat per page-break.
 
 ### Observability
 
-#### Full invite URL using ORIGIN env var
-
-The invite URL is just a path (`/invite/{token}`). Both the mailer
-and the invite result UI page display it without the origin, making
-it unclickable / uncopyable as a real link.
-
-Add an `ORIGIN` env var (e.g. `http://localhost:3000`). Store it on
-`AppState`. The invite handler prepends it to produce a full URL
-for both the mailer call and the UI result page display.
 
 ### Productionization
 
