@@ -1,5 +1,6 @@
 //! Sync-sheet form + result panel.
 
+use chrono::NaiveDateTime;
 use lineup_sheets::SyncSummary;
 use maud::{html, Markup};
 
@@ -10,6 +11,7 @@ pub(crate) fn form_content(
     prev: Option<&SyncFormInput>,
     summary: Option<&SyncSummary>,
     error: Option<&str>,
+    last_synced: Option<NaiveDateTime>,
 ) -> Markup {
     let id_value = prev.map(|p| p.spreadsheet_id.as_str()).unwrap_or("");
     let gid_value = prev.map(|p| p.gid).unwrap_or(0);
@@ -17,9 +19,17 @@ pub(crate) fn form_content(
     html! {
         (page_header(
             "Sync sheet",
-            Some("Pull rower availability from a publicly-shared Google Sheet."),
+            Some("Pull roster and availability from a publicly-shared Google Sheet."),
         ))
         div class="px-8 py-6 max-w-3xl space-y-6" {
+            @if let Some(ts) = last_synced {
+                div class="text-xs text-slate-500" {
+                    "Last synced: "
+                    time datetime=(ts.format("%Y-%m-%dT%H:%M:%S").to_string()) {
+                        (ts.format("%b %d, %Y at %H:%M UTC").to_string())
+                    }
+                }
+            }
             @if let Some(msg) = error {
                 div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                     strong { "Error. " } (msg)

@@ -56,13 +56,14 @@ pub(crate) async fn form_handler(
         })
         .await
         .map_err(internal_error)?;
+    let last_synced = saved.as_ref().and_then(|s| s.last_synced_at);
     let prefill = saved.and_then(|s| {
         serde_json::from_str::<GoogleSheetConfig>(&s.config).ok().map(|cfg| SyncFormInput {
             spreadsheet_id: cfg.sheet_id,
             gid: cfg.gid,
         })
     });
-    let content = templates::sync::form_content(prefill.as_ref(), None, None);
+    let content = templates::sync::form_content(prefill.as_ref(), None, None, last_synced);
     Ok(super::maybe_page("Sync sheet", content, hx))
 }
 
@@ -78,9 +79,7 @@ pub(crate) async fn sync_handler(
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
         let content = templates::sync::form_content(
-            Some(&input),
-            None,
-            Some("Spreadsheet ID is required."),
+            Some(&input), None, Some("Spreadsheet ID is required."), None,
         );
         return Ok(super::maybe_page("Sync sheet", content, hx));
     }
@@ -97,7 +96,7 @@ pub(crate) async fn sync_handler(
         Err(err) => {
             tracing::warn!(?err, %url, "sheet fetch failed");
             let msg = format!("Failed to fetch sheet: {err}");
-            let content = templates::sync::form_content(Some(&input), None, Some(&msg));
+            let content = templates::sync::form_content(Some(&input), None, Some(&msg), None);
             return Ok(super::maybe_page("Sync sheet", content, hx));
         }
     };
@@ -127,18 +126,26 @@ pub(crate) async fn sync_handler(
                 .with_conn(move |conn| {
                     lineup_db::sync_source::SyncSource::upsert(
                         conn, team_id, "google_sheet", &config_json,
-                    )
+                    )?;
+                    // Mark synced so the timestamp persists on reload.
+                    if let Some(src) = lineup_db::sync_source::SyncSource::find_by_type(
+                        conn, team_id, "google_sheet",
+                    )? {
+                        lineup_db::sync_source::SyncSource::mark_synced(conn, src.id)?;
+                    }
+                    Ok(())
                 })
                 .await;
+            let now = Some(chrono::Utc::now().naive_utc());
             let content =
-                templates::sync::form_content(Some(&input), Some(&summary), None);
+                templates::sync::form_content(Some(&input), Some(&summary), None, now);
             Ok(super::maybe_page("Sync sheet", content, hx))
         }
         Err(err) => {
             tracing::warn!(?err, "sheet parse/sync failed");
             let msg = format!("Sync failed: {err}");
             let content =
-                templates::sync::form_content(Some(&input), None, Some(&msg));
+                templates::sync::form_content(Some(&input), None, Some(&msg), None);
             Ok(super::maybe_page("Sync sheet", content, hx))
         }
     }
