@@ -270,6 +270,24 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
+### Discord integration (long-term)
+
+Low priority — don't start until most other work is done.
+
+**Minimal (push-only):** A Discord bot that posts committed
+lineups to a configured channel when a coach commits. No identity
+linking needed — just a webhook or bot token + channel ID in
+tenant config. The message would be a formatted lineup card
+(boat name, seat assignments, bench/sculling lists).
+
+**Full (bidirectional):** Rowers set availability from Discord
+(e.g. reacting to a practice-date message or a slash command).
+Requires linking Discord user IDs to app user accounts — either
+via an OAuth flow or a manual `/link` command with a one-time
+token. Significantly more work and a heavier dependency.
+
+Start with push-only; bidirectional can follow if there's demand.
+
 ## Suggested next moves
 
 1. **#63** seat locks — "pin Alice in stroke" coach use case.
