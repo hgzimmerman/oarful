@@ -57,8 +57,12 @@ pub(crate) async fn detail_handler(
         .await
         .map_err(internal_error)?;
 
+    let is_coach = tenant.claims.role()
+        .unwrap_or(lineup_db::app_user::Role::Member)
+        .at_least(lineup_db::app_user::Role::Coach);
     let content = templates::history::detail_content(
         &snapshot, date, practice.as_ref(), &committed, tenant.config.force_cox_stern,
+        is_coach,
     );
     Ok(super::maybe_page_authed(
         &format!("History · {date}"),

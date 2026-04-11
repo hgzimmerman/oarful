@@ -69,6 +69,7 @@ pub(crate) fn detail_content(
     practice: Option<&Practice>,
     committed: &[CommittedLineup],
     force_cox_stern: bool,
+    is_coach: bool,
 ) -> Markup {
     // Detect stale rowers: committed but availability is no longer "Yes".
     let stale_rowers: HashSet<RowerId> = committed
@@ -87,7 +88,9 @@ pub(crate) fn detail_content(
     html! {
         (page_header(&format!("History · {date}"), None))
         div class="px-8 py-6 max-w-4xl space-y-4" {
-            (notes_section(practice, date))
+            @if is_coach {
+                (notes_section(practice, date))
+            }
 
             @if has_stale {
                 div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
@@ -99,11 +102,9 @@ pub(crate) fn detail_content(
 
             @if committed.is_empty() {
                 (empty_state("No lineups committed for this date."))
-            } @else {
-                // No-show form: wraps all lineups with checkboxes per
-                // rower. Submitting navigates to the solve view with
-                // the committed lineup as baseline + checked rowers
-                // marked as no-show.
+            } @else if is_coach {
+                // No-show form (Coach+): wraps all lineups with
+                // checkboxes per rower.
                 form method="get" action={"/solve/" (date)} {
                     input type="hidden" name="based_on" value=(date);
                     input type="hidden" name="similarity" value="3";
@@ -116,6 +117,11 @@ pub(crate) fn detail_content(
                             "Re-solve without no-shows"
                         }
                     }
+                }
+            } @else {
+                // Read-only view for members — no checkboxes or re-solve.
+                @for c in committed {
+                    (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers))
                 }
                 (unplaced_section(snapshot, committed))
             }
