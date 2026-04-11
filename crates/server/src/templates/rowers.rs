@@ -1,9 +1,8 @@
-//! Roster table with inline-edit support.
+//! Rower roster list + per-rower detail page with attribute editing.
 //!
-//! Rendering is split into [`list_content`] (the page shell + table)
-//! and [`static_row`] / [`edit_row`] (the per-row pieces). The two row
-//! variants share the same `<tr>` shape so HTMX `outerHTML` swaps land
-//! cleanly.
+//! The list view is read-only — each row has a Details link that
+//! navigates to the detail page where attributes, seat affinities,
+//! and pair affinities are editable via HTMX section swaps.
 
 use lineup_db::rower::{
     types::{RowerWeightClass, Side, Skill, Strength},
@@ -34,7 +33,6 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
                                 th class="px-4 py-2" { "Side str" }
                                 th class="px-4 py-2" { "Cox" }
                                 th class="px-4 py-2" { "Scull" }
-                                th class="px-4 py-2 text-right" { "" }
                             }
                         }
                         tbody {
@@ -49,12 +47,20 @@ pub(crate) fn list_content(rowers: &[Rower]) -> Markup {
     }
 }
 
-/// Read-only `<tr>` for one rower. Click the Edit button to swap it
-/// with [`edit_row`].
-pub(crate) fn static_row(r: &Rower) -> Markup {
+/// Read-only `<tr>` for one rower with a Details link to the full
+/// detail/edit page.
+fn static_row(r: &Rower) -> Markup {
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
-            td class="px-4 py-2 font-medium text-slate-800" { (r.name) }
+            td class="px-4 py-2 font-medium text-slate-800" {
+                a href={"/rowers/" (r.id)}
+                  hx-get={"/rowers/" (r.id)}
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="hover:underline" {
+                    (r.name)
+                }
+            }
             td class="px-4 py-2" { (r.weight_class) }
             td class="px-4 py-2" { (r.skill) }
             td class="px-4 py-2" { (r.strength) }
@@ -67,22 +73,6 @@ pub(crate) fn static_row(r: &Rower) -> Markup {
             }
             td class="px-4 py-2" {
                 @if r.can_scull.as_bool() { "yes" } @else { "—" }
-            }
-            td class="px-4 py-2 text-right whitespace-nowrap" {
-                a href={"/rowers/" (r.id)}
-                  hx-get={"/rowers/" (r.id)}
-                  hx-target="#content"
-                  hx-push-url="true"
-                  class="text-slate-500 hover:text-slate-800 text-xs font-semibold uppercase tracking-wide mr-3 cursor-pointer" {
-                    "Details"
-                }
-                button type="button"
-                       class="text-slate-500 hover:text-slate-800 text-xs font-semibold uppercase tracking-wide"
-                       hx-get={"/rowers/" (r.id) "/edit"}
-                       hx-target="closest tr"
-                       hx-swap="outerHTML" {
-                    "Edit"
-                }
             }
         }
     }
@@ -106,24 +96,41 @@ pub(crate) fn detail_content(detail: &RowerDetail) -> Markup {
     html! {
         (page_header(&r.name, Some(&subtitle)))
         div class="px-8 py-6 max-w-4xl space-y-6" {
-            (attribute_summary(r))
+            (attribute_section(r, None))
             (seat_affinities_section(detail, None))
             (pair_affinities_section(detail, None))
         }
     }
 }
 
-fn attribute_summary(r: &Rower) -> Markup {
+/// Read-only attribute display with an Edit button that swaps to an
+/// inline form. The section has id `#attributes` for HTMX `outerHTML`.
+pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
+    let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     html! {
-        section class="bg-white rounded-lg shadow p-6" {
+        section #attributes class="bg-white rounded-lg shadow p-6" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-slate-800" { "Attributes" }
-                a href="/rowers"
-                  hx-get="/rowers"
-                  hx-target="#content"
-                  hx-push-url="true"
-                  class="text-sm text-slate-500 hover:text-slate-800" {
-                    "← back to roster"
+                div class="flex items-center gap-3" {
+                    button type="button"
+                           class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
+                           hx-get=(edit_url)
+                           hx-target="#attributes"
+                           hx-swap="outerHTML" {
+                        "Edit"
+                    }
+                    a href="/rowers"
+                      hx-get="/rowers"
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="text-sm text-slate-500 hover:text-slate-800" {
+                        "← back to roster"
+                    }
+                }
+            }
+            @if let Some(msg) = error {
+                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                    (msg)
                 }
             }
             dl class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
@@ -136,8 +143,92 @@ fn attribute_summary(r: &Rower) -> Markup {
                 (kv("Can scull", if r.can_scull.as_bool() { "yes" } else { "—" }))
                 (kv("Active", if r.active.as_bool() { "yes" } else { "no" }))
             }
-            p class="text-xs text-slate-500 mt-4" {
-                "Edit attributes from the roster's inline edit row."
+        }
+    }
+}
+
+/// Editable attribute form. Save posts to `/rowers/{id}` and the
+/// handler returns a fresh `attribute_section` for the HTMX swap.
+pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
+    let post_url = format!("/rowers/{}", r.id);
+    let cancel_url = format!("/rowers/{}/attributes", r.id);
+    html! {
+        section #attributes class="bg-white rounded-lg shadow p-6 bg-amber-50/50" {
+            div class="flex items-start justify-between mb-4" {
+                h2 class="text-lg font-bold text-slate-800" { "Edit attributes" }
+                div class="flex items-center gap-2" {
+                    button type="button"
+                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded"
+                           hx-post=(post_url)
+                           hx-include="#attributes"
+                           hx-target="#attributes"
+                           hx-swap="outerHTML" {
+                        "Save"
+                    }
+                    button type="button"
+                           class="text-slate-500 hover:text-slate-800 text-sm font-semibold"
+                           hx-get=(cancel_url)
+                           hx-target="#attributes"
+                           hx-swap="outerHTML" {
+                        "Cancel"
+                    }
+                }
+            }
+            @if let Some(msg) = error {
+                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                    (msg)
+                }
+            }
+            div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                    (enum_select("weight_class", &[
+                        ("Light", RowerWeightClass::Light == r.weight_class),
+                        ("Medium", RowerWeightClass::Medium == r.weight_class),
+                        ("Heavy", RowerWeightClass::Heavy == r.weight_class),
+                    ]))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Skill" }
+                    (enum_select("skill", &[
+                        ("Novice", Skill::Novice == r.skill),
+                        ("Intermediate", Skill::Intermediate == r.skill),
+                        ("Master", Skill::Master == r.skill),
+                        ("Expert", Skill::Expert == r.skill),
+                    ]))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                    (enum_select("strength", &[
+                        ("Weak", Strength::Weak == r.strength),
+                        ("Intermediate", Strength::Intermediate == r.strength),
+                        ("Strong", Strength::Strong == r.strength),
+                        ("VeryStrong", Strength::VeryStrong == r.strength),
+                    ]))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Side" }
+                    (enum_select("side", &[
+                        ("Port", Side::Port == r.side),
+                        ("Starboard", Side::Starboard == r.side),
+                        ("Either", Side::Either == r.side),
+                    ]))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Side strength" }
+                    input name="side_strength" type="number" min="0" max="5"
+                          value=(r.side_strength)
+                          class="w-20 border border-slate-300 rounded px-2 py-1 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Cox" }
+                    (checkbox("can_cox", "can cox", r.can_cox.as_bool()))
+                    (checkbox("is_designated_cox", "designated", r.is_designated_cox.as_bool()))
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Scull" }
+                    (checkbox("can_scull", "can scull", r.can_scull.as_bool()))
+                }
             }
         }
     }
@@ -326,84 +417,6 @@ pub(crate) fn pair_affinities_section(
                 button type="submit"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded" {
                     "Add / update"
-                }
-            }
-        }
-    }
-}
-
-/// Editable `<tr>` for one rower. The Save button serialises every
-/// input in the same row via `hx-include="closest tr"` so we don't
-/// need a wrapping `<form>` element (which would be invalid as a
-/// direct child of `<tbody>`).
-pub(crate) fn edit_row(r: &Rower, error: Option<&str>) -> Markup {
-    let post_url = format!("/rowers/{}", r.id);
-    let row_url = format!("/rowers/{}/row", r.id);
-    html! {
-        tr class="border-t border-slate-200 bg-amber-50" {
-            td class="px-4 py-2 font-medium text-slate-800 align-top" {
-                (r.name)
-                @if let Some(msg) = error {
-                    div class="mt-1 text-xs text-red-700" { (msg) }
-                }
-            }
-            td class="px-2 py-2 align-top" {
-                (enum_select("weight_class", &[
-                    ("Light", RowerWeightClass::Light == r.weight_class),
-                    ("Medium", RowerWeightClass::Medium == r.weight_class),
-                    ("Heavy", RowerWeightClass::Heavy == r.weight_class),
-                ]))
-            }
-            td class="px-2 py-2 align-top" {
-                (enum_select("skill", &[
-                    ("Novice", Skill::Novice == r.skill),
-                    ("Intermediate", Skill::Intermediate == r.skill),
-                    ("Master", Skill::Master == r.skill),
-                    ("Expert", Skill::Expert == r.skill),
-                ]))
-            }
-            td class="px-2 py-2 align-top" {
-                (enum_select("strength", &[
-                    ("Weak", Strength::Weak == r.strength),
-                    ("Intermediate", Strength::Intermediate == r.strength),
-                    ("Strong", Strength::Strong == r.strength),
-                    ("VeryStrong", Strength::VeryStrong == r.strength),
-                ]))
-            }
-            td class="px-2 py-2 align-top" {
-                (enum_select("side", &[
-                    ("Port", Side::Port == r.side),
-                    ("Starboard", Side::Starboard == r.side),
-                    ("Either", Side::Either == r.side),
-                ]))
-            }
-            td class="px-2 py-2 align-top" {
-                input name="side_strength" type="number" min="0" max="5"
-                      value=(r.side_strength)
-                      class="w-16 border border-slate-300 rounded px-2 py-1 font-mono text-xs focus:border-slate-500 focus:outline-none";
-            }
-            td class="px-2 py-2 align-top" {
-                (checkbox("can_cox", "can cox", r.can_cox.as_bool()))
-                (checkbox("is_designated_cox", "designated", r.is_designated_cox.as_bool()))
-            }
-            td class="px-2 py-2 align-top" {
-                (checkbox("can_scull", "can scull", r.can_scull.as_bool()))
-            }
-            td class="px-2 py-2 text-right align-top whitespace-nowrap" {
-                button type="button"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1 rounded mr-1"
-                       hx-post=(post_url)
-                       hx-include="closest tr"
-                       hx-target="closest tr"
-                       hx-swap="outerHTML" {
-                    "Save"
-                }
-                button type="button"
-                       class="text-slate-500 hover:text-slate-800 text-xs font-semibold"
-                       hx-get=(row_url)
-                       hx-target="closest tr"
-                       hx-swap="outerHTML" {
-                    "Cancel"
                 }
             }
         }

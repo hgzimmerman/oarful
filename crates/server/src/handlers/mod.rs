@@ -65,8 +65,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/rowers/{id}",
             get(rowers::detail_handler).post(rowers::update_handler),
         )
-        .route("/rowers/{id}/row", get(rowers::row_handler))
-        .route("/rowers/{id}/edit", get(rowers::edit_handler))
+        .route("/rowers/{id}/attributes", get(rowers::attributes_handler))
+        .route("/rowers/{id}/edit-attributes", get(rowers::edit_attributes_handler))
         .route(
             "/rowers/{id}/seat-affinity",
             post(rowers::seat_affinity_upsert_handler),

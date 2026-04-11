@@ -53,6 +53,9 @@ can resume without re-deriving context.
 - **Role-gate rower attribute visibility** — tenant-level
   `attributes_public` flag (default private); Coach+ always sees
   full stats, Members see only side preference unless tenant opts in
+- **Rower attribute editing on detail view** — moved from inline list
+  row edit to HTMX section swap on `/rowers/{id}`. List view is now
+  read-only with clickable name linking to detail page.
 
 ## Open work
 
@@ -89,15 +92,6 @@ backfill new columns with 0. "Save as preset" button persists
 current weights.
 
 No solver changes needed — purely UI + storage.
-
-#### Rower attribute editing on detail view
-
-The rower list view has inline editing (HTMX row swap), but the
-detail page (`/rowers/{id}`) only shows a read-only attribute
-summary. Move attribute editing to the detail view — it's the
-natural place to manage a rower's full profile alongside their
-affinities. The list view can keep a compact read-only display
-with a link to the detail page for editing.
 
 #### Show benched/sculling rowers on history detail view
 

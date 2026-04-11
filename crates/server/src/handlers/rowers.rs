@@ -1,17 +1,15 @@
-//! Rower roster — list view + per-row inline edit.
+//! Rower roster — read-only list + per-rower detail page with
+//! attribute editing, seat affinities, and pair affinities.
 //!
-//! Editing flow is HTMX-driven and never leaves the page:
+//! Attribute editing lives on the detail page (`/rowers/{id}`):
 //!
-//! 1. The static row has an "Edit" button that `hx-get`s
-//!    `/rowers/{id}/edit`, swapping `outerHTML` of the closest `<tr>`.
-//! 2. The edit row contains form inputs and a Save / Cancel pair.
-//!    Save `hx-post`s `/rowers/{id}` with `hx-include="closest tr"`,
-//!    again swapping the row.
-//! 3. Cancel `hx-get`s `/rowers/{id}/row` to fetch the canonical
-//!    static row again.
-//!
-//! Validation errors re-render the edit row with an inline message
-//! so the user keeps their entered values.
+//! 1. The attribute section shows a read-only summary with an "Edit"
+//!    button that `hx-get`s `/rowers/{id}/edit-attributes`, swapping
+//!    `outerHTML` of the `#attributes` section.
+//! 2. The edit form has Save / Cancel. Save `hx-post`s `/rowers/{id}`
+//!    with `hx-include="#attributes"`, returning the read-only section.
+//! 3. Cancel `hx-get`s `/rowers/{id}/attributes` to restore the
+//!    read-only view.
 
 use axum::{
     extract::Path,
@@ -48,28 +46,30 @@ pub(crate) async fn list_handler(
     Ok(super::maybe_page("Rowers", content, hx))
 }
 
-/// Return one canonical static `<tr>` for the given rower. Used by
-/// the Cancel button to undo an in-progress edit.
+/// `GET /rowers/{id}/attributes` — read-only attribute section partial.
+/// Used by the Cancel button to restore the display view.
 #[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn row_handler(
+pub(crate) async fn attributes_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
     let rower = load(&tenant.db, id).await?;
-    Ok(Html(templates::rowers::static_row(&rower).into_string()))
+    Ok(Html(
+        templates::rowers::attribute_section(&rower, None).into_string(),
+    ))
 }
 
-/// Return one editable `<tr>` for the given rower. Triggered by the
-/// Edit button on a static row.
+/// `GET /rowers/{id}/edit-attributes` — editable attribute form partial.
+/// Triggered by the Edit button on the attribute section.
 #[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn edit_handler(
+pub(crate) async fn edit_attributes_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
-        templates::rowers::edit_row(&rower, None).into_string(),
+        templates::rowers::attribute_edit_section(&rower, None).into_string(),
     ))
 }
 
@@ -102,13 +102,13 @@ pub(crate) async fn update_handler(
 
     // Parse string enums into typed values. Any unknown variant gets
     // funneled into the inline error path so the user can correct it
-    // without losing the rest of the row.
+    // without losing the rest of the form.
     let parsed = parse_input(&input);
     let typed = match parsed {
         Ok(typed) => typed,
         Err(msg) => {
             return Ok(Html(
-                templates::rowers::edit_row(&rower, Some(&msg)).into_string(),
+                templates::rowers::attribute_edit_section(&rower, Some(&msg)).into_string(),
             ));
         }
     };
@@ -128,7 +128,9 @@ pub(crate) async fn update_handler(
         .await
         .map_err(internal_error)?;
 
-    Ok(Html(templates::rowers::static_row(&saved).into_string()))
+    Ok(Html(
+        templates::rowers::attribute_section(&saved, None).into_string(),
+    ))
 }
 
 /// Typed projection of [`RowerEditInput`] after enum parsing.
@@ -205,7 +207,7 @@ async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
 // =====================================================================
 //
 // `GET /rowers/{id}` renders a detail page composed of three sections:
-//   1. attribute summary (read-only — editing lives on the list view)
+//   1. attributes — read-only summary with Edit button (HTMX swap)
 //   2. seat affinities (S3) — table + add form
 //   3. pair affinities (S2) — table + add form
 //
