@@ -358,7 +358,7 @@ impl SolverConfig {
             engine_room_strength_weight: 3,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
-            top_boat_stacking_weight: 2,
+            top_boat_stacking_weight: 4,
             ..Self::balanced()
         }
     }
