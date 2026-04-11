@@ -338,6 +338,30 @@ Multi-path fallback: `PUBLIC_DIR` env → `exe_dir/public`.
 Replace CDN with local `tailwind.config.js` scanning
 `crates/server/src/**/*.rs` → `crates/server/public/tailwind.css`.
 
+### Infrastructure
+
+#### Audit log
+
+Track who changed what and when. Useful for coaches reviewing
+availability changes, PDs auditing role grants, and debugging
+unexpected state.
+
+**Schema.** A single `audit_log` table in the per-tenant DB:
+- `id`, `timestamp`, `user_id` (nullable — system actions have
+  no user), `action` (enum or free text: e.g. "availability.update",
+  "lineup.commit", "rower.update", "invite.create"),
+  `resource_type`, `resource_id`, `detail` (JSON blob with
+  before/after or relevant context).
+
+**Write points.** Instrument handlers that mutate state:
+availability upserts, lineup commits, rower edits, role changes,
+invite creation, boat CRUD, practice creation, notes updates.
+
+**Read UI.** A filterable log view for PD+ (by resource, by user,
+by date range). Lower priority than the write instrumentation —
+the data is valuable even before there's a dedicated UI (queryable
+via SQLite directly).
+
 ### Parked
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
