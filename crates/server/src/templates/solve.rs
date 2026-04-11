@@ -30,7 +30,9 @@ pub(crate) struct DisplayFlags {
 }
 
 /// Landing page before the solver runs. Shows knobs with a
-/// "Generate" button (or "Re-generate" if lineups already exist).
+/// "Generate" button (or "Re-generate" if lineups already exist),
+/// plus a manual lineup builder with boat selection and an
+/// available rower pool.
 pub(crate) fn landing_content(
     snapshot: &DbSnapshot,
     date: NaiveDate,
@@ -38,9 +40,9 @@ pub(crate) fn landing_content(
     committed_practices: &[Practice],
     has_committed: bool,
 ) -> Markup {
-    let available = snapshot.available_rowers().count();
+    let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
-        "{available} rowers available · {boats} candidate boats",
+        "{available_count} rowers available · {boats} candidate boats",
         boats = snapshot.sweep_boats.len(),
     );
 
@@ -48,8 +50,252 @@ pub(crate) fn landing_content(
         (page_header(&format!("Generate · {date}"), Some(&subtitle)))
         div class="px-8 py-6 space-y-6 max-w-6xl" {
             (knobs_form(date, knobs, committed_practices, has_committed))
+            (manual_builder(snapshot, date))
         }
     }
+}
+
+/// Manual lineup builder: boat selector + empty boat cards + rower pool.
+/// The coach can place rowers by hand and either commit directly or
+/// click Generate to let the solver fill the rest (placements become locks).
+fn manual_builder(snapshot: &DbSnapshot, date: NaiveDate) -> Markup {
+    let commit_action = format!("/commit-lineup/{date}");
+    let available_rowers: Vec<&Rower> = snapshot.available_rowers().collect();
+
+    html! {
+        section class="bg-white rounded-lg shadow p-6"
+               x-data="manualBuilder()" {
+            div class="flex items-center justify-between mb-4" {
+                h2 class="text-xl font-bold text-slate-800" { "Manual lineup" }
+                div class="flex items-center gap-2" {
+                    template x-if="selected" {
+                        span class="text-xs text-blue-600" {
+                            "Click a seat to place, or click again to cancel"
+                        }
+                    }
+                    form method="post" action=(commit_action) x-ref="manualCommitForm" {
+                        div x-ref="manualSeatInputs" {}
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                            "Commit lineup"
+                        }
+                    }
+                }
+            }
+
+            // Boat selector
+            div class="mb-4" {
+                div class="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                    "Select boats"
+                }
+                div class="flex flex-wrap gap-3" {
+                    @for boat in &snapshot.sweep_boats {
+                        @let bid = boat.id.as_int().to_string();
+                        label class="inline-flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer" {
+                            input type="checkbox"
+                                  value=(bid)
+                                  class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                  "@change"={"toggleBoat(" (boat.id.as_int()) ")"};
+                            (boat.name) " (" (boat.seat_count)
+                            @if boat.has_cox.as_bool() { "+" }
+                            ")"
+                        }
+                    }
+                }
+            }
+
+            // Empty boat cards (shown when boats are selected)
+            div #manual-boats class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" {}
+
+            // Available rower pool
+            div class="pt-4 border-t border-slate-200 text-sm" {
+                div class="mb-2" {
+                    strong class="text-slate-700" { "Available rowers " }
+                    span class="text-xs text-slate-500" { "(click to select, then click a seat)" }
+                }
+                div #rower-pool class="flex flex-wrap gap-2" {
+                    @for r in &available_rowers {
+                        @let key = format!("pool:{}", r.id);
+                        span data-key=(key)
+                             data-rower=(r.id)
+                             data-name=(r.name)
+                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50"
+                             ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                             "@click"={"selectRower('" (key) "')"} {
+                            div class="font-medium text-slate-800 text-sm" { (r.name) }
+                        }
+                    }
+                }
+            }
+        }
+
+        script {
+            (maud::PreEscaped(manual_builder_js(snapshot)))
+        }
+    }
+}
+
+/// Generate the Alpine component JS for the manual builder.
+fn manual_builder_js(snapshot: &DbSnapshot) -> String {
+    // Build a JS object mapping boat_id → { name, seat_count, has_cox }
+    let mut boats_js = String::from("{");
+    for (i, boat) in snapshot.sweep_boats.iter().enumerate() {
+        if i > 0 { boats_js.push(','); }
+        let escaped_name = boat.name
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"");
+        boats_js.push_str(&format!(
+            "{}:{{name:\"{}\",seats:{},hasCox:{}}}",
+            boat.id.as_int(),
+            escaped_name,
+            boat.seat_count,
+            boat.has_cox.as_bool(),
+        ));
+    }
+    boats_js.push('}');
+
+    format!(r#"
+function manualBuilder() {{
+    var boatDefs = {boats_js};
+    return {{
+        selected: null,
+        selectedBoats: {{}},
+        init() {{ this.rebuildInputs(); }},
+        toggleBoat(boatId) {{
+            if (this.selectedBoats[boatId]) {{
+                delete this.selectedBoats[boatId];
+            }} else {{
+                this.selectedBoats[boatId] = true;
+            }}
+            this.renderBoats();
+            this.rebuildInputs();
+        }},
+        selectRower(key) {{
+            if (!this.selected) {{
+                this.selected = key;
+            }} else if (this.selected === key) {{
+                this.selected = null;
+            }} else {{
+                // If first selection was a seat, place this rower there
+                this.placeRower(this.selected, key);
+                this.selected = null;
+            }}
+        }},
+        selectSeat(key) {{
+            if (!this.selected) {{
+                this.selected = key;
+            }} else if (this.selected === key) {{
+                this.selected = null;
+            }} else {{
+                // If first selection was a rower, place them in this seat
+                this.placeRower(key, this.selected);
+                this.selected = null;
+            }}
+        }},
+        placeRower(seatKey, rowerKey) {{
+            var seatEl = this.$root.querySelector('[data-seat-key="' + seatKey + '"]');
+            var rowerEl = this.$root.querySelector('[data-key="' + rowerKey + '"]');
+            if (!seatEl || !rowerEl) return;
+            var rowerId = rowerEl.dataset.rower;
+            var rowerName = rowerEl.dataset.name;
+            if (!rowerId) return;
+            // Place rower in seat
+            seatEl.dataset.rower = rowerId;
+            seatEl.querySelector('.seat-content').innerHTML =
+                '<div class="font-medium text-slate-800">' + this.esc(rowerName) + '</div>';
+            seatEl.classList.remove('text-slate-400');
+            seatEl.classList.add('text-slate-800');
+            // Remove from pool
+            rowerEl.style.display = 'none';
+            this.rebuildInputs();
+        }},
+        clearSeat(seatKey) {{
+            var seatEl = this.$root.querySelector('[data-seat-key="' + seatKey + '"]');
+            if (!seatEl || !seatEl.dataset.rower) return;
+            var rowerId = seatEl.dataset.rower;
+            // Return to pool
+            var poolEl = this.$root.querySelector('[data-key="pool:' + rowerId + '"]');
+            if (poolEl) poolEl.style.display = '';
+            // Clear seat
+            seatEl.dataset.rower = '';
+            var label = seatEl.dataset.seatLabel || '';
+            seatEl.querySelector('.seat-content').innerHTML =
+                '<span class="italic">\u2014 empty \u2014</span>';
+            seatEl.classList.add('text-slate-400');
+            seatEl.classList.remove('text-slate-800');
+            this.rebuildInputs();
+        }},
+        renderBoats() {{
+            var container = this.$root.querySelector('#manual-boats');
+            container.innerHTML = '';
+            var self = this;
+            Object.keys(this.selectedBoats).forEach(function(bid) {{
+                var def = boatDefs[bid];
+                if (!def) return;
+                var card = document.createElement('div');
+                card.className = 'border border-slate-200 rounded-lg overflow-hidden';
+                var header = '<div class="bg-slate-100 px-4 py-2 border-b border-slate-200">' +
+                    '<strong class="text-slate-800">' + self.esc(def.name) + '</strong>' +
+                    '<span class="text-xs text-slate-500 ml-2">(' + def.seats + (def.hasCox ? '+' : '') + ')</span></div>';
+                var rows = '';
+                var seats = [];
+                if (def.hasCox) seats.push(0);
+                for (var s = def.seats; s >= 1; s--) seats.push(s);
+                seats.forEach(function(s) {{
+                    var seatKey = bid + ':' + s;
+                    var label = s === 0 ? 'cox' : 's' + s;
+                    rows += '<tr data-seat-key="' + seatKey + '" data-boat="' + bid + '" data-seat="' + s + '" data-rower="" ' +
+                        'class="border-b border-slate-100 last:border-0 cursor-pointer transition text-slate-400 hover:bg-slate-50" ' +
+                        '@click="selectSeat(\'' + seatKey + '\')" ' +
+                        ':class="selected === \'' + seatKey + '\' ? \'bg-blue-100 ring-2 ring-inset ring-blue-400\' : \'hover:bg-slate-50\'">' +
+                        '<td class="px-4 py-2 text-slate-500 font-mono text-xs w-12">' + label + '</td>' +
+                        '<td class="px-4 py-2 seat-content"><span class="italic">\u2014 empty \u2014</span></td>' +
+                        '<td class="w-8 text-center"><button type="button" class="text-xs text-slate-400 hover:text-red-600" ' +
+                        '@click.stop="clearSeat(\'' + seatKey + '\')" title="Clear seat">\u00d7</button></td></tr>';
+                }});
+                card.innerHTML = header + '<table class="w-full text-sm"><tbody>' + rows + '</tbody></table>';
+                container.appendChild(card);
+            }});
+        }},
+        esc(s) {{
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }},
+        rebuildInputs() {{
+            // Rebuild commit form hidden inputs.
+            var container = this.$refs.manualSeatInputs;
+            if (!container) return;
+            container.innerHTML = '';
+            var placements = [];
+            this.$root.querySelectorAll('[data-seat-key][data-boat][data-seat][data-rower]').forEach(function(el) {{
+                if (!el.dataset.rower || el.dataset.rower === '') return;
+                var val = el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower;
+                var inp = document.createElement('input');
+                inp.type = 'hidden';
+                inp.name = 'seat';
+                inp.value = val;
+                container.appendChild(inp);
+                placements.push(el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
+            }});
+            // Also inject placements as locks into the knobs form so
+            // Generate treats them as seat locks.
+            var knobsForm = document.querySelector('form[hx-get]');
+            if (knobsForm) {{
+                knobsForm.querySelectorAll('input[name="lock"].manual-lock').forEach(function(el) {{ el.remove(); }});
+                placements.forEach(function(lockVal) {{
+                    var inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.name = 'lock';
+                    inp.value = lockVal;
+                    inp.className = 'manual-lock';
+                    knobsForm.appendChild(inp);
+                }});
+            }}
+        }}
+    }};
+}}
+"#)
 }
 
 pub(crate) fn view_content(
