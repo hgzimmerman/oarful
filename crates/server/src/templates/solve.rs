@@ -285,7 +285,15 @@ fn primary_panel(
                     // Hint shown when a rower is selected.
                     template x-if="selected" {
                         span class="text-xs text-blue-600" {
-                            "Click another rower to swap, or click again to cancel"
+                            "Click another rower to swap"
+                            // Bench button — only for seated rowers
+                            " · "
+                            button type="button"
+                                   class="underline text-amber-600 hover:text-amber-800"
+                                   "@click"="toBench(selected)" {
+                                "move to bench"
+                            }
+                            " · or click again to cancel"
                         }
                     }
                     form method="post" action=(commit_action) x-ref="commitForm" {
@@ -347,24 +355,79 @@ function swapLineup() {
             var elA = this.$root.querySelector('[data-key="' + a + '"]');
             var elB = this.$root.querySelector('[data-key="' + b + '"]');
             if (!elA || !elB) return;
-            // Swap the rower content (name + details)
-            var contentA = elA.querySelector('.rower-content');
-            var contentB = elB.querySelector('.rower-content');
-            if (!contentA || !contentB) return;
-            var tmpHTML = contentA.innerHTML;
-            contentA.innerHTML = contentB.innerHTML;
-            contentB.innerHTML = tmpHTML;
-            // Swap data-rower attributes
+            // Swap rower identity (id + name) between the two slots.
             var tmpRower = elA.dataset.rower;
+            var tmpName = elA.dataset.name;
             elA.dataset.rower = elB.dataset.rower;
+            elA.dataset.name = elB.dataset.name;
             elB.dataset.rower = tmpRower;
+            elB.dataset.name = tmpName;
+            // Re-render the visible content for both slots.
+            this.renderSlot(elA);
+            this.renderSlot(elB);
             this.rebuildInputs();
+        },
+        /** Pull a seated rower to the bench, leaving an empty seat. */
+        toBench(key) {
+            var el = this.$root.querySelector('[data-key="' + key + '"]');
+            if (!el || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+            var rowerId = el.dataset.rower;
+            var rowerName = el.dataset.name;
+            if (!rowerId) return;
+            // Clear the seat
+            el.dataset.rower = '';
+            el.dataset.name = '';
+            this.renderSlot(el);
+            // Add a new bench pill
+            this.addBenchPill(rowerId, rowerName);
+            this.selected = null;
+            this.rebuildInputs();
+        },
+        /** Add a rower pill to the bench area. */
+        addBenchPill(rowerId, rowerName) {
+            var container = this.$root.querySelector('#bench-pills');
+            if (!container) return;
+            var key = 'bench:' + rowerId;
+            var span = document.createElement('span');
+            span.dataset.key = key;
+            span.dataset.boat = 'bench';
+            span.dataset.seat = '-1';
+            span.dataset.rower = rowerId;
+            span.dataset.name = rowerName || '';
+            span.className = 'inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50';
+            span.setAttribute('@click', "select('" + key + "')");
+            span.setAttribute(':class', "selected === '" + key + "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'");
+            span.innerHTML = '<div class="font-medium text-slate-800 text-sm">' + this.esc(rowerName || '#' + rowerId) + '</div>';
+            container.appendChild(span);
+        },
+        /** Re-render the visible content of a slot from its data attributes. */
+        renderSlot(el) {
+            var rowerId = el.dataset.rower;
+            var rowerName = el.dataset.name;
+            var content = el.querySelector('.rower-content');
+            // Bench/sculling pills: the element itself is the content container.
+            if (!content) content = el.tagName === 'SPAN' ? el : null;
+            if (!content) return;
+            if (!rowerId) {
+                // Empty seat
+                content.innerHTML = '<span class="text-slate-400 italic">\u2014 empty \u2014</span>';
+            } else {
+                content.innerHTML = '<div class="font-medium text-slate-800' +
+                    (el.tagName === 'SPAN' ? ' text-sm' : '') + '">' +
+                    this.esc(rowerName || '#' + rowerId) + '</div>';
+            }
+        },
+        esc(s) {
+            var d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
         },
         rebuildInputs() {
             var container = this.$refs.seatInputs;
             container.innerHTML = '';
             this.$root.querySelectorAll('[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+                if (!el.dataset.rower) return; // empty seat
                 var inp = document.createElement('input');
                 inp.type = 'hidden';
                 inp.name = 'seat';
@@ -409,10 +472,12 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: Display
                         } else {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition"
                         };
+                        @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
                         tr data-key=(key)
                            data-boat=(lineup.boat_id)
                            data-seat=(seat)
                            data-rower=(rower_id)
+                           data-name=(rower_name)
                            class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
                            "@click"={"select('" (key) "')"} {
@@ -434,11 +499,9 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: Display
     }
 }
 
-/// Bench / sculling rowers as clickable swap targets.
+/// Bench / sculling rowers as clickable swap targets. The bench
+/// container is always rendered so `toBench` can add pills to it.
 fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: DisplayFlags) -> Markup {
-    if unplaced.to_sculling.is_empty() && unplaced.benched.is_empty() {
-        return html! {};
-    }
     html! {
         div class="mt-4 pt-4 border-t border-slate-200 text-sm space-y-2" {
             @if !unplaced.to_sculling.is_empty() {
@@ -450,10 +513,12 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: 
                     @for id in &unplaced.to_sculling {
                         @let key = format!("sculling:{}", id);
                         @let rower = find_rower(snapshot, *id);
+                        @let rname = rower.map(|r| r.name.as_str()).unwrap_or("");
                         span data-key=(key)
                              data-boat="sculling"
                              data-seat="-1"
                              data-rower=(id)
+                             data-name=(rname)
                              class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
@@ -467,28 +532,28 @@ fn swap_unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers, flags: 
                     }
                 }
             }
-            @if !unplaced.benched.is_empty() {
-                div {
-                    strong class="text-slate-700" { "Benched " }
-                    span class="text-xs text-slate-500" { "(click to swap into a seat)" }
-                }
-                div class="flex flex-wrap gap-2 mt-1" {
-                    @for id in &unplaced.benched {
-                        @let key = format!("bench:{}", id);
-                        @let rower = find_rower(snapshot, *id);
-                        span data-key=(key)
-                             data-boat="bench"
-                             data-seat="-1"
-                             data-rower=(id)
-                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
-                             ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
-                             "@click"={"select('" (key) "')"} {
-                            @if let Some(r) = rower {
-                                div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                (rower_stats_line(r, flags.show_attributes))
-                            } @else {
-                                "#" (id)
-                            }
+            div {
+                strong class="text-slate-700" { "Benched " }
+                span class="text-xs text-slate-500" { "(click to swap into a seat)" }
+            }
+            div #bench-pills class="flex flex-wrap gap-2 mt-1" {
+                @for id in &unplaced.benched {
+                    @let key = format!("bench:{}", id);
+                    @let rower = find_rower(snapshot, *id);
+                    @let rname = rower.map(|r| r.name.as_str()).unwrap_or("");
+                    span data-key=(key)
+                         data-boat="bench"
+                         data-seat="-1"
+                         data-rower=(id)
+                         data-name=(rname)
+                         class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content"
+                         ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                         "@click"={"select('" (key) "')"} {
+                        @if let Some(r) = rower {
+                            div class="font-medium text-slate-800 text-sm" { (r.name) }
+                            (rower_stats_line(r, flags.show_attributes))
+                        } @else {
+                            "#" (id)
                         }
                     }
                 }

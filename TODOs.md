@@ -62,6 +62,10 @@ can resume without re-deriving context.
 - **Show benched/sculling rowers on history detail** — re-derived from
   snapshot by subtracting placed rowers from available. Displayed as
   name lists below the committed lineup cards.
+- **Fix bench ↔ boat swaps + pull-to-bench** — rewrote Alpine doSwap
+  to use data attributes instead of innerHTML swap (fixes cross-DOM
+  corruption). Added "move to bench" action for pulling rowers out
+  of seats. Empty seats render as clickable placeholders.
 
 ## Open work
 
@@ -131,28 +135,6 @@ This only applies when `boat.cox_position == Bow`. Stern-loader
 cox seats have no size constraint.
 
 **No UI changes needed** — purely solver-side scoring.
-
-#### Fix bench ↔ boat swaps + support pulling rowers to bench
-
-Two issues with the manual swap UI:
-
-1. **Bug**: swapping a benched/sculling rower with a seated rower
-   doesn't work. The Alpine `doSwap` swaps `.rower-content`
-   innerHTML between the two elements, but seated rowers are `<tr>`
-   table rows and bench rowers are `<span>` pills — the DOM
-   structures don't match, so the swap silently fails or corrupts
-   the display. Fix: make `doSwap` aware of the element types and
-   move content correctly between table rows and pill elements.
-
-2. **Feature**: allow pulling a rower out of a boat to the bench
-   without replacing them, leaving an empty seat. Currently swaps
-   require two rowers. Options:
-   - A "bench" action per seat (small X button) that moves the
-     rower to the bench list and renders the seat as empty.
-   - Or let the coach click a seated rower then click a "Bench"
-     target area (not a specific benched rower) to pull them out.
-   - Empty seats should be visually distinct and clickable as swap
-     targets so a benched rower can be placed into them.
 
 #### Practice scheduling UI
 
