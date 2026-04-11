@@ -2,278 +2,125 @@
 
 A snapshot of the work backlog as of 2026-04-10. Captures the design
 intent behind each pending task so the next session (human or agent)
-can resume without re-deriving context. Numbers match the IDs the
-task system used while building the project.
+can resume without re-deriving context.
 
 ## Already shipped
-
-The MVP plus several rounds of follow-ups landed across commits
-`0e740b6` through `ea0a6c6`:
 
 - **#45** Sync sheet UI (`POST /sync` form + result panel)
 - **#46** Solver knob form on `/solve/{date}` (`SolveKnobs` query
   string + hidden inputs on commit form)
 - **#47** Stop double-solving on commit (handled with #46)
+- **#48** Pre-solve diagnostics for unsatisfiable lineups (cheap
+  eligibility checks surface in the UI banner)
 - **#49** Inline rower edits on `/rowers` (HTMX outerHTML swap)
 - **#50** Per-rower detail page at `/rowers/{id}` with inline pair +
   seat affinity CRUD
-- **#52** `Practice::list_committed` query (replaced
-  `recent_placements(i64::MAX)` hack)
-- **#53** Alternative-vs-primary diff highlighting on solve view
-- **#57** Solver latency measurement → dropped `DEFAULT_BUDGET_SECS`
-  from 3 → 1 (wall-time was `budget × top_n`)
-- **#59** Global semaphore bounding concurrent solver runs
-- **#60** Dedicated rayon thread pool for solver work (isolates from
-  tokio's blocking pool)
-- **#64** Boat CRUD: list / add / edit / relinquish
-- **#58** Auth & multi-tenancy (all 5 phases):
-  - Phase 1: team structure (team/membership tables, team-scoped
-    practice + availability, navbar team selector)
-  - Phase 2: master DB + tenant isolation (`crates/master_db/`,
-    tenant registry, AppState refactor)
-  - Phase 3: JWT auth (user table, login/logout, invite flow, role
-    gating, auth middleware)
-  - Phase 4: multi-tenant (TenantCache with `Mutex<HashMap>`,
-    TenantContext per request, multi-tenant login scan, handler
-    refactor to `Extension<TenantContext>`)
-  - Phase 5: rower self-service (`/my/profile`, `/my/availability`,
-    rower↔user linking, solver role-gated to Coach+)
-- **#48** Pre-solve diagnostics for unsatisfiable lineups
 - **#51** Practice notes editor (textarea on history detail + list
   preview, `POST /history/{date}/notes`)
-- **Role gating** completed per permission matrix: boats PD+, sync
-  Coach+, rower edits Coach+, notes Coach+. Renamed `require_role`
-  → `require_at_least_role`.
-- **Mailer trait** + `LogMailer` for invite delivery, wired into
-  `invite_handler`. Resend invite button on user list for pending
-  invites. Role column added to user list view.
+- **#52** `Practice::list_committed` query
+- **#53** Alternative-vs-primary diff highlighting on solve view
+- **#57** Solver latency measurement → dropped `DEFAULT_BUDGET_SECS`
+  from 3 → 1
+- **#58** Auth & multi-tenancy (all 5 phases)
+- **#59** Global semaphore bounding concurrent solver runs
+- **#60** Dedicated rayon thread pool for solver work
 - **#61** No-show handling + carry-forward via unified reference
-  lineups (replaced S7/S14 with signed-weight mechanism). "Based
-  on" checkbox list + similarity knob on solve view. No-show
-  checkboxes on history detail.
+  lineups. "Based on" checkbox list + similarity knob on solve view.
+  No-show checkboxes on history detail.
+- **#62** Manual rower swap on solve view (Alpine.js click-to-swap,
+  direct commit endpoint `POST /commit-lineup/{date}`, bench/sculling
+  swap targets)
+- **#64** Boat CRUD: list / add / edit / relinquish
+- **Role gating** completed per permission matrix (boats PD+, sync
+  Coach+, rower edits Coach+, notes Coach+). Renamed `require_role`
+  → `require_at_least_role`.
+- **Mailer trait** + `LogMailer` for invite delivery. Resend invite
+  button + role column on user list.
 
 ## Open work
 
-### Foundational (unblocks coach features)
+### Coach features
 
 #### #63 — Solver-side seat locks: pre-pin (rower, boat, seat) assignments
 
 Coach use case: "I want Alice in stroke of Persephone, no matter
-what — solve the rest around that." Today there's no way to express
-this.
+what — solve the rest around that." No longer blocks #61 (which
+shipped via baseline similarity), but still useful on its own.
 
 **Solver work.** Add a `locks: Vec<SeatLock>` field on `SolveRequest`
 where each lock is `(RowerId, BoatId, seat_position)`. In the model
-build phase (`lineup_solver/src/model.rs`), for each lock:
-
-1. Find the corresponding `x[r, b, s]` decision variable.
-2. Post a hard constraint `x[r, b, s] == 1`.
-3. Reject with a structured `Unsatisfiable` reason if the lock
-   conflicts with eligibility (wrong side, can't cox, etc.).
-
-Validation: locks must be self-consistent (no two locks on the
-same seat, no rower locked into two seats, locked rower must be
-available + eligible). Side eligibility and cox checks must happen
-before model build with friendly errors.
-
-**Storage.** Recommend per-practice locks (`practice_lock` table:
-practice_id, rower_id, boat_id, seat_position). Schema is cheap
-and it's the natural model for the no-show workflow (#61).
+build phase, post `x[r, b, s] == 1` + force `use[b] = 1` for each
+lock. Validate eligibility before model build with friendly errors
+via the `Diagnostic` enum.
 
 **UI.** Lock icon per seat on `/solve/{date}`. Click toggles a lock
 and re-solves. Locks visually distinct (different bg, lock icon).
 
-**Unblocks:** #61 (no-show via lock-everyone-else).
+#### Solver presets (profiles)
 
-### Coach features
+Preset weight configurations for different coaching scenarios.
+Segmented control (button group) on the solve form.
 
-#### #61 — No-show handling: re-solve with minimal disruption — SHIPPED
+**Built-in presets:**
+- **Even speed** — high S1/S9, low S4. Boats stay together.
+- **Tiered / coached** — low S1, high S11/S12. Top boat stacked.
+- **Balanced** — current defaults.
 
-Implemented via approach 2 (baseline similarity), which turned out
-to be more flexible than seat locks and independent of #63.
+**Custom profiles.** `solver_profile` table with one typed column
+per `SolverConfig` weight (NOT NULL, no defaults). Future migrations
+backfill new columns with 0. "Save as preset" button persists
+current weights.
 
-**What shipped (2026-04-10):**
-
-- Unified reference-lineup mechanism (replaces old S7 novelty +
-  new S14 baseline into a single signed-weight system)
-- Carry-forward UI: "Based on" checkbox list on the solve view
-  lets coaches select prior committed practices as baselines
-- No-show UI: history detail view has per-rower "no-show"
-  checkboxes + "Re-solve without no-shows" button that navigates
-  to solve with baseline + availability overrides
-- `axum-extra` query feature for repeated query param support
-
-#### #62 — Manual rower swap in lineups
-
-Coach use case: swap two specific rowers' seats without re-solving.
-Pure UI/data feature, not a solver feature.
-
-**Mental model.** The solver proposes; the coach optionally edits;
-commit saves whatever's displayed. No re-solving on a swap.
-
-**UI.** Click rower A → highlight → click rower B → swap. Works
-across boats. Bench/unplaced lists too (swap a fielded rower with
-a benched one). Validation warnings (wrong side, can't cox) but
-not blockers — coach overrides.
-
-**State.** Recommendation: **always commit first, edit committed**
-(option 3). Coach workflow: solve → commit → optionally edit. The
-"commit" verb becomes "save draft". Edits mutate `lineup_seat`
-rows directly. No draft table, no hidden form fields.
-
-**No dependency on #63** — locks affect future solves; swap edits
-existing lineups. They're orthogonal.
-
-### Quick wins
-
-#### #51 — Practice notes editor
-
-`practice.notes` already exists in the schema. Add a notes textarea
-to the solve view (and history view) that POSTs to a new endpoint
-and updates `Practice` via `Practice::upsert_by_date(date,
-Some(notes))`. Render existing notes on `/history/{date}`.
+No solver changes needed — purely UI + storage.
 
 ### Polish
 
 #### #54 — Print-friendly stylesheet for solve / history views
 
-Coaches print the lineup before going on the water. Add `@media
-print` rules (or a dedicated `/print/{date}` route) that hides the
-navbar, expands all alternatives, drops backgrounds, and lays out
-one boat per page-break.
+`@media print` rules (or `/print/{date}` route) that hides navbar,
+expands alternatives, drops backgrounds, one boat per page-break.
 
 ### Productionization
 
 #### #55 — Production static-asset path resolution
 
-`build_router()` takes a `public_dir` string today; `main.rs` reads
-`PUBLIC_DIR` env or defaults to `crates/server/public`
-(dev-friendly). For deployment, fall back to `exe_dir/public` like
-`boat_tracking::build_router` does (multi-path resolution).
+Multi-path fallback: `PUBLIC_DIR` env → `exe_dir/public`.
 
 #### #56 — Custom Tailwind build pipeline
 
-`templates/layout.rs` currently pulls Tailwind from
-`cdn.tailwindcss.com` — fine for dev, broken offline and bloated in
-prod. Add a `tailwind.config.js` that scans
-`crates/server/src/**/*.rs` for class names, and a build step that
-emits `crates/server/public/tailwind.css`.
-
-### Coach features
-
-#### Solver presets (profiles)
-
-The solve view already exposes `SolverConfig` knobs (partial fill,
-novelty, budget, alts), but tuning 14+ soft-constraint weights by
-hand is impractical. Add **preset profiles** — mutually-exclusive
-radio buttons on the solve form that set all weights in one click.
-
-**Built-in presets** (starting point, needs coach input):
-
-- **Even speed** — high skill-variance weight (S1), high
-  pair-strength balance (S9), low side-preference weight (S4).
-  Goal: boats that are as close to each other in speed as possible.
-  Good when few coaches are on the water and boats need to stay
-  together.
-- **Tiered / coached** — low skill-variance weight, high
-  end-pair-skill (S11) and engine-room-strength (S12) rewards.
-  Goal: concentrate talent into a top boat, let weaker boats be
-  coached independently. Good when each boat has a dedicated coach
-  and they don't need to stay together.
-- **Balanced** — the current defaults. Middle ground.
-
-**Custom profiles.** Let coaches create and save their own named
-weight sets. Stored per-team in a `solver_profile` table with one
-typed column per `SolverConfig` weight (not a JSON blob). All
-columns are `NOT NULL` with no defaults — the application always
-writes every field explicitly. When a new soft constraint is added
-in the future, the migration adds the column and backfills existing
-rows with 0 (disabled), preserving behaviour. Schema:
-
-```
-solver_profile (
-    id INTEGER PRIMARY KEY,
-    team_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    skill_variance_weight INTEGER NOT NULL,
-    pair_affinity_weight INTEGER NOT NULL,
-    ... (one column per SolverConfig field)
-    UNIQUE(team_id, name)
-)
-```
-
-The solve form shows built-in presets + any team-custom ones as
-radio buttons, with a "Custom" option that expands the full knobs
-form.
-
-**UI.** Segmented control (button group) above the existing knobs
-form — a row of styled buttons where the active one is filled and
-the rest are outlined (same semantics as radio buttons, but
-visually cleaner). Selecting a preset collapses the knobs and sets
-hidden fields. Selecting "Custom" expands the full knobs form for
-manual tuning. A "Save as preset" button on the custom view
-persists the current weights.
-
-**Solver side.** No solver changes needed — `SolverConfig` already
-supports all the weights. This is purely UI + storage.
+Replace CDN with local `tailwind.config.js` scanning
+`crates/server/src/**/*.rs` → `crates/server/public/tailwind.css`.
 
 ### Parked
 
-#### #48 — Unsat / timeout diagnostics — solver + UI
+#### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
 
-**Pre-solve diagnostics shipped** (2026-04-10): cheap eligibility
-checks (no cox, not enough rowers, unfillable seats, all boats
-unfillable) run before Pumpkin and surface in the UI banner. The
-deeper relaxation-pass / Pumpkin unsat-core work remains parked
-for a future session.
+Pre-solve diagnostics shipped. The deeper relaxation-pass work
+(re-solve with each hard constraint disabled to identify the
+culprit) remains parked pending a Pumpkin API dive.
 
 ## Follow-ups not yet tracked as tasks
 
-These came up during the auth/multi-tenancy work and aren't yet
-formal tasks:
-
-- **CLI `create-tenant` command** — superuser creates a new tenant
-  via `cargo run -p lineup_cli -- create-tenant --name "Club" --slug
-  "club" --db-path "club.sql"`.
-- **Club picker template** — when login email matches multiple
-  tenants, render a "which club?" picker page.
-- **Invite URL with tenant slug** — change `/invite/{token}` to
-  `/invite/{slug}/{token}` so public invite acceptance resolves the
-  correct tenant DB without auth.
-- **Rower self-service guard rails** — coaches can lock specific
-  profile fields so members can't change them (deferred from Phase
-  5).
+- **CLI `create-tenant` command**
+- **Club picker template** (multi-tenant login)
+- **Invite URL with tenant slug**
+- **Rower self-service guard rails** (field locking)
 
 ### Per-team roles
 
-Currently roles are global per user (`user_role(user_id, role)`).
-Real-world scenario: a Program Director rows on the morning team
-and coaches the afternoon team — same person, same day, different
-role per team.
+Currently roles are global per user. Real-world scenario: a PD
+rows on the morning team and coaches the afternoon team.
 
-**Design direction.** Move roles from `user_role` to a
-`team_membership(user_id, team_id, role)` table. The active team
-(from JWT / cookie) determines which role `require_at_least_role`
-checks. This touches:
+**Design direction.** `team_membership(user_id, team_id, role)`
+replaces `user_role`. Active team determines effective role.
+Touches schema, JWT claims, role gating, invite flow, team
+switching, user list UI.
 
-- Schema: `team_membership` table replaces `user_role`
-- JWT claims: embed the per-team role (or resolve it per-request)
-- `require_at_least_role`: read role from `TenantContext` which
-  already carries the active team
-- Invite flow: invites target a specific team + role
-- Team switching: switching teams also switches the effective role
-- UI: the user list should show role per-team, not globally
-
-Needs more refinement before implementation — the interaction with
-multi-tenancy (team within a tenant vs. team across tenants) and
-the migration path from the current global-role model need thought.
+Needs more refinement — interaction with multi-tenancy and
+migration path from global roles need thought.
 
 ## Suggested next moves
 
-If picking up from a fresh session:
-
-1. **#62** manual swap — independent, "commit first, edit committed".
-2. **#63** seat locks — still useful for "pin Alice in stroke"
-   coach use case, but no longer blocks #61.
-3. Solver presets / profiles (segmented control UI).
-4. Then productionization (#55, #56) and polish (#54).
+1. **#63** seat locks — "pin Alice in stroke" coach use case.
+2. Solver presets / profiles (segmented control UI).
+3. Productionization (#55, #56) and polish (#54).
