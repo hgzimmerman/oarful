@@ -201,10 +201,8 @@ fn status_select(id: &str, current: Option<AvailabilityStatus>) -> Markup {
             @if current.is_none() {
                 option value="" disabled selected { "— no response —" }
             }
-            option value="Yes" selected[is(AvailabilityStatus::Yes)] { "Yes — available" }
-            option value="No" selected[is(AvailabilityStatus::No)] { "No — not attending" }
-            option value="Maybe" selected[is(AvailabilityStatus::Maybe)] { "Maybe — tentative" }
-            option value="ScullingOnly" selected[is(AvailabilityStatus::ScullingOnly)] { "Sculling only" }
+            option value="Yes" selected[is(AvailabilityStatus::Yes)] { "Yes" }
+            option value="No" selected[is(AvailabilityStatus::No)] { "No" }
         }
     }
 }
