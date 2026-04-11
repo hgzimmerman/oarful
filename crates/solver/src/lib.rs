@@ -379,6 +379,16 @@ impl SolverConfig {
         }
     }
 
+    /// Built-in preset names. Custom profiles must not shadow these.
+    pub const BUILTIN_NAMES: &'static [&'static str] = &[
+        "balanced", "even_speed", "tiered", "random",
+    ];
+
+    /// Whether a name is a reserved built-in preset.
+    pub fn is_builtin(name: &str) -> bool {
+        Self::BUILTIN_NAMES.contains(&name)
+    }
+
     /// Look up a preset by name. Returns `None` for unknown names.
     pub fn from_preset(name: &str) -> Option<Self> {
         match name {

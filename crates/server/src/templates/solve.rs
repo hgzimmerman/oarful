@@ -413,10 +413,23 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             } else {
                                 "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
                             };
-                            button type="button" class=(btn_class)
-                                   title=[description.as_deref()]
-                                   onclick={"document.getElementById('preset-input').value='" (name) "'"} {
-                                (name)
+                            @let delete_url = format!("/solver-profile/{}", name);
+                            span class="relative inline-flex items-center" {
+                                button type="button" class=(btn_class)
+                                       title=[description.as_deref()]
+                                       onclick={"document.getElementById('preset-input').value='" (name) "'"} {
+                                    (name)
+                                }
+                                button type="button"
+                                       class="text-xs text-violet-400 hover:text-red-600 ml-0.5 -mr-1"
+                                       title="Delete this profile"
+                                       hx-delete=(delete_url)
+                                       hx-confirm={"Delete profile \"" (name) "\"?"}
+                                       hx-target="#content"
+                                       hx-swap="none"
+                                       onclick={"event.stopPropagation(); setTimeout(()=>location.reload(), 200)"} {
+                                    "×"
+                                }
                             }
                         }
                     }

@@ -4,7 +4,7 @@
 use axum::{
     http::StatusCode,
     response::{Html, Redirect},
-    routing::{get, post},
+    routing::{delete, get, post},
     Form, Router,
 };
 use axum_extra::extract::CookieJar;
@@ -45,6 +45,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/practices", get(practices::list_handler).post(practices::create_handler))
         .route("/solve/{date}", get(solve::view_handler))
         .route("/solver-profile", post(solve::save_profile_handler))
+        .route("/solver-profile/{name}", delete(solve::delete_profile_handler))
         .route("/commit/{date}", post(solve::commit_handler))
         .route("/commit-lineup/{date}", post(solve::commit_lineup_handler))
         .route("/history", get(history::list_handler))

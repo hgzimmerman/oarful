@@ -577,7 +577,7 @@ pub(crate) async fn save_profile_handler(
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     let name = input.name.trim().to_string();
-    if name.is_empty() {
+    if name.is_empty() || SolverConfig::is_builtin(&name) {
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -616,6 +616,37 @@ pub(crate) async fn save_profile_handler(
 
     // Redirect back to the referring page (or practices).
     Ok(Redirect::to("/practices"))
+}
+
+/// `DELETE /solver-profile/{name}` — delete a custom profile.
+/// Built-in presets cannot be deleted. Returns 200 on success
+/// (HTMX reloads the page).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn delete_profile_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    Path(name): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    if name.is_empty() || SolverConfig::is_builtin(&name) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    tenant
+        .db
+        .with_conn(move |conn| {
+            use lineup_db::solver_profile::SolverProfile;
+            if let Some(profile) = SolverProfile::find_by_name(conn, team_id, &name)? {
+                SolverProfile::delete(conn, profile.id)?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(StatusCode::OK)
 }
 
 async fn run_solve(
