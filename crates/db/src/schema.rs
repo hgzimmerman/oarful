@@ -152,6 +152,7 @@ diesel::table! {
         id -> Integer,
         team_id -> Integer,
         name -> Text,
+        description -> Nullable<Text>,
         skill_variance_weight -> Integer,
         pair_affinity_weight -> Integer,
         seat_affinity_weight -> Integer,

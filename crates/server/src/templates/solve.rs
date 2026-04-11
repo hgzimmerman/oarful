@@ -39,7 +39,7 @@ pub(crate) fn landing_content(
     knobs: &SolveKnobs,
     committed_practices: &[Practice],
     has_committed: bool,
-    custom_profiles: &[String],
+    custom_profiles: &[(String, Option<String>)],
 ) -> Markup {
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -306,7 +306,7 @@ pub(crate) fn view_content(
     result: &SolveResult,
     committed_practices: &[Practice],
     flags: &DisplayFlags,
-    custom_profiles: &[String],
+    custom_profiles: &[(String, Option<String>)],
 ) -> Markup {
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -335,7 +335,7 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[String]) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)]) -> Markup {
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{date}");
     html! {
@@ -388,11 +388,11 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     }
                     div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
                         @let current = &knobs.preset;
-                        @for (value, label) in &[
-                            ("balanced", "Balanced"),
-                            ("even_speed", "Even speed"),
-                            ("tiered", "Tiered"),
-                            ("random", "Random"),
+                        @for (value, label, tip) in &[
+                            ("balanced", "Balanced", "Even-handed defaults — no emphasis on speed parity or stacking"),
+                            ("even_speed", "Even speed", "Boats matched in speed — talent spread evenly, flexible side placement"),
+                            ("tiered", "Tiered", "Top boat stacked — best rowers in key seats, skill gaps between boats OK"),
+                            ("random", "Random", "No soft preferences — only hard constraints, maximum variety"),
                         ] {
                             @let is_active = current == value || (current.is_empty() && *value == "balanced");
                             @let btn_class = if is_active {
@@ -401,11 +401,12 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                 "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
                             };
                             button type="button" class=(btn_class)
+                                   title=(tip)
                                    onclick={"document.getElementById('preset-input').value='" (*value) "'"} {
                                 (label)
                             }
                         }
-                        @for name in custom_profiles {
+                        @for (name, description) in custom_profiles {
                             @let is_active = current == name;
                             @let btn_class = if is_active {
                                 "px-3 py-1.5 font-semibold bg-violet-700 text-white"
@@ -413,6 +414,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                 "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
                             };
                             button type="button" class=(btn_class)
+                                   title=[description.as_deref()]
                                    onclick={"document.getElementById('preset-input').value='" (name) "'"} {
                                 (name)
                             }

@@ -396,7 +396,7 @@ pub(crate) async fn view_handler(
             force_cox_stern: tenant.config.force_cox_stern,
             locked_seats,
         };
-        let profile_names: Vec<String> = custom_profiles.iter().map(|p| p.name.clone()).collect();
+        let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
             &snapshot, date, &knobs, &result, &committed_practices,
             &flags, &profile_names,
@@ -409,7 +409,7 @@ pub(crate) async fn view_handler(
     }
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
-    let profile_names: Vec<String> = custom_profiles.iter().map(|p| p.name.clone()).collect();
+    let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
         &profile_names,
@@ -562,6 +562,8 @@ pub(crate) async fn commit_lineup_handler(
 pub(crate) struct SaveProfileInput {
     name: String,
     preset: String,
+    #[serde(default)]
+    description: Option<String>,
 }
 
 /// `POST /solver-profile` — save the current preset as a custom profile.
@@ -582,9 +584,11 @@ pub(crate) async fn save_profile_handler(
     // Resolve the config from the preset (built-in or default).
     let config = SolverConfig::from_preset(&input.preset).unwrap_or_default();
 
+    let description = input.description.filter(|d| !d.trim().is_empty());
     let new_profile = lineup_db::solver_profile::NewSolverProfile {
         team_id,
         name,
+        description,
         skill_variance_weight: config.skill_variance_weight,
         pair_affinity_weight: config.pair_affinity_weight,
         seat_affinity_weight: config.seat_affinity_weight,

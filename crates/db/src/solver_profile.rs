@@ -25,6 +25,7 @@ pub struct SolverProfile {
     pub id: SolverProfileId,
     pub team_id: TeamId,
     pub name: String,
+    pub description: Option<String>,
     pub skill_variance_weight: i32,
     pub pair_affinity_weight: i32,
     pub seat_affinity_weight: i32,
@@ -47,6 +48,7 @@ pub struct SolverProfile {
 pub struct NewSolverProfile {
     pub team_id: TeamId,
     pub name: String,
+    pub description: Option<String>,
     pub skill_variance_weight: i32,
     pub pair_affinity_weight: i32,
     pub seat_affinity_weight: i32,

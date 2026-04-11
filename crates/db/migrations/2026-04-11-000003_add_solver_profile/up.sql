@@ -2,6 +2,7 @@ CREATE TABLE solver_profile (
     id              INTEGER PRIMARY KEY NOT NULL,
     team_id         INTEGER NOT NULL,
     name            TEXT    NOT NULL,
+    description     TEXT,
     skill_variance_weight       INTEGER NOT NULL,
     pair_affinity_weight        INTEGER NOT NULL,
     seat_affinity_weight        INTEGER NOT NULL,
