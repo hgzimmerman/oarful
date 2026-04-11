@@ -669,7 +669,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // capacity is exhausted. This doesn't prevent the solver from
     // choosing differently — it just prunes obviously-suboptimal
     // candidates so the solver converges faster.
-    let boats = greedy_fleet_select(boats, available.len(), request.partial_fill);
+    let boats = greedy_fleet_select(boats, &available, request.partial_fill);
 
     // --- Phase 1c: pre-solve diagnostics ---
     let mut diagnostics = pre_solve_diagnostics(&boats, &available);
@@ -692,17 +692,80 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 /// fleet-configuration exploration.
 fn greedy_fleet_select<'a>(
     mut candidates: Vec<&'a Boat>,
-    num_available: usize,
+    available: &[&Rower],
     partial_fill: PartialFillPolicy,
 ) -> Vec<&'a Boat> {
-    use model::optional_seats;
+    use model::{boat_target_weight_ordinal, optional_seats};
 
-    // Sort largest first (already the case from list_sweep, but
-    // be explicit).
+    let num_available = available.len();
+
+    // Compute the average weight class of the strongest rowers.
+    // "Strongest" = highest skill + strength ordinal sum. We look
+    // at the top N where N = largest boat's rowing seat count, so
+    // the weight-class match is for the rowers who'd fill the top
+    // boat.
+    let top_n = candidates
+        .iter()
+        .map(|b| b.seat_count as usize)
+        .max()
+        .unwrap_or(8);
+    // Quality heuristic: skill + strength + power-to-weight bonus.
+    // A rower whose strength exceeds their weight class is more
+    // effective per kg. This prevents heavy-but-weak rowers from
+    // pulling the top boat toward a heavier weight class.
+    let mut rower_quality: Vec<(i32, i32)> = available
+        .iter()
+        .filter(|r| !r.is_designated_cox.as_bool())
+        .map(|r| {
+            let pw_bonus = (r.strength.ordinal() - r.weight_class.ordinal()).max(0);
+            let quality = r.skill.ordinal() + r.strength.ordinal() + pw_bonus;
+            (quality, r.weight_class.ordinal())
+        })
+        .collect();
+    rower_quality.sort_by(|a, b| b.0.cmp(&a.0)); // best first
+    // Quality-weighted average: strong rowers' weight class counts
+    // more than weak rowers'. This reflects power-to-weight: a heavy
+    // Expert matters more for boat selection than a heavy Novice.
+    let top_avg_weight: f64 = if rower_quality.is_empty() {
+        2.0
+    } else {
+        let n = top_n.min(rower_quality.len());
+        let top = &rower_quality[..n];
+        let total_quality: f64 = top.iter().map(|(q, _)| *q as f64).sum();
+        if total_quality > 0.0 {
+            top.iter().map(|(q, w)| *q as f64 * *w as f64).sum::<f64>() / total_quality
+        } else {
+            top.iter().map(|(_, w)| *w as f64).sum::<f64>() / n as f64
+        }
+    };
+
+    // Sort: largest boats first. Among same-sized boats, count how
+    // many strong heavy rowers (quality above median, weight >= Heavy)
+    // are available. If there are enough to justify a heavy boat,
+    // put it first. Otherwise fall back to heavier-boat-first as a
+    // tiebreaker (it's more forgiving of mixed-weight crews).
+    let heavy_strong_count = rower_quality.iter()
+        .filter(|(q, w)| *w >= 3 && *q >= 6) // Heavy+ and decent quality
+        .count();
+
     candidates.sort_by(|a, b| {
         let a_total = a.seat_count + if a.has_cox.as_bool() { 1 } else { 0 };
         let b_total = b.seat_count + if b.has_cox.as_bool() { 1 } else { 0 };
-        b_total.cmp(&a_total)
+        b_total.cmp(&a_total).then_with(|| {
+            if heavy_strong_count >= 2 {
+                // Enough strong heavies — put the heavier boat first
+                // so they don't fight the weight-class wall.
+                let a_wc = boat_target_weight_ordinal(a.weight_class);
+                let b_wc = boat_target_weight_ordinal(b.weight_class);
+                b_wc.cmp(&a_wc)
+            } else {
+                // Few strong heavies — put the lighter boat first
+                // since the top rowers are mostly lighter.
+                let a_wc = boat_target_weight_ordinal(a.weight_class);
+                let b_wc = boat_target_weight_ordinal(b.weight_class);
+                a_wc.cmp(&b_wc)
+            }
+        })
     });
 
     let k = partial_fill.max_empty();
@@ -717,8 +780,6 @@ fn greedy_fleet_select<'a>(
 
         if remaining >= min_seats {
             selected.push(*boat);
-            // Assume we'll fill as many seats as possible (up to
-            // seats_total), not just min_seats.
             let actually_fill = seats_total.min(remaining);
             remaining -= actually_fill;
         }
@@ -727,7 +788,8 @@ fn greedy_fleet_select<'a>(
     tracing::info!(
         candidates = candidates.len(),
         selected = selected.len(),
-        names = %selected.iter().map(|b| b.name.as_str()).collect::<Vec<_>>().join(", "),
+        top_avg_weight = format!("{:.1}", top_avg_weight),
+        names = %selected.iter().map(|b| format!("{} ({})", b.name, b.weight_class)).collect::<Vec<_>>().join(", "),
         "greedy fleet pre-selection"
     );
 
