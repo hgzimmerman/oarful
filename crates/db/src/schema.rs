@@ -168,6 +168,7 @@ diesel::table! {
         partial_fill_bonus -> Integer,
         non_scull_retention_weight -> Integer,
         bow_cox_fit_weight -> Integer,
+        top_boat_stacking_weight -> Integer,
     }
 }
 

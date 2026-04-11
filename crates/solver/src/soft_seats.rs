@@ -588,4 +588,34 @@ impl<'a> ModelBuilder<'a> {
             }
         }
     }
+
+    /// S16 — top-boat stacking bonus. Gives the first boat (b_idx=0)
+    /// an extra per-seat skill + strength reward so the solver
+    /// concentrates the best rowers there. Without this, S11/S12
+    /// fire equally for all boats and the solver distributes talent
+    /// evenly. Only meaningful when `top_boat_stacking_weight > 0`
+    /// (the tiered preset enables it, balanced does not).
+    pub(crate) fn post_s16_top_boat_stacking(&mut self) {
+        if self.cfg.top_boat_stacking_weight == 0 {
+            return;
+        }
+        // Only the first boat (b_idx=0) gets the bonus. After greedy
+        // fleet selection, this is the largest boat.
+        let b_idx = 0;
+        if b_idx >= self.boats.len() {
+            return;
+        }
+        let boat = self.boats[b_idx];
+        let w = self.cfg.top_boat_stacking_weight;
+
+        // Bonus for every rowing seat's skill and strength.
+        for seat in 1..=boat.seat_count {
+            if let Some(&skill_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
+                self.obj_terms.push(skill_var.scaled(-w));
+            }
+            if let Some(&str_var) = self.seat_strength_by_seat.get(&(b_idx, seat)) {
+                self.obj_terms.push(str_var.scaled(-w));
+            }
+        }
+    }
 }

@@ -298,6 +298,11 @@ pub struct SolverConfig {
     /// their height and weight ordinals. Default **1** (use the
     /// penalty table as-is).
     pub bow_cox_fit_weight: i32,
+    /// S16 top-boat stacking bonus. Extra per-seat skill + strength
+    /// reward for the first (largest) boat. The solver concentrates
+    /// the best rowers there. Default **0** (off in balanced; tiered
+    /// sets it to 2).
+    pub top_boat_stacking_weight: i32,
 }
 
 impl SolverConfig {
@@ -320,6 +325,7 @@ impl SolverConfig {
             partial_fill_bonus: 2,
             non_scull_retention_weight: 2,
             bow_cox_fit_weight: 1,
+            top_boat_stacking_weight: 0,
         }
     }
 
@@ -336,6 +342,7 @@ impl SolverConfig {
             side_preference_weight: 0,
             end_pair_skill_weight: 0,
             engine_room_strength_weight: 0,
+            top_boat_stacking_weight: -2, // penalize stacking = spread talent
             ..Self::balanced()
         }
     }
@@ -351,6 +358,7 @@ impl SolverConfig {
             engine_room_strength_weight: 3,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
+            top_boat_stacking_weight: 2,
             ..Self::balanced()
         }
     }
@@ -376,6 +384,7 @@ impl SolverConfig {
             partial_fill_bonus: 1, // keep so partial-fill still prefers filling
             non_scull_retention_weight: 0,
             bow_cox_fit_weight: 0,
+            top_boat_stacking_weight: 0,
         }
     }
 
@@ -892,6 +901,7 @@ fn build_model<'a>(
     m.post_s10_pair_height()?;
     m.post_s11_end_pair_skill();
     m.post_s12_engine_room_strength();
+    m.post_s16_top_boat_stacking();
 
     // --- Objective variable ---
     //

@@ -348,6 +348,7 @@ fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) -> SolverConf
         partial_fill_bonus: p.partial_fill_bonus,
         non_scull_retention_weight: p.non_scull_retention_weight,
         bow_cox_fit_weight: p.bow_cox_fit_weight,
+        top_boat_stacking_weight: p.top_boat_stacking_weight,
     }
 }
 
@@ -658,6 +659,7 @@ pub(crate) async fn save_profile_handler(
         partial_fill_bonus: config.partial_fill_bonus,
         non_scull_retention_weight: config.non_scull_retention_weight,
         bow_cox_fit_weight: config.bow_cox_fit_weight,
+        top_boat_stacking_weight: config.top_boat_stacking_weight,
     };
 
     tenant
