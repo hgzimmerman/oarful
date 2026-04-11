@@ -455,10 +455,11 @@ pub(crate) async fn view_handler(
             &snapshot, date, &knobs, &result, &committed_practices,
             &flags, &profile_names,
         );
-        return Ok(super::maybe_page(
+        return Ok(super::maybe_page_authed(
             &format!("Generate · {date}"),
             content,
             hx,
+            &tenant,
         ));
     }
 
@@ -468,10 +469,11 @@ pub(crate) async fn view_handler(
         &snapshot, date, &knobs, &committed_practices, has_committed,
         &profile_names,
     );
-    Ok(super::maybe_page(
+    Ok(super::maybe_page_authed(
         &format!("Generate · {date}"),
         content,
         hx,
+        &tenant,
     ))
 }
 

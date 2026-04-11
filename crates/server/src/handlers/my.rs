@@ -36,7 +36,7 @@ pub(crate) async fn profile_handler(
                 "My profile",
                 "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
             );
-            return Ok(super::maybe_page("My profile", content, hx));
+            return Ok(super::maybe_page_authed("My profile", content, hx, &tenant));
         }
     };
     // Reuse the rower detail page with member-level permissions.
@@ -52,7 +52,7 @@ pub(crate) async fn profile_handler(
         .unwrap_or(lineup_db::team::SelfEditLevel::Low);
     let perms = templates::rowers::DetailPermissions::member(level);
     let content = templates::rowers::detail_content(&detail, perms);
-    Ok(super::maybe_page("My profile", content, hx))
+    Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -70,7 +70,7 @@ pub(crate) async fn profile_update_handler(
         Ok(p) => p,
         Err(msg) => {
             let content = templates::my::profile_content_with_error(&rower, &msg);
-            return Ok(super::maybe_page("My profile", content, hx));
+            return Ok(super::maybe_page_authed("My profile", content, hx, &tenant));
         }
     };
 
@@ -88,7 +88,7 @@ pub(crate) async fn profile_update_handler(
         .map_err(internal_error)?;
 
     let content = templates::my::profile_content(&saved);
-    Ok(super::maybe_page("My profile", content, hx))
+    Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
 }
 
 #[derive(Debug, Deserialize)]
@@ -170,7 +170,7 @@ pub(crate) async fn availability_handler(
                 "My availability",
                 "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
             );
-            return Ok(super::maybe_page("My availability", content, hx));
+            return Ok(super::maybe_page_authed("My availability", content, hx, &tenant));
         }
     };
     let rower_id = rower.id;
@@ -223,7 +223,7 @@ pub(crate) async fn availability_handler(
         .map_err(internal_error)?;
 
     let content = templates::my::availability_content(&rower, &rows);
-    Ok(super::maybe_page("My availability", content, hx))
+    Ok(super::maybe_page_authed("My availability", content, hx, &tenant))
 }
 
 #[derive(Debug, Deserialize)]

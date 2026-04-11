@@ -38,7 +38,7 @@ pub(crate) async fn list_handler(
         .await
         .map_err(internal_error)?;
     let content = templates::boats::list_content(&boats);
-    Ok(super::maybe_page("Boats", content, hx))
+    Ok(super::maybe_page_authed("Boats", content, hx, &tenant))
 }
 
 /// `GET /boats/new` — empty creation form.
@@ -49,7 +49,7 @@ pub(crate) async fn new_handler(
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let content = templates::boats::form_content(FormMode::New, &BoatFormData::empty(), None);
-    Ok(super::maybe_page("New boat", content, hx))
+    Ok(super::maybe_page_authed("New boat", content, hx, &tenant))
 }
 
 /// `POST /boats` — create a new boat from the form.
@@ -106,10 +106,11 @@ pub(crate) async fn edit_handler(
     let data = BoatFormData::from_boat(&boat);
     let content =
         templates::boats::form_content(FormMode::Edit(id), &data, None);
-    Ok(super::maybe_page(
+    Ok(super::maybe_page_authed(
         &format!("{} — edit", boat.name),
         content,
         hx,
+        &tenant,
     ))
 }
 

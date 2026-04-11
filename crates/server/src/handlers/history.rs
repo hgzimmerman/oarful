@@ -30,7 +30,7 @@ pub(crate) async fn list_handler(
         .map_err(internal_error)?;
 
     let content = templates::history::list_content(&practices);
-    Ok(super::maybe_page("History", content, hx))
+    Ok(super::maybe_page_authed("History", content, hx, &tenant))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -60,10 +60,11 @@ pub(crate) async fn detail_handler(
     let content = templates::history::detail_content(
         &snapshot, date, practice.as_ref(), &committed, tenant.config.force_cox_stern,
     );
-    Ok(super::maybe_page(
+    Ok(super::maybe_page_authed(
         &format!("History · {date}"),
         content,
         hx,
+        &tenant,
     ))
 }
 

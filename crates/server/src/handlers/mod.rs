@@ -121,10 +121,25 @@ pub(crate) fn maybe_page(
     content: Markup,
     HxRequest(is_htmx): HxRequest,
 ) -> Html<String> {
+    // No role context — navbar shows all links. Used by public routes
+    // or when the tenant context isn't available.
     if is_htmx {
         Html(content.into_string())
     } else {
-        Html(templates::layout::page(title, content).into_string())
+        Html(templates::layout::page(title, content, None).into_string())
+    }
+}
+
+pub(crate) fn maybe_page_authed(
+    title: &str,
+    content: Markup,
+    HxRequest(is_htmx): HxRequest,
+    tenant: &crate::state::TenantContext,
+) -> Html<String> {
+    if is_htmx {
+        Html(content.into_string())
+    } else {
+        Html(templates::layout::page(title, content, tenant.claims.role()).into_string())
     }
 }
 

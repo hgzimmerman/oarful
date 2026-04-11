@@ -69,7 +69,7 @@ pub(crate) async fn list_handler(
         .await
         .map_err(internal_error)?;
     let content = templates::rowers::list_content(&rows);
-    Ok(super::maybe_page("Roster", content, hx))
+    Ok(super::maybe_page_authed("Roster", content, hx, &tenant))
 }
 
 /// `GET /rowers/{id}/attributes` — read-only attribute section partial.
@@ -262,10 +262,11 @@ pub(crate) async fn detail_handler(
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(&tenant.db, id).await?;
     let content = templates::rowers::detail_content(&detail, templates::rowers::DetailPermissions::coach());
-    Ok(super::maybe_page(
+    Ok(super::maybe_page_authed(
         &format!("Rower · {}", detail.rower.name),
         content,
         hx,
+        &tenant,
     ))
 }
 

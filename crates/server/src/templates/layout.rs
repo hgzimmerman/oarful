@@ -8,7 +8,9 @@
 
 use maud::{html, Markup, DOCTYPE};
 
-pub(crate) fn page(title: &str, content: Markup) -> Markup {
+use lineup_db::app_user::Role;
+
+pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -23,7 +25,7 @@ pub(crate) fn page(title: &str, content: Markup) -> Markup {
                 script src="/alpine.min.js" defer {}
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
-                (navbar())
+                (navbar(role))
                 main #content class="flex-grow" {
                     (content)
                 }
@@ -32,25 +34,50 @@ pub(crate) fn page(title: &str, content: Markup) -> Markup {
     }
 }
 
-fn navbar() -> Markup {
+fn navbar(role: Option<Role>) -> Markup {
+    let r = role.unwrap_or(Role::Member);
+    let is_coach = r.at_least(Role::Coach);
+    let is_pd = r.at_least(Role::ProgramDirector);
+
     html! {
         nav class="bg-slate-800 text-white px-6 py-3 sticky top-0 z-40 shadow" {
             ul class="flex items-center space-x-6" {
                 li class="font-bold text-lg mr-4" { "Lineup Generator" }
+
+                // Everyone sees practices and history
                 (nav_link("/practices", "Practices"))
                 (nav_link("/history", "History"))
-                (nav_link("/boats", "Fleet"))
-                (nav_link("/rowers", "Roster"))
-                (nav_link("/sync", "Sync"))
-                (nav_link("/users", "Users"))
+
+                // Coach+ sees fleet, roster, sync
+                @if is_coach {
+                    (nav_link("/boats", "Fleet"))
+                    (nav_link("/rowers", "Roster"))
+                    (nav_link("/sync", "Sync"))
+                }
+
+                // PD only
+                @if is_pd {
+                    (nav_link("/users", "Users"))
+                }
+
+                // Self-service — everyone
                 (nav_link("/my/profile", "Profile"))
                 (nav_link("/my/availability", "Availability"))
-                // Team selector — loaded via HTMX on page init so the
-                // navbar template stays a pure function without DB access.
+
+                // Team selector
                 li class="ml-auto"
                    hx-get="/teams/selector"
                    hx-trigger="load"
                    hx-swap="innerHTML" {
+                }
+
+                // Logout
+                li {
+                    form method="post" action="/logout" class="inline" {
+                        button type="submit" class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                            "Logout"
+                        }
+                    }
                 }
             }
         }

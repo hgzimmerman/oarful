@@ -57,7 +57,7 @@ pub(crate) async fn list_handler(
         .await
         .map_err(super::internal_error)?;
     let content = templates::users::list_content(&users, &roles, &unlinked_rowers);
-    Ok(super::maybe_page("Users", content, hx))
+    Ok(super::maybe_page_authed("Users", content, hx, &tenant))
 }
 
 // =====================================================================
@@ -84,7 +84,7 @@ pub(crate) async fn invite_handler(
     let name = input.name.trim().to_string();
     if email.is_empty() || name.is_empty() {
         let content = templates::users::invite_result(None, Some("Email and name are required."));
-        return Ok(super::maybe_page("Invite", content, hx));
+        return Ok(super::maybe_page_authed("Invite", content, hx, &tenant));
     }
 
     let role = Role::from_str(&input.role).unwrap_or(Role::Member);
@@ -152,11 +152,11 @@ pub(crate) async fn invite_handler(
             }
 
             let content = templates::users::invite_result(Some(&invite_url), None);
-            Ok(super::maybe_page("Invite sent", content, hx))
+            Ok(super::maybe_page_authed("Invite sent", content, hx, &tenant))
         }
         Err(msg) => {
             let content = templates::users::invite_result(None, Some(&msg));
-            Ok(super::maybe_page("Invite", content, hx))
+            Ok(super::maybe_page_authed("Invite", content, hx, &tenant))
         }
     }
 }

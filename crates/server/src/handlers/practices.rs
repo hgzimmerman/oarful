@@ -61,7 +61,7 @@ pub(crate) async fn list_handler(
         .map_err(internal_error)?;
 
     let content = templates::practices::list_content(&summaries);
-    Ok(super::maybe_page("Practices", content, hx))
+    Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
 }
 
 #[derive(Debug, Deserialize)]

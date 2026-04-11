@@ -64,7 +64,7 @@ pub(crate) async fn form_handler(
         })
     });
     let content = templates::sync::form_content(prefill.as_ref(), None, None, last_synced);
-    Ok(super::maybe_page("Sync sheet", content, hx))
+    Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -81,7 +81,7 @@ pub(crate) async fn sync_handler(
         let content = templates::sync::form_content(
             Some(&input), None, Some("Spreadsheet ID is required."), None,
         );
-        return Ok(super::maybe_page("Sync sheet", content, hx));
+        return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
     }
 
     // Step 1 — fetch the CSV from Google in async land. Render any
@@ -97,7 +97,7 @@ pub(crate) async fn sync_handler(
             tracing::warn!(?err, %url, "sheet fetch failed");
             let msg = format!("Failed to fetch sheet: {err}");
             let content = templates::sync::form_content(Some(&input), None, Some(&msg), None);
-            return Ok(super::maybe_page("Sync sheet", content, hx));
+            return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
         }
     };
 
@@ -139,14 +139,14 @@ pub(crate) async fn sync_handler(
             let now = Some(chrono::Utc::now().naive_utc());
             let content =
                 templates::sync::form_content(Some(&input), Some(&summary), None, now);
-            Ok(super::maybe_page("Sync sheet", content, hx))
+            Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
         }
         Err(err) => {
             tracing::warn!(?err, "sheet parse/sync failed");
             let msg = format!("Sync failed: {err}");
             let content =
                 templates::sync::form_content(Some(&input), None, Some(&msg), None);
-            Ok(super::maybe_page("Sync sheet", content, hx))
+            Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
         }
     }
 }
