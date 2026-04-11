@@ -439,6 +439,47 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
+### Self-service team onboarding + business model
+
+**Business model.** The software is FOSS (AGPL-3.0 — copyleft
+covers network use, appropriate for a hosted SaaS). Revenue comes
+from a flat yearly hosting fee per tenant. Custom feature work
+available at additional cost. Deployment config (k3s/k8s) is
+private — not part of the open-source release.
+
+**Self-service onboarding.** A public signup flow where a new
+club can create their own tenant without manual intervention:
+
+1. Landing/marketing page explaining the product + pricing.
+2. "Get started" → registration form: club name, admin email,
+   admin name, password. Creates a tenant + PD user in one step.
+3. Tenant gets its own SQLite file, seeded with an empty roster
+   and the PD account. The PD can then invite coaches and rowers.
+4. Payment integration (Stripe or similar) — gate tenant creation
+   behind payment, or allow a trial period then require payment
+   to continue. Details TBD.
+
+**Schema.** The `tenant` table already exists. Onboarding creates
+a new row + a new SQLite file. May want a `billing_status` field
+(trial / active / suspended / cancelled) and `trial_expires_at`
+on the tenant to gate access.
+
+**Payment.** Integrate a payment processor (Stripe likely).
+Tenant table gets `billing_status` (trial / active / suspended /
+cancelled), `trial_expires_at`, and a `stripe_customer_id` (or
+equivalent) to link tenants to their payment state. Middleware
+checks billing status on each request — suspended tenants see a
+"renew your subscription" page instead of the app.
+
+**CI/CD.** Build/test/lint pipelines live in this repo (GitHub
+Actions or similar). Deployment pipelines (k3s/k8s rollout) live
+in the separate private infra repo.
+
+**Licensing.** Add AGPL-3.0 LICENSE file to the repo. Add license
+headers or a notice in the README. The deployment manifests
+(k3s/k8s YAML, infrastructure-as-code) live in a separate private
+repo.
+
 ### Demo mode
 
 Self-service demo for prospective users — try the app without
