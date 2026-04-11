@@ -378,4 +378,51 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
+    /// S15 — designated-cox retention. Strongly rewards placing
+    /// designated coxswains in cox seats. A designated cox who gets
+    /// benched has nowhere else to go (they can't row), so this is
+    /// effectively a hard preference. The weight is intentionally
+    /// high so it takes priority over most other soft constraints.
+    pub(crate) fn post_s15_designated_cox_retention(&mut self) -> Result<()> {
+        let ModelBuilder {
+            solver,
+            available,
+            x,
+            obj_terms,
+            ..
+        } = self;
+
+        for (r_idx, rower) in available.iter().enumerate() {
+            if !rower.is_designated_cox.as_bool() {
+                continue;
+            }
+            // Collect all cox-seat x variables for this rower.
+            let cox_vars: Vec<DomainId> = x
+                .iter()
+                .filter_map(|(&(r, _, s), &v)| {
+                    if r == r_idx && s == 0 { Some(v) } else { None }
+                })
+                .collect();
+            if cox_vars.is_empty() {
+                continue;
+            }
+
+            let cox_used = solver.new_bounded_integer(0, 1);
+            let mut link: Vec<AffineView<DomainId>> =
+                cox_vars.iter().map(|v| v.scaled(1)).collect();
+            link.push(cox_used.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S15 designated-cox-use link: {e:?}"))?;
+
+            // Strong negative weight = reward for placing.
+            // 10 is higher than most other soft constraints to ensure
+            // designated coxes are placed before anything else.
+            obj_terms.push(cox_used.scaled(-10));
+        }
+        Ok(())
+    }
 }

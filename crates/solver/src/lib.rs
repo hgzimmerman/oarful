@@ -797,6 +797,7 @@ fn build_model<'a>(
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s13_non_scull_retention()?;
     m.post_s14_bow_cox_fit()?;
+    m.post_s15_designated_cox_retention()?;
     m.post_reference_similarity(&request.reference_lineups)?;
 
     // Hard constraints: H1 seat fill + partial-fill cap, H2
