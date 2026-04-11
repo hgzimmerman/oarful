@@ -1404,17 +1404,36 @@ fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
     if show_attributes {
         html! {
             div class="text-xs text-slate-500" {
-                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (r.side)
+                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
             }
         }
     } else {
         use lineup_db::rower::types::Side;
         if r.side != Side::Either {
             html! {
-                div class="text-xs text-slate-500" { (r.side) }
+                div class="text-xs text-slate-500" { (compact_side(r)) }
             }
         } else {
             html! {}
+        }
+    }
+}
+
+/// Compact side label with strength number for lineup cards.
+/// e.g. "Port(-4)", "Stbd(+2)", "Either"
+fn compact_side(r: &Rower) -> String {
+    use lineup_db::rower::types::Side;
+    match r.side {
+        Side::Either => "Either".to_string(),
+        Side::Port => {
+            let s = r.side_strength.as_int();
+            let pos = if s == 0 { -5 } else { -(6 - s).min(5).max(1) };
+            format!("Port({pos:+})")
+        }
+        Side::Starboard => {
+            let s = r.side_strength.as_int();
+            let pos = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
+            format!("Starboard({pos:+})")
         }
     }
 }
