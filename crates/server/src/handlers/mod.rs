@@ -45,6 +45,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/practices", get(practices::list_handler))
         .route("/solve/{date}", get(solve::view_handler))
         .route("/commit/{date}", post(solve::commit_handler))
+        .route("/commit-lineup/{date}", post(solve::commit_lineup_handler))
         .route("/history", get(history::list_handler))
         .route("/history/{date}", get(history::detail_handler))
         .route("/history/{date}/notes", post(history::notes_handler))

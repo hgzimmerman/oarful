@@ -361,6 +361,73 @@ pub(crate) async fn commit_handler(
     Ok(Redirect::to(&format!("/history/{date}")))
 }
 
+// =====================================================================
+// Direct commit (no re-solve) — used by the manual-swap UI
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DirectCommitInput {
+    /// Repeated field: each value is "boat_id:seat_pos:rower_id".
+    #[serde(default)]
+    seat: Vec<String>,
+}
+
+pub(crate) async fn commit_lineup_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    Path(date): Path<NaiveDate>,
+    Form(input): Form<DirectCommitInput>,
+) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    // Parse "boat_id:seat_pos:rower_id" triples and group by boat.
+    let mut by_boat: std::collections::BTreeMap<
+        lineup_db::boat::types::BoatId,
+        Vec<CommitSeat>,
+    > = std::collections::BTreeMap::new();
+    for entry in &input.seat {
+        let parts: Vec<&str> = entry.splitn(3, ':').collect();
+        if parts.len() != 3 {
+            tracing::warn!(entry, "malformed seat field, skipping");
+            continue;
+        }
+        let Ok(boat_id) = parts[0].parse::<lineup_db::boat::types::BoatId>() else {
+            continue;
+        };
+        let Ok(seat_pos) = parts[1].parse::<i32>() else {
+            continue;
+        };
+        let Ok(rower_id) = parts[2].parse::<lineup_db::rower::types::RowerId>() else {
+            continue;
+        };
+        by_boat.entry(boat_id).or_default().push(CommitSeat {
+            seat_position: seat_pos,
+            rower_id,
+            is_cox: seat_pos == 0,
+        });
+    }
+
+    if by_boat.is_empty() {
+        tracing::warn!(%date, "direct commit with no valid seats");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    tenant
+        .db
+        .with_conn(move |conn| {
+            let practice = Practice::upsert_by_date(conn, team_id, date, None)?;
+            for (boat_id, seats) in &by_boat {
+                Lineup::commit_for_boat(conn, practice.id, *boat_id, seats)?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Redirect::to(&format!("/history/{date}")))
+}
+
 /// Dispatch `solve()` onto the dedicated rayon thread pool via a
 /// oneshot channel. The async handler awaits the result without
 /// touching tokio's blocking pool — DB queries via deadpool-diesel
