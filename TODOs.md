@@ -394,6 +394,79 @@ files.
 Don't start until most features are stable — the demo should
 showcase a polished product.
 
+### Regatta lineup generator (long-term)
+
+A significantly more complex solver mode for race-day scheduling.
+Unlike practice lineups (one set of boats, one time slot), regattas
+involve multiple races across a day with shared resources.
+
+**Core constraints:**
+
+- **Race schedule.** Each race has a fixed start time and a
+  category (e.g. Mens 4+, Womens 8, Mixed 4x). The solver must
+  assign boats and rowers to races respecting category rules.
+
+- **Boat reuse.** The same boat can race multiple times per day,
+  but not simultaneously. A boat finishing at 10:15 can't start
+  another race until some turnaround time has elapsed (getting
+  from finish line → dock → start line).
+
+- **Trailer capacity.** The club can't bring the whole fleet.
+  The solver must work within a declared subset of boats that
+  fit on the trailer. This is a hard constraint input, not
+  something the solver decides.
+
+- **Multi-race rowers.** Some rowers opt into rowing more than
+  once per day. Rowers who haven't opted in are single-race
+  only. Opted-in rowers still need minimum turnaround time
+  between races (dock swap time).
+
+- **Cooldown preferences.** Beyond the hard minimum turnaround,
+  some rowers prefer longer rest between races. Model as a soft
+  penalty — the solver tries to respect it but can override if
+  necessary for feasibility.
+
+**Gender and category rules:**
+
+- Rowers have an optional `racing_gender` (Man/Woman) on the
+  rower table. Required to be eligible for regatta placement —
+  rowers without it are excluded from the regatta solver.
+  Non-binary rowers declare one for racing purposes (organizer
+  requirement). Separately, add optional `pronouns` (free text)
+  on the rower table for display purposes — not used by solver.
+- Mens races: men only.
+- Womens races: women only. Men cannot row in womens races.
+- Womens-open toggle: allow women in mens boats (typically
+  discouraged — model as a penalty, not a hard block, with a
+  coach toggle to forbid it entirely).
+- Mixed races: target equal men/women split in the boat. More
+  women than men is allowed; more men than women is not. Model
+  the equal-split target as a soft goal, with the women≥men
+  ratio as a hard constraint.
+
+**Data model additions:**
+
+- `regatta` table: name, date, trailer boat list.
+- `race` table: regatta_id, category, start_time, boat_class
+  (4+, 8, etc.).
+- `race_entry` table: race_id, boat_id, seat assignments.
+- `regatta_attendance` table: regatta_id, rower_id,
+  `max_races` (how many races this rower is willing to do at
+  this regatta), `preferred_cooldown_minutes` (soft rest
+  preference between races at this regatta). These vary per
+  regatta, not per rower globally.
+- Rower table additions: `racing_gender` (nullable enum
+  Man/Woman), `pronouns` (nullable text).
+
+**Solver approach:** This is a much harder combinatorial problem
+than practice lineups — it's essentially a resource-constrained
+scheduling problem with gender constraints. May need a different
+solver formulation (e.g. time-indexed variables, or a two-phase
+approach: assign rowers to races first, then schedule boats).
+
+Very large scope — park until practice lineups are mature and
+there's real demand from clubs doing regattas.
+
 ### Discord integration (long-term)
 
 Low priority — don't start until most other work is done.
