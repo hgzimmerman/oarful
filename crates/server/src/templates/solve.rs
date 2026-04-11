@@ -994,9 +994,26 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
         .iter()
         .find(|b| b.id == lineup.boat_id);
     let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
-    let mut seats = lineup.seats.clone();
+    let has_cox = boat.map(|b| b.has_cox.as_bool()).unwrap_or(false);
+
+    // Build full seat list including empty optional seats.
+    let filled: std::collections::HashMap<i32, RowerId> =
+        lineup.seats.iter().copied().collect();
+    let mut all_seats: Vec<(i32, Option<RowerId>)> = Vec::new();
+    if has_cox {
+        all_seats.push((0, filled.get(&0).copied()));
+    }
+    for s in 1..=seat_count {
+        all_seats.push((s, filled.get(&s).copied()));
+    }
     let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
-    sort_seats_for_display(&mut seats, cox_at_top);
+    all_seats.sort_by_key(|(s, _)| {
+        if *s == 0 {
+            if cox_at_top { i32::MIN } else { i32::MAX }
+        } else {
+            -*s
+        }
+    });
 
     html! {
         div class="border border-slate-200 rounded-lg overflow-hidden" {
@@ -1012,13 +1029,17 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
             }
             table class="w-full text-sm" {
                 tbody {
-                    @for (seat, rower_id) in &seats {
+                    @for (seat, maybe_rower_id) in &all_seats {
                         @let key = format!("{}:{}", lineup.boat_id, seat);
                         @let label = seat_label(*seat, seat_count);
-                        @let rower = find_rower(snapshot, *rower_id);
+                        @let rower = maybe_rower_id.and_then(|id| find_rower(snapshot, id));
+                        @let rower_id_str = maybe_rower_id.map(|id| id.as_int().to_string()).unwrap_or_default();
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let is_locked = flags.locked_seats.contains(&(*rower_id, lineup.boat_id, *seat));
-                        @let row_base = if is_locked {
+                        @let is_locked = maybe_rower_id.map(|rid| flags.locked_seats.contains(&(rid, lineup.boat_id, *seat))).unwrap_or(false);
+                        @let is_empty = maybe_rower_id.is_none();
+                        @let row_base = if is_empty {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-slate-50"
+                        } else if is_locked {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition bg-violet-50 border-l-4 border-l-violet-400"
                         } else if is_designated_cox {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
@@ -1026,11 +1047,11 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
                             "border-b border-slate-100 last:border-0 cursor-pointer transition"
                         };
                         @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
-                        @let lock_val = format!("{}:{}:{}", rower_id, lineup.boat_id, seat);
+                        @let lock_val = format!("{}:{}:{}", rower_id_str, lineup.boat_id, seat);
                         tr data-key=(key)
                            data-boat=(lineup.boat_id)
                            data-seat=(seat)
-                           data-rower=(rower_id)
+                           data-rower=(rower_id_str)
                            data-name=(rower_name)
                            class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
@@ -1042,18 +1063,24 @@ fn swap_boat_card(snapshot: &DbSnapshot, lineup: &ProposedLineup, flags: &Displa
                                 @if let Some(r) = rower {
                                     div class="font-medium text-slate-800" { (r.name) }
                                     (rower_stats_line(r, flags.show_attributes))
+                                } @else if is_empty {
+                                    span class="text-slate-400 italic" { "\u{2014} empty \u{2014}" }
                                 } @else {
-                                    span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
+                                    span class="text-slate-400 italic" { "unknown rower #" (rower_id_str) }
                                 }
                             }
-                            td class="w-8 text-center" {
-                                button type="button"
-                                       class="text-xs hover:text-violet-700"
-                                       title=(if is_locked { "Unlock seat" } else { "Lock seat" })
-                                       data-lock=(lock_val)
-                                       "@click.stop"="toggleLock($event.currentTarget.dataset.lock)" {
-                                    @if is_locked { "🔒" } @else { "🔓" }
+                            @if !is_empty {
+                                td class="w-8 text-center" {
+                                    button type="button"
+                                           class="text-xs hover:text-violet-700"
+                                           title=(if is_locked { "Unlock seat" } else { "Lock seat" })
+                                           data-lock=(lock_val)
+                                           "@click.stop"="toggleLock($event.currentTarget.dataset.lock)" {
+                                        @if is_locked { "🔒" } @else { "🔓" }
+                                    }
                                 }
+                            } @else {
+                                td class="w-8" {}
                             }
                             (side_indicator(rower))
                         }
