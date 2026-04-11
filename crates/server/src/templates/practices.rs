@@ -86,17 +86,23 @@ fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     };
     let clickable = !href.is_empty();
 
+    let base_class = if row.is_upcoming {
+        "flex items-center justify-between px-6 py-4"
+    } else {
+        "flex items-center justify-between px-6 py-3 opacity-60"
+    };
+
     html! {
         @if clickable {
             a href=(href)
-              class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition cursor-pointer"
+              class={(base_class) " hover:bg-slate-50 transition cursor-pointer"}
               hx-get=(href)
               hx-target="#content"
               hx-push-url="true" {
                 (row_inner(row, &weekday))
             }
         } @else {
-            div class="flex items-center justify-between px-6 py-4" {
+            div class=(base_class) {
                 (row_inner(row, &weekday))
             }
         }
