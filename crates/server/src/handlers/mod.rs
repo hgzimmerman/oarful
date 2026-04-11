@@ -164,13 +164,15 @@ pub(crate) async fn active_team(
     jar: &CookieJar,
     claims: Option<&crate::jwt::Claims>,
 ) -> Result<TeamId, StatusCode> {
-    if let Some(c) = claims {
-        return Ok(c.team_id());
-    }
+    // Cookie takes priority — set by POST /switch-team.
     if let Some(cookie) = jar.get("active_team_id") {
         if let Ok(id) = cookie.value().parse::<TeamId>() {
             return Ok(id);
         }
+    }
+    // Fall back to the JWT's default team (set at login).
+    if let Some(c) = claims {
+        return Ok(c.team_id());
     }
     let team = db
         .with_conn(|conn| lineup_db::team::Team::first(conn))
