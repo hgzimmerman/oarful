@@ -217,18 +217,49 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
     // fleets don't hang the coach UI — the bench shows the solver
     // finds near-optimal solutions within the first ~second; the
     // remaining budget is proof-of-optimality / marginal redistribution.
+    // Build novelty reference lineups from recent placements when
+    // --novelty N is given (N > 0). Each historical practice becomes
+    // one ReferenceLineup with positive weight (avoid similarity).
+    let reference_lineups = if novelty > 0 {
+        use std::collections::BTreeMap;
+        use lineup_solver::{ReferenceLineup, ReferencePlacement};
+        let mut groups: BTreeMap<
+            (chrono::NaiveDate, lineup_db::boat::types::BoatId),
+            Vec<ReferencePlacement>,
+        > = BTreeMap::new();
+        for p in &snapshot.recent_placements {
+            if p.is_cox || p.seat_position == 0 {
+                continue;
+            }
+            groups
+                .entry((p.practice_date, p.boat_id))
+                .or_default()
+                .push(ReferencePlacement {
+                    rower_id: p.rower_id,
+                    boat_id: p.boat_id,
+                    seat: p.seat_position,
+                });
+        }
+        groups
+            .into_values()
+            .map(|placements| ReferenceLineup {
+                placements,
+                weight: novelty,
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
     let request = SolveRequest {
         date,
         boats: vec![],
         partial_fill: partial,
-        novelty_factor: novelty,
-        // No CLI flags for individual per-constraint weights yet —
-        // a config-file loader is future work. Default preserves
-        // the historical behaviour.
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(10)),
         top_n,
         tabu_min_diff: 2,
+        reference_lineups,
     };
     let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;

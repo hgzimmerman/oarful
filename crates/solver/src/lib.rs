@@ -56,21 +56,9 @@ pub struct SolveRequest {
     /// fielded). Default `Strict`: no partial fills, every seat of every
     /// fielded boat must be filled. See `PartialFillPolicy` for details.
     pub partial_fill: PartialFillPolicy,
-    /// S7 novelty factor. Controls how aggressively the solver avoids
-    /// lineups that resemble historical committed lineups.
-    ///
-    /// - `0`: no novelty enforcement (exact repeats are fine).
-    /// - `1`: deprioritize lineups that are 1 seat (or fewer) different
-    ///   from a historical lineup. Penalises exact repeats harder than
-    ///   "all but 1 seat same", but both incur a cost.
-    /// - `2`: extends the penalty band to 2-seat differences.
-    /// - Higher values widen the band and steepen the per-distance
-    ///   penalty.
-    ///
-    /// Encoded as a per-historical-lineup soft constraint (see the S7
-    /// block in `solve`). See `crates/solver/README.md` §S7 for the
-    /// full formula.
-    pub novelty_factor: i32,
+    // novelty_factor removed — novelty is now expressed via
+    // `reference_lineups` with positive weight. See the handler
+    // for how recent placements are converted to references.
     /// Wall-clock budget the solver may spend looking for an optimal
     /// assignment. `None` lets the solver run to proven optimality
     /// (`Indefinite`), which is fine for small instances but can take
@@ -118,6 +106,43 @@ pub struct SolveRequest {
     /// `0` degenerates to "re-solve the same problem" and returns
     /// exact duplicates (not useful).
     pub tabu_min_diff: i32,
+    /// Reference lineups for similarity scoring. Each reference
+    /// lineup carries a signed weight:
+    ///
+    /// - **Positive weight → avoid similarity** (novelty). The solver
+    ///   penalises placements that match the reference.
+    /// - **Negative weight → prefer similarity** (baseline / carry-
+    ///   forward). The solver rewards placements that match.
+    ///
+    /// Placements whose rower is absent or whose boat isn't in the
+    /// candidate fleet are silently dropped. Empty by default.
+    ///
+    /// Common use cases:
+    /// - **Novelty:** the handler builds references from recent
+    ///   committed lineups with positive weight, so the solver
+    ///   avoids repeating the same seats week after week.
+    /// - **No-show re-solve:** the committed lineup for today with
+    ///   negative weight + the no-show rower removed from available.
+    /// - **Carry-forward:** a previous practice's lineup with
+    ///   negative weight, adapted to different attendance.
+    pub reference_lineups: Vec<ReferenceLineup>,
+}
+
+/// A set of placements from a committed lineup, scored as a group
+/// against the current solution. Positive `weight` penalises
+/// similarity (novelty); negative `weight` rewards it (baseline).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceLineup {
+    pub placements: Vec<ReferencePlacement>,
+    pub weight: i32,
+}
+
+/// A single `(rower, boat, seat)` triple within a [`ReferenceLineup`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferencePlacement {
+    pub rower_id: RowerId,
+    pub boat_id: BoatId,
+    pub seat: i32,
 }
 
 impl SolveRequest {
@@ -185,11 +210,8 @@ pub struct SolverConfig {
     /// ballpark as a strongly side-locked rower on the wrong side
     /// under S4.
     pub cox_cooldown_penalty: i32,
-    /// S7 novelty multiplier. Scales the per-historical-lineup
-    /// similarity penalty. Default **1**. Note that the *width* of
-    /// the penalty band is controlled separately by
-    /// `SolveRequest.novelty_factor`.
-    pub novelty_weight: i32,
+    // novelty_weight removed — weight is now per-reference-lineup
+    // on SolveRequest.reference_lineups.
     /// S8 placement-reward multiplier. Scales the per-boat
     /// `-seats_total` reward for fielding a boat. Default **1**.
     pub placement_reward_weight: i32,
@@ -266,7 +288,6 @@ impl Default for SolverConfig {
             side_preference_weight: 1,
             weight_class_slack_weight: 1,
             cox_cooldown_penalty: 5,
-            novelty_weight: 1,
             placement_reward_weight: 1,
             pair_strength_weight: 1,
             bow_pair_strength_weight: 2,
@@ -653,8 +674,8 @@ fn build_model<'a>(
     // `x`.
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
-    m.post_s7_novelty(snapshot, request.novelty_factor)?;
     m.post_s13_non_scull_retention()?;
+    m.post_reference_similarity(&request.reference_lineups)?;
 
     // Hard constraints: H1 seat fill + partial-fill cap, H2
     // rower-at-most-one, H6 fleet capacity, H5 weight-class wall

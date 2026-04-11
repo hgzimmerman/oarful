@@ -165,7 +165,6 @@ fn silent_config() -> SolverConfig {
         side_preference_weight: 0,
         weight_class_slack_weight: 0,
         cox_cooldown_penalty: 0,
-        novelty_weight: 0,
         // S8 is kept on so the solver actually prefers fielding the
         // test boat over leaving it on the dock. Without this, a
         // "nothing is rewarded" model has no incentive to produce
@@ -197,11 +196,11 @@ fn request(config: SolverConfig) -> SolveRequest {
         date: test_date(),
         boats: Vec::new(),
         partial_fill: PartialFillPolicy::Strict,
-        novelty_factor: 0,
         config,
         time_budget: None,
         top_n: 1,
         tabu_min_diff: 2,
+        reference_lineups: vec![],
     }
 }
 

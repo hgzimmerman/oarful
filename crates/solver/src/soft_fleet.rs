@@ -1,5 +1,6 @@
 //! Fleet-level soft constraints: S4 wrong-side aggregation, S6 cox
-//! cooldown, S7 novelty vs recent lineups, and S8 placement reward.
+//! cooldown, S8 placement reward, S13 non-scull retention, and
+//! reference-lineup similarity (unified novelty / baseline).
 //!
 //! "Fleet-level" here means "operates at the boat / rower level
 //! rather than per-seat or per-partition". The seat-level softs
@@ -13,11 +14,8 @@
 //! call them directly on the builder without touching anything in
 //! this file.
 
-use std::collections::BTreeMap;
-
 use anyhow::{anyhow, Result};
 use chrono::NaiveDate;
-use lineup_db::boat::types::BoatId;
 use lineup_db::snapshot::DbSnapshot;
 use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 
@@ -200,71 +198,39 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S7 — novelty vs recently-committed lineups. Penalises
-    /// assignments that are too similar to a historical lineup
-    /// from `snapshot.recent_placements`.
+    /// Unified reference-lineup similarity scoring. Each
+    /// [`ReferenceLineup`] carries a signed `weight`:
     ///
-    /// Per historical lineup `L` with `N_L` still-reachable
-    /// (rower, boat, seat) placements:
+    /// - **Positive → avoid** (novelty). Each matching placement
+    ///   adds `weight` to the objective (a penalty).
+    /// - **Negative → prefer** (baseline / carry-forward). Each
+    ///   matching placement adds `weight` (negative, so a reward).
     ///
-    ///   `threshold = N_L − novelty_factor − 1`
-    ///   `match_L   = Σ x[r, b, s]` over L's reachable placements
-    ///   `penalty_L ≥ match_L − threshold`     (posted as inequality)
-    ///   `penalty_L ≥ 0`                        (via domain)
-    ///   `obj_terms.push(penalty_L.scaled(novelty_weight))`
+    /// For each reference lineup, we iterate its placements, look
+    /// up the corresponding `x[r, b, s]` variable (silently
+    /// skipping absent rowers / missing boats / ineligible seats),
+    /// and push `var.scaled(weight)` into `obj_terms`.
     ///
-    /// Since the solver minimises, `penalty_L` ends up as
-    /// `max(0, match_L − threshold)` — zero below the threshold,
-    /// linearly growing above it. Cox seats are excluded because
-    /// cox rotation is governed by S6 cooldown, which would
-    /// otherwise fight against this constraint's designated-exempt
-    /// case.
-    ///
-    /// Cost: one aux var + one inequality per historical lineup.
-    /// With the default recent-lineup window and a realistic
-    /// fleet, that's at most ~16 constraints — tiny.
-    pub(crate) fn post_s7_novelty(
+    /// This replaces both the old S7 (novelty) and S14 (baseline
+    /// similarity) with a single linear mechanism. The caller
+    /// decides what placements to include and what sign/magnitude
+    /// the weight should have.
+    pub(crate) fn post_reference_similarity(
         &mut self,
-        snapshot: &DbSnapshot,
-        novelty_factor: i32,
+        references: &[crate::ReferenceLineup],
     ) -> Result<()> {
-        if novelty_factor <= 0 || self.cfg.novelty_weight == 0 {
-            return Ok(());
-        }
-
-        // Group recent placements by (practice_date, boat_id). Each
-        // group is one historical lineup whose similarity to the
-        // current assignment we want to penalise.
-        let mut groups: BTreeMap<
-            (NaiveDate, BoatId),
-            Vec<&lineup_db::lineup::RecentPlacement>,
-        > = BTreeMap::new();
-        for placement in &snapshot.recent_placements {
-            if placement.is_cox || placement.seat_position == 0 {
-                continue; // cox rotation handled by S6
-            }
-            groups
-                .entry((placement.practice_date, placement.boat_id))
-                .or_default()
-                .push(placement);
-        }
-
         let ModelBuilder {
-            solver,
             boats,
             available,
             x,
             obj_terms,
-            cfg,
             ..
         } = self;
-        for placements in groups.values() {
-            // Match terms: x variables for placements that still
-            // exist in today's model. Placements whose rower is
-            // absent / boat is out of the fleet / x var doesn't
-            // exist are silently dropped.
-            let mut match_terms: Vec<AffineView<DomainId>> = Vec::new();
-            for p in placements {
+        for reference in references {
+            if reference.weight == 0 {
+                continue;
+            }
+            for p in &reference.placements {
                 let Some(r_idx) = available.iter().position(|r| r.id == p.rower_id)
                 else {
                     continue;
@@ -272,43 +238,10 @@ impl<'a> ModelBuilder<'a> {
                 let Some(b_idx) = boats.iter().position(|b| b.id == p.boat_id) else {
                     continue;
                 };
-                if let Some(&var) = x.get(&(r_idx, b_idx, p.seat_position)) {
-                    match_terms.push(var.scaled(1));
+                if let Some(&var) = x.get(&(r_idx, b_idx, p.seat)) {
+                    obj_terms.push(var.scaled(reference.weight));
                 }
             }
-
-            let reachable_matches = match_terms.len() as i32;
-            if reachable_matches == 0 {
-                continue; // nothing from this historical lineup is live
-            }
-
-            let threshold = reachable_matches - novelty_factor - 1;
-            // If the threshold is ≥ max possible match count, the
-            // constraint is trivially slack (penalty always 0) — skip
-            // posting it to save Pumpkin work.
-            if threshold >= reachable_matches {
-                continue;
-            }
-
-            // penalty upper bound: max possible is `reachable_matches
-            // - threshold` = `factor + 1`. Overshoot slightly for
-            // safety.
-            let penalty_upper = novelty_factor + 2;
-            let penalty = solver.new_bounded_integer(0, penalty_upper);
-
-            // Σ match_terms - penalty ≤ threshold
-            //   ⇔  penalty ≥ Σ match_terms - threshold
-            let mut lhs = match_terms.clone();
-            lhs.push(penalty.scaled(-1));
-            let tag = solver.new_constraint_tag();
-            solver
-                .add_constraint(pumpkin_constraints::less_than_or_equals(
-                    lhs, threshold, tag,
-                ))
-                .post()
-                .map_err(|e| anyhow!("S7 novelty link: {e:?}"))?;
-
-            obj_terms.push(penalty.scaled(cfg.novelty_weight));
         }
         Ok(())
     }
@@ -394,4 +327,5 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
 }

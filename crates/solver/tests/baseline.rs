@@ -90,16 +90,16 @@ fn fixture_snapshot() -> DbSnapshot {
 /// returned "best found so far" is deterministic because Pumpkin's
 /// search order is deterministic given a fixed variable creation
 /// order (which the fixture + constraint builder guarantees).
-fn request(partial_fill: PartialFillPolicy, novelty_factor: i32) -> SolveRequest {
+fn request(partial_fill: PartialFillPolicy) -> SolveRequest {
     SolveRequest {
         date: fixture_date(),
-        boats: Vec::new(), // empty = consider every in-service sweep boat
+        boats: Vec::new(),
         partial_fill,
-        novelty_factor,
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(5)),
         top_n: 1,
         tabu_min_diff: 2,
+        reference_lineups: vec![],
     }
 }
 
@@ -270,7 +270,7 @@ fn baseline_default() {
     // This is the "does the toy fixture still produce a sane
     // Persephone lineup" sanity check that caught every error
     // during the ModelBuilder refactor.
-    run_baseline("default", request(PartialFillPolicy::Strict, 0));
+    run_baseline("default", request(PartialFillPolicy::Strict));
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn baseline_partial_fill_two() {
     // rowers and the fixture fleet (8+, 4+, 4-), this gives the
     // solver the option to field a partially-filled Persephone
     // rather than being forced into a smaller boat.
-    run_baseline("partial2", request(PartialFillPolicy::Allowed(2), 0));
+    run_baseline("partial2", request(PartialFillPolicy::Allowed(2)));
 }
 
 #[test]
@@ -289,10 +289,10 @@ fn baseline_novelty_one() {
     // anyway as a regression guard for the S7 gating path — if
     // the "no historical placements" short-circuit ever breaks,
     // this scenario will diverge from default.
-    run_baseline("novelty1", request(PartialFillPolicy::Strict, 1));
+    run_baseline("novelty1", request(PartialFillPolicy::Strict));
 }
 
 #[test]
 fn baseline_novelty_two() {
-    run_baseline("novelty2", request(PartialFillPolicy::Strict, 2));
+    run_baseline("novelty2", request(PartialFillPolicy::Strict));
 }

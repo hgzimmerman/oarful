@@ -104,9 +104,48 @@ impl Default for SolveKnobs {
 }
 
 impl SolveKnobs {
-    /// Build a [`SolveRequest`] for the given date. The fleet is left
-    /// empty so the solver considers every in-service sweep boat.
-    fn to_request(&self, date: NaiveDate) -> SolveRequest {
+    /// Build a [`SolveRequest`] for the given date. Novelty
+    /// reference lineups are built from the snapshot's recent
+    /// placements — each historical practice becomes one
+    /// [`ReferenceLineup`] with positive weight so the solver
+    /// avoids repeating it. Cox seats are excluded (S6 handles
+    /// cox rotation separately).
+    fn to_request(&self, date: NaiveDate, snapshot: &DbSnapshot) -> SolveRequest {
+        use std::collections::BTreeMap;
+        use lineup_solver::{ReferenceLineup, ReferencePlacement};
+
+        let novelty_weight = self.novelty.max(0);
+        let mut reference_lineups = Vec::new();
+
+        if novelty_weight > 0 {
+            // Group recent placements by (practice_date, boat_id),
+            // mirroring the old S7 grouping. Each group becomes one
+            // ReferenceLineup with positive weight (avoid).
+            let mut groups: BTreeMap<
+                (NaiveDate, lineup_db::boat::types::BoatId),
+                Vec<ReferencePlacement>,
+            > = BTreeMap::new();
+            for p in &snapshot.recent_placements {
+                if p.is_cox || p.seat_position == 0 {
+                    continue; // cox rotation handled by S6
+                }
+                groups
+                    .entry((p.practice_date, p.boat_id))
+                    .or_default()
+                    .push(ReferencePlacement {
+                        rower_id: p.rower_id,
+                        boat_id: p.boat_id,
+                        seat: p.seat_position,
+                    });
+            }
+            for placements in groups.into_values() {
+                reference_lineups.push(ReferenceLineup {
+                    placements,
+                    weight: novelty_weight,
+                });
+            }
+        }
+
         SolveRequest {
             date,
             boats: vec![],
@@ -115,11 +154,11 @@ impl SolveKnobs {
             } else {
                 PartialFillPolicy::Strict
             },
-            novelty_factor: self.novelty.max(0),
             config: SolverConfig::default(),
             time_budget: Some(Duration::from_secs(self.budget.max(1))),
             top_n: self.alts.max(1),
             tabu_min_diff: 2,
+            reference_lineups,
         }
     }
 }
@@ -149,7 +188,7 @@ pub(crate) async fn view_handler(
         .map_err(internal_error)?;
 
     let _permit = acquire_solve_permit(&state).await?;
-    let request = knobs.to_request(date);
+    let request = knobs.to_request(date, &snapshot);
     let result = run_solve(&state, snapshot.clone(), request).await?;
 
     let content = templates::solve::view_content(&snapshot, date, &knobs, &result);
@@ -175,7 +214,7 @@ pub(crate) async fn commit_handler(
         .await
         .map_err(internal_error)?;
 
-    let mut request = knobs.to_request(date);
+    let mut request = knobs.to_request(date, &snapshot);
     request.top_n = 1;
 
     let _permit = acquire_solve_permit(&state).await?;

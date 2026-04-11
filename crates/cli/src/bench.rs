@@ -120,11 +120,11 @@ fn run_repeated(
         date,
         boats: vec![],
         partial_fill: PartialFillPolicy::Strict,
-        novelty_factor: 0,
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(budget_secs)),
         top_n,
         tabu_min_diff: 2,
+        reference_lineups: vec![],
     };
 
     let mut elapsed: Vec<std::time::Duration> = Vec::with_capacity(samples);
@@ -195,18 +195,11 @@ fn run_one_with_label(
         date,
         boats: vec![],
         partial_fill: PartialFillPolicy::Strict,
-        // S7 novelty disabled — the synthetic snapshots carry no
-        // history anyway (`recent_placements` is empty), so this
-        // is just clarity-of-intent.
-        novelty_factor: 0,
-        // Default weights — the benchmark measures baseline scaling
-        // behaviour, not weight-tuning effects.
         config: SolverConfig::default(),
         time_budget: Some(std::time::Duration::from_secs(5)),
-        // Top-N is irrelevant to scaling measurements — stick with
-        // the historical single-solution path.
         top_n: 1,
         tabu_min_diff: 2,
+        reference_lineups: vec![],
     };
 
     let start = std::time::Instant::now();
