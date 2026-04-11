@@ -81,7 +81,7 @@ pub(crate) async fn attributes_handler(
 ) -> Result<Html<String>, StatusCode> {
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
-        templates::rowers::attribute_section(&rower, None).into_string(),
+        templates::rowers::attribute_section(&rower, None, &templates::rowers::DetailPermissions::coach()).into_string(),
     ))
 }
 
@@ -95,7 +95,7 @@ pub(crate) async fn edit_attributes_handler(
     require_coach_or_self(&tenant, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
-        templates::rowers::attribute_edit_section(&rower, None).into_string(),
+        templates::rowers::attribute_edit_section(&rower, None, &templates::rowers::DetailPermissions::coach()).into_string(),
     ))
 }
 
@@ -135,7 +135,7 @@ pub(crate) async fn update_handler(
         Ok(typed) => typed,
         Err(msg) => {
             return Ok(Html(
-                templates::rowers::attribute_edit_section(&rower, Some(&msg)).into_string(),
+                templates::rowers::attribute_edit_section(&rower, Some(&msg), &templates::rowers::DetailPermissions::coach()).into_string(),
             ));
         }
     };
@@ -157,7 +157,7 @@ pub(crate) async fn update_handler(
         .map_err(internal_error)?;
 
     Ok(Html(
-        templates::rowers::attribute_section(&saved, None).into_string(),
+        templates::rowers::attribute_section(&saved, None, &templates::rowers::DetailPermissions::coach()).into_string(),
     ))
 }
 
@@ -261,7 +261,7 @@ pub(crate) async fn detail_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     let detail = load_detail(&tenant.db, id).await?;
-    let content = templates::rowers::detail_content(&detail, true);
+    let content = templates::rowers::detail_content(&detail, templates::rowers::DetailPermissions::coach());
     Ok(super::maybe_page(
         &format!("Rower · {}", detail.rower.name),
         content,
@@ -277,6 +277,33 @@ pub(crate) struct RowerDetail {
     pub(crate) seat_affinities: Vec<SeatAffinity>,
     pub(crate) pair_affinities: Vec<PairAffinity>,
     pub(crate) other_rowers: Vec<Rower>,
+}
+
+/// Determine the DetailPermissions for the current user viewing/editing this rower.
+async fn resolve_perms(
+    tenant: &TenantContext,
+    db: &lineup_db::state::Db,
+    rower_id: RowerId,
+    team_id: lineup_db::team::TeamId,
+) -> Result<templates::rowers::DetailPermissions, StatusCode> {
+    use lineup_db::team::{SelfEditLevel, Team};
+
+    if tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach) {
+        return Ok(templates::rowers::DetailPermissions::coach());
+    }
+    // Check if this rower is linked to the current user.
+    let rower = load(db, rower_id).await?;
+    if rower.user_id == Some(tenant.claims.sub) {
+        let team = db
+            .with_conn(move |conn| Team::get(conn, team_id))
+            .await
+            .map_err(internal_error)?;
+        let level = team
+            .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+            .unwrap_or(SelfEditLevel::Low);
+        return Ok(templates::rowers::DetailPermissions::member(level));
+    }
+    Err(StatusCode::FORBIDDEN)
 }
 
 /// Allow if user is Coach+ or is editing their own rower profile.

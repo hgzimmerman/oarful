@@ -63,6 +63,44 @@ pub struct Team {
     pub id: TeamId,
     pub name: String,
     pub created_at: NaiveDateTime,
+    /// Controls what members can self-edit on their profile.
+    /// "low" | "medium" | "high". Default "low".
+    pub self_edit_level: String,
+}
+
+/// What a non-coach member is allowed to edit on their own profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelfEditLevel {
+    /// Side, designated cox, can scull only.
+    Low,
+    /// Low + height.
+    Medium,
+    /// All attributes except active.
+    High,
+}
+
+impl SelfEditLevel {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "high" => Self::High,
+            "medium" => Self::Medium,
+            _ => Self::Low,
+        }
+    }
+
+    pub fn can_edit_weight_class(self) -> bool {
+        self == Self::High
+    }
+    pub fn can_edit_skill(self) -> bool {
+        self == Self::High
+    }
+    pub fn can_edit_strength(self) -> bool {
+        self == Self::High
+    }
+    pub fn can_edit_height(self) -> bool {
+        matches!(self, Self::Medium | Self::High)
+    }
+    // Side, side_strength, can_scull, designated_cox, can_cox: always editable
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]

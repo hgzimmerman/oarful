@@ -8,6 +8,42 @@ use lineup_db::rower::{
     types::{Height, RowerWeightClass, Skill, Strength},
     Rower,
 };
+use lineup_db::team::SelfEditLevel;
+
+/// Controls what the current user can do on this rower's detail page.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DetailPermissions {
+    /// Can edit affinities (seat/pair preferences). Coach+ only.
+    pub(crate) can_edit_affinities: bool,
+    /// Which attribute fields the user can edit. None = all (Coach+).
+    /// Some(level) = restricted by trust level (self-edit).
+    pub(crate) self_edit_level: Option<SelfEditLevel>,
+}
+
+impl DetailPermissions {
+    /// Coach+ — full access.
+    pub(crate) fn coach() -> Self {
+        Self { can_edit_affinities: true, self_edit_level: None }
+    }
+    /// Member editing own profile.
+    pub(crate) fn member(level: SelfEditLevel) -> Self {
+        Self { can_edit_affinities: false, self_edit_level: Some(level) }
+    }
+    /// Whether a specific field is editable.
+    fn can_edit_field(&self, field: &str) -> bool {
+        match self.self_edit_level {
+            None => field != "active", // Coach+ can edit everything except active
+            Some(level) => match field {
+                "side" | "side_strength" | "can_scull" | "can_cox" | "is_designated_cox" => true,
+                "height" => level.can_edit_height(),
+                "weight_class" => level.can_edit_weight_class(),
+                "skill" => level.can_edit_skill(),
+                "strength" => level.can_edit_strength(),
+                _ => false,
+            },
+        }
+    }
+}
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
@@ -117,7 +153,7 @@ fn static_row(row: &RosterRow) -> Markup {
 /// whether the affinity add/delete forms are shown (Coach+ only).
 /// Attribute editing is always available for the rower's own profile
 /// and for Coach+.
-pub(crate) fn detail_content(detail: &RowerDetail, can_edit_affinities: bool) -> Markup {
+pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> Markup {
     let r = &detail.rower;
     let subtitle = format!(
         "{} · {} · {} · {}",
@@ -139,16 +175,16 @@ pub(crate) fn detail_content(detail: &RowerDetail, can_edit_affinities: bool) ->
             p class="text-sm text-slate-500 mt-1" { (subtitle) }
         }
         div class="px-8 py-6 max-w-4xl space-y-6" {
-            (attribute_section(r, None))
-            (seat_affinities_section(detail, None, can_edit_affinities))
-            (pair_affinities_section(detail, None, can_edit_affinities))
+            (attribute_section(r, None, &perms))
+            (seat_affinities_section(detail, None, perms.can_edit_affinities))
+            (pair_affinities_section(detail, None, perms.can_edit_affinities))
         }
     }
 }
 
 /// Read-only attribute display with an Edit button that swaps to an
 /// inline form. The section has id `#attributes` for HTMX `outerHTML`.
-pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
+pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, perms: &DetailPermissions) -> Markup {
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     html! {
         section #attributes class="bg-white rounded-lg shadow p-6" {
@@ -184,7 +220,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
 
 /// Editable attribute form. Save posts to `/rowers/{id}` and the
 /// handler returns a fresh `attribute_section` for the HTMX swap.
-pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
+pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>, perms: &DetailPermissions) -> Markup {
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
@@ -215,41 +251,85 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
                 }
             }
             div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                    (enum_select("weight_class", &[
-                        ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
-                        ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
-                        ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
-                    ]))
+                // Weight class
+                @if perms.can_edit_field("weight_class") {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                        (enum_select("weight_class", &[
+                            ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
+                            ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
+                            ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
+                        ]))
+                    }
+                } @else {
+                    (kv("Weight", &r.weight_class.to_string()))
+                    input type="hidden" name="weight_class" value=(match r.weight_class {
+                        RowerWeightClass::Light => "Light",
+                        RowerWeightClass::Medium => "Medium",
+                        RowerWeightClass::Heavy => "Heavy",
+                    });
                 }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
-                    (enum_select("skill", &[
-                        ("Novice", "Novice", Skill::Novice == r.skill),
-                        ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
-                        ("Master", "Master", Skill::Master == r.skill),
-                        ("Expert", "Expert", Skill::Expert == r.skill),
-                    ]))
+                // Form (skill)
+                @if perms.can_edit_field("skill") {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
+                        (enum_select("skill", &[
+                            ("Novice", "Novice", Skill::Novice == r.skill),
+                            ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
+                            ("Master", "Master", Skill::Master == r.skill),
+                            ("Expert", "Expert", Skill::Expert == r.skill),
+                        ]))
+                    }
+                } @else {
+                    (kv("Form", &r.skill.to_string()))
+                    input type="hidden" name="skill" value=(match r.skill {
+                        Skill::Novice => "Novice",
+                        Skill::Intermediate => "Intermediate",
+                        Skill::Master => "Master",
+                        Skill::Expert => "Expert",
+                    });
                 }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
-                    (enum_select("strength", &[
-                        ("Weak", "Weak", Strength::Weak == r.strength),
-                        ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
-                        ("Strong", "Strong", Strength::Strong == r.strength),
-                        ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
-                    ]))
+                // Strength
+                @if perms.can_edit_field("strength") {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                        (enum_select("strength", &[
+                            ("Weak", "Weak", Strength::Weak == r.strength),
+                            ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
+                            ("Strong", "Strong", Strength::Strong == r.strength),
+                            ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
+                        ]))
+                    }
+                } @else {
+                    (kv("Strength", &r.strength.to_string()))
+                    input type="hidden" name="strength" value=(match r.strength {
+                        Strength::Weak => "Weak",
+                        Strength::Intermediate => "Intermediate",
+                        Strength::Strong => "Strong",
+                        Strength::VeryStrong => "VeryStrong",
+                    });
                 }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
-                    (enum_select("height", &[
-                        ("Short", "Short", Height::Short == r.height),
-                        ("Medium", "Medium", Height::Medium == r.height),
+                // Height
+                @if perms.can_edit_field("height") {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                        (enum_select("height", &[
+                            ("Short", "Short", Height::Short == r.height),
+                            ("Medium", "Medium", Height::Medium == r.height),
                         ("Tall", "Tall", Height::Tall == r.height),
                         ("VeryTall", "Very tall", Height::VeryTall == r.height),
                     ]))
+                    }
+                } @else {
+                    (kv("Height", &r.height.to_string()))
+                    input type="hidden" name="height" value=(match r.height {
+                        Height::Short => "Short",
+                        Height::Medium => "Medium",
+                        Height::Tall => "Tall",
+                        Height::VeryTall => "VeryTall",
+                    });
                 }
+                // Side — always editable
                 div class="col-span-2" {
                     (side_slider(r))
                 }

@@ -91,6 +91,7 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         created_at -> Timestamp,
+        self_edit_level -> Text,
     }
 }
 

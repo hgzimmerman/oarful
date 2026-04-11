@@ -39,10 +39,19 @@ pub(crate) async fn profile_handler(
             return Ok(super::maybe_page("My profile", content, hx));
         }
     };
-    // Reuse the rower detail page with affinities read-only.
+    // Reuse the rower detail page with member-level permissions.
     let rower_id = rower.id;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let detail = load_detail(&tenant.db, rower_id).await?;
-    let content = templates::rowers::detail_content(&detail, false);
+    let level = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team::Team::get(conn, team_id))
+        .await
+        .map_err(internal_error)?
+        .map(|t| lineup_db::team::SelfEditLevel::from_str(&t.self_edit_level))
+        .unwrap_or(lineup_db::team::SelfEditLevel::Low);
+    let perms = templates::rowers::DetailPermissions::member(level);
+    let content = templates::rowers::detail_content(&detail, perms);
     Ok(super::maybe_page("My profile", content, hx))
 }
 
