@@ -5,7 +5,7 @@
 //! and pair affinities are editable via HTMX section swaps.
 
 use lineup_db::rower::{
-    types::{RowerWeightClass, Side, Skill, Strength},
+    types::{RowerWeightClass, Skill, Strength},
     Rower,
 };
 use maud::{html, Markup};
@@ -94,7 +94,20 @@ pub(crate) fn detail_content(detail: &RowerDetail) -> Markup {
         r.weight_class, r.skill, r.strength, r.side,
     );
     html! {
-        (page_header(&r.name, Some(&subtitle)))
+        header class="bg-white border-b border-slate-200 px-8 py-6" {
+            div class="flex items-center gap-3" {
+                a href="/rowers"
+                  hx-get="/rowers"
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="text-slate-400 hover:text-slate-700"
+                  title="Back to roster" {
+                    "←"
+                }
+                h1 class="text-2xl font-bold text-slate-800" { (r.name) }
+            }
+            p class="text-sm text-slate-500 mt-1" { (subtitle) }
+        }
         div class="px-8 py-6 max-w-4xl space-y-6" {
             (attribute_section(r, None))
             (seat_affinities_section(detail, None))
@@ -111,21 +124,12 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
         section #attributes class="bg-white rounded-lg shadow p-6" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-slate-800" { "Attributes" }
-                div class="flex items-center gap-3" {
-                    button type="button"
-                           class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
-                           hx-get=(edit_url)
-                           hx-target="#attributes"
-                           hx-swap="outerHTML" {
-                        "Edit"
-                    }
-                    a href="/rowers"
-                      hx-get="/rowers"
-                      hx-target="#content"
-                      hx-push-url="true"
-                      class="text-sm text-slate-500 hover:text-slate-800" {
-                        "← back to roster"
-                    }
+                button type="button"
+                       class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
+                       hx-get=(edit_url)
+                       hx-target="#attributes"
+                       hx-swap="outerHTML" {
+                    "Edit"
                 }
             }
             @if let Some(msg) = error {
@@ -137,7 +141,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>) -> Markup {
                 (kv("Weight", &r.weight_class.to_string()))
                 (kv("Form", &r.skill.to_string()))
                 (kv("Strength", &r.strength.to_string()))
-                (kv("Side", &format!("{} ({})", r.side, r.side_strength)))
+                (kv("Side", side_display_label(r)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Can scull", if r.can_scull.as_bool() { "yes" } else { "—" }))
@@ -206,19 +210,8 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>) -> Markup {
                         ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
                     ]))
                 }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Side" }
-                    (enum_select("side", &[
-                        ("Port", "Port", Side::Port == r.side),
-                        ("Starboard", "Starboard", Side::Starboard == r.side),
-                        ("Either", "Either", Side::Either == r.side),
-                    ]))
-                }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Side strength" }
-                    input name="side_strength" type="number" min="0" max="5"
-                          value=(r.side_strength)
-                          class="w-20 border border-slate-300 rounded px-2 py-1 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                div class="col-span-2" {
+                    (side_slider(r))
                 }
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Cox" }
@@ -472,6 +465,109 @@ fn weight_slider(id: &str, default: i32) -> Markup {
 
 /// Format a solver weight value (-5..+5) as a human-readable label
 /// with the numeric value in parentheses, e.g. "Moderately prefer (+3)".
+/// Combined side + side_strength as a single slider.
+/// -5 = hard port, 0 = either, +5 = hard starboard.
+fn side_slider(r: &Rower) -> Markup {
+    use lineup_db::rower::types::Side;
+    // Map current state to slider position (-5..+5).
+    let pos: i32 = match r.side {
+        Side::Either => 0,
+        Side::Port => {
+            let s = r.side_strength.as_int();
+            if s == 0 { -5 } else { -(6 - s).min(5).max(1) }
+        }
+        Side::Starboard => {
+            let s = r.side_strength.as_int();
+            if s == 0 { 5 } else { (6 - s).min(5).max(1) }
+        }
+    };
+    let default_label = side_slider_label(pos);
+
+    html! {
+        div {
+            div class="flex items-center justify-between mb-1" {
+                span class="text-xs text-red-600 font-semibold" { "Port" }
+                span #side-slider-label class="text-xs font-semibold text-slate-700" {
+                    (default_label)
+                }
+                span class="text-xs text-green-600 font-semibold" { "Starboard" }
+            }
+            input #side-slider type="range" min="-5" max="5" value=(pos)
+                  class="w-full accent-blue-600"
+                  oninput="sideSliderUpdate(Number(this.value))";
+            input #side-hidden type="hidden" name="side" value=(match r.side {
+                Side::Port => "Port",
+                Side::Starboard => "Starboard",
+                Side::Either => "Either",
+            });
+            input #side-strength-hidden type="hidden" name="side_strength" value=(r.side_strength.as_int());
+            script {
+                (maud::PreEscaped(r#"
+function sideSliderUpdate(v) {
+    var labels = {
+        '-5':'Hard port','-4':'Strong port','-3':'Moderate port',
+        '-2':'Slight port','-1':'Weak port',
+        '0':'Either',
+        '1':'Weak starboard','2':'Slight starboard','3':'Moderate starboard',
+        '4':'Strong starboard','5':'Hard starboard'
+    };
+    document.getElementById('side-slider-label').textContent = labels[String(v)] || v;
+    if (v === 0) {
+        document.getElementById('side-hidden').value = 'Either';
+        document.getElementById('side-strength-hidden').value = '0';
+    } else if (v < 0) {
+        document.getElementById('side-hidden').value = 'Port';
+        var strength = Math.abs(v) === 5 ? 0 : 6 - Math.abs(v);
+        document.getElementById('side-strength-hidden').value = String(strength);
+    } else {
+        document.getElementById('side-hidden').value = 'Starboard';
+        var strength = v === 5 ? 0 : 6 - v;
+        document.getElementById('side-strength-hidden').value = String(strength);
+    }
+}
+"#))
+            }
+        }
+    }
+}
+
+/// Human-readable side label for the read-only attribute summary.
+fn side_display_label(r: &Rower) -> &'static str {
+    use lineup_db::rower::types::Side;
+    match r.side {
+        Side::Either => "Either",
+        Side::Port => {
+            let s = r.side_strength.as_int();
+            if s == 0 { return "Hard port"; }
+            let pos = -(6 - s).min(5).max(1);
+            side_slider_label(pos)
+        }
+        Side::Starboard => {
+            let s = r.side_strength.as_int();
+            if s == 0 { return "Hard starboard"; }
+            let pos = (6 - s).min(5).max(1);
+            side_slider_label(pos)
+        }
+    }
+}
+
+fn side_slider_label(pos: i32) -> &'static str {
+    match pos {
+        -5 => "Hard port",
+        -4 => "Strong port",
+        -3 => "Moderate port",
+        -2 => "Slight port",
+        -1 => "Weak port",
+        0 => "Either",
+        1 => "Weak starboard",
+        2 => "Slight starboard",
+        3 => "Moderate starboard",
+        4 => "Strong starboard",
+        5 => "Hard starboard",
+        _ => "?",
+    }
+}
+
 fn format_weight(w: i32) -> String {
     let label = match w {
         -5 => "Strongly avoid",
