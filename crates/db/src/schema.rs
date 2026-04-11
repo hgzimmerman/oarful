@@ -172,6 +172,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    sync_source (id) {
+        id -> Integer,
+        team_id -> Integer,
+        source_type -> Text,
+        config -> Text,
+        last_synced_at -> Nullable<Timestamp>,
+        last_error -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::joinable!(sync_source -> team (team_id));
 diesel::joinable!(solver_profile -> team (team_id));
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
 diesel::joinable!(rower -> app_user (user_id));
@@ -204,4 +217,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_role,
     user_invite,
     solver_profile,
+    sync_source,
 );

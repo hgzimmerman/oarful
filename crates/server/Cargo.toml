@@ -37,3 +37,4 @@ axum-htmx.workspace = true
 axum-extra.workspace = true
 async-trait.workspace = true
 serde_html_form = "0.2"
+serde_json.workspace = true

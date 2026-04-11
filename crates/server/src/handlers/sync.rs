@@ -23,6 +23,13 @@ use lineup_db::app_user::Role;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
+/// Google Sheet sync config, serialized as JSON in sync_source.config.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GoogleSheetConfig {
+    sheet_id: String,
+    gid: u32,
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct SyncFormInput {
     pub(crate) spreadsheet_id: String,
@@ -34,11 +41,28 @@ pub(crate) struct SyncFormInput {
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn form_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let content = templates::sync::form_content(None, None, None);
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    // Pre-fill from saved sync config if available.
+    let saved = tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::sync_source::SyncSource::find_by_type(conn, team_id, "google_sheet")
+        })
+        .await
+        .map_err(internal_error)?;
+    let prefill = saved.and_then(|s| {
+        serde_json::from_str::<GoogleSheetConfig>(&s.config).ok().map(|cfg| SyncFormInput {
+            spreadsheet_id: cfg.sheet_id,
+            gid: cfg.gid,
+        })
+    });
+    let content = templates::sync::form_content(prefill.as_ref(), None, None);
     Ok(super::maybe_page("Sync sheet", content, hx))
 }
 
@@ -92,6 +116,20 @@ pub(crate) async fn sync_handler(
 
     match sync_outcome {
         Ok(summary) => {
+            // Save sync config for one-click re-sync.
+            let config_json = serde_json::to_string(&GoogleSheetConfig {
+                sheet_id: trimmed.clone(),
+                gid: input.gid,
+            })
+            .unwrap_or_default();
+            let _ = tenant
+                .db
+                .with_conn(move |conn| {
+                    lineup_db::sync_source::SyncSource::upsert(
+                        conn, team_id, "google_sheet", &config_json,
+                    )
+                })
+                .await;
             let content =
                 templates::sync::form_content(Some(&input), Some(&summary), None);
             Ok(super::maybe_page("Sync sheet", content, hx))
