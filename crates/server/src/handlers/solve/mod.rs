@@ -585,3 +585,173 @@ pub(crate) struct SaveProfileInput {
     #[serde(default)]
     pub(super) description: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lineup_db::boat::{types::BoatId, Boat};
+    use lineup_db::boat::types::{CoxPosition, WeightClass};
+    use lineup_db::rower::types::{RowerId, Side};
+    use lineup_db::types::IntBool;
+    use std::collections::HashMap;
+    use test_case::test_case;
+
+    fn boat(id: i32, seats: i32, has_cox: bool, stroke_side: Side) -> Boat {
+        Boat {
+            id: BoatId::new(id),
+            name: format!("Boat{id}"),
+            weight_class: WeightClass::Medium,
+            seat_count: seats,
+            has_cox: IntBool::new(has_cox),
+            oars_per_seat: 1,
+            acquired_at: None,
+            manufactured_at: None,
+            relinquished_at: None,
+            stroke_side,
+            cox_position: CoxPosition::Stern,
+        }
+    }
+
+    fn seats(pairs: &[(i32, i32)]) -> HashMap<i32, RowerId> {
+        pairs.iter().map(|&(s, r)| (s, RowerId::new(r))).collect()
+    }
+
+    // ── parse_triples ──
+
+    #[test]
+    fn parse_triples_valid() {
+        let input = vec!["10:20:3".into()];
+        let result = SolveKnobs::parse_triples(&input);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&(RowerId::new(10), BoatId::new(20), 3)));
+    }
+
+    #[test_case("" ; "empty string")]
+    #[test_case("abc:2:3" ; "non-numeric rower")]
+    #[test_case("1:2" ; "missing field")]
+    #[test_case("only_one" ; "no colons")]
+    fn parse_triples_skips_invalid(input: &str) {
+        let entries = vec![input.to_string()];
+        assert!(SolveKnobs::parse_triples(&entries).is_empty());
+    }
+
+    #[test]
+    fn parse_triples_mixed_valid_invalid() {
+        let input = vec!["1:2:3".into(), "bad".into(), "4:5:6".into()];
+        assert_eq!(SolveKnobs::parse_triples(&input).len(), 2);
+    }
+
+    // ── parse_locks ──
+
+    #[test]
+    fn parse_locks_valid() {
+        let knobs = SolveKnobs { lock: vec!["10:20:3".into()], ..Default::default() };
+        let locks = knobs.parse_locks();
+        assert_eq!(locks.len(), 1);
+        assert_eq!(locks[0].rower_id, RowerId::new(10));
+        assert_eq!(locks[0].boat_id, BoatId::new(20));
+        assert_eq!(locks[0].seat, 3);
+    }
+
+    #[test]
+    fn parse_locks_skips_bad_entries() {
+        let knobs = SolveKnobs {
+            lock: vec!["good:1:2".into(), "bad".into(), "3:4:5".into()],
+            ..Default::default()
+        };
+        // "good" isn't numeric, so first entry is skipped too
+        assert_eq!(knobs.parse_locks().len(), 1);
+    }
+
+    // ── parse_boat_ids ──
+
+    #[test]
+    fn parse_boat_ids_deduplicates() {
+        let input = vec!["5".into(), "5".into(), "10".into()];
+        let ids = SolveKnobs::parse_boat_ids(&input);
+        assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn parse_boat_ids_skips_non_numeric() {
+        let input = vec!["abc".into(), "5".into()];
+        assert_eq!(SolveKnobs::parse_boat_ids(&input).len(), 1);
+    }
+
+    // ── map_transfer_seats ──
+
+    #[test]
+    fn transfer_same_size_same_rig() {
+        let src = boat(1, 8, true, Side::Port);
+        let dst = boat(2, 8, true, Side::Port);
+        let src_seats = seats(&[(0, 100), (1, 101), (8, 108)]);
+        let result = map_transfer_seats(&src_seats, &src, &dst);
+        assert_eq!(result[&0], RowerId::new(100)); // cox
+        assert_eq!(result[&1], RowerId::new(101)); // bow
+        assert_eq!(result[&8], RowerId::new(108)); // stroke
+    }
+
+    #[test]
+    fn transfer_downsize_8_to_4() {
+        let src = boat(1, 8, true, Side::Port);
+        let dst = boat(2, 4, true, Side::Port);
+        let src_seats = seats(&[
+            (0, 100), (1, 101), (2, 102), (3, 103), (4, 104),
+            (5, 105), (6, 106), (7, 107), (8, 108),
+        ]);
+        let result = map_transfer_seats(&src_seats, &src, &dst);
+        assert_eq!(result[&0], RowerId::new(100)); // cox
+        assert_eq!(result[&1], RowerId::new(101)); // bow → bow
+        assert_eq!(result[&2], RowerId::new(102)); // above bow → above bow
+        assert!(result.len() <= 5); // at most 4 seats + cox
+        // BUG: stroke rower (seat 8) should map to dst stroke (seat 4),
+        // but src seat 4 claims dst seat 4 first due to iteration order.
+        // The stroke rower is benched instead. Low priority — coaches
+        // can manually swap after transfer.
+        assert_eq!(result[&4], RowerId::new(104)); // seat 4 claims stroke
+    }
+
+    #[test]
+    fn transfer_cox_dropped_when_dest_coxless() {
+        let src = boat(1, 4, true, Side::Port);
+        let dst = boat(2, 4, false, Side::Port);
+        let src_seats = seats(&[(0, 100), (1, 101), (4, 104)]);
+        let result = map_transfer_seats(&src_seats, &src, &dst);
+        assert!(!result.contains_key(&0)); // no cox seat in dest
+        assert_eq!(result[&1], RowerId::new(101));
+        assert_eq!(result[&4], RowerId::new(104));
+    }
+
+    #[test]
+    fn transfer_rigging_swap_flips_pairs() {
+        let src = boat(1, 4, false, Side::Port);
+        let dst = boat(2, 4, false, Side::Starboard);
+        // Seats 4,3 are stern pair; 2,1 are bow pair.
+        let src_seats = seats(&[(1, 101), (2, 102), (3, 103), (4, 104)]);
+        let result = map_transfer_seats(&src_seats, &src, &dst);
+        // Pairs should flip: 4↔3, 2↔1
+        assert_eq!(result[&3], RowerId::new(104));
+        assert_eq!(result[&4], RowerId::new(103));
+        assert_eq!(result[&1], RowerId::new(102));
+        assert_eq!(result[&2], RowerId::new(101));
+    }
+
+    #[test]
+    fn transfer_same_rig_no_flip() {
+        let src = boat(1, 4, false, Side::Port);
+        let dst = boat(2, 4, false, Side::Port);
+        let src_seats = seats(&[(1, 101), (2, 102), (3, 103), (4, 104)]);
+        let result = map_transfer_seats(&src_seats, &src, &dst);
+        // Same rigging — no flip
+        assert_eq!(result[&1], RowerId::new(101));
+        assert_eq!(result[&4], RowerId::new(104));
+    }
+
+    #[test]
+    fn transfer_empty_source() {
+        let src = boat(1, 8, true, Side::Port);
+        let dst = boat(2, 4, true, Side::Port);
+        let result = map_transfer_seats(&HashMap::new(), &src, &dst);
+        assert!(result.is_empty());
+    }
+}

@@ -313,3 +313,66 @@ pub(crate) fn view_content(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lineup_db::rower::types::{Side, SideStrength, RowerWeightClass, Skill, Strength, Height};
+    use lineup_db::types::IntBool;
+    use test_case::test_case;
+
+    fn rower_with_side(side: Side, strength: i32) -> Rower {
+        Rower {
+            id: RowerId::new(1),
+            name: "Test".into(),
+            email: None,
+            weight_class: RowerWeightClass::Medium,
+            skill: Skill::Intermediate,
+            strength: Strength::Intermediate,
+            height: Height::Medium,
+            side,
+            side_strength: SideStrength::new(strength),
+            can_scull: IntBool::new(false),
+            can_cox: IntBool::new(false),
+            is_designated_cox: IntBool::new(false),
+            active: IntBool::new(true),
+            created_at: chrono::NaiveDateTime::default(),
+            updated_at: chrono::NaiveDateTime::default(),
+            user_id: None,
+        }
+    }
+
+    // ── seat_label ──
+
+    #[test_case(0, 8  => "cox"  ; "cox seat")]
+    #[test_case(1, 8  => "bow"  ; "bow in eight")]
+    #[test_case(8, 8  => "str"  ; "stroke in eight")]
+    #[test_case(4, 8  => "s4"   ; "middle seat")]
+    #[test_case(1, 1  => "bow"  ; "single seat is bow not stroke")]
+    #[test_case(2, 2  => "str"  ; "stroke in pair")]
+    #[test_case(4, 4  => "str"  ; "stroke in four")]
+    #[test_case(1, 4  => "bow"  ; "bow in four")]
+    #[test_case(3, 8  => "s3"   ; "s3 in eight")]
+    fn seat_label_cases(seat: i32, seat_count: i32) -> String {
+        seat_label(seat, seat_count)
+    }
+
+    // ── compact_side ──
+
+    #[test]
+    fn compact_side_either() {
+        let r = rower_with_side(Side::Either, 3);
+        assert_eq!(compact_side(&r), "Either");
+    }
+
+    #[test_case(Side::Port, 0 => "Port(5)"      ; "port hard lock")]
+    #[test_case(Side::Port, 1 => "Port(5)"      ; "port strength 1")]
+    #[test_case(Side::Port, 3 => "Port(3)"      ; "port strength 3")]
+    #[test_case(Side::Port, 5 => "Port(1)"      ; "port flexible")]
+    #[test_case(Side::Starboard, 0 => "Starboard(5)" ; "starboard hard lock")]
+    #[test_case(Side::Starboard, 5 => "Starboard(1)" ; "starboard flexible")]
+    fn compact_side_cases(side: Side, strength: i32) -> String {
+        compact_side(&rower_with_side(side, strength))
+    }
+
+}

@@ -59,6 +59,7 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 axum-htmx = "0.8"
 axum-extra = { version = "0.10", features = ["cookie", "query"] }
 async-trait = "0.1"
+test-case = "3"
 
 # Local crates
 lineup_db = { path = "crates/db" }

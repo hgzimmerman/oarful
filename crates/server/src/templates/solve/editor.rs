@@ -886,3 +886,70 @@ function lineupEditor() {
 }
 "#.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lineup_db::rower::types::{Side, SideStrength, RowerWeightClass, Skill, Strength, Height};
+    use lineup_db::types::IntBool;
+
+    fn rower_with_side(side: Side, strength: i32) -> Rower {
+        Rower {
+            id: RowerId::new(1),
+            name: "Test".into(),
+            email: None,
+            weight_class: RowerWeightClass::Medium,
+            skill: Skill::Intermediate,
+            strength: Strength::Intermediate,
+            height: Height::Medium,
+            side,
+            side_strength: SideStrength::new(strength),
+            can_scull: IntBool::new(false),
+            can_cox: IntBool::new(false),
+            is_designated_cox: IntBool::new(false),
+            active: IntBool::new(true),
+            created_at: chrono::NaiveDateTime::default(),
+            updated_at: chrono::NaiveDateTime::default(),
+            user_id: None,
+        }
+    }
+
+    #[test]
+    fn side_sort_key_ordering() {
+        let port_hard = rower_with_side(Side::Port, 0);
+        let port_flex = rower_with_side(Side::Port, 5);
+        let either = rower_with_side(Side::Either, 0);
+        let stbd_flex = rower_with_side(Side::Starboard, 5);
+        let stbd_hard = rower_with_side(Side::Starboard, 0);
+
+        let keys: Vec<i32> = vec![&port_hard, &port_flex, &either, &stbd_flex, &stbd_hard]
+            .into_iter()
+            .map(EditorData::side_sort_key)
+            .collect();
+
+        // Strictly ascending: port hard < port flex < either < stbd flex < stbd hard
+        for w in keys.windows(2) {
+            assert!(w[0] < w[1], "{} should be < {}", w[0], w[1]);
+        }
+    }
+
+    #[test]
+    fn side_sort_key_either_is_zero() {
+        assert_eq!(EditorData::side_sort_key(&rower_with_side(Side::Either, 0)), 0);
+        assert_eq!(EditorData::side_sort_key(&rower_with_side(Side::Either, 5)), 0);
+    }
+
+    #[test]
+    fn side_sort_key_port_is_negative() {
+        for s in 0..=5 {
+            assert!(EditorData::side_sort_key(&rower_with_side(Side::Port, s)) < 0);
+        }
+    }
+
+    #[test]
+    fn side_sort_key_starboard_is_positive() {
+        for s in 0..=5 {
+            assert!(EditorData::side_sort_key(&rower_with_side(Side::Starboard, s)) > 0);
+        }
+    }
+}
