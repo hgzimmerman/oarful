@@ -445,8 +445,26 @@ pub(super) fn map_transfer_seats(
         }
     }
 
-    // Numbered seats: map by relative position.
-    for src_pos in 1..=src_count {
+    // Numbered seats: map by relative position. Process priority
+    // seats first (stroke, bow, adjacent) so they claim their
+    // mapped positions before mid-seats.
+    let priority_order: Vec<i32> = {
+        let mut order = Vec::new();
+        // Stroke first (most important positional mapping)
+        order.push(src_count);
+        // Bow
+        if src_count > 1 { order.push(1); }
+        // Below stroke
+        if src_count > 2 { order.push(src_count - 1); }
+        // Above bow
+        if src_count > 2 && !order.contains(&2) { order.push(2); }
+        // Remaining middle seats
+        for s in 1..=src_count {
+            if !order.contains(&s) { order.push(s); }
+        }
+        order
+    };
+    for src_pos in priority_order {
         let Some(&rower) = src_seats.get(&src_pos) else { continue };
         let dst_pos = if src_pos == src_count {
             dst_count // stroke → stroke
@@ -703,12 +721,9 @@ mod tests {
         assert_eq!(result[&0], RowerId::new(100)); // cox
         assert_eq!(result[&1], RowerId::new(101)); // bow → bow
         assert_eq!(result[&2], RowerId::new(102)); // above bow → above bow
-        assert!(result.len() <= 5); // at most 4 seats + cox
-        // BUG: stroke rower (seat 8) should map to dst stroke (seat 4),
-        // but src seat 4 claims dst seat 4 first due to iteration order.
-        // The stroke rower is benched instead. Low priority — coaches
-        // can manually swap after transfer.
-        assert_eq!(result[&4], RowerId::new(104)); // seat 4 claims stroke
+        assert_eq!(result[&4], RowerId::new(108)); // stroke → stroke (priority)
+        assert_eq!(result[&3], RowerId::new(107)); // below stroke → below stroke
+        assert_eq!(result.len(), 5); // cox + 4 seats
     }
 
     #[test]
