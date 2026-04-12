@@ -25,11 +25,31 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
                 style { "[x-cloak] { display: none !important; }" }
-                // Note: Alpine.initTree afterSettle hook intentionally
-                // omitted — Alpine v3 with `defer` auto-initializes
-                // new x-data elements via MutationObserver. Manual
-                // initTree calls cause double-initialization that
-                // breaks client-side state in the lineup editor.
+                // Highlight the active nav link based on the current URL.
+                script {
+                    (maud::PreEscaped(r#"
+                    function updateActiveNav() {
+                        var path = location.pathname;
+                        // Map related paths to a single nav section.
+                        var aliases = {'/practices': ['/history', '/solve', '/commit']};
+                        document.querySelectorAll('[data-nav]').forEach(function(a) {
+                            var href = a.dataset.nav;
+                            var active = (href === '/' && path === '/') ||
+                                         (href !== '/' && path.startsWith(href));
+                            if (!active && aliases[href]) {
+                                active = aliases[href].some(function(p) { return path.startsWith(p); });
+                            }
+                            if (active) {
+                                a.classList.add('bg-white/15', 'font-semibold');
+                            } else {
+                                a.classList.remove('bg-white/15', 'font-semibold');
+                            }
+                        });
+                    }
+                    document.addEventListener('DOMContentLoaded', updateActiveNav);
+                    document.addEventListener('htmx:pushedIntoHistory', updateActiveNav);
+                    "#))
+                }
                 // Print-friendly overrides: hide chrome, expand content
                 style { r#"
                     @media print {
@@ -143,6 +163,7 @@ fn nav_link(href: &str, label: &str) -> Markup {
         li {
             a href=(href)
               class="px-3 py-2 rounded hover:bg-white/10 transition cursor-pointer"
+              data-nav=(href)
               hx-get=(href)
               hx-target="#content"
               hx-push-url="true"
