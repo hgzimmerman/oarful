@@ -103,6 +103,23 @@ can resume without re-deriving context.
   upcoming scheduled practices with inline status dropdowns.
   Rowers see all practices and can respond per-date without needing
   the free-form date picker (kept as fallback for ad-hoc dates).
+- **Coach email blast — all 4 phases shipped.** Magic links (SHA-256
+  hashed, tenant-scoped URLs `/auth/magic/{slug}/{token}`, optional
+  `team_id` for team context, dynamic JWT expiry). Email opt-out
+  (`opt_in_reminders`/`opt_in_lineups` on `app_user`, toggles at
+  `/my/email-preferences`). Maud HTML email templates for reminders
+  and lineup notifications. Practices page tabs (Schedule /
+  Reminders / Lineups sub-routes) with send handlers, `email_log`
+  rate limiting, confirmation, and recipient scope toggle.
+- **Club picker (multi-tenant login)** — two-step login (email →
+  password). When email matches multiple tenants, password is
+  verified first, then a club picker page shows tenant name + role.
+  `POST /login/pick` re-verifies and completes login.
+- **Magic-link sign-in** — "Email me a sign-in link" button on the
+  password step, shown only for returning users (long-lived
+  `known_user` cookie, 1-year). Multi-tenant: one email with a
+  "Sign in to [Club]" button per matching tenant. Always shows
+  "link sent" regardless of email existence (no enumeration leak).
 
 ## Open work
 
@@ -159,105 +176,16 @@ Follows the same pattern as `attributes_public` — cached in
 TenantConfig, threaded through TenantContext. The visibility
 check combines the tenant flag with the user's role.
 
-#### Coach email blast — reminders + lineup notifications
+#### ~~Coach email blast — reminders + lineup notifications~~ (shipped)
 
-Two email types coaches can send to team members. Both require
-magic-link auth and email opt-out as prerequisites.
+All 4 phases shipped. Magic links, email opt-out, HTML email
+templates, practices page tabs with send UI. See "Already shipped"
+for details.
 
-##### Phase 1: Magic links
+#### ~~Magic-link sign-in~~ (shipped)
 
-Foundation for all email links. Clicking a link in an email
-auto-authenticates and redirects — no login form needed.
-
-**Schema.** `magic_link` table in per-tenant DB:
-- `token_hash TEXT PRIMARY KEY` — hashed token (same pattern as
-  invite tokens)
-- `user_id INTEGER NOT NULL` — FK to `app_user`
-- `redirect_path TEXT NOT NULL` — where to send after auth
-  (e.g. `/my/availability`, `/history/2026-04-15`)
-- `expires_at DATETIME NOT NULL` — short-lived, e.g. 48 hours
-- `created_at DATETIME NOT NULL`
-
-**Endpoint.** `GET /auth/magic/{token}` — validates token, creates
-JWT session cookie, redirects to `redirect_path`. Expired/invalid
-tokens redirect to `/login` with an error message.
-
-**Generation.** `create_magic_link(conn, user_id, redirect_path,
-ttl) → token_string` helper. Called by the email send logic.
-
-**Future extension.** "Email me a login link" on the login page —
-uses the same magic_link table but with `/` as the redirect path.
-This is NOT part of the email blast feature but shares the infra.
-
-##### Phase 2: Email opt-out
-
-Members can opt out of each email type independently.
-
-**Schema.** Add two columns to `app_user`:
-- `opt_in_reminders INTEGER NOT NULL DEFAULT 1`
-- `opt_in_lineups INTEGER NOT NULL DEFAULT 1`
-
-**UI.** Toggles on `/my/profile`. Respected by email send logic.
-Does NOT exclude the user from magic-link login (if they
-explicitly request a login link).
-
-##### Phase 3: Email rendering
-
-HTML email templates (maud) for both email types. No real email
-provider yet — `LogMailer` logs at TRACE (full HTML) and INFO
-(recipient + subject + date summary).
-
-**Availability reminder email:**
-- Subject: "[Team] — availability needed for [dates]"
-- Body: list of practice dates without a response, magic link to
-  `/my/availability`
-- Sent to: all team members without an availability row for any
-  upcoming un-committed, non-cancelled practice
-- Single "Send reminders" button blasts to all non-respondents
-
-**Lineup notification email:**
-- Subject: "[Team] — lineups posted for [dates]"
-- Body: full seat assignments per boat (boat name, seat label,
-  rower name), magic link to `/history/{date}` for each date
-- Recipient toggle at send time:
-  - "Placed only" — rowers who appear in a committed lineup
-  - "All available" — placed + those who haven't declined
-    attendance for the practice date
-- For recipients whose attendance isn't set, include a link to
-  their availability page
-
-**Mailer trait.** Add `send_reminder(&self, to, name, dates,
-magic_url)` and `send_lineup(&self, to, name, lineups,
-magic_url)` methods alongside existing `send_invite`.
-
-##### Phase 4: Practices page tabs + send UI
-
-The practices page gets a tabbed interface to manage the growing
-feature set without overwhelming the single-page layout.
-
-**Tabs:**
-1. **Schedule** — current practices list (upcoming + past,
-   create form, cancel buttons). This is the existing view.
-2. **Reminders** — shows non-respondent count per upcoming
-   practice. Single "Send reminders" button that blasts all
-   non-respondents across all un-committed dates. Shows a
-   confirmation with recipient count before sending.
-3. **Lineups** — checkboxes on committed practice dates.
-   Recipient toggle (placed-only vs all-available). "Send
-   lineups" button with confirmation showing recipient count.
-
-**Tab implementation.** HTMX-driven — each tab is a separate
-`hx-get` that swaps `#practices-content`. URL stays at
-`/practices` with a `?tab=reminders` query param for
-bookmarkability. Default tab is Schedule.
-
-**Considerations:**
-- Both send actions show a confirmation step before actually
-  sending (count of recipients, list of dates).
-- After sending, show a success message with the count sent.
-- Rate-limit: don't allow sending the same reminder/lineup
-  email more than once per practice per day. Track via a
-  `email_log` table or a last-sent timestamp on the practice.
+Two-step login (email → password) with "Email me a sign-in link"
+for returning users. Multi-tenant: per-club links in the email.
 
 #### Team management — roster management
 
@@ -416,31 +344,6 @@ culprit) remains parked pending a Pumpkin API dive.
 - **CLI `create-tenant` command**
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
-
-### Club picker (multi-tenant login)
-
-When a user's email matches accounts in multiple tenants, the login
-flow should present a club picker instead of silently choosing the
-first match. Currently `handlers/auth.rs` collects all matching
-tenants into a `Vec<Match>` (with `tenant_id`, `_tenant_name`,
-`user`, `role`, `default_team`) but always uses the first one
-(line 103: `matches.into_iter().next().unwrap()`).
-
-**Implementation:**
-- If `matches.len() > 1`, render a club picker page listing each
-  tenant name. The user clicks one to complete login.
-- The picker page doesn't need re-authentication — the password was
-  already verified. It just needs to carry a short-lived token or
-  session state that maps to the verified user + candidate tenants.
-- On selection, issue the JWT for the chosen tenant and redirect.
-- If `matches.len() == 1`, behave as today (auto-select).
-
-**Considerations:**
-- The `_tenant_name` field on the `Match` struct is already
-  populated for this purpose — just rename back to `tenant_name`
-  when implementing.
-- The picker template should show the tenant name and possibly the
-  user's role in that tenant so they can distinguish.
 
 ### Per-team roles
 
@@ -667,6 +570,7 @@ Start with push-only; bidirectional can follow if there's demand.
 
 ## Suggested next moves
 
-1. **#63** seat locks — "pin Alice in stroke" coach use case.
-2. Solver presets / profiles (segmented control UI).
-3. Productionization (#55, #56) and polish (#54).
+1. **Batch invite from roster** — bulk user creation for linked rowers.
+2. **Email visibility tenant config** — `emails_visible` boolean.
+3. **#56** Custom Tailwind build pipeline — replace CDN.
+4. **Persistent sync URL** — save sheet config, one-click re-sync.
