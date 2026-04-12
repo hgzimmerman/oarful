@@ -149,9 +149,9 @@ pub(crate) fn lineup_editor(
                 @for eb in &editor.boats {
                     @let bid = eb.boat.id.as_int();
                     @let active_class = if eb.active {
-                        "px-3 py-1 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer"
+                        "px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer"
                     } else {
-                        "px-3 py-1 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
+                        "px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
                     };
                     button type="button" class=(active_class)
                            data-boat-id=(bid)
@@ -193,7 +193,7 @@ pub(crate) fn lineup_editor(
                                  data-rower=(r.id)
                                  data-name=(r.name)
                                  data-stats=(stats)
-                                 class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                                 class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
                                  ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                                  "@click"={"select('" (key) "')"} {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
@@ -220,7 +220,7 @@ pub(crate) fn lineup_editor(
                              data-rower=(r.id)
                              data-name=(r.name)
                              data-stats=(stats)
-                             class="inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                             class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
                             div class="font-medium text-slate-800 text-sm" { (r.name) }
@@ -624,7 +624,7 @@ fn walkon_section(date: NaiveDate, unavailable: &[&Rower], knobs: &SolveKnobs) -
                             }
                         }
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded shadow transition" {
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
                             "Add"
                         }
                     }
@@ -736,9 +736,9 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         ] {
                             @let is_active = current == value || (current.is_empty() && *value == "balanced");
                             @let btn_class = if is_active {
-                                "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                                "px-3 py-2 font-semibold bg-slate-800 text-white"
                             } else {
-                                "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                                "px-3 py-2 text-slate-700 hover:bg-slate-100"
                             };
                             @let preset_url = preset_url_with(date, knobs, value);
                             button type="button" class=(btn_class)
@@ -752,9 +752,9 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         @for (name, description) in custom_profiles {
                             @let is_active = current == name;
                             @let btn_class = if is_active {
-                                "px-3 py-1.5 font-semibold bg-violet-700 text-white"
+                                "px-3 py-2 font-semibold bg-violet-700 text-white"
                             } else {
-                                "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
+                                "px-3 py-2 text-violet-700 hover:bg-violet-50"
                             };
                             @let delete_url = format!("/solver-profile/{}", name);
                             @let preset_url = preset_url_with(date, knobs, name);
@@ -783,7 +783,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                 }
 
                 // Solver knobs
-                div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end" {
+                div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end" {
                     // Partial fill — segmented (Off / 1 / 2)
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
@@ -793,9 +793,9 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             @for (val, lbl) in &[(0, "Off"), (1, "1 empty"), (2, "2 empty")] {
                                 @let active = knobs.partial == *val;
                                 @let cls = if active {
-                                    "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                                    "px-3 py-2 font-semibold bg-slate-800 text-white"
                                 } else {
-                                    "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
                                 };
                                 button type="submit" name="partial" value=(val) class=(cls) {
                                     (lbl)
@@ -816,9 +816,9 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             @for n in 0..=3i64 {
                                 @let active = knobs.alts as i64 == n;
                                 @let cls = if active {
-                                    "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                                    "px-3 py-2 font-semibold bg-slate-800 text-white"
                                 } else {
-                                    "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
                                 };
                                 button type="submit" name="alts" value=(n) class=(cls) {
                                     (n)
@@ -937,9 +937,9 @@ pub(crate) fn preset_bar(
                 ] {
                     @let is_active = current == value || (current.is_empty() && *value == "balanced");
                     @let btn_class = if is_active {
-                        "px-3 py-1.5 font-semibold bg-slate-800 text-white"
+                        "px-3 py-2 font-semibold bg-slate-800 text-white"
                     } else {
-                        "px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+                        "px-3 py-2 text-slate-700 hover:bg-slate-100"
                     };
                     @let preset_url = preset_url_with(date, knobs, value);
                     button type="button" class=(btn_class)
@@ -953,9 +953,9 @@ pub(crate) fn preset_bar(
                 @for (name, description) in custom_profiles {
                     @let is_active = current == name;
                     @let btn_class = if is_active {
-                        "px-3 py-1.5 font-semibold bg-violet-700 text-white"
+                        "px-3 py-2 font-semibold bg-violet-700 text-white"
                     } else {
-                        "px-3 py-1.5 text-violet-700 hover:bg-violet-50"
+                        "px-3 py-2 text-violet-700 hover:bg-violet-50"
                     };
                     @let delete_url = format!("/solver-profile/{}", name);
                     @let preset_url = preset_url_with(date, knobs, name);

@@ -167,7 +167,7 @@ pub(crate) fn form_content(
                 }
 
                 // Weight class + stroke side (side-by-side)
-                div class="grid grid-cols-2 gap-4" {
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                     div {
                         label for="weight_class" class="block text-sm font-semibold text-slate-700 mb-1" {
                             "Weight class"
@@ -212,7 +212,7 @@ pub(crate) fn form_content(
                 }
 
                 // Dates
-                div class="grid grid-cols-3 gap-4" {
+                div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" {
                     (date_field("acquired_at", "Acquired", &data.acquired_at))
                     (date_field("manufactured_at", "Manufactured", &data.manufactured_at))
                     @if let FormMode::Edit(_) = mode {

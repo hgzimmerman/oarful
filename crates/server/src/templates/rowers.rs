@@ -244,7 +244,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, perms: &DetailPe
                     (msg)
                 }
             }
-            dl class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
+            dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
                 (kv("Weight", &r.weight_class.to_string()))
                 (kv("Form", &r.skill.to_string()))
                 (kv("Strength", &r.strength.to_string()))
@@ -291,7 +291,7 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>, perms: &Det
                     (msg)
                 }
             }
-            div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
+            div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
                 // Weight class
                 @if perms.can_edit_field("weight_class") {
                     div {
@@ -463,11 +463,11 @@ pub(crate) fn seat_affinities_section(
             form hx-post=(upsert_url)
                  hx-target="#seat-affinities"
                  hx-swap="outerHTML"
-                 class="flex items-end space-x-2 pt-3 border-t border-slate-200" {
+                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-slate-200" {
                 div {
                     label for="seat_position" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Seat" }
                     select id="seat_position" name="seat_position"
-                           class="border border-slate-300 rounded px-2 py-1 text-sm" {
+                           class="border border-slate-300 rounded px-3 py-2 text-sm" {
                         @for s in 1..=8i32 {
                             option value=(s) { "s" (s) }
                         }
@@ -475,7 +475,7 @@ pub(crate) fn seat_affinities_section(
                 }
                 (weight_slider("seat_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }
@@ -562,11 +562,11 @@ pub(crate) fn pair_affinities_section(
             form hx-post=(upsert_url)
                  hx-target="#pair-affinities"
                  hx-swap="outerHTML"
-                 class="flex items-end space-x-2 pt-3 border-t border-slate-200" {
+                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-slate-200" {
                 div class="flex-grow" {
                     label for="partner_id" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Partner" }
                     select id="partner_id" name="partner_id"
-                           class="w-full border border-slate-300 rounded px-2 py-1 text-sm" {
+                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm" {
                         @for o in &detail.other_rowers {
                             option value=(o.id) { (o.name) }
                         }
@@ -574,7 +574,7 @@ pub(crate) fn pair_affinities_section(
                 }
                 (weight_slider("pair_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }

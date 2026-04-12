@@ -52,7 +52,7 @@ fn profile_inner(r: &Rower, error: Option<&str>) -> Markup {
                  hx-post="/my/profile"
                  hx-target="#content"
                  class="bg-white rounded-lg shadow p-6 space-y-4" {
-                div class="grid grid-cols-2 gap-4" {
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                     (select_field("weight_class", "Weight class", &[
                         ("Light", "Lightweight", r.weight_class == lineup_db::rower::types::RowerWeightClass::Light),
                         ("Medium", "Middleweight", r.weight_class == lineup_db::rower::types::RowerWeightClass::Medium),
