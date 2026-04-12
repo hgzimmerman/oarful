@@ -138,12 +138,11 @@ invited from the Users page. Need a bulk flow:
   active) so the coach can see who still needs an invite.
 - Use the existing Mailer trait (LogMailer for dev).
 
-#### Self-edit trust levels — UI for team config
+#### ~~Self-edit trust levels — UI for team config~~ (shipped)
 
 Self-edit trust levels are implemented (low/medium/high on the
-team table). Need a UI for PDs to change the setting — currently
-requires direct DB edit. Could go on the future team management
-page.
+team table). PDs can change the setting on the team detail page
+(`/teams/{id}`) via a dropdown + Save button.
 
 #### Email visibility tenant config
 
