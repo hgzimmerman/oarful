@@ -19,6 +19,7 @@ stateDiagram-v2
     [*] --> Clean
 
     Clean --> Dirty : coach moves rower here
+    Clean --> Locked : click icon (lock directly)
 
     Dirty --> Clean : click icon (unpin)
     Dirty --> WasPinned : Generate (solver honored it)
@@ -60,12 +61,24 @@ When the solver runs:
 
 Each state has exactly one click action:
 
-- **Clean** (🔓) — no click action (seat is already free).
+- **Clean** (🔓) — click promotes to **Locked** (coach locks directly).
 - **Dirty** (📌) — click resets to **Clean** (coach unpins their
   manual placement).
 - **Was-pinned** (📌 angled) — click promotes to **Locked** (coach
   decides to keep this placement permanently).
 - **Locked** (🔒) — click resets to **Clean** (coach unlocks).
+
+## Boat-level states
+
+The same four states apply to boats. A boat's state controls whether
+the solver is forced to field it. Placing a rower in a boat auto-pins
+it (Dirty). The icon appears in the boat card header.
+
+Boat params: `boat_lock=id`, `boat_pin=id`, `boat_was_pin=id`.
+
+Dirty and locked boats are passed to the solver as `required_boats`,
+which posts `use[b] = 1` constraints. The greedy fleet pre-selection
+also preserves required boats and boats with seat locks.
 
 ## Implementation notes
 
