@@ -1,11 +1,35 @@
-//! Abstraction over invite delivery so the server doesn't hard-code a
+//! Abstraction over email delivery so the server doesn't hard-code a
 //! specific email provider. Production deploys supply a real
 //! implementation (SendGrid, SES, SMTP, …); dev and self-hosted
-//! setups use [`LogMailer`] which just prints the invite URL.
+//! setups use [`LogMailer`] which just prints the content.
 
 use anyhow::Result;
+use chrono::NaiveDate;
 
-/// Async-capable interface for delivering invite links to users.
+/// A boat's lineup for email rendering — boat name + ordered seat list.
+#[derive(Debug, Clone)]
+pub struct EmailBoatLineup {
+    pub boat_name: String,
+    pub seats: Vec<EmailSeat>,
+}
+
+/// A single seat in an email lineup.
+#[derive(Debug, Clone)]
+pub struct EmailSeat {
+    pub label: String,
+    pub rower_name: String,
+}
+
+/// Summary of lineups for one practice date.
+#[derive(Debug, Clone)]
+pub struct EmailLineupSummary {
+    pub date: NaiveDate,
+    pub boats: Vec<EmailBoatLineup>,
+    /// Rowers who were benched (not placed in any boat).
+    pub benched: Vec<String>,
+}
+
+/// Async-capable interface for delivering emails to users.
 ///
 /// Implementations must be `Send + Sync` so they can live on
 /// [`crate::state::AppState`] behind an `Arc`.
@@ -17,12 +41,37 @@ pub trait Mailer: Send + Sync {
     /// logged but does not prevent the invite from being created (the
     /// UI still shows the link as a fallback).
     async fn send_invite(&self, to_email: &str, to_name: &str, invite_url: &str) -> Result<()>;
+
+    /// Send an availability reminder to a single recipient.
+    ///
+    /// `dates` lists practice dates the rower hasn't responded to.
+    /// `magic_url` is a magic-link URL to `/my/availability`.
+    async fn send_reminder(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        dates: &[NaiveDate],
+        magic_url: &str,
+    ) -> Result<()>;
+
+    /// Send a lineup notification to a single recipient.
+    ///
+    /// `lineups` contains the full seat assignments per boat per date.
+    /// `magic_url` is a magic-link URL to `/history/{date}`.
+    async fn send_lineup(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        lineups: &[EmailLineupSummary],
+        magic_url: &str,
+    ) -> Result<()>;
 }
 
-/// Development mailer that logs the invite URL via `tracing::info!`
-/// instead of actually sending anything. Good for local dev and
-/// self-hosted deployments where the PD can copy the link from the
-/// server logs or the UI.
+/// Development mailer that logs email content via `tracing` instead
+/// of actually sending anything. Good for local dev and self-hosted
+/// deployments.
 pub struct LogMailer;
 
 #[async_trait::async_trait]
@@ -34,6 +83,50 @@ impl Mailer for LogMailer {
             invite_url,
             "invite ready (LogMailer — no email sent)"
         );
+        Ok(())
+    }
+
+    async fn send_reminder(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        dates: &[NaiveDate],
+        magic_url: &str,
+    ) -> Result<()> {
+        let date_list: Vec<String> = dates.iter().map(|d| d.to_string()).collect();
+        let html = crate::templates::email::reminder_email(to_name, team_name, dates, magic_url)
+            .into_string();
+        tracing::info!(
+            to_email,
+            to_name,
+            team_name,
+            ?date_list,
+            "availability reminder (LogMailer — no email sent)"
+        );
+        tracing::trace!(html, "reminder email HTML");
+        Ok(())
+    }
+
+    async fn send_lineup(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        lineups: &[EmailLineupSummary],
+        magic_url: &str,
+    ) -> Result<()> {
+        let dates: Vec<String> = lineups.iter().map(|l| l.date.to_string()).collect();
+        let html = crate::templates::email::lineup_email(to_name, team_name, lineups, magic_url)
+            .into_string();
+        tracing::info!(
+            to_email,
+            to_name,
+            team_name,
+            ?dates,
+            "lineup notification (LogMailer — no email sent)"
+        );
+        tracing::trace!(html, "lineup email HTML");
         Ok(())
     }
 }

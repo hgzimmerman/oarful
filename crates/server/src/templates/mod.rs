@@ -13,4 +13,5 @@ pub(crate) mod rowers;
 pub(crate) mod solve;
 pub(crate) mod sync;
 pub(crate) mod teams;
+pub(crate) mod email;
 pub(crate) mod users;
