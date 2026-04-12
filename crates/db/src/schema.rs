@@ -184,6 +184,9 @@ diesel::table! {
         non_scull_retention_weight -> Integer,
         bow_cox_fit_weight -> Integer,
         top_boat_stacking_weight -> Integer,
+        pair_eligibility_weight -> Integer,
+        minimize_bench_weight -> Integer,
+        boat_size_stacking_weight -> Integer,
     }
 }
 

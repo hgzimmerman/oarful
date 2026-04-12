@@ -187,6 +187,9 @@ fn silent_config() -> SolverConfig {
         non_scull_retention_weight: 0,
         bow_cox_fit_weight: 0,
         top_boat_stacking_weight: 0,
+        pair_eligibility_weight: 0,
+        minimize_bench_weight: 0,
+        boat_size_stacking_weight: 0,
     }
 }
 

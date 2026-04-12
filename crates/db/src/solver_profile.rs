@@ -42,6 +42,9 @@ pub struct SolverProfile {
     pub non_scull_retention_weight: i32,
     pub bow_cox_fit_weight: i32,
     pub top_boat_stacking_weight: i32,
+    pub pair_eligibility_weight: i32,
+    pub minimize_bench_weight: i32,
+    pub boat_size_stacking_weight: i32,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -66,6 +69,9 @@ pub struct NewSolverProfile {
     pub non_scull_retention_weight: i32,
     pub bow_cox_fit_weight: i32,
     pub top_boat_stacking_weight: i32,
+    pub pair_eligibility_weight: i32,
+    pub minimize_bench_weight: i32,
+    pub boat_size_stacking_weight: i32,
 }
 
 impl SolverProfile {

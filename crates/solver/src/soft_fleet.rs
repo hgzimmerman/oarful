@@ -425,4 +425,133 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
+    /// S17 — pair-eligibility soft constraints for pair boats
+    /// (seat_count=2, no cox). Two components:
+    ///
+    /// 1. **Skill penalty:** Intermediate rowers incur a penalty when
+    ///    placed in a pair. Master/Expert = 0 penalty. (Novices are
+    ///    hard-gated by H7 in `rower_eligible_for_seat`.)
+    ///
+    /// 2. **Strength-mismatch penalty:** the absolute difference in
+    ///    strength ordinals between the two rowers in a pair, scaled
+    ///    by the weight. Balanced pairs row better.
+    pub(crate) fn post_s17_pair_eligibility(&mut self) -> Result<()> {
+        if self.cfg.pair_eligibility_weight == 0 {
+            return Ok(());
+        }
+        let ModelBuilder {
+            solver,
+            boats,
+            available,
+            x,
+            obj_terms,
+            cfg,
+            seat_strength_by_seat,
+            ..
+        } = self;
+        let w = cfg.pair_eligibility_weight;
+
+        for (b_idx, boat) in boats.iter().enumerate() {
+            // Only pair boats (2 rowing seats, no cox).
+            if boat.seat_count != 2 || boat.has_cox.as_bool() {
+                continue;
+            }
+
+            // Component 1: per-rower skill penalty for Intermediate.
+            for (r_idx, rower) in available.iter().enumerate() {
+                for seat in 1..=2 {
+                    if let Some(&var) = x.get(&(r_idx, b_idx, seat)) {
+                        let penalty = match rower.skill {
+                            lineup_db::rower::types::Skill::Intermediate => 2,
+                            _ => 0, // Novice hard-gated, Master/Expert = free
+                        };
+                        if penalty > 0 {
+                            obj_terms.push(var.scaled(w * penalty));
+                        }
+                    }
+                }
+            }
+
+            // Component 2: strength mismatch between the two seats.
+            // Uses the shared seat_strength trait map (built by
+            // build_seat_trait_maps). strength[b,1] and strength[b,2]
+            // are [1..4] aux vars linked to the placed rower's ordinal.
+            let s1 = seat_strength_by_seat.get(&(b_idx, 1)).copied();
+            let s2 = seat_strength_by_seat.get(&(b_idx, 2)).copied();
+            if let (Some(str1), Some(str2)) = (s1, s2) {
+                // diff >= str1 - str2 AND diff >= str2 - str1
+                // => diff = |str1 - str2|.
+                let diff = solver.new_bounded_integer(0, 3);
+                let tag = solver.new_constraint_tag();
+                // diff >= str1 - str2  →  diff - str1 + str2 >= 0
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        vec![str1.scaled(1), str2.scaled(-1), diff.scaled(-1)],
+                        0,
+                        tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("S17 pair strength diff (a): {e:?}"))?;
+                // diff >= str2 - str1  →  diff - str2 + str1 >= 0
+                let tag2 = solver.new_constraint_tag();
+                solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        vec![str2.scaled(1), str1.scaled(-1), diff.scaled(-1)],
+                        0,
+                        tag2,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("S17 pair strength diff (b): {e:?}"))?;
+
+                obj_terms.push(diff.scaled(w));
+            }
+        }
+        Ok(())
+    }
+
+    /// S18 — minimize bench. Per-rower reward for being placed in
+    /// any seat. Applies to ALL available rowers (unlike S13 which
+    /// only covers non-scull rowers). Higher weight = stronger
+    /// pressure to field everyone.
+    pub(crate) fn post_s18_minimize_bench(&mut self) -> Result<()> {
+        if self.cfg.minimize_bench_weight == 0 {
+            return Ok(());
+        }
+        let ModelBuilder {
+            solver,
+            available,
+            x,
+            obj_terms,
+            cfg,
+            ..
+        } = self;
+        for (r_idx, rower) in available.iter().enumerate() {
+            // Skip designated coxes — they're handled by S15 and
+            // can only go in cox seats, not rowing seats.
+            if rower.is_designated_cox.as_bool() {
+                continue;
+            }
+            let rower_vars: Vec<DomainId> = x
+                .iter()
+                .filter_map(|(&(r, _, _), &v)| if r == r_idx { Some(v) } else { None })
+                .collect();
+            if rower_vars.is_empty() {
+                continue;
+            }
+
+            let rower_used = solver.new_bounded_integer(0, 1);
+            let mut link: Vec<AffineView<DomainId>> =
+                rower_vars.iter().map(|v| v.scaled(1)).collect();
+            link.push(rower_used.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S18 rower-use link: {e:?}"))?;
+
+            obj_terms.push(rower_used.scaled(-cfg.minimize_bench_weight));
+        }
+        Ok(())
+    }
 }

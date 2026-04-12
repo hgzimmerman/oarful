@@ -307,6 +307,22 @@ pub struct SolverConfig {
     /// the best rowers there. Default **0** (off in balanced; tiered
     /// sets it to 2).
     pub top_boat_stacking_weight: i32,
+    /// S17 pair-eligibility weight. For pair boats (seat_count=2, no
+    /// cox): penalises Intermediate rowers (Master/Expert are free).
+    /// Also penalises strength mismatch between the two rowers.
+    /// Novices are hard-gated from pairs entirely (H7). Default **3**.
+    pub pair_eligibility_weight: i32,
+    /// S18 minimize-bench weight. Per-rower reward for being placed
+    /// in any seat. Applies to all available rowers (unlike S13 which
+    /// only covers non-scull rowers). Higher = fewer benched rowers.
+    /// Default **4**.
+    pub minimize_bench_weight: i32,
+    /// S19 boat-size stacking weight. Quality reward inversely scaled
+    /// by boat size — strong rowers in smaller boats get a bigger
+    /// reward. Used by even_speed to concentrate talent in 4s/pairs
+    /// (which need it more than 8s). Default **0** (off; even_speed
+    /// sets it to 2).
+    pub boat_size_stacking_weight: i32,
 }
 
 impl SolverConfig {
@@ -330,6 +346,9 @@ impl SolverConfig {
             non_scull_retention_weight: 2,
             bow_cox_fit_weight: 1,
             top_boat_stacking_weight: 0,
+            pair_eligibility_weight: 3,
+            minimize_bench_weight: 4,
+            boat_size_stacking_weight: 0,
         }
     }
 
@@ -347,6 +366,7 @@ impl SolverConfig {
             end_pair_skill_weight: 0,
             engine_room_strength_weight: 0,
             top_boat_stacking_weight: -2, // penalize stacking = spread talent
+            boat_size_stacking_weight: 2, // stack smaller boats for speed parity
             ..Self::balanced()
         }
     }
@@ -363,6 +383,7 @@ impl SolverConfig {
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
             top_boat_stacking_weight: 4,
+            minimize_bench_weight: 2, // lower — benching weaker rowers to stack is OK
             ..Self::balanced()
         }
     }
@@ -389,6 +410,9 @@ impl SolverConfig {
             non_scull_retention_weight: 0,
             bow_cox_fit_weight: 0,
             top_boat_stacking_weight: 0,
+            pair_eligibility_weight: 0,
+            minimize_bench_weight: 0,
+            boat_size_stacking_weight: 0,
         }
     }
 
@@ -980,6 +1004,7 @@ fn build_model<'a>(
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s13_non_scull_retention()?;
+    m.post_s18_minimize_bench()?;
     m.post_s14_bow_cox_fit()?;
     m.post_s15_designated_cox_retention()?;
     m.post_reference_similarity(&request.reference_lineups)?;
@@ -1013,6 +1038,8 @@ fn build_model<'a>(
     m.post_s11_end_pair_skill();
     m.post_s12_engine_room_strength();
     m.post_s16_top_boat_stacking();
+    m.post_s17_pair_eligibility()?;
+    m.post_s19_boat_size_stacking();
 
     // --- Objective variable ---
     //

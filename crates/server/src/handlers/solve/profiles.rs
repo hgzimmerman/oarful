@@ -85,6 +85,9 @@ pub(crate) async fn save_profile_handler(
         non_scull_retention_weight: config.non_scull_retention_weight,
         bow_cox_fit_weight: config.bow_cox_fit_weight,
         top_boat_stacking_weight: config.top_boat_stacking_weight,
+        pair_eligibility_weight: config.pair_eligibility_weight,
+        minimize_bench_weight: config.minimize_bench_weight,
+        boat_size_stacking_weight: config.boat_size_stacking_weight,
     };
 
     tenant

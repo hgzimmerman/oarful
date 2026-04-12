@@ -647,4 +647,38 @@ impl<'a> ModelBuilder<'a> {
             }
         }
     }
+
+    /// S19 — boat-size stacking. Quality reward inversely scaled by
+    /// boat size. Strong rowers in smaller boats get a bigger reward
+    /// than in larger boats. This encourages the solver to
+    /// concentrate talent in 4s/pairs (which need it more) when
+    /// trying to equalise boat speeds.
+    ///
+    /// The scaling factor is `8 / seat_count` (rounded), so:
+    /// - pair (2 seats): quality × 4
+    /// - four (4 seats): quality × 2
+    /// - eight (8 seats): quality × 1
+    ///
+    /// Only applied when weight > 0.
+    pub(crate) fn post_s19_boat_size_stacking(&mut self) {
+        if self.cfg.boat_size_stacking_weight == 0 {
+            return;
+        }
+        let w = self.cfg.boat_size_stacking_weight;
+
+        for (b_idx, boat) in self.boats.iter().enumerate() {
+            let size_factor = (8i32).checked_div(boat.seat_count).unwrap_or(1).max(1);
+            for seat in 1..=boat.seat_count {
+                for (r_idx, rower) in self.available.iter().enumerate() {
+                    if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
+                        let quality = rower.skill.ordinal() + rower.strength.ordinal();
+                        let coef = -w * quality * size_factor;
+                        if coef != 0 {
+                            self.obj_terms.push(var.scaled(coef));
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

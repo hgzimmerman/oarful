@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use lineup_db::boat::{types::WeightClass, Boat};
-use lineup_db::rower::{types::Side, Rower};
+use lineup_db::rower::{types::{Side, Skill}, Rower};
 use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
 
@@ -574,6 +574,12 @@ pub(crate) fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> 
     // Designated coxswains *only* cox — they never row a rowing seat,
     // regardless of side, weight class, or availability.
     if rower.is_designated_cox.as_bool() {
+        return false;
+    }
+    // H7: Novices cannot row in pair boats (seat_count=2, no cox).
+    // A pair requires enough technical skill to balance and steer
+    // without a coxswain — novices aren't there yet.
+    if boat.seat_count == 2 && !boat.has_cox.as_bool() && rower.skill == Skill::Novice {
         return false;
     }
     // Rowing seats: the rower's side must match the seat's side, UNLESS

@@ -421,6 +421,9 @@ pub(super) fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) ->
         non_scull_retention_weight: p.non_scull_retention_weight,
         bow_cox_fit_weight: p.bow_cox_fit_weight,
         top_boat_stacking_weight: p.top_boat_stacking_weight,
+        pair_eligibility_weight: p.pair_eligibility_weight,
+        minimize_bench_weight: p.minimize_bench_weight,
+        boat_size_stacking_weight: p.boat_size_stacking_weight,
     }
 }
 
