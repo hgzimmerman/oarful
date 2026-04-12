@@ -48,6 +48,24 @@ pub(crate) struct EditorData<'a> {
 }
 
 impl<'a> EditorData<'a> {
+    /// Sort key for pool rowers: port-biased first (negative), then
+    /// either (zero), then starboard-biased (positive). Within a side,
+    /// stronger preference comes first.
+    fn side_sort_key(r: &Rower) -> i32 {
+        use lineup_db::rower::types::Side;
+        let strength = r.side_strength.as_int(); // 0 = hard lock, 5 = flexible
+        let bias = 5 - strength; // higher = stronger preference
+        match r.side {
+            Side::Port => -(bias + 1),      // -6..-1
+            Side::Either => 0,
+            Side::Starboard => bias + 1,    // 1..6
+        }
+    }
+
+    fn sort_pool(pool: &mut [&Rower]) {
+        pool.sort_by_key(|r| Self::side_sort_key(r));
+    }
+
     /// Build from a snapshot with no solver result — all boats empty,
     /// all available rowers in pool.
     pub(crate) fn empty(snapshot: &'a DbSnapshot) -> Self {
@@ -58,7 +76,8 @@ impl<'a> EditorData<'a> {
             for s in 1..=b.seat_count { seats.push((s, None)); }
             EditorBoat { boat: b, seats, active: true }
         }).collect();
-        let pool: Vec<&Rower> = snapshot.available_rowers().collect();
+        let mut pool: Vec<&Rower> = snapshot.available_rowers().collect();
+        Self::sort_pool(&mut pool);
         Self { boats, pool, sculling: vec![] }
     }
 
@@ -92,9 +111,10 @@ impl<'a> EditorData<'a> {
             EditorBoat { boat: b, seats, active }
         }).collect();
 
-        let pool: Vec<&Rower> = primary.unplaced.benched.iter()
+        let mut pool: Vec<&Rower> = primary.unplaced.benched.iter()
             .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
             .collect();
+        Self::sort_pool(&mut pool);
         let sculling: Vec<&Rower> = primary.unplaced.to_sculling.iter()
             .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
             .collect();
@@ -129,9 +149,10 @@ impl<'a> EditorData<'a> {
             .values()
             .flat_map(|m| m.values().copied())
             .collect();
-        let pool: Vec<&Rower> = snapshot.available_rowers()
+        let mut pool: Vec<&Rower> = snapshot.available_rowers()
             .filter(|r| !placed.contains(&r.id))
             .collect();
+        Self::sort_pool(&mut pool);
 
         Self { boats, pool, sculling: vec![] }
     }
@@ -279,11 +300,20 @@ pub(crate) fn lineup_editor(
                     div class="flex flex-wrap gap-2 mt-1" {
                         @for r in &editor.sculling {
                             @let key = format!("sculling:{}", r.id);
+                            @let side_border = if r.is_designated_cox.as_bool() {
+                                "border-r-2 border-r-indigo-400"
+                            } else {
+                                match r.side {
+                                    lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
+                                    lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
+                                    lineup_db::rower::types::Side::Either => "",
+                                }
+                            };
                             span data-key=(key)
                                  data-boat="sculling"
                                  data-seat="-1"
                                  data-rower=(r.id)
-                                 class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50"
+                                 class={"inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50 " (side_border)}
                                  ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                                  "@click"={"select('" (key) "')"} {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
@@ -315,11 +345,20 @@ pub(crate) fn lineup_editor(
                     }
                     @for r in &editor.pool {
                         @let key = format!("bench:{}", r.id);
+                        @let side_border = if r.is_designated_cox.as_bool() {
+                            "border-r-2 border-r-indigo-400"
+                        } else {
+                            match r.side {
+                                lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
+                                lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
+                                lineup_db::rower::types::Side::Either => "",
+                            }
+                        };
                         span data-key=(key)
                              data-boat="bench"
                              data-seat="-1"
                              data-rower=(r.id)
-                             class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50"
+                             class={"inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50 " (side_border)}
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
                             div class="font-medium text-slate-800 text-sm" { (r.name) }
@@ -1517,13 +1556,13 @@ fn compact_side(r: &Rower) -> String {
         Side::Either => "Either".to_string(),
         Side::Port => {
             let s = r.side_strength.as_int();
-            let pos = if s == 0 { -5 } else { -(6 - s).min(5).max(1) };
-            format!("Port({pos:+})")
+            let bias = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
+            format!("Port({bias})")
         }
         Side::Starboard => {
             let s = r.side_strength.as_int();
-            let pos = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
-            format!("Starboard({pos:+})")
+            let bias = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
+            format!("Starboard({bias})")
         }
     }
 }
