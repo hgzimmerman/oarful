@@ -344,6 +344,14 @@ culprit) remains parked pending a Pumpkin API dive.
 - **CLI `create-tenant` command**
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
+- **Pair boat constraints** — only Expert/Master rowers of similar
+  strength should be eligible for pair boats
+- **Minimize benched rowers** — hard or heavily-weighted soft
+  constraint to avoid leaving rowers on the bench when seats exist
+- **Equal speed profile: boat-size weighting** — bigger boats go
+  faster, so the "even speed" profile should stack smaller boats
+  (4s) with stronger rowers rather than distributing evenly. An 8
+  tolerates weaker rowers better than a 4.
 
 ### Per-team roles
 
