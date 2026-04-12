@@ -96,6 +96,22 @@ impl JwtKeys {
         jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
     }
 
+    /// Issue a token with a custom expiry timestamp (Unix seconds).
+    /// Used for magic-link sessions where the JWT should expire at
+    /// end-of-day of the last relevant practice.
+    pub(crate) fn issue_with_expiry(
+        &self,
+        user_id: UserId,
+        tenant_id: TenantId,
+        role: Role,
+        active_team_id: TeamId,
+        exp: u64,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let mut claims = Claims::new(user_id, tenant_id, role, active_team_id);
+        claims.exp = exp;
+        jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
+    }
+
     /// Decode and validate a token. Returns the claims on success.
     pub(crate) fn verify(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let data = jsonwebtoken::decode::<Claims>(

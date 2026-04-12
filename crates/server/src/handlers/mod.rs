@@ -37,6 +37,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/invite/{token}",
             get(users::accept_page).post(users::accept_handler),
         )
+        .route("/auth/magic/{token}", get(auth::magic_link_handler))
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.

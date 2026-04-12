@@ -52,6 +52,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    magic_link (token_hash) {
+        token_hash -> Text,
+        user_id -> Integer,
+        redirect_path -> Text,
+        expires_at -> Timestamp,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use crate::sql_types::*;
 
@@ -192,6 +202,7 @@ diesel::joinable!(rower_seat_affinity -> rower (rower_id));
 diesel::joinable!(rower -> app_user (user_id));
 diesel::joinable!(user_role -> app_user (user_id));
 diesel::joinable!(user_invite -> app_user (user_id));
+diesel::joinable!(magic_link -> app_user (user_id));
 diesel::joinable!(availability -> rower (rower_id));
 diesel::joinable!(availability -> team (team_id));
 diesel::joinable!(practice -> team (team_id));
@@ -218,6 +229,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     app_user,
     user_role,
     user_invite,
+    magic_link,
     solver_profile,
     sync_source,
 );

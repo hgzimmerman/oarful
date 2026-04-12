@@ -10,6 +10,7 @@ use tower_http::services::ServeDir;
 pub(crate) mod extract;
 pub(crate) mod handlers;
 pub(crate) mod jwt;
+pub(crate) mod magic_link;
 pub mod mailer;
 pub(crate) mod request_id;
 pub(crate) mod state;

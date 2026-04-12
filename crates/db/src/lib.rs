@@ -10,6 +10,7 @@ pub mod availability;
 pub mod boat;
 pub mod fixture;
 pub mod lineup;
+pub mod magic_link;
 pub mod pair_affinity;
 pub mod practice;
 pub mod rower;
