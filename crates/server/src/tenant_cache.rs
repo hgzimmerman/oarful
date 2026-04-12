@@ -58,6 +58,11 @@ impl TenantCache {
             .insert(tenant_id, CachedTenant { db, config });
     }
 
+    /// Evict a tenant from the cache (e.g. after deleting a demo tenant).
+    pub(crate) fn remove(&self, tenant_id: TenantId) {
+        self.tenants.lock().unwrap().remove(&tenant_id);
+    }
+
     /// Get the Db and config for a tenant, opening it on first access.
     /// Returns an error if the tenant doesn't exist in the master DB or
     /// the SQLite file can't be opened.

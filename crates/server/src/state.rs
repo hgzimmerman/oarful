@@ -158,6 +158,11 @@ impl AppState {
             .await
     }
 
+    /// Evict a tenant from the connection cache.
+    pub(crate) fn evict_tenant(&self, tenant_id: TenantId) {
+        self.tenant_cache.remove(tenant_id);
+    }
+
     /// Resolve a tenant by slug. Looks up the tenant_id in the master
     /// DB, then delegates to [`tenant_db`].
     pub(crate) async fn tenant_db_by_slug(

@@ -241,6 +241,8 @@ pub async fn cleanup_expired_demos(state: &AppState) {
                 tracing::warn!(db_path = %t.db_path, ?e, "failed to remove demo DB file");
             }
         }
+        // Evict from the in-memory connection cache.
+        state.evict_tenant(t.id);
         // Remove from master DB.
         let tid = t.id;
         if let Err(e) = state

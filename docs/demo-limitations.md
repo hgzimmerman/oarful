@@ -62,6 +62,13 @@ There are no other user accounts to test:
 - Creating a new demo after expiry starts fresh — no data carries
   over.
 
+**Garbage collection.** A background cleanup task runs at server
+startup and then every hour. It queries the master DB for tenants
+where `demo_expires_at < now`, then for each expired tenant:
+1. Deletes the tenant's SQLite file from disk.
+2. Evicts the tenant from the in-memory connection pool cache.
+3. Deletes the tenant row from the master DB.
+
 ### Billing and onboarding
 
 - No payment flow exists in the demo (or anywhere yet).
