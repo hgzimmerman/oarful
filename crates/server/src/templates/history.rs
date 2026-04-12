@@ -85,11 +85,46 @@ pub(crate) fn detail_content(
         .collect();
     let has_stale = !stale_rowers.is_empty();
 
+    let is_cancelled = practice.map(|p| p.cancelled.as_bool()).unwrap_or(false);
+    let cancel_action = format!("/practices/{date}/cancel");
+
     html! {
         (page_header(&format!("Lineups · {date}"), None))
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-4" {
+            @if is_cancelled {
+                div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900 flex items-center justify-between" {
+                    div {
+                        strong { "Cancelled. " }
+                        "This practice has been cancelled."
+                    }
+                    @if is_coach {
+                        form method="post" action=(cancel_action)
+                             hx-post=(cancel_action)
+                             hx-target="#content"
+                             class="no-print" {
+                            button type="submit"
+                                   class="text-sm font-semibold text-red-700 hover:text-red-900 underline" {
+                                "Restore"
+                            }
+                        }
+                    }
+                }
+            }
+
             @if is_coach {
-                div class="no-print" { (notes_section(practice, date)) }
+                div class="no-print flex items-center justify-between" {
+                    div { (notes_section(practice, date)) }
+                    @if !is_cancelled {
+                        form method="post" action=(cancel_action)
+                             hx-post=(cancel_action)
+                             hx-target="#content" {
+                            button type="submit"
+                                   class="text-xs text-slate-400 hover:text-red-600 font-medium" {
+                                "Cancel practice"
+                            }
+                        }
+                    }
+                }
             }
 
             @if has_stale {
