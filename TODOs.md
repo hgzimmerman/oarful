@@ -398,9 +398,33 @@ culprit) remains parked pending a Pumpkin API dive.
 ## Follow-ups not yet tracked as tasks
 
 - **CLI `create-tenant` command**
-- **Club picker template** (multi-tenant login)
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
+
+### Club picker (multi-tenant login)
+
+When a user's email matches accounts in multiple tenants, the login
+flow should present a club picker instead of silently choosing the
+first match. Currently `handlers/auth.rs` collects all matching
+tenants into a `Vec<Match>` (with `tenant_id`, `_tenant_name`,
+`user`, `role`, `default_team`) but always uses the first one
+(line 103: `matches.into_iter().next().unwrap()`).
+
+**Implementation:**
+- If `matches.len() > 1`, render a club picker page listing each
+  tenant name. The user clicks one to complete login.
+- The picker page doesn't need re-authentication — the password was
+  already verified. It just needs to carry a short-lived token or
+  session state that maps to the verified user + candidate tenants.
+- On selection, issue the JWT for the chosen tenant and redirect.
+- If `matches.len() == 1`, behave as today (auto-select).
+
+**Considerations:**
+- The `_tenant_name` field on the `Match` struct is already
+  populated for this purpose — just rename back to `tenant_name`
+  when implementing.
+- The picker template should show the tenant name and possibly the
+  user's role in that tenant so they can distinguish.
 
 ### Per-team roles
 
