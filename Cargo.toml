@@ -59,6 +59,7 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 axum-htmx = "0.8"
 axum-extra = { version = "0.10", features = ["cookie", "query"] }
 async-trait = "0.1"
+time = "0.3"
 sha2 = "0.10"
 hex = "0.4"
 test-case = "3"

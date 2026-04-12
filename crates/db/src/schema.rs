@@ -187,18 +187,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    email_log (id) {
-        id -> Integer,
-        team_id -> Integer,
-        email_type -> Text,
-        practice_date -> Date,
-        sent_at -> Timestamp,
-        recipient_count -> Integer,
-        sent_by_user_id -> Integer,
-    }
-}
-
-diesel::table! {
     sync_source (id) {
         id -> Integer,
         team_id -> Integer,
@@ -207,6 +195,18 @@ diesel::table! {
         last_synced_at -> Nullable<Timestamp>,
         last_error -> Nullable<Text>,
         created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    email_log (id) {
+        id -> Integer,
+        team_id -> Integer,
+        email_type -> Text,
+        practice_date -> Date,
+        sent_at -> Timestamp,
+        recipient_count -> Integer,
+        sent_by_user_id -> Integer,
     }
 }
 

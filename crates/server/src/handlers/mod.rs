@@ -32,6 +32,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
     // Public routes — no auth required.
     let public = Router::new()
         .route("/login", get(auth::login_page).post(auth::login_handler))
+        .route("/login/email", post(auth::email_step_handler))
+        .route("/login/magic", post(auth::magic_login_handler))
         .route("/logout", post(auth::logout_handler))
         .route(
             "/invite/{token}",
