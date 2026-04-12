@@ -498,6 +498,11 @@ pub struct SolveResult {
     /// Populated by cheap eligibility checks before the solver
     /// runs, so the coach gets actionable feedback instantly.
     pub diagnostics: Vec<Diagnostic>,
+    /// Wall-clock time the solver spent (model build + search).
+    pub elapsed: std::time::Duration,
+    /// Best objective value found (lower is better). None when
+    /// unsatisfiable or unknown.
+    pub objective: Option<i32>,
 }
 
 /// A single self-contained proposal from the solver: one
@@ -646,12 +651,16 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             })
             .collect::<Result<_>>()?
     };
+    let solve_start = std::time::Instant::now();
+
     if boats.is_empty() {
         return Ok(SolveResult {
             status: SolveStatus::Satisfied,
             primary: ProposedSolution::default(),
             alternatives: vec![],
             diagnostics: vec![],
+            elapsed: solve_start.elapsed(),
+            objective: None,
         });
     }
 
@@ -678,7 +687,9 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     let (builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     // --- Phase 3: search ---
-    search_lineups(builder, objective, request, diagnostics)
+    let mut result = search_lineups(builder, objective, request, diagnostics)?;
+    result.elapsed = solve_start.elapsed();
+    Ok(result)
 }
 
 /// Greedy fleet pre-selection: pick the largest boats first until
@@ -1056,7 +1067,7 @@ fn search_lineups(
 
     // Primary solve — determines the overall result status.
     let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
-    let (primary_status, primary_lineups, primary_placements) =
+    let (primary_status, primary_lineups, primary_placements, primary_objective) =
         match primary_opt {
             OptimisationResult::Optimal(sol) => {
                 let obj_val = sol.get_integer_value(objective);
@@ -1078,7 +1089,7 @@ fn search_lineups(
                 );
                 let placements =
                     collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements)
+                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
             }
             OptimisationResult::Satisfiable(sol) => {
                 let obj_val = sol.get_integer_value(objective);
@@ -1100,7 +1111,7 @@ fn search_lineups(
                 );
                 let placements =
                     collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements)
+                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
             }
             OptimisationResult::Stopped(sol, _) => {
                 let obj_val = sol.get_integer_value(objective);
@@ -1122,7 +1133,7 @@ fn search_lineups(
                 );
                 let placements =
                     collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements)
+                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
             }
             OptimisationResult::Unsatisfiable => {
                 return Ok(SolveResult {
@@ -1130,6 +1141,8 @@ fn search_lineups(
                     primary: ProposedSolution::default(),
                     alternatives: vec![],
                     diagnostics,
+                    elapsed: std::time::Duration::ZERO,
+                    objective: None,
                 });
             }
             OptimisationResult::Unknown => {
@@ -1138,6 +1151,8 @@ fn search_lineups(
                     primary: ProposedSolution::default(),
                     alternatives: vec![],
                     diagnostics: vec![],
+                    elapsed: std::time::Duration::ZERO,
+                    objective: None,
                 });
             }
         };
@@ -1224,6 +1239,8 @@ fn search_lineups(
         },
         alternatives,
         diagnostics: vec![],
+        elapsed: std::time::Duration::ZERO, // filled in by solve()
+        objective: primary_objective,
     })
 }
 

@@ -661,7 +661,7 @@ pub(crate) fn view_content(
             div class="no-print" {
                 (knobs_form(date, knobs, committed_practices, true, custom_profiles))
             }
-            (status_banner(date, &result.status, &result.diagnostics))
+            (status_banner(date, result))
             (lineup_editor(snapshot, date, &editor, flags, knobs))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
@@ -1007,22 +1007,48 @@ fn knob_input(
     }
 }
 
-fn status_banner(date: NaiveDate, status: &SolveStatus, diagnostics: &[Diagnostic]) -> Markup {
-    match status {
-        SolveStatus::Satisfied => html! {
-            div class="bg-emerald-50 border-l-4 border-emerald-500 px-4 py-3 rounded text-sm text-emerald-900" {
-                "Solver satisfied — review the proposed lineup and commit when ready."
+fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
+    match result.status {
+        // Success (optimal or timeout-with-result): no banner.
+        // The filled boat cards are the success signal. Show solver
+        // metadata in a collapsible <details> instead.
+        SolveStatus::Satisfied => {
+            let elapsed_ms = result.elapsed.as_millis();
+            let elapsed_label = if elapsed_ms < 1000 {
+                format!("{elapsed_ms}ms")
+            } else {
+                format!("{:.1}s", result.elapsed.as_secs_f64())
+            };
+            html! {
+                details class="text-xs text-slate-500 no-print" {
+                    summary class="cursor-pointer hover:text-slate-700 select-none" {
+                        "Solver details"
+                    }
+                    div class="mt-1 pl-4 space-y-0.5" {
+                        div { "Time: " (elapsed_label) }
+                        @if let Some(obj) = result.objective {
+                            div { "Objective: " (obj) " (lower is better)" }
+                        }
+                        @if !result.diagnostics.is_empty() {
+                            div class="mt-1" {
+                                @for d in &result.diagnostics {
+                                    div class="text-amber-600" { (diagnostic_message(d)) }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         SolveStatus::Unsatisfiable => html! {
             div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                 strong { "Unsatisfiable." }
                 " No seat assignment exists under the current constraints for " (date) "."
-                @if diagnostics.is_empty() {
+                @if result.diagnostics.is_empty() {
                     " Check the roster, availability, and hard locks."
                 } @else {
                     ul class="mt-2 ml-4 list-disc space-y-1" {
-                        @for d in diagnostics {
+                        @for d in &result.diagnostics {
                             li { (diagnostic_message(d)) }
                         }
                     }
@@ -1031,8 +1057,8 @@ fn status_banner(date: NaiveDate, status: &SolveStatus, diagnostics: &[Diagnosti
         },
         SolveStatus::Timeout => html! {
             div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
-                strong { "Timeout." }
-                " Solver did not finish within its time budget. Try again or increase the budget."
+                strong { "No result." }
+                " Solver timed out without finding any valid lineup. Try increasing the time budget or relaxing constraints."
             }
         },
     }
