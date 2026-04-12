@@ -157,21 +157,9 @@ pub(crate) fn lineup_editor(
                data-editor-url=(editor_url)
                x-data="lineupEditor()" {
 
-            div class="flex items-center justify-between mb-4 flex-wrap gap-2" {
+            div class="flex items-center justify-between mb-1" {
                 h2 class="text-xl font-bold text-slate-800" { "Lineup" }
-                div class="flex items-center gap-2 no-print" {
-                    template x-if="selected" {
-                        span class="text-xs text-blue-600" {
-                            "Click another to swap"
-                            " · "
-                            button type="button"
-                                   class="underline text-amber-600 hover:text-amber-800"
-                                   "@click"="toBench(selected)" {
-                                "bench"
-                            }
-                            " · or click again to cancel"
-                        }
-                    }
+                div class="no-print" {
                     form method="post" action=(commit_action) {
                         // Server-rendered hidden inputs for commit.
                         @for eb in &editor.boats {
@@ -191,9 +179,17 @@ pub(crate) fn lineup_editor(
                     }
                 }
             }
+            // Selection hint — fixed height so it doesn't cause reflow.
+            div class="h-6 mb-2 no-print" {
+                span class="text-xs text-blue-600"
+                     x-show="selected"
+                     x-cloak {
+                    "Click another to swap · or click again to cancel"
+                }
+            }
 
             // Boat selector pills
-            div class="flex flex-wrap gap-2 mb-4 no-print" {
+            div class="flex flex-wrap items-center gap-2 mb-4 no-print" {
                 @for eb in &editor.boats {
                     @let bid = eb.boat.id.as_int();
                     @let active_class = if eb.active {
@@ -209,6 +205,17 @@ pub(crate) fn lineup_editor(
                         (eb.boat.seat_count)
                         @if eb.boat.has_cox.as_bool() { "+" }
                         ")"
+                    }
+                }
+                @if editor.boats.len() > 2 {
+                    span class="inline-flex items-center gap-1 ml-1" {
+                        span class="text-xs text-slate-400" { "|" }
+                        button type="button"
+                               class="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-medium rounded"
+                               "@click"="selectAllBoats()" { "All" }
+                        button type="button"
+                               class="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-medium rounded"
+                               "@click"="deselectAllBoats()" { "None" }
                     }
                 }
             }
@@ -292,7 +299,20 @@ pub(crate) fn lineup_editor(
                     strong class="text-slate-700" { "Available " }
                     span class="text-xs text-slate-500" { "(click to place in a seat)" }
                 }
+                @let has_boated = editor.boats.iter().any(|eb| eb.active && eb.seats.iter().any(|(_, r)| r.is_some()));
                 div class="flex flex-wrap gap-2 mt-1" {
+                    // Empty bench slot — drop target for moving a rower out of a boat.
+                    @if has_boated {
+                        span data-key="bench:empty"
+                             data-boat="bench"
+                             data-seat="-1"
+                             data-rower=""
+                             class="inline-block px-3 py-2 rounded border border-dashed border-slate-300 cursor-pointer transition hover:bg-slate-50"
+                             ":class"={"selected === 'bench:empty' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                             "@click"="select('bench:empty')" {
+                            span class="text-slate-400 italic text-sm" { "\u{2014} bench \u{2014}" }
+                        }
+                    }
                     @for r in &editor.pool {
                         @let key = format!("bench:{}", r.id);
                         span data-key=(key)
@@ -494,6 +514,11 @@ function lineupEditor() {
         },
 
         doSwap(a, b) {
+            // If either side is the empty bench slot, treat as a bench operation.
+            if (a === 'bench:empty' || b === 'bench:empty') {
+                var seated = (a === 'bench:empty') ? b : a;
+                return this.toBench(seated);
+            }
             // Read current state, swap the two rower IDs, re-render.
             var root = this.$root;
             var elA = root.querySelector('[data-key="' + a + '"]');
@@ -529,6 +554,25 @@ function lineupEditor() {
                 });
                 card.dataset.hidden = 'true';
             }
+            this.selected = null;
+            this.rerender(this.gatherState());
+        },
+
+        selectAllBoats() {
+            this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
+                card.dataset.hidden = 'false';
+            });
+            this.selected = null;
+            this.rerender(this.gatherState());
+        },
+
+        deselectAllBoats() {
+            this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
+                card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                    row.dataset.rower = '';
+                });
+                card.dataset.hidden = 'true';
+            });
             this.selected = null;
             this.rerender(this.gatherState());
         },
