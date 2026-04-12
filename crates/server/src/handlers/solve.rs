@@ -21,6 +21,7 @@ use crate::extract::HtmlForm;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::{
+    boat::types::BoatId,
     lineup::{CommitSeat, Lineup},
     practice::Practice,
     snapshot::DbSnapshot,
@@ -125,6 +126,11 @@ pub(crate) struct SolveKnobs {
     /// repeated `walkon=<rower_id>` query params.
     #[serde(default)]
     pub(crate) walkon: Vec<String>,
+    /// Active boat IDs from the editor. When non-empty, restricts the
+    /// solver to only consider these boats. Deserialized from repeated
+    /// `boat=<boat_id>` query params injected by the editor JS.
+    #[serde(default)]
+    pub(crate) boat: Vec<String>,
 }
 
 impl Default for SolveKnobs {
@@ -141,6 +147,7 @@ impl Default for SolveKnobs {
             lock: vec![],
             preset: String::new(),
             walkon: vec![],
+            boat: vec![],
         }
     }
 }
@@ -194,9 +201,14 @@ impl SolveKnobs {
         // prefer similarity).
         reference_lineups.extend(baselines);
 
+        let boats: Vec<BoatId> = self.boat.iter()
+            .filter_map(|s| s.parse::<i32>().ok())
+            .map(BoatId::new)
+            .collect();
+
         SolveRequest {
             date,
-            boats: vec![],
+            boats,
             partial_fill: if self.partial > 0 {
                 PartialFillPolicy::Allowed(self.partial)
             } else {

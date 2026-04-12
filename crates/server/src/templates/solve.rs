@@ -427,7 +427,7 @@ function lineupEditor() {{
                 // Show the boat.
                 card.style.display = '';
                 card.dataset.hidden = 'false';
-                if (pill) pill.className = 'px-3 py-1 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
+                if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
             }} else {{
                 // Bench all rowers from this boat, then hide.
                 var rows = Array.from(card.querySelectorAll('tr[data-rower]'));
@@ -446,7 +446,7 @@ function lineupEditor() {{
                 }});
                 card.style.display = 'none';
                 card.dataset.hidden = 'true';
-                if (pill) pill.className = 'px-3 py-1 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
+                if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
             }}
             this.rebuildInputs();
         }},
@@ -502,6 +502,20 @@ function lineupEditor() {{
                     inp.value = lockVal;
                     inp.className = 'manual-lock';
                     knobsForm.appendChild(inp);
+                }});
+                // Inject active boat IDs so the solver only considers
+                // boats the coach has toggled on.
+                knobsForm.querySelectorAll('input[name="boat"].editor-boat').forEach(function(el) {{ el.remove(); }});
+                var self = this;
+                this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {{
+                    if (card.dataset.hidden !== 'true') {{
+                        var inp = document.createElement('input');
+                        inp.type = 'hidden';
+                        inp.name = 'boat';
+                        inp.value = card.dataset.editorBoat;
+                        inp.className = 'editor-boat';
+                        knobsForm.appendChild(inp);
+                    }}
                 }});
             }}
         }}

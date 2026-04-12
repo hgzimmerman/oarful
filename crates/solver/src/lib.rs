@@ -791,8 +791,10 @@ fn greedy_fleet_select<'a>(
 
         if remaining >= min_seats {
             selected.push(*boat);
-            let actually_fill = seats_total.min(remaining);
-            remaining -= actually_fill;
+            // Reserve only min_seats worth of rowers so subsequent
+            // boats can still qualify. The solver decides the actual
+            // fill level via use[b] + partial-fill constraints.
+            remaining -= min_seats;
         }
     }
 

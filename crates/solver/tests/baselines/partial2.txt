@@ -1,6 +1,6 @@
 status: Satisfied
-fielded: 1/1
-skipped: 
+fielded: 1/2
+skipped: Hestia
 to sculling: 
 benched: Grace, Ivan
 
@@ -8,9 +8,9 @@ boat 1: Persephone
   cox  Lena
   s1   Finn
   s2   Mika
-  s3   Erin
-  s4   Alice
+  s3   Carla
+  s4   Diego
   s5   Hana
   s6   Bob
-  s7   Carla
-  s8   Diego
+  s7   Alice
+  s8   Erin
