@@ -17,31 +17,12 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
     let action = format!("/solve/{date}");
     html! {
         // Segmented button helper: update hidden input + toggle active style.
+        // Knob helpers: segmentedSelect() updates hidden inputs +
+        // toggles button styling without form submission. knobChanged()
+        // clears stale solver metrics from the summary. presetClicked()
+        // updates the preset label in the summary.
         script {
-            (maud::PreEscaped(r#"
-            function segmentedSelect(btn, name, value) {
-                var form = btn.closest('form');
-                if (form) {
-                    var hidden = form.querySelector('input[type="hidden"][name="' + name + '"]');
-                    if (hidden) hidden.value = value;
-                }
-                var siblings = btn.parentElement.querySelectorAll('button');
-                siblings.forEach(function(b) {
-                    b.className = 'px-3 py-2 text-slate-700 hover:bg-slate-100';
-                });
-                btn.className = 'px-3 py-2 font-semibold bg-slate-800 text-white';
-                knobChanged();
-            }
-            function knobChanged() {
-                var m = document.getElementById('knob-metrics');
-                if (m) m.textContent = '';
-            }
-            function presetClicked(label) {
-                var p = document.getElementById('knob-preset-label');
-                if (p) p.textContent = label;
-                knobChanged();
-            }
-            "#))
+            (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
         section class="bg-white rounded-lg shadow" {
             // Collapsible knobs — open on landing, collapsed after generation.
