@@ -33,7 +33,7 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let (users, roles, unlinked_rowers) = tenant
+    let (users, roles, unlinked_rowers, user_rower_map) = tenant
         .db
         .with_conn(|conn| {
             let users = app_user::table
@@ -47,16 +47,23 @@ pub(crate) async fn list_handler(
                 .into_iter()
                 .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
                 .collect();
+            let all_rowers = Rower::list_active(conn)?;
             // Roster members with email but no linked user account.
-            let unlinked: Vec<Rower> = Rower::list_active(conn)?
-                .into_iter()
+            let unlinked: Vec<Rower> = all_rowers
+                .iter()
                 .filter(|r| r.user_id.is_none() && r.email.is_some())
+                .cloned()
                 .collect();
-            Ok((users, roles, unlinked))
+            // Map user_id → rower_id for linked members.
+            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = all_rowers
+                .iter()
+                .filter_map(|r| r.user_id.map(|uid| (UserId::new(uid), r.id)))
+                .collect();
+            Ok((users, roles, unlinked, user_rower))
         })
         .await
         .map_err(super::internal_error)?;
-    let content = templates::users::list_content(&users, &roles, &unlinked_rowers);
+    let content = templates::users::list_content(&users, &roles, &unlinked_rowers, &user_rower_map);
     Ok(super::maybe_page_authed("Users", content, hx, &tenant))
 }
 
@@ -219,21 +226,25 @@ pub(crate) async fn resend_invite_handler(
     }
 
     // Return the updated row for HTMX swap. We need the roles map
-    // for rendering, so fetch this user's role.
-    let roles = tenant
+    // and rower link for rendering.
+    let (roles, rower_map) = tenant
         .db
         .with_conn(move |conn| {
-            let mut map = HashMap::new();
+            let mut role_map = HashMap::new();
             if let Some(role) = AppUser::role(conn, user_id)? {
-                map.insert(user_id, role);
+                role_map.insert(user_id, role);
             }
-            Ok(map)
+            let mut rower_map = HashMap::new();
+            if let Some(rower) = Rower::find_by_user_id(conn, user_id.as_int())? {
+                rower_map.insert(user_id, rower.id);
+            }
+            Ok((role_map, rower_map))
         })
         .await
         .map_err(super::internal_error)?;
 
     Ok(Html(
-        templates::users::user_row(&user, &roles).into_string(),
+        templates::users::user_row(&user, &roles, &rower_map).into_string(),
     ))
 }
 

@@ -204,15 +204,11 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
-                @if perms.can_edit_affinities {
-                    a href="/rowers"
-                      hx-get="/rowers"
-                      hx-target="#content"
-                      hx-push-url="true"
-                      class="text-slate-400 hover:text-slate-700"
-                      title="Back to roster" {
-                        "←"
-                    }
+                a href="/rowers"
+                  onclick="if (history.length > 1) { history.back(); return false; }"
+                  class="text-slate-400 hover:text-slate-700"
+                  title="Back" {
+                    "←"
                 }
                 h1 class="text-2xl font-bold text-slate-800" { (r.name) }
             }
@@ -512,7 +508,7 @@ pub(crate) fn pair_affinities_section(
     html! {
         section #pair-affinities class="bg-white rounded-lg shadow p-6" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-slate-800" { "Pair affinities" }
+                h2 class="text-lg font-bold text-slate-800" { "Pair preferences" }
                 span class="text-xs text-slate-500" {
                     "Same-partition reward / penalty (S2)"
                 }
@@ -523,7 +519,7 @@ pub(crate) fn pair_affinities_section(
                 }
             }
             @if detail.pair_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic mb-3" { "No pair affinities on file." }
+                div class="text-sm text-slate-500 italic mb-3" { "No pair preferences on file." }
             } @else {
                 table class="w-full text-sm mb-3" {
                     thead class="text-left text-xs uppercase text-slate-500" {
@@ -558,7 +554,7 @@ pub(crate) fn pair_affinities_section(
             }
 
             @if !can_edit && detail.pair_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic" { "No pair affinities set by your coach." }
+                div class="text-sm text-slate-500 italic" { "No pair preferences set by your coach." }
             }
 
             @if can_edit {

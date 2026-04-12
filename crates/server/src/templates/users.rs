@@ -3,13 +3,13 @@
 use std::collections::HashMap;
 
 use lineup_db::app_user::{AppUser, Role, UserId};
-use lineup_db::rower::Rower;
+use lineup_db::rower::{types::RowerId, Rower};
 use maud::{html, Markup, DOCTYPE};
 
 use super::layout::page_header;
 
 /// User list with invite form (PD-only page).
-pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unlinked_rowers: &[Rower]) -> Markup {
+pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unlinked_rowers: &[Rower], user_rower_map: &HashMap<UserId, RowerId>) -> Markup {
     let subtitle = format!("{} users", users.len());
     html! {
         (page_header("Users", Some(&subtitle)))
@@ -101,7 +101,7 @@ pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unl
                         }
                         tbody {
                             @for u in users {
-                                (user_row(u, roles))
+                                (user_row(u, roles, user_rower_map))
                             }
                         }
                     }
@@ -111,7 +111,7 @@ pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, unl
     }
 }
 
-pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>) -> Markup {
+pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>, user_rower_map: &HashMap<UserId, RowerId>) -> Markup {
     let role_label = roles
         .get(&u.id)
         .map(|r| match r {
@@ -120,9 +120,22 @@ pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>) -> Markup {
             Role::ProgramDirector => "Program Director",
         })
         .unwrap_or("—");
+    let rower_id = user_rower_map.get(&u.id);
     html! {
         tr id={"user-" (u.id)} class="border-t border-slate-100" {
-            td class="px-4 py-2 font-medium text-slate-800" { (u.name) }
+            td class="px-4 py-2 font-medium text-slate-800" {
+                @if let Some(rid) = rower_id {
+                    a href={"/rowers/" (rid)}
+                      hx-get={"/rowers/" (rid)}
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="text-blue-600 hover:text-blue-800 hover:underline" {
+                        (u.name)
+                    }
+                } @else {
+                    (u.name)
+                }
+            }
             td class="px-4 py-2 text-slate-600" { (u.email) }
             td class="px-4 py-2 text-slate-600" { (role_label) }
             td class="px-4 py-2" {
