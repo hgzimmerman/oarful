@@ -111,10 +111,19 @@ pub(crate) struct SolveKnobs {
     /// the solver — the coach clicks "Generate" to trigger it.
     #[serde(default)]
     pub(crate) generate: i32,
-    /// Seat locks. Each value is `rower_id:boat_id:seat_position`.
-    /// Repeated query param: `lock=1:2:8&lock=3:2:0`.
+    /// Seat locks (explicit coach locks). Each value is
+    /// `rower_id:boat_id:seat_position`.
     #[serde(default)]
     pub(crate) lock: Vec<String>,
+    /// Dirty pins (manual edits since last generate). Same format.
+    /// Honored as solver constraints on Generate, then converted
+    /// to `was_pin` in the response.
+    #[serde(default)]
+    pub(crate) pin: Vec<String>,
+    /// Was-pinned seats (honored last generate, no longer constrained).
+    /// Coach can promote to lock via the icon.
+    #[serde(default)]
+    pub(crate) was_pin: Vec<String>,
     /// Solver preset name. One of: balanced, even_speed, tiered, random.
     /// Overrides the default SolverConfig when present.
     #[serde(default)]
@@ -150,6 +159,8 @@ impl Default for SolveKnobs {
             no_show: vec![],
             generate: 0,
             lock: vec![],
+            pin: vec![],
+            was_pin: vec![],
             preset: String::new(),
             walkon: vec![],
             boat: vec![],
@@ -238,6 +249,14 @@ impl SolveKnobs {
 
     /// Parse `lock` query params into `SeatLock`s.
     /// Each value is `rower_id:boat_id:seat_position`.
+    fn parse_triples(entries: &[String]) -> std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> {
+        entries.iter().filter_map(|entry| {
+            let parts: Vec<&str> = entry.splitn(3, ':').collect();
+            if parts.len() != 3 { return None; }
+            Some((parts[0].parse().ok()?, parts[1].parse().ok()?, parts[2].parse().ok()?))
+        }).collect()
+    }
+
     fn parse_locks(&self) -> Vec<lineup_solver::SeatLock> {
         self.lock
             .iter()
@@ -461,19 +480,37 @@ pub(crate) async fn view_handler(
             .unwrap_or_else(|| knobs.resolve_config());
         let mut request = knobs.to_request(date, &snapshot, baselines);
         request.config = config;
+        // Combine explicit locks + dirty pins as solver constraints.
+        let mut solver_locks = knobs.parse_locks();
+        for entry in &knobs.pin {
+            let parts: Vec<&str> = entry.splitn(3, ':').collect();
+            if parts.len() == 3 {
+                if let (Ok(rid), Ok(bid), Ok(seat)) = (parts[0].parse(), parts[1].parse(), parts[2].parse()) {
+                    solver_locks.push(lineup_solver::SeatLock { rower_id: rid, boat_id: bid, seat });
+                }
+            }
+        }
+        request.locks = solver_locks;
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
-        let locked_seats = knobs.parse_locks().into_iter()
-            .map(|l| (l.rower_id, l.boat_id, l.seat))
-            .collect();
+        // State transitions: pin→was_pin, was_pin→dropped, lock→lock.
+        let locked_seats = SolveKnobs::parse_triples(&knobs.lock);
+        let was_pinned_seats = SolveKnobs::parse_triples(&knobs.pin); // pins become was-pinned
+        let pinned_seats = std::collections::HashSet::new(); // fresh solve clears dirty
         let flags = templates::solve::DisplayFlags {
             show_attributes: tenant.show_attributes(),
             force_cox_stern: tenant.config.force_cox_stern,
             locked_seats,
+            pinned_seats,
+            was_pinned_seats,
         };
+        // Transform knobs for the response: pin→was_pin, was_pin→cleared.
+        let mut response_knobs = knobs.clone();
+        response_knobs.was_pin = knobs.pin.clone();
+        response_knobs.pin = vec![];
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
-            &snapshot, date, &knobs, &result, &committed_practices,
+            &snapshot, date, &response_knobs, &result, &committed_practices,
             &flags, &profile_names,
         );
         return Ok(super::maybe_page_authed(
@@ -488,13 +525,12 @@ pub(crate) async fn view_handler(
     // If seat params are present (e.g. from "Edit lineup" on history),
     // pre-populate the editor with those placements.
     let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
-    let locked_seats = knobs.parse_locks().into_iter()
-        .map(|l| (l.rower_id, l.boat_id, l.seat))
-        .collect();
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
-        locked_seats,
+        locked_seats: SolveKnobs::parse_triples(&knobs.lock),
+        pinned_seats: SolveKnobs::parse_triples(&knobs.pin),
+        was_pinned_seats: SolveKnobs::parse_triples(&knobs.was_pin),
     };
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
@@ -588,6 +624,10 @@ pub(crate) struct EditorParams {
     walkon: Vec<String>,
     #[serde(default)]
     no_show: Vec<String>,
+    #[serde(default)]
+    pin: Vec<String>,
+    #[serde(default)]
+    was_pin: Vec<String>,
 }
 
 /// `GET /solve/{date}/editor` — re-render the lineup editor from the
@@ -652,11 +692,16 @@ pub(crate) async fn editor_handler(
         })
         .collect();
 
+    let pinned_seats = SolveKnobs::parse_triples(&params.pin);
+    let was_pinned_seats = SolveKnobs::parse_triples(&params.was_pin);
+
     let editor = templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
         locked_seats,
+        pinned_seats,
+        was_pinned_seats,
     };
 
     // Unavailable rowers for the walk-on dropdown.

@@ -268,10 +268,16 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
                     @for ns in &knobs.no_show {
                         input type="hidden" name="no_show" value=(ns);
                     }
-                    // OOB target: editor injects locks + active boats here.
+                    // OOB target: editor injects pin state + active boats here.
                     div #editor-knob-state style="display:none" {
                         @for l in &knobs.lock {
                             input type="hidden" name="lock" value=(l);
+                        }
+                        @for p in &knobs.pin {
+                            input type="hidden" name="pin" value=(p);
+                        }
+                        @for wp in &knobs.was_pin {
+                            input type="hidden" name="was_pin" value=(wp);
                         }
                         @for b in &knobs.boat {
                             input type="hidden" name="boat" value=(b);
@@ -315,6 +321,12 @@ fn preset_url_with(date: NaiveDate, knobs: &SolveKnobs, new_preset: &str) -> Str
     }
     for l in &knobs.lock {
         parts.push(format!("lock={l}"));
+    }
+    for p in &knobs.pin {
+        parts.push(format!("pin={p}"));
+    }
+    for wp in &knobs.was_pin {
+        parts.push(format!("was_pin={wp}"));
     }
     for w in &knobs.walkon {
         parts.push(format!("walkon={w}"));

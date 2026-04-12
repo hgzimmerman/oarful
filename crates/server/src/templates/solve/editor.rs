@@ -21,9 +21,12 @@ use super::{
 pub(crate) struct DisplayFlags {
     pub(crate) show_attributes: bool,
     pub(crate) force_cox_stern: bool,
-    /// Locked (rower_id, boat_id, seat) triples. Used to render lock
-    /// icons and distinct styling on locked seats.
+    /// Explicit coach locks — always honored by solver.
     pub(crate) locked_seats: HashSet<(RowerId, BoatId, i32)>,
+    /// Dirty pins — manual edits since last generate.
+    pub(crate) pinned_seats: HashSet<(RowerId, BoatId, i32)>,
+    /// Was-pinned — honored last generate, not constrained now.
+    pub(crate) was_pinned_seats: HashSet<(RowerId, BoatId, i32)>,
 }
 
 /// A boat in the unified lineup editor, with optional seat assignments.
@@ -373,19 +376,22 @@ pub(crate) fn lineup_editor(
             (maud::PreEscaped(editor_js()))
         }
 
-        // OOB swap: inject current placements as locks + active boats
-        // into the knobs form so Generate/Re-generate honors them.
+        // OOB swap: inject active boats + carry through pin state.
+        // Does NOT auto-lock placements — only explicit state is preserved.
         div #editor-knob-state hx-swap-oob="innerHTML" {
             @for eb in &editor.boats {
                 @if eb.active {
                     input type="hidden" name="boat" value=(eb.boat.id);
-                    @for (seat, maybe_rower) in &eb.seats {
-                        @if let Some(rower_id) = maybe_rower {
-                            input type="hidden" name="lock"
-                                  value={(rower_id) ":" (eb.boat.id) ":" (seat)};
-                        }
-                    }
                 }
+            }
+            @for &(rid, bid, seat) in &flags.locked_seats {
+                input type="hidden" name="lock" value={(rid) ":" (bid) ":" (seat)};
+            }
+            @for &(rid, bid, seat) in &flags.pinned_seats {
+                input type="hidden" name="pin" value={(rid) ":" (bid) ":" (seat)};
+            }
+            @for &(rid, bid, seat) in &flags.was_pinned_seats {
+                input type="hidden" name="was_pin" value={(rid) ":" (bid) ":" (seat)};
             }
         }
     }
@@ -433,24 +439,39 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                             r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
                         )).unwrap_or_default();
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let is_locked = maybe_rower.map(|rid| flags.locked_seats.contains(&(rid, boat.id, *seat))).unwrap_or(false);
                         @let is_empty = maybe_rower.is_none();
+                        // Determine seat pin state: locked > dirty > was_pinned > clean.
+                        @let seat_triple = maybe_rower.map(|rid| (rid, boat.id, *seat));
+                        @let pin_state = if seat_triple.map(|t| flags.locked_seats.contains(&t)).unwrap_or(false) {
+                            "locked"
+                        } else if seat_triple.map(|t| flags.pinned_seats.contains(&t)).unwrap_or(false) {
+                            "dirty"
+                        } else if seat_triple.map(|t| flags.was_pinned_seats.contains(&t)).unwrap_or(false) {
+                            "was_pinned"
+                        } else {
+                            "clean"
+                        };
                         @let row_base = if is_empty {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition bg-slate-50"
-                        } else if is_locked {
+                        } else if pin_state == "locked" {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition bg-violet-50 border-l-4 border-l-violet-400"
+                        } else if pin_state == "dirty" {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-amber-50 border-l-4 border-l-amber-400"
+                        } else if pin_state == "was_pinned" {
+                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-slate-50 border-l-4 border-l-slate-300"
                         } else if is_designated_cox {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
                         } else {
                             "border-b border-slate-100 last:border-0 cursor-pointer transition"
                         };
-                        @let lock_val = format!("{}:{}:{}", rower_id_str, boat.id, seat);
+                        @let seat_key = format!("{}:{}:{}", rower_id_str, boat.id, seat);
                         tr data-key=(key)
                            data-boat=(boat.id)
                            data-seat=(seat)
                            data-rower=(rower_id_str)
                            data-name=(rower_name)
                            data-stats=(stats_text)
+                           data-pin-state=(pin_state)
                            class=(row_base)
                            ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
                            "@click"={"select('" (key) "')"} {
@@ -469,12 +490,31 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                             }
                             @if !is_empty {
                                 td class="w-8 text-center lock-cell" {
-                                    button type="button"
-                                           class="text-xs hover:text-violet-700"
-                                           title=(if is_locked { "Unlock seat" } else { "Lock seat" })
-                                           data-lock=(lock_val)
-                                           "@click.stop"="toggleLock($event.currentTarget.dataset.lock)" {
-                                        @if is_locked { "🔒" } @else { "🔓" }
+                                    @if pin_state == "locked" {
+                                        button type="button"
+                                               class="text-xs hover:text-violet-700"
+                                               title="Unlock"
+                                               "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
+                                            "\u{1F512}"
+                                        }
+                                    } @else if pin_state == "dirty" {
+                                        button type="button"
+                                               class="text-xs hover:text-amber-700"
+                                               title="Unpin (let solver reassign)"
+                                               "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {
+                                            "\u{1F4CC}"
+                                        }
+                                    } @else if pin_state == "was_pinned" {
+                                        button type="button"
+                                               class="text-xs hover:text-violet-700 rotate-[-45deg] inline-block"
+                                               title="Lock (keep this placement)"
+                                               "@click.stop"={"cycleSeatState('was_pinned','" (seat_key) "')"} {
+                                            "\u{1F4CC}"
+                                        }
+                                    } @else {
+                                        span class="text-xs text-slate-300" title="Unlocked" {
+                                            "\u{1F513}"
+                                        }
                                     }
                                 }
                             } @else {
@@ -489,51 +529,41 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     }
 }
 
-/// Simplified Alpine JS for the lineup editor. Alpine handles only
-/// selection highlighting; every mutation triggers an HTMX re-render
-/// so the server produces correct lock icons, side indicators, etc.
+/// Alpine JS for the lineup editor. Handles selection highlighting
+/// and triggers HTMX re-renders. Manages pin/lock state transitions
+/// via knobs form hidden inputs.
 fn editor_js() -> String {
     r#"
 function lineupEditor() {
     return {
         selected: null,
 
-        // Gather current placement state from data-* attributes.
+        // Gather current placement + pin state from DOM + knobs form.
         gatherState() {
             var root = this.$root;
-            var seats = [];
-            var boats = [];
-            var locks = [];
-            var walkons = [];
+            var params = [];
             root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
                 if (el.dataset.rower) {
-                    seats.push('seat=' + el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower);
+                    params.push('seat=' + el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower);
                 }
             });
             root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
                 if (card.dataset.hidden !== 'true') {
-                    boats.push('boat=' + card.dataset.editorBoat);
+                    params.push('boat=' + card.dataset.editorBoat);
                 }
             });
-            // Collect locks, walk-ons, and no-shows from the knobs form.
-            var noshows = [];
             var knobsForm = document.querySelector('form[hx-get]');
             if (knobsForm) {
-                knobsForm.querySelectorAll('input[name="lock"]').forEach(function(el) {
-                    locks.push('lock=' + el.value);
-                });
-                knobsForm.querySelectorAll('input[name="walkon"]').forEach(function(el) {
-                    walkons.push('walkon=' + el.value);
-                });
-                knobsForm.querySelectorAll('input[name="no_show"]').forEach(function(el) {
-                    noshows.push('no_show=' + el.value);
+                ['lock', 'pin', 'was_pin', 'walkon', 'no_show'].forEach(function(name) {
+                    knobsForm.querySelectorAll('input[name="' + name + '"]').forEach(function(el) {
+                        params.push(name + '=' + el.value);
+                    });
                 });
             }
-            return [].concat(seats, boats, locks, walkons, noshows).join('&');
+            return params.join('&');
         },
 
-        // Trigger HTMX re-render of the editor section.
         rerender(params) {
             var url = this.$root.dataset.editorUrl + '?' + params;
             htmx.ajax('GET', url, {target: this.$root, swap: 'outerHTML'});
@@ -549,21 +579,59 @@ function lineupEditor() {
             }
         },
 
+        // Helper: remove all knobs form inputs matching name + value.
+        _removeKnobInput(name, value) {
+            var form = document.querySelector('form[hx-get]');
+            if (!form) return;
+            form.querySelectorAll('input[name="' + name + '"][value="' + value + '"]').forEach(function(el) {
+                el.remove();
+            });
+        },
+
+        // Helper: add a knobs form hidden input.
+        _addKnobInput(name, value) {
+            var form = document.querySelector('form[hx-get]');
+            if (!form) return;
+            var inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = name; inp.value = value;
+            form.appendChild(inp);
+        },
+
+        // Helper: mark a seat as dirty (pinned) after a manual move.
+        _markDirty(el) {
+            if (!el.dataset.rower || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+            var key = el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat;
+            // Remove any existing state for this seat key.
+            ['lock', 'pin', 'was_pin'].forEach(function(n) { this._removeKnobInput(n, key); }.bind(this));
+            this._addKnobInput('pin', key);
+        },
+
+        // Helper: clear all pin state for a seat before it changes.
+        _clearSeatState(el) {
+            if (!el.dataset.rower) return;
+            var key = el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat;
+            ['lock', 'pin', 'was_pin'].forEach(function(n) { this._removeKnobInput(n, key); }.bind(this));
+        },
+
         doSwap(a, b) {
-            // If either side is the empty bench slot, treat as a bench operation.
             if (a === 'bench:empty' || b === 'bench:empty') {
                 var seated = (a === 'bench:empty') ? b : a;
                 return this.toBench(seated);
             }
-            // Read current state, swap the two rower IDs, re-render.
             var root = this.$root;
             var elA = root.querySelector('[data-key="' + a + '"]');
             var elB = root.querySelector('[data-key="' + b + '"]');
             if (!elA || !elB) return;
-            // Swap rower IDs in the data attributes before gathering.
+            // Clear state for both seats before swap.
+            this._clearSeatState(elA);
+            this._clearSeatState(elB);
+            // Swap rower IDs.
             var tmpRower = elA.dataset.rower;
             elA.dataset.rower = elB.dataset.rower;
             elB.dataset.rower = tmpRower;
+            // Mark destination seats as dirty.
+            this._markDirty(elA);
+            this._markDirty(elB);
             this.selected = null;
             this.rerender(this.gatherState());
         },
@@ -572,6 +640,7 @@ function lineupEditor() {
             var el = this.$root.querySelector('[data-key="' + key + '"]');
             if (!el || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
             if (!el.dataset.rower) return;
+            this._clearSeatState(el);
             el.dataset.rower = '';
             this.selected = null;
             this.rerender(this.gatherState());
@@ -584,8 +653,9 @@ function lineupEditor() {
             if (isHidden) {
                 card.dataset.hidden = 'false';
             } else {
-                // Clear all placements for this boat before gathering.
+                var self = this;
                 card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                    self._clearSeatState(row);
                     row.dataset.rower = '';
                 });
                 card.dataset.hidden = 'true';
@@ -603,8 +673,10 @@ function lineupEditor() {
         },
 
         deselectAllBoats() {
+            var self = this;
             this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
                 card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                    self._clearSeatState(row);
                     row.dataset.rower = '';
                 });
                 card.dataset.hidden = 'true';
@@ -613,18 +685,16 @@ function lineupEditor() {
             this.rerender(this.gatherState());
         },
 
-        toggleLock(lockVal) {
-            var knobsForm = document.querySelector('form[hx-get]');
-            if (!knobsForm) return;
-            var existing = knobsForm.querySelector('input[name="lock"][value="' + lockVal + '"]');
-            if (existing) {
-                existing.remove();
-            } else {
-                var inp = document.createElement('input');
-                inp.type = 'hidden';
-                inp.name = 'lock';
-                inp.value = lockVal;
-                knobsForm.appendChild(inp);
+        // State machine click handler: clean(noop), dirty→clean,
+        // was_pinned→locked, locked→clean.
+        cycleSeatState(currentState, seatKey) {
+            if (currentState === 'dirty') {
+                this._removeKnobInput('pin', seatKey);
+            } else if (currentState === 'was_pinned') {
+                this._removeKnobInput('was_pin', seatKey);
+                this._addKnobInput('lock', seatKey);
+            } else if (currentState === 'locked') {
+                this._removeKnobInput('lock', seatKey);
             }
             this.rerender(this.gatherState());
         }
