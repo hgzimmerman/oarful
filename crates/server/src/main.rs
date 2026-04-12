@@ -28,8 +28,16 @@ async fn main() -> Result<()> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3000);
-    let public_dir = std::env::var("PUBLIC_DIR")
-        .unwrap_or_else(|_| "crates/server/public".to_string());
+    let public_dir = std::env::var("PUBLIC_DIR").ok().unwrap_or_else(|| {
+        // Fallback chain: exe_dir/public → workspace default.
+        if let Ok(exe) = std::env::current_exe() {
+            let exe_public = exe.parent().unwrap_or(exe.as_ref()).join("public");
+            if exe_public.is_dir() {
+                return exe_public.to_string_lossy().into_owned();
+            }
+        }
+        "crates/server/public".to_string()
+    });
 
     tracing::info!(%master_db, %tenant_db, %port, %public_dir, "starting lineup_server");
 
