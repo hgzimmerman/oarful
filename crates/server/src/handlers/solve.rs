@@ -218,10 +218,21 @@ impl SolveKnobs {
         // prefer similarity).
         reference_lineups.extend(baselines);
 
-        let boats: Vec<BoatId> = self.boat.iter()
-            .filter_map(|s| s.parse::<i32>().ok())
-            .map(BoatId::new)
+        // Active boats + any boats referenced by locks or pins.
+        let mut boat_set: std::collections::HashSet<BoatId> = self.boat.iter()
+            .filter_map(|s| s.parse::<BoatId>().ok())
             .collect();
+        for entries in [&self.lock, &self.pin] {
+            for entry in entries.iter() {
+                let parts: Vec<&str> = entry.splitn(3, ':').collect();
+                if parts.len() == 3 {
+                    if let Ok(bid) = parts[1].parse::<BoatId>() {
+                        boat_set.insert(bid);
+                    }
+                }
+            }
+        }
+        let boats: Vec<BoatId> = boat_set.into_iter().collect();
 
         SolveRequest {
             date,
@@ -494,9 +505,27 @@ pub(crate) async fn view_handler(
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
         // State transitions: pin→was_pin, was_pin→dropped, lock→lock.
+        // Pins reference a specific boat, but the solver may have moved
+        // the rower to a different boat. Match pinned rowers against
+        // their actual placement in the solver output.
         let locked_seats = SolveKnobs::parse_triples(&knobs.lock);
-        let was_pinned_seats = SolveKnobs::parse_triples(&knobs.pin); // pins become was-pinned
+        let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
+            knobs.pin.iter().filter_map(|e| {
+                e.splitn(3, ':').next()?.parse().ok()
+            }).collect();
+        let was_pinned_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> =
+            result.primary.lineups.iter()
+                .filter(|l| l.used)
+                .flat_map(|l| l.seats.iter().map(move |&(seat, rid)| (rid, l.boat_id, seat)))
+                .filter(|(rid, _, _)| pinned_rowers.contains(rid))
+                .collect();
         let pinned_seats = std::collections::HashSet::new(); // fresh solve clears dirty
+        // Transform knobs for the response: pin→was_pin (at actual positions), was_pin→cleared.
+        let mut response_knobs = knobs.clone();
+        response_knobs.was_pin = was_pinned_seats.iter()
+            .map(|(rid, bid, seat)| format!("{rid}:{bid}:{seat}"))
+            .collect();
+        response_knobs.pin = vec![];
         let flags = templates::solve::DisplayFlags {
             show_attributes: tenant.show_attributes(),
             force_cox_stern: tenant.config.force_cox_stern,
@@ -504,10 +533,6 @@ pub(crate) async fn view_handler(
             pinned_seats,
             was_pinned_seats,
         };
-        // Transform knobs for the response: pin→was_pin, was_pin→cleared.
-        let mut response_knobs = knobs.clone();
-        response_knobs.was_pin = knobs.pin.clone();
-        response_knobs.pin = vec![];
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
             &snapshot, date, &response_knobs, &result, &committed_practices,
