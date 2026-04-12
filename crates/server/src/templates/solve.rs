@@ -165,12 +165,10 @@ pub(crate) fn lineup_editor(
                 }
             }
 
-            // Boat cards
+            // Boat cards (all rendered; inactive ones hidden via style)
             div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" {
                 @for eb in &editor.boats {
-                    @if eb.active {
-                        (editor_boat_card(snapshot, eb, flags))
-                    }
+                    (editor_boat_card(snapshot, eb, flags))
                 }
             }
 
@@ -253,9 +251,12 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     });
 
     html! {
+        @let hidden = if eb.active { "false" } else { "true" };
+        @let hide_style = if eb.active { "" } else { "display:none" };
         div class="border border-slate-200 rounded-lg overflow-hidden print-break"
              data-editor-boat=(boat.id)
-             data-hidden="false" {
+             data-hidden=(hidden)
+             style=(hide_style) {
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
                 strong class="text-slate-800" { (boat.name) }
                 span class="text-xs text-slate-500 ml-2" {
@@ -349,6 +350,18 @@ function lineupEditor() {{
                 this.doSwap(this.selected, key);
                 this.selected = null;
             }}
+            // Update highlight on dynamically-created pool pills
+            // (they use addEventListener, not Alpine :class).
+            this.$root.querySelectorAll('#bench-pills > span').forEach(function(el) {{
+                if (!el.getAttribute(':class')) {{
+                    var isSelected = el.dataset.key === this.selected;
+                    if (isSelected) {{
+                        el.classList.add('bg-blue-100', 'ring-2', 'ring-blue-400', 'border-blue-400');
+                    }} else {{
+                        el.classList.remove('bg-blue-100', 'ring-2', 'ring-blue-400', 'border-blue-400');
+                    }}
+                }}
+            }}.bind(this));
         }},
         doSwap(a, b) {{
             var elA = this.$root.querySelector('[data-key="' + a + '"]');
@@ -393,9 +406,9 @@ function lineupEditor() {{
             span.dataset.rower = rowerId;
             span.dataset.name = rowerName || '';
             span.dataset.stats = rowerStats || '';
-            span.className = 'inline-block px-3 py-1.5 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50';
-            span.setAttribute('@click', "select('" + key + "')");
-            span.setAttribute(':class', "selected === '" + key + "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'");
+            span.className = 'inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50';
+            var self = this;
+            span.addEventListener('click', function() {{ self.select(key); }});
             var html = '<div class="font-medium text-slate-800 text-sm">' + this.esc(rowerName || '#' + rowerId) + '</div>';
             if (rowerStats) html += '<div class="text-xs text-slate-500">' + this.esc(rowerStats) + '</div>';
             span.innerHTML = html;
@@ -424,30 +437,39 @@ function lineupEditor() {{
             if (!card) return;
             var isHidden = card.dataset.hidden === 'true';
             if (isHidden) {{
-                // Show the boat.
+                // Show an empty boat card.
                 card.style.display = '';
                 card.dataset.hidden = 'false';
                 if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
             }} else {{
-                // Bench all rowers from this boat, then hide.
-                var rows = Array.from(card.querySelectorAll('tr[data-rower]'));
+                // Collect all rowers, then batch-clear and bench.
+                var rowers = [];
                 var self = this;
-                rows.forEach(function(row) {{
-                    var rid = row.dataset.rower;
-                    if (rid) {{
-                        var rn = row.dataset.name;
-                        var rs = row.dataset.stats || '';
+                card.querySelectorAll('tr[data-rower]').forEach(function(row) {{
+                    if (row.dataset.rower) {{
+                        rowers.push({{
+                            id: row.dataset.rower,
+                            name: row.dataset.name,
+                            stats: row.dataset.stats || ''
+                        }});
                         row.dataset.rower = '';
                         row.dataset.name = '';
                         row.dataset.stats = '';
-                        self.renderSlot(row);
-                        self.addPoolPill(rid, rn, rs);
                     }}
+                }});
+                // Re-render all cleared slots at once.
+                card.querySelectorAll('tr[data-key]').forEach(function(row) {{
+                    self.renderSlot(row);
+                }});
+                // Add all pool pills in one pass.
+                rowers.forEach(function(r) {{
+                    self.addPoolPill(r.id, r.name, r.stats);
                 }});
                 card.style.display = 'none';
                 card.dataset.hidden = 'true';
                 if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
             }}
+            this.selected = null;
             this.rebuildInputs();
         }},
         esc(s) {{

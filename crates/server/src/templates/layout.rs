@@ -25,6 +25,12 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
                 style { "[x-cloak] { display: none !important; }" }
+                // Re-initialize Alpine on HTMX-swapped content so
+                // x-data components and @click handlers work after
+                // partial page updates.
+                script {
+                    "document.addEventListener('htmx:afterSettle', function(e) { if (typeof Alpine !== 'undefined') Alpine.initTree(e.detail.elt); });"
+                }
                 // Print-friendly overrides: hide chrome, expand content
                 style { r#"
                     @media print {
