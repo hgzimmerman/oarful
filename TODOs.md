@@ -159,34 +159,105 @@ Follows the same pattern as `attributes_public` — cached in
 TenantConfig, threaded through TenantContext. The visibility
 check combines the tenant flag with the user's role.
 
-#### Availability reminder emails
+#### Coach email blast — reminders + lineup notifications
 
-Coach action: select one or more upcoming practice dates and send
-a reminder email to all team rowers who haven't responded yet.
+Two email types coaches can send to team members. Both require
+magic-link auth and email opt-out as prerequisites.
 
-**UI.** On `/practices`, checkboxes per date + a "Send reminders"
-button (Coach+ gated). Alternatively, a per-date "Remind" button
-on each practice row. Shows a confirmation with the count of
-recipients before sending.
+##### Phase 1: Magic links
 
-**Backend.** For each selected date, query rowers on the team who
-have no `availability` row for that `(rower_id, team_id, date)`.
-Join against `rower` to get email addresses. Call the `Mailer`
-trait for each recipient.
+Foundation for all email links. Clicking a link in an email
+auto-authenticates and redirects — no login form needed.
 
-**Mailer.** Add a `send_reminder` method to the `Mailer` trait
-(alongside the existing `send_invite`). The `LogMailer` impl
-logs the reminder the same way it logs invites. The method
-signature should take `to_email`, `to_name`, and a list of
-practice dates they haven't responded to.
+**Schema.** `magic_link` table in per-tenant DB:
+- `token_hash TEXT PRIMARY KEY` — hashed token (same pattern as
+  invite tokens)
+- `user_id INTEGER NOT NULL` — FK to `app_user`
+- `redirect_path TEXT NOT NULL` — where to send after auth
+  (e.g. `/my/availability`, `/history/2026-04-15`)
+- `expires_at DATETIME NOT NULL` — short-lived, e.g. 48 hours
+- `created_at DATETIME NOT NULL`
 
-**Email content.** Something like: "Your coach needs your
-availability for [dates]. Please respond at [link to
-/my/availability]."
+**Endpoint.** `GET /auth/magic/{token}` — validates token, creates
+JWT session cookie, redirects to `redirect_path`. Expired/invalid
+tokens redirect to `/login` with an error message.
 
-No real email provider needed yet — `LogMailer` covers it.
-Swap in a real implementation (e.g. Resend, SES) later via
-the same trait.
+**Generation.** `create_magic_link(conn, user_id, redirect_path,
+ttl) → token_string` helper. Called by the email send logic.
+
+**Future extension.** "Email me a login link" on the login page —
+uses the same magic_link table but with `/` as the redirect path.
+This is NOT part of the email blast feature but shares the infra.
+
+##### Phase 2: Email opt-out
+
+Members can opt out of each email type independently.
+
+**Schema.** Add two columns to `app_user`:
+- `opt_in_reminders INTEGER NOT NULL DEFAULT 1`
+- `opt_in_lineups INTEGER NOT NULL DEFAULT 1`
+
+**UI.** Toggles on `/my/profile`. Respected by email send logic.
+Does NOT exclude the user from magic-link login (if they
+explicitly request a login link).
+
+##### Phase 3: Email rendering
+
+HTML email templates (maud) for both email types. No real email
+provider yet — `LogMailer` logs at TRACE (full HTML) and INFO
+(recipient + subject + date summary).
+
+**Availability reminder email:**
+- Subject: "[Team] — availability needed for [dates]"
+- Body: list of practice dates without a response, magic link to
+  `/my/availability`
+- Sent to: all team members without an availability row for any
+  upcoming un-committed, non-cancelled practice
+- Single "Send reminders" button blasts to all non-respondents
+
+**Lineup notification email:**
+- Subject: "[Team] — lineups posted for [dates]"
+- Body: full seat assignments per boat (boat name, seat label,
+  rower name), magic link to `/history/{date}` for each date
+- Recipient toggle at send time:
+  - "Placed only" — rowers who appear in a committed lineup
+  - "All available" — placed + those who haven't declined
+    attendance for the practice date
+- For recipients whose attendance isn't set, include a link to
+  their availability page
+
+**Mailer trait.** Add `send_reminder(&self, to, name, dates,
+magic_url)` and `send_lineup(&self, to, name, lineups,
+magic_url)` methods alongside existing `send_invite`.
+
+##### Phase 4: Practices page tabs + send UI
+
+The practices page gets a tabbed interface to manage the growing
+feature set without overwhelming the single-page layout.
+
+**Tabs:**
+1. **Schedule** — current practices list (upcoming + past,
+   create form, cancel buttons). This is the existing view.
+2. **Reminders** — shows non-respondent count per upcoming
+   practice. Single "Send reminders" button that blasts all
+   non-respondents across all un-committed dates. Shows a
+   confirmation with recipient count before sending.
+3. **Lineups** — checkboxes on committed practice dates.
+   Recipient toggle (placed-only vs all-available). "Send
+   lineups" button with confirmation showing recipient count.
+
+**Tab implementation.** HTMX-driven — each tab is a separate
+`hx-get` that swaps `#practices-content`. URL stays at
+`/practices` with a `?tab=reminders` query param for
+bookmarkability. Default tab is Schedule.
+
+**Considerations:**
+- Both send actions show a confirmation step before actually
+  sending (count of recipients, list of dates).
+- After sending, show a success message with the count sent.
+- Rate-limit: don't allow sending the same reminder/lineup
+  email more than once per practice per day. Track via a
+  `email_log` table or a last-sent timestamp on the practice.
 
 #### Team management UI for Program Directors
 
