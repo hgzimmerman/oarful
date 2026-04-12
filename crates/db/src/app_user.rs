@@ -114,6 +114,8 @@ pub struct AppUser {
     pub status: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub opt_in_reminders: i32,
+    pub opt_in_lineups: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -214,5 +216,33 @@ impl AppUser {
 
     pub fn parsed_status(&self) -> Option<UserStatus> {
         UserStatus::from_str(&self.status)
+    }
+
+    /// Whether this user has opted in to availability reminder emails.
+    pub fn wants_reminders(&self) -> bool {
+        self.opt_in_reminders != 0
+    }
+
+    /// Whether this user has opted in to lineup notification emails.
+    pub fn wants_lineups(&self) -> bool {
+        self.opt_in_lineups != 0
+    }
+
+    /// Update email opt-in preferences.
+    pub fn set_email_prefs(
+        conn: &mut SqliteConnection,
+        user_id: UserId,
+        opt_in_reminders: bool,
+        opt_in_lineups: bool,
+    ) -> Result<(), diesel::result::Error> {
+        let now = chrono::Utc::now().naive_utc();
+        diesel::update(app_user::table.find(user_id))
+            .set((
+                app_user::opt_in_reminders.eq(if opt_in_reminders { 1 } else { 0 }),
+                app_user::opt_in_lineups.eq(if opt_in_lineups { 1 } else { 0 }),
+                app_user::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+        Ok(())
     }
 }

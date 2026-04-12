@@ -33,6 +33,8 @@ diesel::table! {
         status -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        opt_in_reminders -> Integer,
+        opt_in_lineups -> Integer,
     }
 }
 

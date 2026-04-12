@@ -90,6 +90,7 @@ fn navbar(role: Option<Role>) -> Markup {
                     li class="ml-4" {}
                     (nav_link("/my/profile", "Profile"))
                     (nav_link("/my/availability", "Availability"))
+                    (nav_link("/my/email-preferences", "Email"))
                     li {
                         form method="post" action="/logout" class="inline" {
                             button type="submit" class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
@@ -128,6 +129,7 @@ fn navbar(role: Option<Role>) -> Markup {
                 li class="border-t border-slate-700 my-1 pt-1" {}
                 (nav_link("/my/profile", "Profile"))
                 (nav_link("/my/availability", "Availability"))
+                (nav_link("/my/email-preferences", "Email"))
                 li {
                     form method="post" action="/logout" class="inline" {
                         button type="submit" class="block w-full text-left px-3 py-2 rounded hover:bg-white/10 transition text-sm" {

@@ -19,6 +19,8 @@ use serde::Deserialize;
 
 use lineup_db::team::{SelfEditLevel, Team};
 
+use lineup_db::app_user::AppUser;
+
 use crate::{handlers::internal_error, handlers::rowers::load_detail, state::TenantContext, templates};
 
 // =====================================================================
@@ -290,6 +292,68 @@ pub(crate) async fn availability_update_handler(
 
     // Re-render the full availability page.
     availability_handler(jar, Extension(tenant), hx).await
+}
+
+// =====================================================================
+// Email preferences
+// =====================================================================
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn email_prefs_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    let user_id = tenant.claims.user_id();
+    let user = tenant
+        .db
+        .with_conn(move |conn| {
+            AppUser::get(conn, user_id)?
+                .ok_or(diesel::result::Error::NotFound)
+        })
+        .await
+        .map_err(internal_error)?;
+    let content = templates::my::email_prefs_content(&user);
+    Ok(super::maybe_page_authed("Email preferences", content, hx, &tenant))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct EmailPrefsInput {
+    #[serde(default)]
+    pub(crate) opt_in_reminders: Option<String>,
+    #[serde(default)]
+    pub(crate) opt_in_lineups: Option<String>,
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn email_prefs_update_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    Form(input): Form<EmailPrefsInput>,
+) -> Result<Html<String>, StatusCode> {
+    let user_id = tenant.claims.user_id();
+    let reminders = input.opt_in_reminders.is_some();
+    let lineups = input.opt_in_lineups.is_some();
+
+    tenant
+        .db
+        .with_conn(move |conn| {
+            AppUser::set_email_prefs(conn, user_id, reminders, lineups)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Re-render with updated state.
+    let user = tenant
+        .db
+        .with_conn(move |conn| {
+            AppUser::get(conn, user_id)?
+                .ok_or(diesel::result::Error::NotFound)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let content = templates::my::email_prefs_content(&user);
+    Ok(super::maybe_page_authed("Email preferences", content, hx, &tenant))
 }
 
 // =====================================================================
