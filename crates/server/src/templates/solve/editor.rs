@@ -27,6 +27,10 @@ pub(crate) struct DisplayFlags {
     pub(crate) pinned_seats: HashSet<(RowerId, BoatId, i32)>,
     /// Was-pinned — honored last generate, not constrained now.
     pub(crate) was_pinned_seats: HashSet<(RowerId, BoatId, i32)>,
+    /// Boat-level pin states.
+    pub(crate) pinned_boats: HashSet<BoatId>,
+    pub(crate) was_pinned_boats: HashSet<BoatId>,
+    pub(crate) locked_boats: HashSet<BoatId>,
 }
 
 /// A boat in the unified lineup editor, with optional seat assignments.
@@ -393,6 +397,15 @@ pub(crate) fn lineup_editor(
             @for &(rid, bid, seat) in &flags.was_pinned_seats {
                 input type="hidden" name="was_pin" value={(rid) ":" (bid) ":" (seat)};
             }
+            @for bid in &flags.pinned_boats {
+                input type="hidden" name="boat_pin" value=(bid);
+            }
+            @for bid in &flags.was_pinned_boats {
+                input type="hidden" name="boat_was_pin" value=(bid);
+            }
+            @for bid in &flags.locked_boats {
+                input type="hidden" name="boat_lock" value=(bid);
+            }
         }
     }
 }
@@ -418,12 +431,52 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
              data-editor-boat=(boat.id)
              data-hidden=(hidden)
              style=(hide_style) {
-            div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
+            @let boat_pin_state = if flags.locked_boats.contains(&boat.id) {
+                "locked"
+            } else if flags.pinned_boats.contains(&boat.id) {
+                "dirty"
+            } else if flags.was_pinned_boats.contains(&boat.id) {
+                "was_pinned"
+            } else {
+                "clean"
+            };
+            div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center" {
                 strong class="text-slate-800" { (boat.name) }
                 span class="text-xs text-slate-500 ml-2" {
                     "(" (seat_count) "+"
                     ", " (rig_label(boat))
                     ")"
+                }
+                span class="ml-auto" {
+                    @if boat_pin_state == "locked" {
+                        button type="button"
+                               class="text-xs hover:text-violet-700"
+                               title="Unlock boat"
+                               "@click.stop"={"cycleBoatState('locked'," (boat.id) ")"} {
+                            "\u{1F512}"
+                        }
+                    } @else if boat_pin_state == "dirty" {
+                        button type="button"
+                               class="text-xs hover:text-amber-700"
+                               title="Unpin boat"
+                               "@click.stop"={"cycleBoatState('dirty'," (boat.id) ")"} {
+                            "\u{1F4CC}"
+                        }
+                    } @else if boat_pin_state == "was_pinned" {
+                        button type="button"
+                               class="text-xs hover:text-violet-700 rotate-[-45deg] inline-block"
+                               title="Lock boat"
+                               "@click.stop"={"cycleBoatState('was_pinned'," (boat.id) ")"} {
+                            "\u{1F4CC}"
+                        }
+                    } @else {
+                        button type="button"
+                               class="text-xs text-slate-300 hover:text-violet-700"
+                               title="Lock boat"
+                               "@click.stop"={"cycleBoatState('clean'," (boat.id) ")"} {
+                            "\u{1F513}"
+                        }
+                    }
                 }
             }
             table class="w-full text-sm" {
@@ -512,7 +565,10 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                             "\u{1F4CC}"
                                         }
                                     } @else {
-                                        span class="text-xs text-slate-300" title="Unlocked" {
+                                        button type="button"
+                                               class="text-xs text-slate-300 hover:text-violet-700"
+                                               title="Lock seat"
+                                               "@click.stop"={"cycleSeatState('clean','" (seat_key) "')"} {
                                             "\u{1F513}"
                                         }
                                     }
@@ -555,7 +611,7 @@ function lineupEditor() {
             });
             var knobsForm = document.querySelector('form[hx-get]');
             if (knobsForm) {
-                ['lock', 'pin', 'was_pin', 'walkon', 'no_show'].forEach(function(name) {
+                ['lock', 'pin', 'was_pin', 'walkon', 'no_show', 'boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(name) {
                     knobsForm.querySelectorAll('input[name="' + name + '"]').forEach(function(el) {
                         params.push(name + '=' + el.value);
                     });
@@ -598,12 +654,23 @@ function lineupEditor() {
         },
 
         // Helper: mark a seat as dirty (pinned) after a manual move.
+        // Also pins the boat (if not already locked).
         _markDirty(el) {
             if (!el.dataset.rower || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
             var key = el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat;
             // Remove any existing state for this seat key.
             ['lock', 'pin', 'was_pin'].forEach(function(n) { this._removeKnobInput(n, key); }.bind(this));
             this._addKnobInput('pin', key);
+            // Also mark the boat as dirty (if not already locked).
+            var boatId = el.dataset.boat;
+            var form = document.querySelector('form[hx-get]');
+            var isBoatLocked = form && form.querySelector('input[name="boat_lock"][value="' + boatId + '"]');
+            if (!isBoatLocked) {
+                ['boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(n) {
+                    this._removeKnobInput(n, boatId);
+                }.bind(this));
+                this._addKnobInput('boat_pin', boatId);
+            }
         },
 
         // Helper: clear all pin state for a seat before it changes.
@@ -659,6 +726,10 @@ function lineupEditor() {
                     row.dataset.rower = '';
                 });
                 card.dataset.hidden = 'true';
+                // Clear boat pin state when deactivating.
+                ['boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(n) {
+                    self._removeKnobInput(n, String(boatId));
+                });
             }
             this.selected = null;
             this.rerender(this.gatherState());
@@ -681,20 +752,44 @@ function lineupEditor() {
                 });
                 card.dataset.hidden = 'true';
             });
+            // Clear all boat pin state.
+            var form = document.querySelector('form[hx-get]');
+            if (form) {
+                ['boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(n) {
+                    form.querySelectorAll('input[name="' + n + '"]').forEach(function(el) { el.remove(); });
+                });
+            }
             this.selected = null;
             this.rerender(this.gatherState());
         },
 
-        // State machine click handler: clean(noop), dirty→clean,
-        // was_pinned→locked, locked→clean.
+        // Seat state machine: clean→locked, dirty→clean, was_pinned→locked, locked→clean.
         cycleSeatState(currentState, seatKey) {
-            if (currentState === 'dirty') {
+            if (currentState === 'clean') {
+                this._addKnobInput('lock', seatKey);
+            } else if (currentState === 'dirty') {
                 this._removeKnobInput('pin', seatKey);
             } else if (currentState === 'was_pinned') {
                 this._removeKnobInput('was_pin', seatKey);
                 this._addKnobInput('lock', seatKey);
             } else if (currentState === 'locked') {
                 this._removeKnobInput('lock', seatKey);
+            }
+            this.rerender(this.gatherState());
+        },
+
+        // Boat state machine: clean→locked, dirty→clean, was_pinned→locked, locked→clean.
+        cycleBoatState(currentState, boatId) {
+            var bid = String(boatId);
+            if (currentState === 'clean') {
+                this._addKnobInput('boat_lock', bid);
+            } else if (currentState === 'dirty') {
+                this._removeKnobInput('boat_pin', bid);
+            } else if (currentState === 'was_pinned') {
+                this._removeKnobInput('boat_was_pin', bid);
+                this._addKnobInput('boat_lock', bid);
+            } else if (currentState === 'locked') {
+                this._removeKnobInput('boat_lock', bid);
             }
             this.rerender(this.gatherState());
         }

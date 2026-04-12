@@ -101,6 +101,7 @@ fn request(partial_fill: PartialFillPolicy) -> SolveRequest {
         tabu_min_diff: 2,
         reference_lineups: vec![],
         locks: vec![],
+        required_boats: vec![],
     }
 }
 

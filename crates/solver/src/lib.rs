@@ -140,6 +140,10 @@ pub struct SolveRequest {
     /// locks (unknown rower/boat, ineligible seat) are surfaced as
     /// diagnostics and skipped. Empty by default.
     pub locks: Vec<SeatLock>,
+    /// Boats the solver MUST field (`use[b] = 1`). Unlike seat locks,
+    /// these don't pin any specific rower — they just force the boat
+    /// to be used. Used by the boat pin/lock state machine.
+    pub required_boats: Vec<BoatId>,
 }
 
 /// A set of placements from a committed lineup, scored as a group
@@ -678,7 +682,24 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // capacity is exhausted. This doesn't prevent the solver from
     // choosing differently — it just prunes obviously-suboptimal
     // candidates so the solver converges faster.
-    let boats = greedy_fleet_select(boats, &available, request.partial_fill);
+    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill);
+
+    // Ensure required boats (from pins/locks) survive greedy selection.
+    for &req_bid in &request.required_boats {
+        if !boats.iter().any(|b| b.id == req_bid) {
+            if let Some(b) = snapshot.sweep_boats.iter().find(|b| b.id == req_bid) {
+                boats.push(b);
+            }
+        }
+    }
+    // Also ensure boats with seat locks survive greedy selection.
+    for lock in &request.locks {
+        if !boats.iter().any(|b| b.id == lock.boat_id) {
+            if let Some(b) = snapshot.sweep_boats.iter().find(|b| b.id == lock.boat_id) {
+                boats.push(b);
+            }
+        }
+    }
 
     // --- Phase 1c: pre-solve diagnostics ---
     let mut diagnostics = pre_solve_diagnostics(&boats, &available);
@@ -934,6 +955,21 @@ fn build_model<'a>(
     // Must run after create_variables so x vars exist, but before
     // other constraints so the locks are visible to propagation.
     lock_diags.extend(m.post_seat_locks(&request.locks)?);
+
+    // Required boats — force use[b] = 1 for boats the coach pinned/locked.
+    for &required_bid in &request.required_boats {
+        if let Some(b_idx) = m.boats.iter().position(|b| b.id == required_bid) {
+            let tag = m.solver.new_constraint_tag();
+            m.solver
+                .add_constraint(pumpkin_constraints::equals(
+                    vec![m.use_b[b_idx].scaled(1)],
+                    1,
+                    tag,
+                ))
+                .post()
+                .map_err(|e| anyhow!("required boat {required_bid}: {e:?}"))?;
+        }
+    }
 
     // Fleet-level soft constraints: S4 wrong-side aggregation,
     // S6 cox cooldown, S7 novelty vs recent lineups, S13

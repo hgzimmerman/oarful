@@ -140,6 +140,15 @@ pub(crate) struct SolveKnobs {
     /// `boat=<boat_id>` query params injected by the editor JS.
     #[serde(default)]
     pub(crate) boat: Vec<String>,
+    /// Dirty-pinned boats (must be fielded this generate).
+    #[serde(default)]
+    pub(crate) boat_pin: Vec<String>,
+    /// Was-pinned boats (honored last generate, free next time).
+    #[serde(default)]
+    pub(crate) boat_was_pin: Vec<String>,
+    /// Locked boats (always fielded).
+    #[serde(default)]
+    pub(crate) boat_lock: Vec<String>,
     /// Pre-populated seat placements for the editor. Each value is
     /// `boat_id:seat_pos:rower_id`. Used when navigating from the
     /// history page "Edit lineup" button.
@@ -164,6 +173,9 @@ impl Default for SolveKnobs {
             preset: String::new(),
             walkon: vec![],
             boat: vec![],
+            boat_pin: vec![],
+            boat_was_pin: vec![],
+            boat_lock: vec![],
             seat: vec![],
         }
     }
@@ -218,7 +230,7 @@ impl SolveKnobs {
         // prefer similarity).
         reference_lineups.extend(baselines);
 
-        // Active boats + any boats referenced by locks or pins.
+        // Active boats + any boats referenced by seat locks/pins + boat pins/locks.
         let mut boat_set: std::collections::HashSet<BoatId> = self.boat.iter()
             .filter_map(|s| s.parse::<BoatId>().ok())
             .collect();
@@ -232,7 +244,21 @@ impl SolveKnobs {
                 }
             }
         }
+        for entries in [&self.boat_pin, &self.boat_lock] {
+            for entry in entries.iter() {
+                if let Ok(bid) = entry.parse::<BoatId>() {
+                    boat_set.insert(bid);
+                }
+            }
+        }
         let boats: Vec<BoatId> = boat_set.into_iter().collect();
+        // Required boats: dirty-pinned + locked boats must be fielded.
+        let mut required_boats: Vec<BoatId> = self.boat_pin.iter()
+            .chain(self.boat_lock.iter())
+            .filter_map(|s| s.parse::<BoatId>().ok())
+            .collect();
+        required_boats.sort();
+        required_boats.dedup();
 
         SolveRequest {
             date,
@@ -248,6 +274,7 @@ impl SolveKnobs {
             tabu_min_diff: 2,
             reference_lineups,
             locks: self.parse_locks(),
+            required_boats,
         }
     }
 
@@ -260,6 +287,10 @@ impl SolveKnobs {
 
     /// Parse `lock` query params into `SeatLock`s.
     /// Each value is `rower_id:boat_id:seat_position`.
+    fn parse_boat_ids(entries: &[String]) -> std::collections::HashSet<BoatId> {
+        entries.iter().filter_map(|s| s.parse().ok()).collect()
+    }
+
     fn parse_triples(entries: &[String]) -> std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> {
         entries.iter().filter_map(|entry| {
             let parts: Vec<&str> = entry.splitn(3, ':').collect();
@@ -526,12 +557,21 @@ pub(crate) async fn view_handler(
             .map(|(rid, bid, seat)| format!("{rid}:{bid}:{seat}"))
             .collect();
         response_knobs.pin = vec![];
+        // Boat state transitions: boat_pin→boat_was_pin, boat_was_pin→dropped, boat_lock→boat_lock.
+        let locked_boats = SolveKnobs::parse_boat_ids(&knobs.boat_lock);
+        let was_pinned_boats = SolveKnobs::parse_boat_ids(&knobs.boat_pin);
+        let pinned_boats = std::collections::HashSet::new();
+        response_knobs.boat_was_pin = knobs.boat_pin.clone();
+        response_knobs.boat_pin = vec![];
         let flags = templates::solve::DisplayFlags {
             show_attributes: tenant.show_attributes(),
             force_cox_stern: tenant.config.force_cox_stern,
             locked_seats,
             pinned_seats,
             was_pinned_seats,
+            pinned_boats,
+            was_pinned_boats,
+            locked_boats,
         };
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
@@ -556,6 +596,9 @@ pub(crate) async fn view_handler(
         locked_seats: SolveKnobs::parse_triples(&knobs.lock),
         pinned_seats: SolveKnobs::parse_triples(&knobs.pin),
         was_pinned_seats: SolveKnobs::parse_triples(&knobs.was_pin),
+        pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_pin),
+        was_pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_was_pin),
+        locked_boats: SolveKnobs::parse_boat_ids(&knobs.boat_lock),
     };
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
@@ -653,6 +696,12 @@ pub(crate) struct EditorParams {
     pin: Vec<String>,
     #[serde(default)]
     was_pin: Vec<String>,
+    #[serde(default)]
+    boat_pin: Vec<String>,
+    #[serde(default)]
+    boat_was_pin: Vec<String>,
+    #[serde(default)]
+    boat_lock: Vec<String>,
 }
 
 /// `GET /solve/{date}/editor` — re-render the lineup editor from the
@@ -727,6 +776,9 @@ pub(crate) async fn editor_handler(
         locked_seats,
         pinned_seats,
         was_pinned_seats,
+        pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_pin),
+        was_pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_was_pin),
+        locked_boats: SolveKnobs::parse_boat_ids(&params.boat_lock),
     };
 
     // Unavailable rowers for the walk-on dropdown.

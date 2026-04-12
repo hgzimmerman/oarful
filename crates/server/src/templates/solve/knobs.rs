@@ -282,6 +282,15 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
                         @for b in &knobs.boat {
                             input type="hidden" name="boat" value=(b);
                         }
+                        @for bp in &knobs.boat_pin {
+                            input type="hidden" name="boat_pin" value=(bp);
+                        }
+                        @for bwp in &knobs.boat_was_pin {
+                            input type="hidden" name="boat_was_pin" value=(bwp);
+                        }
+                        @for bl in &knobs.boat_lock {
+                            input type="hidden" name="boat_lock" value=(bl);
+                        }
                     }
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
@@ -330,6 +339,15 @@ fn preset_url_with(date: NaiveDate, knobs: &SolveKnobs, new_preset: &str) -> Str
     }
     for w in &knobs.walkon {
         parts.push(format!("walkon={w}"));
+    }
+    for bp in &knobs.boat_pin {
+        parts.push(format!("boat_pin={bp}"));
+    }
+    for bwp in &knobs.boat_was_pin {
+        parts.push(format!("boat_was_pin={bwp}"));
+    }
+    for bl in &knobs.boat_lock {
+        parts.push(format!("boat_lock={bl}"));
     }
     format!("/solve/{date}/preset-bar?{}", parts.join("&"))
 }

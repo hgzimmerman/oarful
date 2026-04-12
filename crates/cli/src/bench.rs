@@ -126,6 +126,7 @@ fn run_repeated(
         tabu_min_diff: 2,
         reference_lineups: vec![],
         locks: vec![],
+        required_boats: vec![],
     };
 
     let mut elapsed: Vec<std::time::Duration> = Vec::with_capacity(samples);
@@ -202,6 +203,7 @@ fn run_one_with_label(
         tabu_min_diff: 2,
         reference_lineups: vec![],
         locks: vec![],
+        required_boats: vec![],
     };
 
     let start = std::time::Instant::now();
