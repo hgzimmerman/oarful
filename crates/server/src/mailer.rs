@@ -55,6 +55,17 @@ pub trait Mailer: Send + Sync {
         magic_url: &str,
     ) -> Result<()>;
 
+    /// Send a magic-link login email. Each entry in `clubs` is a
+    /// (club_name, magic_url) pair. When there's only one club the
+    /// email has a single "Sign in" button; when there are multiple
+    /// the user picks which club to sign into.
+    async fn send_magic_login(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()>;
+
     /// Send a lineup notification to a single recipient.
     ///
     /// `lineups` contains the full seat assignments per boat per date.
@@ -83,6 +94,24 @@ impl Mailer for LogMailer {
             invite_url,
             "invite ready (LogMailer — no email sent)"
         );
+        Ok(())
+    }
+
+    async fn send_magic_login(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()> {
+        let club_names: Vec<&str> = clubs.iter().map(|(name, _)| name.as_str()).collect();
+        let html = crate::templates::email::magic_login_email(to_name, clubs).into_string();
+        tracing::info!(
+            to_email,
+            to_name,
+            ?club_names,
+            "magic login link (LogMailer -- no email sent)"
+        );
+        tracing::trace!(html, "magic login email HTML");
         Ok(())
     }
 

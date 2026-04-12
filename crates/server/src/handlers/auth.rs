@@ -357,15 +357,22 @@ pub(crate) async fn magic_login_handler(
 ) -> Result<Html<String>, StatusCode> {
     let email = input.email.trim().to_lowercase();
 
-    // Try to find the user. If not found, still show the confirmation
-    // page (don't leak account existence).
+    // Find all matching tenants. If none found, we still show the
+    // confirmation page (don't leak account existence).
     let tenants = state
         .master_db
         .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
         .await
         .map_err(super::internal_error)?;
 
-    let mut found_user: Option<(AppUser, TenantId, String)> = None;
+    struct MatchedTenant {
+        user: AppUser,
+        tenant_id: TenantId,
+        tenant_slug: String,
+        tenant_name: String,
+    }
+
+    let mut matches = Vec::new();
     for t in &tenants {
         let Ok((db, _config)) = state.tenant_db(t.id).await else {
             continue;
@@ -377,35 +384,47 @@ pub(crate) async fn magic_login_handler(
             .map_err(super::internal_error)?;
         if let Some(u) = user {
             if u.parsed_status() == Some(UserStatus::Active) {
-                found_user = Some((u, t.id, t.slug.clone()));
-                break;
+                matches.push(MatchedTenant {
+                    user: u,
+                    tenant_id: t.id,
+                    tenant_slug: t.slug.clone(),
+                    tenant_name: t.name.clone(),
+                });
             }
         }
     }
 
-    if let Some((user, tenant_id, tenant_slug)) = found_user {
-        // Create a magic link with 24h expiry, redirecting to home.
+    if !matches.is_empty() {
         let expires_at = (chrono::Utc::now() + chrono::TimeDelta::try_hours(24).unwrap())
             .naive_utc();
-        let created = create_magic_link(user.id, "/practices", expires_at, None);
-        let raw_token = created.raw_token.clone();
-        let row = created.row;
 
-        let (db, _config) = state
-            .tenant_db(tenant_id)
-            .await
-            .map_err(super::internal_error)?;
-        db.with_conn(move |conn| MagicLink::create(conn, row))
-            .await
-            .map_err(super::internal_error)?;
+        // Create one magic link per tenant and collect (club_name, url) pairs.
+        let mut clubs: Vec<(String, String)> = Vec::new();
+        let user_name = matches[0].user.name.clone();
 
-        let magic_url = state.full_url(&format!("/auth/magic/{tenant_slug}/{raw_token}"));
+        for m in &matches {
+            let created = create_magic_link(m.user.id, "/practices", expires_at, None);
+            let raw_token = created.raw_token.clone();
+            let row = created.row;
+
+            let (db, _config) = state
+                .tenant_db(m.tenant_id)
+                .await
+                .map_err(super::internal_error)?;
+            db.with_conn(move |conn| MagicLink::create(conn, row))
+                .await
+                .map_err(super::internal_error)?;
+
+            let url = state.full_url(&format!("/auth/magic/{}/{raw_token}", m.tenant_slug));
+            clubs.push((m.tenant_name.clone(), url));
+        }
+
         if let Err(err) = state
             .mailer
-            .send_invite(&user.email, &user.name, &magic_url)
+            .send_magic_login(&email, &user_name, &clubs)
             .await
         {
-            tracing::warn!(?err, email = %user.email, "failed to send magic login link");
+            tracing::warn!(?err, %email, "failed to send magic login email");
         }
     } else {
         tracing::debug!(%email, "magic login requested for unknown/inactive email");
