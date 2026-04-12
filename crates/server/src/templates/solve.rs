@@ -101,6 +101,40 @@ impl<'a> EditorData<'a> {
 
         Self { boats, pool, sculling }
     }
+
+    /// Build from explicit placements — used by the editor endpoint
+    /// after client-side operations (swap, bench, toggle boat). The
+    /// server re-renders the editor with correct indicators/stats.
+    pub(crate) fn from_placements(
+        snapshot: &'a DbSnapshot,
+        placements: &HashMap<BoatId, HashMap<i32, RowerId>>,
+        active_boats: &HashSet<BoatId>,
+    ) -> Self {
+        let boats = snapshot.sweep_boats.iter().map(|b| {
+            let active = active_boats.contains(&b.id);
+            let seat_map = placements.get(&b.id);
+            let has_cox = b.has_cox.as_bool();
+            let mut seats = Vec::new();
+            if has_cox {
+                seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
+            }
+            for s in 1..=b.seat_count {
+                seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
+            }
+            EditorBoat { boat: b, seats, active }
+        }).collect();
+
+        // Pool = available rowers not placed in any seat.
+        let placed: HashSet<RowerId> = placements
+            .values()
+            .flat_map(|m| m.values().copied())
+            .collect();
+        let pool: Vec<&Rower> = snapshot.available_rowers()
+            .filter(|r| !placed.contains(&r.id))
+            .collect();
+
+        Self { boats, pool, sculling: vec![] }
+    }
 }
 
 /// Unified lineup editor — renders boat selector, boat cards with
@@ -111,12 +145,14 @@ pub(crate) fn lineup_editor(
     date: NaiveDate,
     editor: &EditorData,
     flags: &DisplayFlags,
-    knobs: &SolveKnobs,
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{date}");
+    let editor_url = format!("/solve/{date}/editor");
 
     html! {
-        section class="bg-white rounded-lg shadow p-4 sm:p-6"
+        section #lineup-editor class="bg-white rounded-lg shadow p-4 sm:p-6"
+               data-date=(date)
+               data-editor-url=(editor_url)
                x-data="lineupEditor()" {
 
             div class="flex items-center justify-between mb-4 flex-wrap gap-2" {
@@ -134,8 +170,18 @@ pub(crate) fn lineup_editor(
                             " · or click again to cancel"
                         }
                     }
-                    form method="post" action=(commit_action) x-ref="commitForm" {
-                        div x-ref="seatInputs" {}
+                    form method="post" action=(commit_action) {
+                        // Server-rendered hidden inputs for commit.
+                        @for eb in &editor.boats {
+                            @if eb.active {
+                                @for (seat, maybe_rower) in &eb.seats {
+                                    @if let Some(rower_id) = maybe_rower {
+                                        input type="hidden" name="seat"
+                                              value={(eb.boat.id) ":" (seat) ":" (rower_id)};
+                                    }
+                                }
+                            }
+                        }
                         button type="submit"
                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                             "Commit lineup"
@@ -181,21 +227,17 @@ pub(crate) fn lineup_editor(
                     div class="flex flex-wrap gap-2 mt-1" {
                         @for r in &editor.sculling {
                             @let key = format!("sculling:{}", r.id);
-                            @let stats = format!(
-                                "{} · {} · {} · {}",
-                                r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
-                            );
                             span data-key=(key)
                                  data-boat="sculling"
                                  data-seat="-1"
                                  data-rower=(r.id)
-                                 data-name=(r.name)
-                                 data-stats=(stats)
-                                 class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                                 class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50"
                                  ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                                  "@click"={"select('" (key) "')"} {
                                 div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                div class="text-xs text-slate-500" { (stats) }
+                                div class="text-xs text-slate-500" {
+                                    (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
+                                }
                             }
                         }
                     }
@@ -205,33 +247,45 @@ pub(crate) fn lineup_editor(
                     strong class="text-slate-700" { "Available " }
                     span class="text-xs text-slate-500" { "(click to place in a seat)" }
                 }
-                div #bench-pills class="flex flex-wrap gap-2 mt-1" {
+                div class="flex flex-wrap gap-2 mt-1" {
                     @for r in &editor.pool {
                         @let key = format!("bench:{}", r.id);
-                        @let stats = format!(
-                            "{} · {} · {} · {}",
-                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
-                        );
                         span data-key=(key)
                              data-boat="bench"
                              data-seat="-1"
                              data-rower=(r.id)
-                             data-name=(r.name)
-                             data-stats=(stats)
-                             class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50"
+                             class="inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50"
                              ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
                              "@click"={"select('" (key) "')"} {
                             div class="font-medium text-slate-800 text-sm" { (r.name) }
-                            div class="text-xs text-slate-500" { (stats) }
+                            div class="text-xs text-slate-500" {
+                                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Unified Alpine editor logic
+        // Alpine editor logic — selection + HTMX re-render
         script {
-            (maud::PreEscaped(editor_js(knobs)))
+            (maud::PreEscaped(editor_js()))
+        }
+
+        // OOB swap: inject current placements as locks + active boats
+        // into the knobs form so Generate/Re-generate honors them.
+        div #editor-knob-state hx-swap-oob="innerHTML" {
+            @for eb in &editor.boats {
+                @if eb.active {
+                    input type="hidden" name="boat" value=(eb.boat.id);
+                    @for (seat, maybe_rower) in &eb.seats {
+                        @if let Some(rower_id) = maybe_rower {
+                            input type="hidden" name="lock"
+                                  value={(rower_id) ":" (eb.boat.id) ":" (seat)};
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -313,7 +367,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                 }
                             }
                             @if !is_empty {
-                                td class="w-8 text-center" {
+                                td class="w-8 text-center lock-cell" {
                                     button type="button"
                                            class="text-xs hover:text-violet-700"
                                            title=(if is_locked { "Unlock seat" } else { "Lock seat" })
@@ -323,7 +377,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                     }
                                 }
                             } @else {
-                                td class="w-8" {}
+                                td class="w-8 lock-cell" {}
                             }
                             (side_indicator(rower))
                         }
@@ -334,216 +388,120 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     }
 }
 
-/// Alpine JS for the unified lineup editor.
-fn editor_js(knobs: &SolveKnobs) -> String {
-    format!(r#"
-function lineupEditor() {{
-    return {{
+/// Simplified Alpine JS for the lineup editor. Alpine handles only
+/// selection highlighting; every mutation triggers an HTMX re-render
+/// so the server produces correct lock icons, side indicators, etc.
+fn editor_js() -> String {
+    r#"
+function lineupEditor() {
+    return {
         selected: null,
-        init() {{ this.rebuildInputs(); }},
-        select(key) {{
-            if (!this.selected) {{
+
+        // Gather current placement state from data-* attributes.
+        gatherState() {
+            var root = this.$root;
+            var seats = [];
+            var boats = [];
+            var locks = [];
+            var walkons = [];
+            root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
+                if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
+                if (el.dataset.rower) {
+                    seats.push('seat=' + el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower);
+                }
+            });
+            root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
+                if (card.dataset.hidden !== 'true') {
+                    boats.push('boat=' + card.dataset.editorBoat);
+                }
+            });
+            // Collect locks and walk-ons from the knobs form.
+            var knobsForm = document.querySelector('form[hx-get]');
+            if (knobsForm) {
+                knobsForm.querySelectorAll('input[name="lock"]').forEach(function(el) {
+                    locks.push('lock=' + el.value);
+                });
+                knobsForm.querySelectorAll('input[name="walkon"]').forEach(function(el) {
+                    walkons.push('walkon=' + el.value);
+                });
+            }
+            return [].concat(seats, boats, locks, walkons).join('&');
+        },
+
+        // Trigger HTMX re-render of the editor section.
+        rerender(params) {
+            var url = this.$root.dataset.editorUrl + '?' + params;
+            htmx.ajax('GET', url, {target: this.$root, swap: 'outerHTML'});
+        },
+
+        select(key) {
+            if (!this.selected) {
                 this.selected = key;
-            }} else if (this.selected === key) {{
+            } else if (this.selected === key) {
                 this.selected = null;
-            }} else {{
+            } else {
                 this.doSwap(this.selected, key);
-                this.selected = null;
-            }}
-            // Update highlight on dynamically-created pool pills
-            // (they use addEventListener, not Alpine :class).
-            this.$root.querySelectorAll('#bench-pills > span').forEach(function(el) {{
-                if (!el.getAttribute(':class')) {{
-                    var isSelected = el.dataset.key === this.selected;
-                    if (isSelected) {{
-                        el.classList.add('bg-blue-100', 'ring-2', 'ring-blue-400', 'border-blue-400');
-                    }} else {{
-                        el.classList.remove('bg-blue-100', 'ring-2', 'ring-blue-400', 'border-blue-400');
-                    }}
-                }}
-            }}.bind(this));
-        }},
-        doSwap(a, b) {{
-            var elA = this.$root.querySelector('[data-key="' + a + '"]');
-            var elB = this.$root.querySelector('[data-key="' + b + '"]');
+            }
+        },
+
+        doSwap(a, b) {
+            // Read current state, swap the two rower IDs, re-render.
+            var root = this.$root;
+            var elA = root.querySelector('[data-key="' + a + '"]');
+            var elB = root.querySelector('[data-key="' + b + '"]');
             if (!elA || !elB) return;
+            // Swap rower IDs in the data attributes before gathering.
             var tmpRower = elA.dataset.rower;
-            var tmpName = elA.dataset.name;
-            var tmpStats = elA.dataset.stats || '';
             elA.dataset.rower = elB.dataset.rower;
-            elA.dataset.name = elB.dataset.name;
-            elA.dataset.stats = elB.dataset.stats || '';
             elB.dataset.rower = tmpRower;
-            elB.dataset.name = tmpName;
-            elB.dataset.stats = tmpStats;
-            this.renderSlot(elA);
-            this.renderSlot(elB);
-            this.rebuildInputs();
-        }},
-        toBench(key) {{
+            this.selected = null;
+            this.rerender(this.gatherState());
+        },
+
+        toBench(key) {
             var el = this.$root.querySelector('[data-key="' + key + '"]');
             if (!el || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
-            var rowerId = el.dataset.rower;
-            var rowerName = el.dataset.name;
-            var rowerStats = el.dataset.stats || '';
-            if (!rowerId) return;
+            if (!el.dataset.rower) return;
             el.dataset.rower = '';
-            el.dataset.name = '';
-            el.dataset.stats = '';
-            this.renderSlot(el);
-            this.addPoolPill(rowerId, rowerName, rowerStats);
             this.selected = null;
-            this.rebuildInputs();
-        }},
-        addPoolPill(rowerId, rowerName, rowerStats) {{
-            var container = this.$root.querySelector('#bench-pills');
-            if (!container) return;
-            var key = 'bench:' + rowerId;
-            var span = document.createElement('span');
-            span.dataset.key = key;
-            span.dataset.boat = 'bench';
-            span.dataset.seat = '-1';
-            span.dataset.rower = rowerId;
-            span.dataset.name = rowerName || '';
-            span.dataset.stats = rowerStats || '';
-            span.className = 'inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition rower-content hover:bg-slate-50';
-            var self = this;
-            span.addEventListener('click', function() {{ self.select(key); }});
-            var html = '<div class="font-medium text-slate-800 text-sm">' + this.esc(rowerName || '#' + rowerId) + '</div>';
-            if (rowerStats) html += '<div class="text-xs text-slate-500">' + this.esc(rowerStats) + '</div>';
-            span.innerHTML = html;
-            container.appendChild(span);
-        }},
-        renderSlot(el) {{
-            var rowerId = el.dataset.rower;
-            var rowerName = el.dataset.name;
-            var stats = el.dataset.stats || '';
-            var content = el.querySelector('.rower-content');
-            if (!content) content = el.tagName === 'SPAN' ? el : null;
-            if (!content) return;
-            if (!rowerId) {{
-                content.innerHTML = '<span class="text-slate-400 italic">\u2014 empty \u2014</span>';
-            }} else {{
-                var html = '<div class="font-medium text-slate-800' +
-                    (el.tagName === 'SPAN' ? ' text-sm' : '') + '">' +
-                    this.esc(rowerName || '#' + rowerId) + '</div>';
-                if (stats) html += '<div class="text-xs text-slate-500">' + this.esc(stats) + '</div>';
-                content.innerHTML = html;
-            }}
-        }},
-        toggleBoat(boatId) {{
+            this.rerender(this.gatherState());
+        },
+
+        toggleBoat(boatId) {
             var card = this.$root.querySelector('[data-editor-boat="' + boatId + '"]');
-            var pill = this.$root.querySelector('[data-boat-id="' + boatId + '"]');
             if (!card) return;
             var isHidden = card.dataset.hidden === 'true';
-            if (isHidden) {{
-                // Show an empty boat card.
-                card.removeAttribute('style');
+            if (isHidden) {
                 card.dataset.hidden = 'false';
-                if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
-            }} else {{
-                // Collect all rowers, then batch-clear and bench.
-                var rowers = [];
-                var self = this;
-                card.querySelectorAll('tr[data-rower]').forEach(function(row) {{
-                    if (row.dataset.rower) {{
-                        rowers.push({{
-                            id: row.dataset.rower,
-                            name: row.dataset.name,
-                            stats: row.dataset.stats || ''
-                        }});
-                        row.dataset.rower = '';
-                        row.dataset.name = '';
-                        row.dataset.stats = '';
-                    }}
-                }});
-                // Re-render all cleared slots at once.
-                card.querySelectorAll('tr[data-key]').forEach(function(row) {{
-                    self.renderSlot(row);
-                }});
-                // Add all pool pills in one pass.
-                rowers.forEach(function(r) {{
-                    self.addPoolPill(r.id, r.name, r.stats);
-                }});
-                card.setAttribute('style', 'display:none');
+            } else {
+                // Clear all placements for this boat before gathering.
+                card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                    row.dataset.rower = '';
+                });
                 card.dataset.hidden = 'true';
-                if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
-            }}
+            }
             this.selected = null;
-            this.rebuildInputs();
-        }},
-        esc(s) {{
-            var d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-        }},
-        toggleLock(lockVal) {{
-            var form = document.querySelector('form[hx-get]');
-            if (!form) return;
-            var existing = form.querySelector('input[name="lock"][value="' + lockVal + '"]');
-            var btn = this.$root.querySelector('[data-lock="' + lockVal + '"]');
-            var row = btn ? btn.closest('tr') : null;
-            if (existing) {{
+            this.rerender(this.gatherState());
+        },
+
+        toggleLock(lockVal) {
+            var knobsForm = document.querySelector('form[hx-get]');
+            if (!knobsForm) return;
+            var existing = knobsForm.querySelector('input[name="lock"][value="' + lockVal + '"]');
+            if (existing) {
                 existing.remove();
-                if (btn) btn.textContent = '\uD83D\uDD13';
-                if (row) row.classList.remove('bg-violet-50', 'border-l-4', 'border-l-violet-400');
-            }} else {{
+            } else {
                 var inp = document.createElement('input');
                 inp.type = 'hidden';
                 inp.name = 'lock';
                 inp.value = lockVal;
-                form.appendChild(inp);
-                if (btn) btn.textContent = '\uD83D\uDD12';
-                if (row) row.classList.add('bg-violet-50', 'border-l-4', 'border-l-violet-400');
-            }}
-        }},
-        rebuildInputs() {{
-            var container = this.$refs.seatInputs;
-            if (!container) return;
-            container.innerHTML = '';
-            var placements = [];
-            this.$root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {{
-                if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
-                if (!el.dataset.rower) return;
-                var val = el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower;
-                var inp = document.createElement('input');
-                inp.type = 'hidden';
-                inp.name = 'seat';
-                inp.value = val;
-                container.appendChild(inp);
-                placements.push(el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
-            }});
-            // Inject placements as locks into the knobs form for Generate.
-            var knobsForm = document.querySelector('form[hx-get]');
-            if (knobsForm) {{
-                knobsForm.querySelectorAll('input[name="lock"].manual-lock').forEach(function(el) {{ el.remove(); }});
-                placements.forEach(function(lockVal) {{
-                    var inp = document.createElement('input');
-                    inp.type = 'hidden';
-                    inp.name = 'lock';
-                    inp.value = lockVal;
-                    inp.className = 'manual-lock';
-                    knobsForm.appendChild(inp);
-                }});
-                // Inject active boat IDs so the solver only considers
-                // boats the coach has toggled on.
-                knobsForm.querySelectorAll('input[name="boat"].editor-boat').forEach(function(el) {{ el.remove(); }});
-                var self = this;
-                this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {{
-                    if (card.dataset.hidden !== 'true') {{
-                        var inp = document.createElement('input');
-                        inp.type = 'hidden';
-                        inp.name = 'boat';
-                        inp.value = card.dataset.editorBoat;
-                        inp.className = 'editor-boat';
-                        knobsForm.appendChild(inp);
-                    }}
-                }});
-            }}
-        }}
-    }};
-}}
-"#)
+                knobsForm.appendChild(inp);
+            }
+            this.rerender(this.gatherState());
+        }
+    };
+}
+"#.to_string()
 }
 
 /// Landing page before the solver runs. Shows knobs with a
@@ -588,7 +546,7 @@ pub(crate) fn landing_content(
                 (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles, snapshot))
                 (walkon_section(date, &unavailable, knobs))
             }
-            (lineup_editor(snapshot, date, &editor, flags, knobs))
+            (lineup_editor(snapshot, date, &editor, flags))
         }
     }
 }
@@ -698,7 +656,7 @@ pub(crate) fn view_content(
                 (knobs_form(date, knobs, committed_practices, true, custom_profiles, snapshot))
             }
             (status_banner(date, result))
-            (lineup_editor(snapshot, date, &editor, flags, knobs))
+            (lineup_editor(snapshot, date, &editor, flags))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
                 (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
@@ -920,12 +878,18 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         p class="text-xs text-slate-500 mt-1" { "Avoid repeating recent lineups" }
                     }
                     input type="hidden" name="generate" value="1";
-                    // Carry seat locks and walk-ons through re-solves.
-                    @for l in &knobs.lock {
-                        input type="hidden" name="lock" value=(l);
-                    }
+                    // Carry walk-ons through re-solves.
                     @for w in &knobs.walkon {
                         input type="hidden" name="walkon" value=(w);
+                    }
+                    // OOB target: editor injects locks + active boats here.
+                    div #editor-knob-state style="display:none" {
+                        @for l in &knobs.lock {
+                            input type="hidden" name="lock" value=(l);
+                        }
+                        @for b in &knobs.boat {
+                            input type="hidden" name="boat" value=(b);
+                        }
                     }
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
@@ -1405,12 +1369,12 @@ fn name_list(snapshot: &DbSnapshot, ids: &[RowerId]) -> Markup {
 pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     use lineup_db::rower::types::Side;
     let Some(r) = rower else {
-        return html! {};
+        return html! { td class="w-2 p-0 side-cell" {} };
     };
     let color = match r.side {
         Side::Port => "bg-red-400",
         Side::Starboard => "bg-green-500",
-        Side::Either => return html! {},
+        Side::Either => return html! { td class="w-2 p-0 side-cell" {} },
     };
     let notches = if r.side_strength.is_hard() {
         0
@@ -1419,7 +1383,7 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     };
     if notches == 0 {
         return html! {
-            td class={"w-2 p-0 " (color)} { "\u{00a0}" }
+            td class={"w-2 p-0 side-cell " (color)} { "\u{00a0}" }
         };
     }
     // Notches centered vertically: use a repeating gradient sized to
@@ -1438,7 +1402,7 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
         stops.join(",")
     );
     html! {
-        td class={"w-2 p-0 " (color)} style=(gradient) { "\u{00a0}" }
+        td class={"w-2 p-0 side-cell " (color)} style=(gradient) { "\u{00a0}" }
     }
 }
 

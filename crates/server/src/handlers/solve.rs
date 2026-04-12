@@ -558,6 +558,96 @@ pub(crate) async fn commit_handler(
 // Direct commit (no re-solve) — used by the manual-swap UI
 // =====================================================================
 
+// =====================================================================
+// Editor partial — re-renders the lineup editor from explicit placements
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct EditorParams {
+    #[serde(default)]
+    seat: Vec<String>,
+    #[serde(default)]
+    boat: Vec<String>,
+    #[serde(default)]
+    lock: Vec<String>,
+    #[serde(default)]
+    walkon: Vec<String>,
+}
+
+/// `GET /solve/{date}/editor` — re-render the lineup editor from the
+/// given placement state. No solver run — just snapshot lookup + template.
+/// Used by the Alpine component after each client-side operation.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn editor_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    Path(date): Path<NaiveDate>,
+    Query(params): Query<EditorParams>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    let mut snapshot = tenant
+        .db
+        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
+        .await
+        .map_err(internal_error)?;
+
+    // Apply walk-on overrides.
+    for id_str in &params.walkon {
+        if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
+            snapshot.availability.insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
+        }
+    }
+
+    // Parse seat placements: "boat_id:seat_pos:rower_id"
+    let mut placements: std::collections::HashMap<BoatId, std::collections::HashMap<i32, lineup_db::rower::types::RowerId>> =
+        std::collections::HashMap::new();
+    for entry in &params.seat {
+        let parts: Vec<&str> = entry.splitn(3, ':').collect();
+        if parts.len() != 3 { continue; }
+        let Ok(boat_id) = parts[0].parse::<BoatId>() else { continue };
+        let Ok(seat) = parts[1].parse::<i32>() else { continue };
+        let Ok(rower_id) = parts[2].parse::<lineup_db::rower::types::RowerId>() else { continue };
+        placements.entry(boat_id).or_default().insert(seat, rower_id);
+    }
+
+    // Parse active boats.
+    let active_boats: std::collections::HashSet<BoatId> = params.boat.iter()
+        .filter_map(|s| s.parse::<BoatId>().ok())
+        .collect();
+
+    // Parse locks for display.
+    let locked_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> = params.lock.iter()
+        .filter_map(|entry| {
+            let parts: Vec<&str> = entry.splitn(3, ':').collect();
+            if parts.len() != 3 { return None; }
+            let rower_id = parts[0].parse().ok()?;
+            let boat_id = parts[1].parse().ok()?;
+            let seat = parts[2].parse().ok()?;
+            Some((rower_id, boat_id, seat))
+        })
+        .collect();
+
+    let editor = templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
+    let flags = templates::solve::DisplayFlags {
+        show_attributes: tenant.show_attributes(),
+        force_cox_stern: tenant.config.force_cox_stern,
+        locked_seats,
+    };
+
+    // Build a minimal SolveKnobs to carry lock + walkon params through.
+    let knobs = SolveKnobs {
+        lock: params.lock,
+        walkon: params.walkon,
+        ..SolveKnobs::default()
+    };
+
+    Ok(Html(
+        templates::solve::lineup_editor(&snapshot, date, &editor, &flags).into_string(),
+    ))
+}
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct DirectCommitInput {
     /// Repeated field: each value is "boat_id:seat_pos:rower_id".
