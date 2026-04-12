@@ -259,53 +259,28 @@ bookmarkability. Default tab is Schedule.
   email more than once per practice per day. Track via a
   `email_log` table or a last-sent timestamp on the practice.
 
-#### Team management UI for Program Directors
+#### Team management — roster management
 
-There's no way for a PD to create, view, or manage teams in the
-web UI. Teams exist in the DB and the navbar has a team selector,
-but there's no CRUD page. Need:
+Team CRUD is shipped (`/teams` list, create, `/teams/{id}` detail
+with name + self-edit level editing). Remaining:
 
-- `GET /teams` — list all teams in the tenant
-- `GET /teams/new` + `POST /teams` — create a team
-- `GET /teams/{id}` — view team with its roster (members)
-- Ability to add/remove rowers from a team
+- View the team's roster on the team detail page
+- Add/remove rowers from a team
 - Role-gated to ProgramDirector+
 
 ### Polish
 
-#### Mobile-responsive pass
+#### ~~Mobile-responsive pass~~ (shipped)
 
-In practice, coaches use this on their phone at the boathouse.
-The current layout is desktop-first — multi-column grids, wide
-tables, and inline forms that don't work well on narrow viewports.
+Grid collapses (`grid-cols-1` → `sm:`/`md:` step-up), touch
+targets bumped to `py-2` (44px), affinity forms stack on mobile,
+hamburger at `lg` breakpoint for PD nav overflow.
 
-**Priority order (by real-world usage):**
-1. **Solve view** — the most critical mobile screen. Boat cards,
-   seat rows, swap interactions, knobs form, and the bench/sculling
-   pool all need to work in a single-column touch-friendly layout.
-2. **History detail** — reviewing committed lineups + marking
-   no-shows on the go.
-3. **Practices list** — picking a date to solve.
-4. **`/my/availability`** — rowers responding from their phone.
-5. **Rower list + detail** — less urgent but still used.
+#### ~~#54 — Print-friendly stylesheet~~ (shipped)
 
-**Approach:**
-- Tailwind responsive utilities (`sm:`, `md:` breakpoints) on
-  existing classes — most of the grid/flex layouts just need
-  single-column fallbacks.
-- Boat cards: stack to full-width on small screens.
-- Knobs form: stack inputs vertically instead of 5-column grid.
-- Tables: consider horizontal scroll or card-based layout for
-  narrow screens.
-- Swap interactions: ensure touch targets are large enough
-  (minimum 44px) and the selection hint is visible without
-  scrolling.
-- Test on 375px width (iPhone SE) as the baseline.
-
-#### #54 — Print-friendly stylesheet for solve / history views
-
-`@media print` rules (or `/print/{date}` route) that hides navbar,
-expands alternatives, drops backgrounds, one boat per page-break.
+`@media print` rules hide navbar, knobs, interactive controls.
+`print-break` avoids page-break inside boat cards. Colored badges
+preserved via `print-color-adjust`.
 
 ### Observability
 
