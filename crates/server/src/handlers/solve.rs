@@ -708,6 +708,65 @@ pub(crate) struct EditorParams {
     transfer: Option<String>,
 }
 
+/// Map rowers from one boat to another by seat position.
+/// Stroke→stroke, bow→bow, cox→cox (if dest has cox).
+/// Rowers that don't fit (downsizing) are dropped (go to bench).
+/// If rigging differs, pairs are swapped so rowers stay on their side.
+fn map_transfer_seats(
+    src_seats: &std::collections::HashMap<i32, lineup_db::rower::types::RowerId>,
+    src: &lineup_db::boat::Boat,
+    dst: &lineup_db::boat::Boat,
+) -> std::collections::HashMap<i32, lineup_db::rower::types::RowerId> {
+    let mut result = std::collections::HashMap::new();
+    let dst_has_cox = dst.has_cox.as_bool();
+    let dst_count = dst.seat_count;
+    let src_count = src.seat_count;
+
+    // Cox → cox (if dest has cox).
+    if dst_has_cox {
+        if let Some(&cox) = src_seats.get(&0) {
+            result.insert(0, cox);
+        }
+    }
+
+    // Numbered seats: map by relative position.
+    for src_pos in 1..=src_count {
+        let Some(&rower) = src_seats.get(&src_pos) else { continue };
+        let dst_pos = if src_pos == src_count {
+            dst_count // stroke → stroke
+        } else if src_pos == 1 {
+            1 // bow → bow
+        } else if src_pos == src_count - 1 && dst_count > 2 {
+            dst_count - 1 // below stroke → below stroke
+        } else if src_pos == 2 && dst_count > 2 {
+            2 // above bow → above bow
+        } else if src_pos <= dst_count {
+            src_pos // same position if it fits
+        } else {
+            continue; // doesn't fit → bench
+        };
+        if dst_pos >= 1 && dst_pos <= dst_count && !result.contains_key(&dst_pos) {
+            result.insert(dst_pos, rower);
+        }
+    }
+
+    // If rigging differs, swap rowers within each pair.
+    if src.stroke_side != dst.stroke_side {
+        let mut swapped = result.clone();
+        let mut pos = dst_count;
+        while pos >= 2 {
+            let high = swapped.remove(&pos);
+            let low = swapped.remove(&(pos - 1));
+            if let Some(r) = high { swapped.insert(pos - 1, r); }
+            if let Some(r) = low { swapped.insert(pos, r); }
+            pos -= 2;
+        }
+        result = swapped;
+    }
+
+    result
+}
+
 /// `GET /solve/{date}/editor` — re-render the lineup editor from the
 /// given placement state. No solver run — just snapshot lookup + template.
 /// Used by the Alpine component after each client-side operation.
@@ -768,73 +827,25 @@ pub(crate) async fn editor_handler(
                 let dst_boat = snapshot.sweep_boats.iter().find(|b| b.id == dst_id);
                 if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
                     let src_seats = placements.remove(&src_id).unwrap_or_default();
-                    let mut dst_seats = placements.remove(&dst_id).unwrap_or_default();
-                    let dst_has_cox = dst.has_cox.as_bool();
-                    let dst_seat_count = dst.seat_count;
+                    let dst_seats = placements.remove(&dst_id).unwrap_or_default();
+                    let dst_is_populated = !dst_seats.is_empty();
 
-                    // Map by position: cox→cox, then numbered seats
-                    // from stroke (highest) down to bow (1).
-                    // Cox seat (0) transfers if dest has cox.
-                    if dst_has_cox {
-                        if let Some(cox_rower) = src_seats.get(&0) {
-                            dst_seats.insert(0, *cox_rower);
-                        }
-                    }
-                    // Numbered seats: map stroke→stroke, bow→bow.
-                    // Source seat N (where N=src.seat_count is stroke)
-                    // maps to dest seat at the same relative position.
-                    let src_count = src.seat_count;
-                    for src_pos in 1..=src_count {
-                        if let Some(rower) = src_seats.get(&src_pos) {
-                            // Map: stern pair stays stern, bow pair stays bow.
-                            // src stroke (src_count) → dst stroke (dst_seat_count)
-                            // src bow (1) → dst bow (1)
-                            // Middle seats: proportional mapping.
-                            let dst_pos = if src_pos == src_count {
-                                // Stroke → stroke
-                                dst_seat_count
-                            } else if src_pos == 1 {
-                                // Bow → bow
-                                1
-                            } else if src_pos == src_count - 1 && dst_seat_count > 2 {
-                                // Seat below stroke → seat below stroke
-                                dst_seat_count - 1
-                            } else if src_pos == 2 && dst_seat_count > 2 {
-                                // Seat above bow → seat above bow
-                                2
-                            } else if src_pos <= dst_seat_count {
-                                // Same position if it fits
-                                src_pos
-                            } else {
-                                // Doesn't fit (downsizing) → skip, goes to bench
-                                continue;
-                            };
-                            if dst_pos >= 1 && dst_pos <= dst_seat_count && !dst_seats.contains_key(&dst_pos) {
-                                dst_seats.insert(dst_pos, *rower);
-                            }
-                            // If seat already occupied (collision), rower goes to bench (not inserted)
-                        }
+                    // Map src rowers → dst boat.
+                    let new_dst = map_transfer_seats(&src_seats, src, dst);
+
+                    if dst_is_populated {
+                        // Live→live: also map dst rowers → src boat (bidirectional swap).
+                        let new_src = map_transfer_seats(&dst_seats, dst, src);
+                        placements.insert(src_id, new_src);
+                        // Both boats stay active.
+                        active_boats.insert(dst_id);
+                    } else {
+                        // Source boat is deactivated.
+                        active_boats.remove(&src_id);
+                        active_boats.insert(dst_id);
                     }
 
-                    // If rigging differs, swap rowers within each pair
-                    // so they stay on their preferred side.
-                    if src.stroke_side != dst.stroke_side {
-                        let mut swapped = dst_seats.clone();
-                        let mut pos = dst_seat_count;
-                        while pos >= 2 {
-                            let high = swapped.remove(&pos);
-                            let low = swapped.remove(&(pos - 1));
-                            if let Some(r) = high { swapped.insert(pos - 1, r); }
-                            if let Some(r) = low { swapped.insert(pos, r); }
-                            pos -= 2;
-                        }
-                        dst_seats = swapped;
-                    }
-
-                    placements.insert(dst_id, dst_seats);
-                    // Source boat is deactivated.
-                    active_boats.remove(&src_id);
-                    active_boats.insert(dst_id);
+                    placements.insert(dst_id, new_dst);
                 }
             }
         }
