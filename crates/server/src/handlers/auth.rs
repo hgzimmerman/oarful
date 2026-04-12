@@ -57,7 +57,7 @@ pub(crate) async fn login_handler(
 
     struct Match {
         tenant_id: TenantId,
-        tenant_name: String,
+        _tenant_name: String,
         user: AppUser,
         role: Option<Role>,
         default_team: Option<Team>,
@@ -83,7 +83,7 @@ pub(crate) async fn login_handler(
         if let Some((user, role, default_team)) = found {
             matches.push(Match {
                 tenant_id: t.id,
-                tenant_name: t.name.clone(),
+                _tenant_name: t.name.clone(),
                 user,
                 role,
                 default_team,

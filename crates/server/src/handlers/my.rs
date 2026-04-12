@@ -299,7 +299,7 @@ pub(crate) async fn availability_update_handler(
 /// Try to load the rower linked to the authenticated user. Returns
 /// None if the user has no linked rower record.
 async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, StatusCode> {
-    let user_id = tenant.claims.sub;
+    let user_id = tenant.claims.user_id().as_int();
     tenant
         .db
         .with_conn(move |conn| Rower::find_by_user_id(conn, user_id))
@@ -310,7 +310,7 @@ async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, Stat
 /// Load the rower linked to the authenticated user. Returns 404 if
 /// the user doesn't have a linked rower record.
 async fn load_my_rower(tenant: &TenantContext) -> Result<Rower, StatusCode> {
-    let user_id = tenant.claims.sub;
+    let user_id = tenant.claims.user_id().as_int();
     let maybe = tenant
         .db
         .with_conn(move |conn| Rower::find_by_user_id(conn, user_id))

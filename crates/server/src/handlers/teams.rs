@@ -27,7 +27,7 @@ pub(crate) async fn selector_handler(
     let is_pd = role.at_least(Role::ProgramDirector);
     let is_coach = role.at_least(Role::Coach);
 
-    let user_id = tenant.claims.sub;
+    let user_id = tenant.claims.user_id().as_int();
     let teams = tenant
         .db
         .with_conn(move |conn| {

@@ -18,20 +18,40 @@ const TOKEN_LIFETIME_SECS: u64 = 86400;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Claims {
     /// User ID within the tenant DB.
-    pub(crate) sub: i32,
+    sub: i32,
     /// Which tenant (club) this token is for.
-    pub(crate) tenant_id: i32,
+    tenant_id: i32,
     /// Tenant-wide role: "Member", "Coach", "ProgramDirector".
-    pub(crate) role: String,
+    role: String,
     /// Which team the user is currently viewing.
-    pub(crate) active_team_id: i32,
+    active_team_id: i32,
     /// Expiry (Unix timestamp).
-    pub(crate) exp: u64,
+    exp: u64,
     /// Issued at (Unix timestamp).
-    pub(crate) iat: u64,
+    iat: u64,
 }
 
 impl Claims {
+    pub(crate) fn new(
+        user_id: UserId,
+        tenant_id: TenantId,
+        role: Role,
+        active_team_id: TeamId,
+    ) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            sub: user_id.as_int(),
+            tenant_id: tenant_id.as_int(),
+            role: role.as_str().to_string(),
+            active_team_id: active_team_id.as_int(),
+            exp: now + TOKEN_LIFETIME_SECS,
+            iat: now,
+        }
+    }
+
     pub(crate) fn user_id(&self) -> UserId {
         UserId::new(self.sub)
     }
@@ -72,18 +92,7 @@ impl JwtKeys {
         role: Role,
         active_team_id: TeamId,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let claims = Claims {
-            sub: user_id.as_int(),
-            tenant_id: tenant_id.as_int(),
-            role: role.as_str().to_string(),
-            active_team_id: active_team_id.as_int(),
-            exp: now + TOKEN_LIFETIME_SECS,
-            iat: now,
-        };
+        let claims = Claims::new(user_id, tenant_id, role, active_team_id);
         jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
     }
 

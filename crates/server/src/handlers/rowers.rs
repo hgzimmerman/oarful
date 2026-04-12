@@ -259,7 +259,7 @@ async fn resolve_perms(
     }
     // Member — check they own this rower, then look up trust level.
     let rower = load(&tenant.db, rower_id).await?;
-    if rower.user_id != Some(tenant.claims.sub) {
+    if rower.user_id != Some(tenant.claims.user_id().as_int()) {
         return Err(StatusCode::FORBIDDEN);
     }
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
