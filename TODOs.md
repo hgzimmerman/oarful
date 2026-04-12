@@ -242,9 +242,9 @@ expands alternatives, drops backgrounds, one boat per page-break.
 
 ### Productionization
 
-#### #55 — Production static-asset path resolution
+#### ~~#55 — Production static-asset path resolution~~ (shipped)
 
-Multi-path fallback: `PUBLIC_DIR` env → `exe_dir/public`.
+Multi-path fallback: `PUBLIC_DIR` env → `exe_dir/public` → workspace default.
 
 #### #56 — Custom Tailwind build pipeline
 
