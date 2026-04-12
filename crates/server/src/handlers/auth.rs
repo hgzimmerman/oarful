@@ -104,7 +104,7 @@ pub(crate) async fn login_handler(
 
     struct Match {
         tenant_id: TenantId,
-        _tenant_name: String,
+        tenant_name: String,
         user: AppUser,
         role: Option<Role>,
         default_team: Option<Team>,
@@ -130,7 +130,7 @@ pub(crate) async fn login_handler(
         if let Some((user, role, default_team)) = found {
             matches.push(Match {
                 tenant_id: t.id,
-                _tenant_name: t.name.clone(),
+                tenant_name: t.name.clone(),
                 user,
                 role,
                 default_team,
@@ -146,15 +146,10 @@ pub(crate) async fn login_handler(
         .into_response());
     }
 
-    // For now, use the first match (single-tenant deployments).
-    // TODO: if matches.len() > 1, render a club picker.
-    let m = matches.into_iter().next().unwrap();
-    let user = m.user;
-    let role = m.role;
-    let default_team = m.default_team;
-    let login_tenant_id = m.tenant_id;
-
-    if user.parsed_status() != Some(UserStatus::Active) {
+    // Verify password against the first match. The password is
+    // per-tenant but typically identical for the same email.
+    let first = &matches[0];
+    if first.user.parsed_status() != Some(UserStatus::Active) {
         return Ok(Html(
             templates::auth::login_password_step(
                 &email,
@@ -166,7 +161,7 @@ pub(crate) async fn login_handler(
         .into_response());
     }
 
-    let hash: String = match &user.password_hash {
+    let hash: String = match &first.user.password_hash {
         Some(h) => h.clone(),
         None => {
             return Ok(Html(
@@ -181,7 +176,6 @@ pub(crate) async fn login_handler(
         }
     };
 
-    // Verify password (bcrypt is CPU-bound; run on blocking pool).
     let ok = tokio::task::spawn_blocking(move || bcrypt::verify(password, &hash))
         .await
         .map_err(super::internal_error)?
@@ -195,14 +189,37 @@ pub(crate) async fn login_handler(
         .into_response());
     }
 
-    let role = role.unwrap_or(Role::Member);
-    let team_id = default_team
+    // If multiple tenants, show the club picker. The password is
+    // re-submitted as a hidden field so we can complete login after
+    // the user picks a club.
+    if matches.len() > 1 {
+        let clubs: Vec<(i32, String, Option<String>)> = matches
+            .iter()
+            .map(|m| {
+                (
+                    m.tenant_id.as_int(),
+                    m.tenant_name.clone(),
+                    m.role.map(|r| r.as_str().to_string()),
+                )
+            })
+            .collect();
+        return Ok(Html(
+            templates::auth::login_club_picker(&email, &input.password, &clubs).into_string(),
+        )
+        .into_response());
+    }
+
+    let m = matches.into_iter().next().unwrap();
+    let role = m.role.unwrap_or(Role::Member);
+    let team_id = m
+        .default_team
         .map(|t| t.id)
         .unwrap_or(lineup_db::team::TeamId::new(1));
+    let login_tenant_id = m.tenant_id;
 
     let token = state
         .jwt_keys
-        .issue(user.id, login_tenant_id, role, team_id)
+        .issue(m.user.id, login_tenant_id, role, team_id)
         .map_err(super::internal_error)?;
 
     let jwt_cookie = axum_extra::extract::cookie::Cookie::build((TOKEN_COOKIE, token))
@@ -212,6 +229,104 @@ pub(crate) async fn login_handler(
 
     // Set the long-lived known_user cookie so this user gets the
     // magic-link option on future visits.
+    let known_cookie = axum_extra::extract::cookie::Cookie::build((KNOWN_USER_COOKIE, email))
+        .path("/")
+        .http_only(true)
+        .max_age(KNOWN_USER_MAX_AGE)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
+
+    let jar = jar.add(jwt_cookie).add(known_cookie);
+    Ok((jar, Redirect::to("/practices")).into_response())
+}
+
+// =====================================================================
+// Club picker (step 3 — multi-tenant)
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PickInput {
+    pub(crate) email: String,
+    pub(crate) password: String,
+    pub(crate) tenant_id: i32,
+}
+
+/// `POST /login/pick` — complete login after club selection.
+///
+/// Re-verifies credentials against the chosen tenant (the password was
+/// already checked on the previous step, but we re-verify because it's
+/// submitted as a hidden field and could be tampered with).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn pick_handler(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Form(input): Form<PickInput>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let email = input.email.trim().to_lowercase();
+    let password = input.password.clone();
+    let tenant_id = TenantId::new(input.tenant_id);
+
+    let (db, _config) = state
+        .tenant_db(tenant_id)
+        .await
+        .map_err(super::internal_error)?;
+
+    let email_clone = email.clone();
+    let found = db
+        .with_conn(move |conn| {
+            let Some(user) = AppUser::find_by_email(conn, &email_clone)? else {
+                return Ok(None);
+            };
+            let role = AppUser::role(conn, user.id)?;
+            let default_team = Team::first(conn)?;
+            Ok(Some((user, role, default_team)))
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    let Some((user, role, default_team)) = found else {
+        return Ok(
+            Html(templates::auth::login_page(Some("Invalid credentials.")).into_string())
+                .into_response(),
+        );
+    };
+
+    let hash = match &user.password_hash {
+        Some(h) => h.clone(),
+        None => {
+            return Ok(
+                Html(templates::auth::login_page(Some("Password not set.")).into_string())
+                    .into_response(),
+            );
+        }
+    };
+
+    let ok = tokio::task::spawn_blocking(move || bcrypt::verify(password, &hash))
+        .await
+        .map_err(super::internal_error)?
+        .map_err(super::internal_error)?;
+
+    if !ok {
+        return Ok(
+            Html(templates::auth::login_page(Some("Invalid credentials.")).into_string())
+                .into_response(),
+        );
+    }
+
+    let role = role.unwrap_or(Role::Member);
+    let team_id = default_team
+        .map(|t| t.id)
+        .unwrap_or(lineup_db::team::TeamId::new(1));
+
+    let token = state
+        .jwt_keys
+        .issue(user.id, tenant_id, role, team_id)
+        .map_err(super::internal_error)?;
+
+    let jwt_cookie = axum_extra::extract::cookie::Cookie::build((TOKEN_COOKIE, token))
+        .path("/")
+        .http_only(true)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
+
     let known_cookie = axum_extra::extract::cookie::Cookie::build((KNOWN_USER_COOKIE, email))
         .path("/")
         .http_only(true)
@@ -250,7 +365,7 @@ pub(crate) async fn magic_login_handler(
         .await
         .map_err(super::internal_error)?;
 
-    let mut found_user: Option<(AppUser, TenantId)> = None;
+    let mut found_user: Option<(AppUser, TenantId, String)> = None;
     for t in &tenants {
         let Ok((db, _config)) = state.tenant_db(t.id).await else {
             continue;
@@ -262,17 +377,17 @@ pub(crate) async fn magic_login_handler(
             .map_err(super::internal_error)?;
         if let Some(u) = user {
             if u.parsed_status() == Some(UserStatus::Active) {
-                found_user = Some((u, t.id));
+                found_user = Some((u, t.id, t.slug.clone()));
                 break;
             }
         }
     }
 
-    if let Some((user, tenant_id)) = found_user {
+    if let Some((user, tenant_id, tenant_slug)) = found_user {
         // Create a magic link with 24h expiry, redirecting to home.
         let expires_at = (chrono::Utc::now() + chrono::TimeDelta::try_hours(24).unwrap())
             .naive_utc();
-        let created = create_magic_link(user.id, "/practices", expires_at);
+        let created = create_magic_link(user.id, "/practices", expires_at, None);
         let raw_token = created.raw_token.clone();
         let row = created.row;
 
@@ -284,7 +399,7 @@ pub(crate) async fn magic_login_handler(
             .await
             .map_err(super::internal_error)?;
 
-        let magic_url = state.full_url(&format!("/auth/magic/{raw_token}"));
+        let magic_url = state.full_url(&format!("/auth/magic/{tenant_slug}/{raw_token}"));
         if let Err(err) = state
             .mailer
             .send_invite(&user.email, &user.name, &magic_url)
@@ -306,9 +421,10 @@ pub(crate) async fn magic_login_handler(
 // Magic link token authentication
 // =====================================================================
 
-/// `GET /auth/magic/{token}` — validate a magic link, create a JWT
-/// session, and redirect to the link's `redirect_path`.
+/// `GET /auth/magic/{slug}/{token}` — validate a magic link, create a
+/// JWT session, and redirect to the link's `redirect_path`.
 ///
+/// The slug identifies the tenant whose DB holds the magic link.
 /// If the user already has a valid JWT cookie, we keep it (don't
 /// downgrade their session). If they don't, we issue a JWT that
 /// expires at the magic link's `expires_at`.
@@ -316,14 +432,12 @@ pub(crate) async fn magic_login_handler(
 pub(crate) async fn magic_link_handler(
     State(state): State<AppState>,
     jar: CookieJar,
-    Path(token): Path<String>,
+    Path((slug, token)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let token_hash = hash_token(&token);
 
-    // For now, use the default tenant (single-tenant). Multi-tenant
-    // would scan or encode tenant_id in the link.
-    let (db, _config) = state
-        .tenant_db(state.default_tenant_id)
+    let (tenant_id, db, _config) = state
+        .tenant_db_by_slug(&slug)
         .await
         .map_err(super::internal_error)?;
 
@@ -346,6 +460,7 @@ pub(crate) async fn magic_link_handler(
     let redirect_path = link.redirect_path.clone();
     let magic_user_id = link.user_id;
     let magic_expires_at = link.expires_at;
+    let magic_team_id = link.team_id;
 
     // Consume the token so it can't be replayed.
     let token_hash_clone = token_hash.clone();
@@ -390,13 +505,14 @@ pub(crate) async fn magic_link_handler(
     }
 
     let role = role.unwrap_or(Role::Member);
-    let team_id = default_team
-        .map(|t| t.id)
+    // Use the magic link's team_id if set, otherwise fall back to default.
+    let team_id = magic_team_id
+        .or_else(|| default_team.map(|t| t.id))
         .unwrap_or(lineup_db::team::TeamId::new(1));
 
     let jwt = state
         .jwt_keys
-        .issue_with_expiry(user.id, state.default_tenant_id, role, team_id, exp_unix)
+        .issue_with_expiry(user.id, tenant_id, role, team_id, exp_unix)
         .map_err(super::internal_error)?;
 
     let jwt_cookie = axum_extra::extract::cookie::Cookie::build((TOKEN_COOKIE, jwt))

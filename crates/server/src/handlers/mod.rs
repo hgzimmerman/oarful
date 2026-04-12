@@ -34,12 +34,13 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/login", get(auth::login_page).post(auth::login_handler))
         .route("/login/email", post(auth::email_step_handler))
         .route("/login/magic", post(auth::magic_login_handler))
+        .route("/login/pick", post(auth::pick_handler))
         .route("/logout", post(auth::logout_handler))
         .route(
             "/invite/{token}",
             get(users::accept_page).post(users::accept_handler),
         )
-        .route("/auth/magic/{token}", get(auth::magic_link_handler))
+        .route("/auth/magic/{slug}/{token}", get(auth::magic_link_handler))
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.

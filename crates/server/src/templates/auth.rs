@@ -120,6 +120,43 @@ pub(crate) fn login_password_step(
     })
 }
 
+/// Step 3 (optional): club picker when the user's email matches
+/// multiple tenants. Each button posts to `/login/pick` with the
+/// chosen tenant_id.
+pub(crate) fn login_club_picker(
+    email: &str,
+    password: &str,
+    clubs: &[(i32, String, Option<String>)], // (tenant_id, name, role)
+) -> Markup {
+    auth_shell("Choose your club", html! {
+        div class="bg-white rounded-lg shadow p-6 space-y-4" {
+            p class="text-sm text-slate-600 mb-2" {
+                "Your email is associated with multiple clubs. Choose one:"
+            }
+            @for (tenant_id, name, role) in clubs {
+                form method="post" action="/login/pick" {
+                    input type="hidden" name="email" value=(email);
+                    input type="hidden" name="password" value=(password);
+                    input type="hidden" name="tenant_id" value=(tenant_id);
+                    button type="submit"
+                           class="w-full text-left border border-slate-200 hover:border-slate-400 rounded-lg px-4 py-3 transition flex items-center justify-between" {
+                        div {
+                            div class="font-semibold text-slate-800" { (name) }
+                            @if let Some(r) = role {
+                                div class="text-xs text-slate-500" { (r) }
+                            }
+                        }
+                        span class="text-slate-400 text-sm" { "\u{2192}" }
+                    }
+                }
+            }
+            a href="/login" class="inline-block mt-2 text-sm text-slate-500 hover:text-slate-700" {
+                "Back"
+            }
+        }
+    })
+}
+
 /// Confirmation after sending a magic link login email.
 pub(crate) fn login_magic_sent(email: &str) -> Markup {
     auth_shell("Check your email", html! {

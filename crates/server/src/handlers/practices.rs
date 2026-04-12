@@ -368,7 +368,7 @@ pub(crate) async fn send_reminders_handler(
         let last_date = dates.iter().max().copied().unwrap();
         let expires_at = last_date.and_hms_opt(23, 59, 59).unwrap();
 
-        let created = create_magic_link(*user_id, "/my/availability", expires_at);
+        let created = create_magic_link(*user_id, "/my/availability", expires_at, Some(team_id));
         let raw_token = created.raw_token.clone();
 
         // Insert the magic link row.
@@ -379,7 +379,7 @@ pub(crate) async fn send_reminders_handler(
             .await
             .map_err(internal_error)?;
 
-        let magic_url = state.full_url(&format!("/auth/magic/{raw_token}"));
+        let magic_url = state.full_url(&format!("/auth/magic/{}/{raw_token}", tenant.config.tenant_slug));
         if let Err(err) = state
             .mailer
             .send_reminder(&email, &name, &team_name, dates, &magic_url)
@@ -655,7 +655,7 @@ pub(crate) async fn send_lineups_handler(
             // Each user gets their own magic link (different tokens).
             let first_date = summaries.first().map(|s| s.date).unwrap();
             let redirect = format!("/history/{first_date}");
-            let created = create_magic_link(*user_id, &redirect, expires_at);
+            let created = create_magic_link(*user_id, &redirect, expires_at, Some(team_id));
             let raw_token = created.raw_token.clone();
             let row = created.row;
 
@@ -665,7 +665,7 @@ pub(crate) async fn send_lineups_handler(
                 .await
                 .map_err(internal_error)?;
 
-            let magic_url = state.full_url(&format!("/auth/magic/{raw_token}"));
+            let magic_url = state.full_url(&format!("/auth/magic/{}/{raw_token}", tenant.config.tenant_slug));
             if let Err(err) = state
                 .mailer
                 .send_lineup(&email, &name, &team_name, &summaries, &magic_url)

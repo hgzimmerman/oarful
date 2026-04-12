@@ -60,6 +60,7 @@ diesel::table! {
         redirect_path -> Text,
         expires_at -> Timestamp,
         created_at -> Timestamp,
+        team_id -> Nullable<Integer>,
     }
 }
 

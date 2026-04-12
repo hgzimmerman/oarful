@@ -157,6 +157,22 @@ impl AppState {
             .get_or_connect(tenant_id, &self.master_db)
             .await
     }
+
+    /// Resolve a tenant by slug. Looks up the tenant_id in the master
+    /// DB, then delegates to [`tenant_db`].
+    pub(crate) async fn tenant_db_by_slug(
+        &self,
+        slug: &str,
+    ) -> anyhow::Result<(TenantId, Db, TenantConfig)> {
+        let slug = slug.to_string();
+        let tenant = self
+            .master_db
+            .with_conn(move |conn| Tenant::find_by_slug(conn, &slug))
+            .await?;
+        let tenant = tenant.ok_or_else(|| anyhow::anyhow!("unknown tenant slug"))?;
+        let (db, config) = self.tenant_db(tenant.id).await?;
+        Ok((tenant.id, db, config))
+    }
 }
 
 fn lookup_tenant(master_conn_str: &str, id: TenantId) -> anyhow::Result<Tenant> {

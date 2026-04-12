@@ -5,6 +5,7 @@
 use chrono::NaiveDateTime;
 use lineup_db::app_user::UserId;
 use lineup_db::magic_link::NewMagicLink;
+use lineup_db::team::TeamId;
 use sha2::{Digest, Sha256};
 
 /// Generate a random 32-hex-char token (same entropy as invite tokens).
@@ -39,6 +40,7 @@ pub(crate) fn create_magic_link(
     user_id: UserId,
     redirect_path: &str,
     expires_at: NaiveDateTime,
+    team_id: Option<TeamId>,
 ) -> CreatedMagicLink {
     let raw_token = generate_token();
     let token_hash = hash_token(&raw_token);
@@ -52,6 +54,7 @@ pub(crate) fn create_magic_link(
             redirect_path: redirect_path.to_string(),
             expires_at,
             created_at: now,
+            team_id,
         },
     }
 }

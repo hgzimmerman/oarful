@@ -6,6 +6,7 @@
 
 use crate::app_user::UserId;
 use crate::schema::magic_link;
+use crate::team::TeamId;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -18,6 +19,9 @@ pub struct MagicLink {
     pub redirect_path: String,
     pub expires_at: NaiveDateTime,
     pub created_at: NaiveDateTime,
+    /// Optional team context. When set, the JWT issued on magic-link
+    /// auth will use this as `active_team_id` instead of the default.
+    pub team_id: Option<TeamId>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -28,6 +32,7 @@ pub struct NewMagicLink {
     pub redirect_path: String,
     pub expires_at: NaiveDateTime,
     pub created_at: NaiveDateTime,
+    pub team_id: Option<TeamId>,
 }
 
 impl MagicLink {

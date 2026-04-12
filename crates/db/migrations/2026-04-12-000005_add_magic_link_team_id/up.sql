@@ -1,0 +1,1 @@
+ALTER TABLE magic_link ADD COLUMN team_id INTEGER;
