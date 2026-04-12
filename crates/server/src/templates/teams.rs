@@ -9,21 +9,28 @@ use super::layout::page_header;
 /// Sits in the navbar's right side. When only one team exists, shows
 /// the name as plain text (no dropdown) since there's nothing to
 /// switch to.
-pub(crate) fn selector(teams: &[Team], active: TeamId) -> Markup {
+pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>) -> Markup {
+    let tenant_prefix = tenant_name.map(|n| html! {
+        span class="text-xs text-slate-400 mr-2 hidden 2xl:inline" { (n) " ·" }
+    });
+
     if teams.len() <= 1 {
-        // Single team — no switcher needed, just show the name.
         let name = teams
             .first()
             .map(|t| t.name.as_str())
             .unwrap_or("No team");
         return html! {
-            span class="text-sm text-slate-300" { (name) }
+            span class="flex items-center" {
+                @if let Some(prefix) = tenant_prefix { (prefix) }
+                span class="text-sm text-slate-300" { (name) }
+            }
         };
     }
 
     html! {
         form method="post" action="/switch-team"
              class="flex items-center space-x-2" {
+            @if let Some(prefix) = tenant_prefix { (prefix) }
             label class="text-xs text-slate-400 uppercase tracking-wide" { "Team" }
             select name="team_id"
                    onchange="this.form.submit()"

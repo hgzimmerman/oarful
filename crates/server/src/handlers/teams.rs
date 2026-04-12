@@ -55,8 +55,9 @@ pub(crate) async fn selector_handler(
         })
         .await
         .map_err(internal_error)?;
+    let tenant_name = if is_pd { Some(tenant.config.tenant_name.as_str()) } else { None };
     Ok(Html(
-        templates::teams::selector(&teams, active).into_string(),
+        templates::teams::selector(&teams, active, tenant_name).into_string(),
     ))
 }
 

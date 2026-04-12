@@ -115,6 +115,7 @@ diesel::table! {
         team_id -> Integer,
         date -> Date,
         notes -> Nullable<Text>,
+        cancelled -> Integer,
     }
 }
 

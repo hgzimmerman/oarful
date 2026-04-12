@@ -43,6 +43,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/", get(|| async { Redirect::permanent("/practices") }))
         .route("/practices", get(practices::list_handler).post(practices::create_handler))
+        .route("/practices/{date}/cancel", post(practices::cancel_handler))
         .route("/solve/{date}", get(solve::view_handler))
         .route("/solve/{date}/editor", get(solve::editor_handler))
         .route("/solve/{date}/preset-bar", get(solve::preset_bar_handler))

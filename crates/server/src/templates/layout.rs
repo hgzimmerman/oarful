@@ -94,7 +94,7 @@ fn navbar(role: Option<Role>) -> Markup {
                 }
 
                 // Desktop nav links (hidden on mobile)
-                ul class="hidden md:flex items-center space-x-4" {
+                ul class="hidden lg:flex items-center space-x-4" {
                     (nav_link("/practices", "Practices"))
                     @if is_coach {
                         (nav_link("/boats", "Fleet"))
@@ -118,7 +118,7 @@ fn navbar(role: Option<Role>) -> Markup {
                 }
 
                 // Hamburger button (mobile only)
-                button class="md:hidden p-2 rounded hover:bg-white/10"
+                button class="lg:hidden p-2 rounded hover:bg-white/10"
                        "@click"="open = !open"
                        aria-label="Menu" {
                     // Hamburger icon
@@ -129,7 +129,7 @@ fn navbar(role: Option<Role>) -> Markup {
             }
 
             // Mobile menu (toggles)
-            ul class="md:hidden flex-col space-y-1 pt-3"
+            ul class="lg:hidden flex-col space-y-1 pt-3"
                x-show="open"
                x-cloak
                "@click"="open = false" {

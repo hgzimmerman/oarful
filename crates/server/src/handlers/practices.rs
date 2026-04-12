@@ -17,6 +17,8 @@ use lineup_db::availability::Availability;
 use lineup_db::practice::Practice;
 use serde::Deserialize;
 
+use axum::extract::Path;
+
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -47,12 +49,25 @@ pub(crate) async fn list_handler(
                 .filter(|d| *d < today)
                 .collect();
 
-            // All dates, with committed status.
+            // All dates, with committed + cancelled status.
             let all_dates: BTreeSet<_> = upcoming.iter().chain(past_dates.iter()).copied().collect();
             let date_vec: Vec<_> = all_dates.iter().copied().collect();
             let committed_dates: HashSet<_> = Practice::committed_dates(conn, team_id, &date_vec)?
                 .into_iter()
                 .collect();
+            // Build a set of cancelled dates.
+            let cancelled_dates: HashSet<NaiveDate> = {
+                use diesel::prelude::*;
+                use lineup_db::schema::practice as p;
+                p::table
+                    .filter(p::team_id.eq(team_id))
+                    .filter(p::date.eq_any(&date_vec))
+                    .filter(p::cancelled.ne(0))
+                    .select(p::date)
+                    .get_results::<NaiveDate>(conn)?
+                    .into_iter()
+                    .collect()
+            };
 
             let mut rows = Vec::with_capacity(all_dates.len());
             for date in all_dates.iter().rev() {
@@ -70,6 +85,7 @@ pub(crate) async fn list_handler(
                     total_responses,
                     has_committed: committed_dates.contains(date),
                     is_upcoming: *date >= today,
+                    cancelled: cancelled_dates.contains(date),
                 });
             }
             Ok(rows)
@@ -103,6 +119,30 @@ pub(crate) async fn create_handler(
     tenant
         .db
         .with_conn(move |conn| Practice::upsert_by_date(conn, team_id, date, None))
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Redirect::to("/practices"))
+}
+
+/// `POST /practices/{date}/cancel` — toggle cancelled status.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn cancel_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(date): Path<NaiveDate>,
+) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    tenant
+        .db
+        .with_conn(move |conn| {
+            let practice = Practice::find_by_date(conn, team_id, date)?
+                .ok_or(diesel::result::Error::NotFound)?;
+            let new_cancelled = !practice.cancelled.as_bool();
+            Practice::set_cancelled(conn, team_id, date, new_cancelled)
+        })
         .await
         .map_err(internal_error)?;
 

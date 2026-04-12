@@ -1,5 +1,6 @@
 use crate::schema::{lineup, practice};
 use crate::team::TeamId;
+use crate::types::IntBool;
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -62,6 +63,7 @@ pub struct Practice {
     pub team_id: TeamId,
     pub date: NaiveDate,
     pub notes: Option<String>,
+    pub cancelled: IntBool,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -151,7 +153,7 @@ impl Practice {
     }
 
     /// Future practice dates (on or after `today`), ordered ascending.
-    /// Includes practices with no availability records yet.
+    /// Excludes cancelled practices.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn list_upcoming(
         conn: &mut SqliteConnection,
@@ -161,9 +163,28 @@ impl Practice {
         practice::table
             .filter(practice::team_id.eq(team_id))
             .filter(practice::date.ge(today))
+            .filter(practice::cancelled.eq(0))
             .select(practice::date)
             .order(practice::date.asc())
             .get_results(conn)
+    }
+
+    /// Toggle the cancelled flag on a practice.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn set_cancelled(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        date: NaiveDate,
+        cancelled: bool,
+    ) -> Result<Practice, diesel::result::Error> {
+        diesel::update(
+            practice::table
+                .filter(practice::team_id.eq(team_id))
+                .filter(practice::date.eq(date)),
+        )
+        .set(practice::cancelled.eq(if cancelled { 1 } else { 0 }))
+        .returning(Practice::as_returning())
+        .get_result(conn)
     }
 
     /// Find an existing practice for a (team, date) pair.

@@ -12,6 +12,7 @@ pub(crate) struct PracticeRow {
     pub(crate) total_responses: usize,
     pub(crate) has_committed: bool,
     pub(crate) is_upcoming: bool,
+    pub(crate) cancelled: bool,
 }
 
 pub(crate) fn list_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
@@ -86,7 +87,9 @@ fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     };
     let clickable = !href.is_empty();
 
-    let base_class = if row.is_upcoming {
+    let base_class = if row.cancelled {
+        "flex items-center justify-between px-6 py-3 opacity-40"
+    } else if row.is_upcoming {
         "flex items-center justify-between px-6 py-4"
     } else {
         "flex items-center justify-between px-6 py-3 opacity-60"
@@ -99,21 +102,29 @@ fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
               hx-get=(href)
               hx-target="#content"
               hx-push-url="true" {
-                (row_inner(row, &weekday))
+                (row_inner(row, &weekday, is_coach))
             }
         } @else {
             div class=(base_class) {
-                (row_inner(row, &weekday))
+                (row_inner(row, &weekday, is_coach))
             }
         }
     }
 }
 
-fn row_inner(row: &PracticeRow, weekday: &str) -> Markup {
+fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
+    let cancel_action = format!("/practices/{}/cancel", row.date);
     html! {
         div {
             div class="flex items-center gap-2" {
-                span class="font-semibold text-slate-800" { (row.date) }
+                @if row.cancelled {
+                    span class="font-semibold text-slate-800 line-through" { (row.date) }
+                    span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full" {
+                        "Cancelled"
+                    }
+                } @else {
+                    span class="font-semibold text-slate-800" { (row.date) }
+                }
                 @if row.has_committed {
                     span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" {
                         "Committed"
@@ -122,14 +133,27 @@ fn row_inner(row: &PracticeRow, weekday: &str) -> Markup {
             }
             div class="text-sm text-slate-500" { (weekday) }
         }
-        @if row.is_upcoming {
-            div class="text-right" {
-                div class="text-lg font-bold text-emerald-700" {
-                    (row.yes_count) " available"
+        div class="flex items-center gap-3" {
+            @if row.is_upcoming && !row.cancelled {
+                div class="text-right" {
+                    div class="text-lg font-bold text-emerald-700" {
+                        (row.yes_count) " available"
+                    }
+                    @if row.total_responses > 0 {
+                        div class="text-xs text-slate-500" {
+                            (row.total_responses) " responses"
+                        }
+                    }
                 }
-                @if row.total_responses > 0 {
-                    div class="text-xs text-slate-500" {
-                        (row.total_responses) " responses"
+            }
+            @if is_coach {
+                form method="post" action=(cancel_action)
+                     hx-post=(cancel_action)
+                     hx-target="#content"
+                     onclick="event.stopPropagation(); event.preventDefault(); this.requestSubmit();" {
+                    button type="submit"
+                           class="text-xs text-slate-400 hover:text-red-600 font-medium no-print" {
+                        @if row.cancelled { "Restore" } @else { "Cancel" }
                     }
                 }
             }

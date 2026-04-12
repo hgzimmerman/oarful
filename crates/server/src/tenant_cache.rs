@@ -12,10 +12,11 @@ use lineup_master_db::state::MasterDb;
 use lineup_master_db::tenant::{Tenant, TenantId};
 
 /// Tenant-level UI configuration flags, cached from the master DB.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct TenantConfig {
     pub(crate) attributes_public: bool,
     pub(crate) force_cox_stern: bool,
+    pub(crate) tenant_name: String,
 }
 
 impl TenantConfig {
@@ -23,6 +24,7 @@ impl TenantConfig {
         Self {
             attributes_public: t.are_attributes_public(),
             force_cox_stern: t.force_cox_stern(),
+            tenant_name: t.name.clone(),
         }
     }
 }
@@ -64,7 +66,7 @@ impl TenantCache {
     ) -> anyhow::Result<(Db, TenantConfig)> {
         // Fast path: already cached.
         if let Some(cached) = self.tenants.lock().unwrap().get(&tenant_id) {
-            return Ok((cached.db.clone(), cached.config));
+            return Ok((cached.db.clone(), cached.config.clone()));
         }
 
         // Slow path: look up the tenant's db_path in the master DB
@@ -86,7 +88,7 @@ impl TenantCache {
         // fine, the first writer wins and the second Db gets dropped.
         let cached = CachedTenant {
             db: db.clone(),
-            config,
+            config: config.clone(),
         };
         self.tenants
             .lock()
