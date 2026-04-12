@@ -352,6 +352,22 @@ culprit) remains parked pending a Pumpkin API dive.
   faster, so the "even speed" profile should stack smaller boats
   (4s) with stronger rowers rather than distributing evenly. An 8
   tolerates weaker rowers better than a 4.
+- **Boat-type biases** — per-boat-class solver preferences so
+  coaches can express "I want to field eights today" or "prioritize
+  the 4+ over the pair." Potential approaches:
+  - Per-boat-class priority weight on `SolveRequest` (e.g.
+    `eight_bias`, `four_bias`, `pair_bias`) that scales the S8
+    placement reward by boat class. Higher bias = solver tries
+    harder to field that class.
+  - Per-boat toggle in the UI: "must field" (hard), "prefer"
+    (soft bonus), "avoid" (soft penalty), "exclude" (hard).
+    Currently the boat pill on/off is binary include/exclude;
+    this would add intermediate states.
+  - Greedy fleet pre-selection could rank by bias before size,
+    letting the coach override the default largest-first heuristic.
+  - Interaction with boat-size stacking (S19): if the coach biases
+    towards 4s, the even-speed profile should stack them
+    accordingly rather than treating them as overflow.
 
 ### Per-team roles
 
