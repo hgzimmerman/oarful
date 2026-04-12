@@ -17,6 +17,7 @@ use crate::{state::AppState, templates};
 
 pub(crate) mod auth;
 pub(crate) mod boats;
+pub(crate) mod demo;
 pub(crate) mod my;
 pub(crate) mod users;
 pub(crate) mod history;
@@ -41,6 +42,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(users::accept_page).post(users::accept_handler),
         )
         .route("/auth/magic/{slug}/{token}", get(auth::magic_link_handler))
+        .route("/demo", post(demo::create_demo_handler))
+        .route("/demo/resume", get(demo::resume_demo_handler).post(demo::resume_demo_handler))
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.

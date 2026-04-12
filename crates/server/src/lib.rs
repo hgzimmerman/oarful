@@ -32,6 +32,21 @@ pub fn build_router(
     mailer: std::sync::Arc<dyn mailer::Mailer>,
 ) -> anyhow::Result<Router> {
     let state = AppState::new(master_conn_str, tenant_conn_str, mailer)?;
+
+    // Run demo cleanup at startup, then periodically.
+    let cleanup_state = state.clone();
+    tokio::spawn(async move {
+        // Startup sweep.
+        handlers::demo::cleanup_expired_demos(&cleanup_state).await;
+        // Then every hour.
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        interval.tick().await; // skip the immediate first tick
+        loop {
+            interval.tick().await;
+            handlers::demo::cleanup_expired_demos(&cleanup_state).await;
+        }
+    });
+
     Ok(handlers::create_router(state)
         .fallback_service(ServeDir::new(public_dir))
         .layer(axum::middleware::from_fn(request_id::request_tracing)))

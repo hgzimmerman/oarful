@@ -41,8 +41,9 @@ const KNOWN_USER_MAX_AGE: time::Duration = time::Duration::days(365);
 /// `GET /login` — render the email form (step 1).
 pub(crate) async fn login_page(jar: CookieJar) -> Html<String> {
     let prefill = jar.get(KNOWN_USER_COOKIE).map(|c| c.value().to_string());
+    let has_demo = jar.get(super::demo::DEMO_SLUG_COOKIE).is_some();
     Html(
-        templates::auth::login_email_step(None, prefill.as_deref()).into_string(),
+        templates::auth::login_email_step(None, prefill.as_deref(), has_demo).into_string(),
     )
 }
 
@@ -65,7 +66,7 @@ pub(crate) async fn email_step_handler(
     let email = input.email.trim().to_lowercase();
     if email.is_empty() {
         return Html(
-            templates::auth::login_email_step(Some("Email is required."), None).into_string(),
+            templates::auth::login_email_step(Some("Email is required."), None, false).into_string(),
         );
     }
     let show_magic = jar.get(KNOWN_USER_COOKIE).is_some();

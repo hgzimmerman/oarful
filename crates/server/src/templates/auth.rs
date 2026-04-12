@@ -45,10 +45,14 @@ fn success_banner(msg: &str) -> Markup {
 /// Step 1: email-only form. `prefill_email` comes from the long-lived
 /// `known_user` cookie.
 pub(crate) fn login_page(error: Option<&str>) -> Markup {
-    login_email_step(error, None)
+    login_email_step(error, None, false)
 }
 
-pub(crate) fn login_email_step(error: Option<&str>, prefill_email: Option<&str>) -> Markup {
+pub(crate) fn login_email_step(
+    error: Option<&str>,
+    prefill_email: Option<&str>,
+    has_demo_cookie: bool,
+) -> Markup {
     auth_shell("Login", html! {
         @if let Some(msg) = error {
             (error_banner(msg))
@@ -65,6 +69,26 @@ pub(crate) fn login_email_step(error: Option<&str>, prefill_email: Option<&str>)
             button type="submit"
                    class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
                 "Continue"
+            }
+        }
+
+        // Demo section
+        div class="mt-6 text-center" {
+            div class="text-xs text-slate-400 mb-2" { "or" }
+            @if has_demo_cookie {
+                form method="post" action="/demo/resume" {
+                    button type="submit"
+                           class="w-full border border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-800 font-medium py-2 rounded transition text-sm" {
+                        "Resume demo"
+                    }
+                }
+            } @else {
+                form method="post" action="/demo" {
+                    button type="submit"
+                           class="w-full border border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-800 font-medium py-2 rounded transition text-sm" {
+                        "Try demo"
+                    }
+                }
             }
         }
     })

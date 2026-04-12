@@ -66,6 +66,9 @@ pub struct Tenant {
     /// When `1`, always display the coxswain at the top of the lineup
     /// (stern position) regardless of per-boat `cox_position`.
     pub force_cox_stern: i32,
+    /// When set, this tenant is an ephemeral demo that should be
+    /// cleaned up after this timestamp.
+    pub demo_expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -84,6 +87,31 @@ impl Tenant {
 
     pub fn force_cox_stern(&self) -> bool {
         self.force_cox_stern != 0
+    }
+
+    pub fn is_demo(&self) -> bool {
+        self.demo_expires_at.is_some()
+    }
+
+    /// List all expired demo tenants (for cleanup).
+    pub fn list_expired_demos(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<Tenant>, diesel::result::Error> {
+        let now = chrono::Utc::now().naive_utc();
+        tenant::table
+            .filter(tenant::demo_expires_at.is_not_null())
+            .filter(tenant::demo_expires_at.lt(now))
+            .select(Tenant::as_select())
+            .get_results(conn)
+    }
+
+    /// Delete a tenant row from the master DB.
+    pub fn delete(
+        conn: &mut SqliteConnection,
+        id: TenantId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::delete(tenant::table.find(id)).execute(conn)?;
+        Ok(())
     }
 
     pub fn list_all(

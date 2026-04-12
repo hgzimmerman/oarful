@@ -17,6 +17,16 @@ use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 
+/// Seed a demo tenant. Same fixture as `seed_if_empty` but with a
+/// `demo@localhost` coach account (no password — accessed only via
+/// magic links or direct JWT). Always seeds unconditionally.
+#[tracing::instrument(level = "info", skip(conn), err)]
+pub fn seed_demo(conn: &mut SqliteConnection) -> Result<crate::app_user::UserId, diesel::result::Error> {
+    conn.transaction(|conn| {
+        seed_all_inner(conn, true)
+    })
+}
+
 /// Seed the db only if there are zero rowers. Safe to call on every startup.
 #[tracing::instrument(level = "info", skip(conn), err)]
 pub fn seed_if_empty(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
@@ -24,7 +34,10 @@ pub fn seed_if_empty(conn: &mut SqliteConnection) -> Result<(), diesel::result::
         tracing::info!("Fixture already seeded, skipping");
         return Ok(());
     }
-    conn.transaction(|conn| seed_all(conn))
+    conn.transaction(|conn| {
+        seed_all_inner(conn, false)?;
+        Ok(())
+    })
 }
 
 /// Seed only the fleet (boats) + team + coach account, no rowers.
@@ -66,8 +79,8 @@ pub fn seed_fleet_only(conn: &mut SqliteConnection) -> Result<(), diesel::result
     })
 }
 
-fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
-    tracing::info!("Seeding toy fixture");
+fn seed_all_inner(conn: &mut SqliteConnection, demo: bool) -> Result<crate::app_user::UserId, diesel::result::Error> {
+    tracing::info!(demo, "Seeding toy fixture");
 
     // --- team (use existing if the migration seeded one, else create) ---
     let now = chrono::Utc::now().naive_utc();
@@ -89,8 +102,14 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
         rower_ids.push(inserted.id);
     }
 
-    // --- practice + availabilities for an upcoming date ---
-    let date = NaiveDate::from_ymd_opt(2026, 4, 11).expect("valid date");
+    // --- practice + availabilities ---
+    // Demo uses tomorrow so there's always an upcoming practice.
+    // Dev uses a fixed date for deterministic baselines.
+    let date = if demo {
+        chrono::Utc::now().date_naive() + chrono::TimeDelta::try_days(1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(2026, 4, 11).expect("valid date")
+    };
     Practice::upsert_by_date(conn, team.id, date, Some("Toy seeded practice".to_string()))?;
 
     let statuses = [
@@ -161,17 +180,21 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
         )?;
     }
 
-    // --- dev user (ProgramDirector, password "12345") ---
-    //
-    // Pre-computed bcrypt hash (cost 4) so the fixture is
-    // deterministic and fast. This is a dev-only account.
-    let hash = "$2b$04$GM6z8WroCGjpPpOAzMpVwu3WOrWykUBFY40rmEXs.JJemMkBRsUXK";
+    // --- user account ---
+    let (email, name, password_hash) = if demo {
+        // Demo account: no password, accessed via direct JWT issuance.
+        ("demo@localhost".to_string(), "Demo Coach".to_string(), None)
+    } else {
+        // Dev account: password "12345" (bcrypt cost 4, pre-computed).
+        let hash = "$2b$04$GM6z8WroCGjpPpOAzMpVwu3WOrWykUBFY40rmEXs.JJemMkBRsUXK";
+        ("coach@test.com".to_string(), "Dev Coach".to_string(), Some(hash.to_string()))
+    };
     let user = AppUser::create(
         conn,
         NewAppUser {
-            email: "coach@test.com".to_string(),
-            password_hash: Some(hash.to_string()),
-            name: "Dev Coach".to_string(),
+            email,
+            password_hash,
+            name,
             status: "active".to_string(),
             created_at: now,
             updated_at: now,
@@ -179,7 +202,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     )?;
     AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
 
-    Ok(())
+    Ok(user.id)
 }
 
 fn toy_boats() -> Vec<NewBoat> {
