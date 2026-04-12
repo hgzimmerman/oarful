@@ -30,6 +30,7 @@ use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WE
 use serde::Deserialize;
 
 use lineup_db::app_user::Role;
+use lineup_db::team::{SelfEditLevel, Team};
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
@@ -76,12 +77,14 @@ pub(crate) async fn list_handler(
 /// Used by the Cancel button to restore the display view.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn attributes_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
+    let perms = resolve_perms(&tenant, &jar, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
-        templates::rowers::attribute_section(&rower, None, &templates::rowers::DetailPermissions::coach()).into_string(),
+        templates::rowers::attribute_section(&rower, None, &perms).into_string(),
     ))
 }
 
@@ -89,13 +92,14 @@ pub(crate) async fn attributes_handler(
 /// Triggered by the Edit button on the attribute section.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn edit_attributes_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
 ) -> Result<Html<String>, StatusCode> {
-    require_coach_or_self(&tenant, id).await?;
+    let perms = resolve_perms(&tenant, &jar, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
-        templates::rowers::attribute_edit_section(&rower, None, &templates::rowers::DetailPermissions::coach()).into_string(),
+        templates::rowers::attribute_edit_section(&rower, None, &perms).into_string(),
     ))
 }
 
@@ -120,11 +124,12 @@ pub(crate) struct RowerEditInput {
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn update_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<RowerEditInput>,
 ) -> Result<Html<String>, StatusCode> {
-    require_coach_or_self(&tenant, id).await?;
+    let perms = resolve_perms(&tenant, &jar, id).await?;
     let mut rower = load(&tenant.db, id).await?;
 
     // Parse string enums into typed values. Any unknown variant gets
@@ -135,20 +140,21 @@ pub(crate) async fn update_handler(
         Ok(typed) => typed,
         Err(msg) => {
             return Ok(Html(
-                templates::rowers::attribute_edit_section(&rower, Some(&msg), &templates::rowers::DetailPermissions::coach()).into_string(),
+                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms).into_string(),
             ));
         }
     };
 
-    rower.weight_class = typed.weight_class;
-    rower.skill = typed.skill;
-    rower.strength = typed.strength;
-    rower.height = typed.height;
-    rower.side = typed.side;
-    rower.side_strength = typed.side_strength;
-    rower.can_cox = IntBool::new(typed.can_cox);
-    rower.can_scull = IntBool::new(typed.can_scull);
-    rower.is_designated_cox = IntBool::new(typed.is_designated_cox);
+    // Only apply fields the user is allowed to edit.
+    if perms.can_edit("weight_class") { rower.weight_class = typed.weight_class; }
+    if perms.can_edit("skill") { rower.skill = typed.skill; }
+    if perms.can_edit("strength") { rower.strength = typed.strength; }
+    if perms.can_edit("height") { rower.height = typed.height; }
+    if perms.can_edit("side") { rower.side = typed.side; }
+    if perms.can_edit("side_strength") { rower.side_strength = typed.side_strength; }
+    if perms.can_edit("can_cox") { rower.can_cox = IntBool::new(typed.can_cox); }
+    if perms.can_edit("can_scull") { rower.can_scull = IntBool::new(typed.can_scull); }
+    if perms.can_edit("is_designated_cox") { rower.is_designated_cox = IntBool::new(typed.is_designated_cox); }
 
     let saved = tenant
         .db
@@ -157,7 +163,7 @@ pub(crate) async fn update_handler(
         .map_err(internal_error)?;
 
     Ok(Html(
-        templates::rowers::attribute_section(&saved, None, &templates::rowers::DetailPermissions::coach()).into_string(),
+        templates::rowers::attribute_section(&saved, None, &perms).into_string(),
     ))
 }
 
@@ -239,6 +245,34 @@ async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
     maybe.ok_or(StatusCode::NOT_FOUND)
 }
 
+/// Resolve permissions for a rower edit: Coach+ gets full access,
+/// a member editing their own profile gets member-level perms gated
+/// by the team's self-edit trust level.
+async fn resolve_perms(
+    tenant: &TenantContext,
+    jar: &CookieJar,
+    rower_id: RowerId,
+) -> Result<templates::rowers::DetailPermissions, StatusCode> {
+    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    if is_coach {
+        return Ok(templates::rowers::DetailPermissions::coach());
+    }
+    // Member — check they own this rower, then look up trust level.
+    let rower = load(&tenant.db, rower_id).await?;
+    if rower.user_id != Some(tenant.claims.sub) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
+    let level = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, team_id))
+        .await
+        .map_err(internal_error)?
+        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .unwrap_or(SelfEditLevel::Low);
+    Ok(templates::rowers::DetailPermissions::member(level))
+}
+
 // =====================================================================
 // Per-rower detail page + affinity CRUD
 // =====================================================================
@@ -256,12 +290,14 @@ async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
 /// `GET /rowers/{id}` — full detail page.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn detail_handler(
+    jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
+    let perms = resolve_perms(&tenant, &jar, id).await?;
     let detail = load_detail(&tenant.db, id).await?;
-    let content = templates::rowers::detail_content(&detail, templates::rowers::DetailPermissions::coach());
+    let content = templates::rowers::detail_content(&detail, perms);
     Ok(super::maybe_page_authed(
         &format!("Rower · {}", detail.rower.name),
         content,
@@ -278,20 +314,6 @@ pub(crate) struct RowerDetail {
     pub(crate) seat_affinities: Vec<SeatAffinity>,
     pub(crate) pair_affinities: Vec<PairAffinity>,
     pub(crate) other_rowers: Vec<Rower>,
-}
-
-/// Allow if user is Coach+ or is editing their own rower profile.
-async fn require_coach_or_self(tenant: &TenantContext, rower_id: RowerId) -> Result<(), StatusCode> {
-    if tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach) {
-        return Ok(());
-    }
-    // Check if this rower is linked to the current user.
-    let user_id = tenant.claims.sub;
-    let rower = load(&tenant.db, rower_id).await?;
-    if rower.user_id == Some(user_id) {
-        return Ok(());
-    }
-    Err(StatusCode::FORBIDDEN)
 }
 
 pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {

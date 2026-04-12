@@ -30,6 +30,9 @@ impl DetailPermissions {
         Self { can_edit_affinities: false, self_edit_level: Some(level) }
     }
     /// Whether a specific field is editable.
+    pub(crate) fn can_edit(&self, field: &str) -> bool {
+        self.can_edit_field(field)
+    }
     fn can_edit_field(&self, field: &str) -> bool {
         match self.self_edit_level {
             None => field != "active", // Coach+ can edit everything except active

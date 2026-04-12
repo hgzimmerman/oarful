@@ -17,6 +17,8 @@ use lineup_db::rower::Rower;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
 
+use lineup_db::team::{SelfEditLevel, Team};
+
 use crate::{handlers::internal_error, handlers::rowers::load_detail, state::TenantContext, templates};
 
 // =====================================================================
@@ -64,22 +66,34 @@ pub(crate) async fn profile_update_handler(
 ) -> Result<Html<String>, StatusCode> {
     let mut rower = load_my_rower(&tenant).await?;
 
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let level = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, team_id))
+        .await
+        .map_err(internal_error)?
+        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .unwrap_or(SelfEditLevel::Low);
+    let perms = templates::rowers::DetailPermissions::member(level);
+
     // Parse and apply — same validation as the admin rower edit,
     // but scoped to the authenticated user's own record.
     let parsed = match parse_profile(&input) {
         Ok(p) => p,
         Err(msg) => {
-            let content = templates::my::profile_content_with_error(&rower, &msg);
-            return Ok(super::maybe_page_authed("My profile", content, hx, &tenant));
+            return Ok(Html(
+                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms).into_string(),
+            ));
         }
     };
 
-    rower.weight_class = parsed.weight_class;
-    rower.skill = parsed.skill;
-    rower.strength = parsed.strength;
-    rower.side = parsed.side;
-    rower.side_strength = parsed.side_strength;
-    rower.can_scull = IntBool::new(parsed.can_scull);
+    // Only apply fields the trust level allows.
+    if perms.can_edit("weight_class") { rower.weight_class = parsed.weight_class; }
+    if perms.can_edit("skill") { rower.skill = parsed.skill; }
+    if perms.can_edit("strength") { rower.strength = parsed.strength; }
+    if perms.can_edit("side") { rower.side = parsed.side; }
+    if perms.can_edit("side_strength") { rower.side_strength = parsed.side_strength; }
+    if perms.can_edit("can_scull") { rower.can_scull = IntBool::new(parsed.can_scull); }
 
     let saved = tenant
         .db
@@ -87,7 +101,10 @@ pub(crate) async fn profile_update_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::my::profile_content(&saved);
+    // Re-render the full detail page with correct permissions.
+    let rower_id = saved.id;
+    let detail = load_detail(&tenant.db, rower_id).await?;
+    let content = templates::rowers::detail_content(&detail, perms);
     Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
 }
 
