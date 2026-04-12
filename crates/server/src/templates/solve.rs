@@ -438,7 +438,7 @@ function lineupEditor() {{
             var isHidden = card.dataset.hidden === 'true';
             if (isHidden) {{
                 // Show an empty boat card.
-                card.style.display = '';
+                card.removeAttribute('style');
                 card.dataset.hidden = 'false';
                 if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer';
             }} else {{
@@ -465,7 +465,7 @@ function lineupEditor() {{
                 rowers.forEach(function(r) {{
                     self.addPoolPill(r.id, r.name, r.stats);
                 }});
-                card.style.display = 'none';
+                card.setAttribute('style', 'display:none');
                 card.dataset.hidden = 'true';
                 if (pill) pill.className = 'px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer';
             }}

@@ -25,11 +25,12 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
                 style { "[x-cloak] { display: none !important; }" }
-                // Re-initialize Alpine on HTMX-swapped content so
-                // x-data components and @click handlers work after
-                // partial page updates.
+                // Re-initialize Alpine on full page swaps so x-data
+                // components work after HTMX navigation. Scoped to
+                // #content to avoid re-processing partial swaps
+                // (preset bar, team selector) inside live components.
                 script {
-                    "document.addEventListener('htmx:afterSettle', function(e) { if (typeof Alpine !== 'undefined') Alpine.initTree(e.detail.elt); });"
+                    "document.addEventListener('htmx:afterSettle', function(e) { if (typeof Alpine !== 'undefined' && e.detail.target && e.detail.target.id === 'content') Alpine.initTree(e.detail.target); });"
                 }
                 // Print-friendly overrides: hide chrome, expand content
                 style { r#"
