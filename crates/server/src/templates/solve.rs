@@ -585,7 +585,7 @@ pub(crate) fn landing_content(
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles))
+                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles, snapshot))
                 (walkon_section(date, &unavailable, knobs))
             }
             (lineup_editor(snapshot, date, &editor, flags, knobs))
@@ -695,7 +695,7 @@ pub(crate) fn view_content(
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, true, custom_profiles))
+                (knobs_form(date, knobs, committed_practices, true, custom_profiles, snapshot))
             }
             (status_banner(date, result))
             (lineup_editor(snapshot, date, &editor, flags, knobs))
@@ -711,10 +711,28 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)]) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot) -> Markup {
+    let has_eight = snapshot.sweep_boats.iter().any(|b| b.seat_count >= 8);
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{date}");
     html! {
+        // Segmented button helper: update hidden input + toggle active style.
+        script {
+            (maud::PreEscaped(r#"
+            function segmentedSelect(btn, name, value) {
+                var form = btn.closest('form');
+                if (form) {
+                    var hidden = form.querySelector('input[type="hidden"][name="' + name + '"]');
+                    if (hidden) hidden.value = value;
+                }
+                var siblings = btn.parentElement.querySelectorAll('button');
+                siblings.forEach(function(b) {
+                    b.className = 'px-3 py-2 text-slate-700 hover:bg-slate-100';
+                });
+                btn.className = 'px-3 py-2 font-semibold bg-slate-800 text-white';
+            }
+            "#))
+        }
         section class="bg-white rounded-lg shadow p-6" {
             form method="get" action=(action)
                  hx-get=(action)
@@ -820,7 +838,8 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
 
                 // Solver knobs
                 div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end" {
-                    // Partial fill — segmented (Off / 1 / 2)
+                    // Partial fill — only relevant when the fleet has an 8+
+                    @if has_eight {
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
                             "Partial fill"
@@ -833,14 +852,15 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                 } else {
                                     "px-3 py-2 text-slate-700 hover:bg-slate-100"
                                 };
-                                button type="submit" name="partial" value=(val) class=(cls) {
+                                button type="button" class=(cls)
+                                       onclick={"segmentedSelect(this, 'partial', " (val) ")"} {
                                     (lbl)
                                 }
                             }
                         }
-                        // Hidden fallback when Generate (not a partial button) is clicked
                         input type="hidden" name="partial" value=(knobs.partial);
                         p class="text-xs text-slate-500 mt-1" { "Empty optional seats per boat" }
+                    }
                     }
 
                     // Alternatives — segmented (0 / 1 / 2 / 3)
@@ -856,7 +876,8 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                 } else {
                                     "px-3 py-2 text-slate-700 hover:bg-slate-100"
                                 };
-                                button type="submit" name="alts" value=(n) class=(cls) {
+                                button type="button" class=(cls)
+                                       onclick={"segmentedSelect(this, 'alts', " (n) ")"} {
                                     (n)
                                 }
                             }
