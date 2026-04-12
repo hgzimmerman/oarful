@@ -234,14 +234,14 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                             "border-b border-slate-100 last:border-0"
                         };
                         tr class=(row_class) {
-                            td class="px-4 py-2 w-12" {
+                            td class="px-2 sm:px-4 py-1.5 sm:py-2 w-10 sm:w-12" {
                                 (seat_badge(boat, *pos, &label))
                             }
-                            td class="px-4 py-2 text-slate-800" {
+                            td class="px-2 sm:px-4 py-1.5 sm:py-2 text-slate-800 truncate" {
                                 @if let Some(r) = rower {
                                     (r.name)
                                     @if is_stale {
-                                        span class="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                                        span class="ml-1 sm:ml-2 text-xs bg-amber-200 text-amber-800 px-1 sm:px-1.5 py-0.5 rounded-full" {
                                             "unavailable"
                                         }
                                     }
@@ -251,7 +251,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                             }
                             @if is_coach {
                                 @if maybe_seat.is_some() {
-                                    td class="px-4 py-2 text-right w-16 no-print" {
+                                    td class="px-2 sm:px-4 py-1.5 sm:py-2 text-right w-20 no-print whitespace-nowrap" {
                                         label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
                                             input type="checkbox" name="no_show" value=(maybe_seat.unwrap().rower_id)
                                                   class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
@@ -259,7 +259,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                                         }
                                     }
                                 } @else {
-                                    td class="w-16" {}
+                                    td class="w-20" {}
                                 }
                             }
                             (side_indicator(rower))
