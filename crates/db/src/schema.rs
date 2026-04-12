@@ -187,6 +187,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    email_log (id) {
+        id -> Integer,
+        team_id -> Integer,
+        email_type -> Text,
+        practice_date -> Date,
+        sent_at -> Timestamp,
+        recipient_count -> Integer,
+        sent_by_user_id -> Integer,
+    }
+}
+
+diesel::table! {
     sync_source (id) {
         id -> Integer,
         team_id -> Integer,
@@ -205,6 +217,7 @@ diesel::joinable!(rower -> app_user (user_id));
 diesel::joinable!(user_role -> app_user (user_id));
 diesel::joinable!(user_invite -> app_user (user_id));
 diesel::joinable!(magic_link -> app_user (user_id));
+diesel::joinable!(email_log -> team (team_id));
 diesel::joinable!(availability -> rower (rower_id));
 diesel::joinable!(availability -> team (team_id));
 diesel::joinable!(practice -> team (team_id));
@@ -232,6 +245,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     user_role,
     user_invite,
     magic_link,
+    email_log,
     solver_profile,
     sync_source,
 );

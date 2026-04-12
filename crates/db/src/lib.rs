@@ -8,6 +8,7 @@
 pub mod app_user;
 pub mod availability;
 pub mod boat;
+pub mod email_log;
 pub mod fixture;
 pub mod lineup;
 pub mod magic_link;

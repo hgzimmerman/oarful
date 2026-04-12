@@ -1,11 +1,12 @@
-//! Practices dashboard template — unified upcoming + past view.
+//! Practices dashboard template — tabbed view: Schedule, Reminders, Lineups.
 
 use chrono::NaiveDate;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
+use crate::handlers::practices::{LineupRow, ReminderRow};
 
-/// Per-row summary for the practices page.
+/// Per-row summary for the schedule tab.
 pub(crate) struct PracticeRow {
     pub(crate) date: NaiveDate,
     pub(crate) yes_count: usize,
@@ -15,58 +16,103 @@ pub(crate) struct PracticeRow {
     pub(crate) cancelled: bool,
 }
 
-pub(crate) fn list_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
+/// Full tabbed page wrapper. `active_tab` is "schedule", "reminders",
+/// or "lineups". `tab_content` is the pre-rendered content for the
+/// active tab.
+pub(crate) fn tabbed_page(
+    active_tab: &str,
+    tab_content: Markup,
+    is_coach: bool,
+) -> Markup {
+    html! {
+        (page_header("Practices", None))
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+            // Tab bar
+            div class="flex gap-1 border-b border-slate-200 mb-4" {
+                (tab_button("Schedule", "/practices/schedule", "schedule", active_tab))
+                @if is_coach {
+                    (tab_button("Reminders", "/practices/reminders", "reminders", active_tab))
+                    (tab_button("Lineups", "/practices/lineups", "lineups", active_tab))
+                }
+            }
+            // Tab content
+            div id="practices-tab-content" {
+                (tab_content)
+            }
+        }
+    }
+}
+
+fn tab_button(label: &str, url: &str, tab_id: &str, active: &str) -> Markup {
+    let is_active = tab_id == active;
+    let base = "px-4 py-2 text-sm font-medium border-b-2 transition cursor-pointer";
+    let classes = if is_active {
+        format!("{base} border-slate-800 text-slate-800")
+    } else {
+        format!("{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")
+    };
+    html! {
+        button hx-get=(url)
+               hx-target="#practices-tab-content"
+               class=(classes) {
+            (label)
+        }
+    }
+}
+
+// =====================================================================
+// Schedule tab
+// =====================================================================
+
+pub(crate) fn schedule_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
     let upcoming: Vec<&PracticeRow> = rows.iter().filter(|r| r.is_upcoming).collect();
     let past: Vec<&PracticeRow> = rows.iter().filter(|r| !r.is_upcoming).collect();
 
     html! {
-        (page_header("Practices", None))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            // Add practice form (Coach+ only)
-            @if is_coach {
-                form method="post" action="/practices"
-                     hx-post="/practices"
-                     hx-target="#content"
-                     hx-push-url="true"
-                     class="flex items-end gap-3" {
-                    div {
-                        label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
-                            "Add practice"
-                        }
-                        input id="date" name="date" type="date"
-                              class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+        // Add practice form (Coach+ only)
+        @if is_coach {
+            form method="post" action="/practices"
+                 hx-post="/practices"
+                 hx-target="#content"
+                 hx-push-url="true"
+                 class="flex items-end gap-3 mb-6" {
+                div {
+                    label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        "Add practice"
                     }
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                        "Create"
+                    input id="date" name="date" type="date"
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                button type="submit"
+                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                    "Create"
+                }
+            }
+        }
+
+        // Upcoming
+        @if upcoming.is_empty() && past.is_empty() {
+            (empty_state("No practices scheduled. Sync the spreadsheet or add a practice date above."))
+        }
+
+        @if !upcoming.is_empty() {
+            div {
+                h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Upcoming" }
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in &upcoming {
+                        (row_card(row, is_coach))
                     }
                 }
             }
+        }
 
-            // Upcoming
-            @if upcoming.is_empty() && past.is_empty() {
-                (empty_state("No practices scheduled. Sync the spreadsheet or add a practice date above."))
-            }
-
-            @if !upcoming.is_empty() {
-                div {
-                    h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Upcoming" }
-                    div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                        @for row in &upcoming {
-                            (row_card(row, is_coach))
-                        }
-                    }
-                }
-            }
-
-            // Past (committed only)
-            @if !past.is_empty() {
-                div {
-                    h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Past" }
-                    div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                        @for row in &past {
-                            (row_card(row, is_coach))
-                        }
+        // Past (committed only)
+        @if !past.is_empty() {
+            div {
+                h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Past" }
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in &past {
+                        (row_card(row, is_coach))
                     }
                 }
             }
@@ -76,8 +122,6 @@ pub(crate) fn list_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
 
 fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     let weekday = row.date.format("%A").to_string();
-    // Upcoming → solve view (Coach) or just info (Member).
-    // Past committed → history detail for everyone.
     let href = if row.has_committed {
         format!("/history/{}", row.date)
     } else if is_coach {
@@ -157,6 +201,141 @@ fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
                     }
                 }
             }
+        }
+    }
+}
+
+// =====================================================================
+// Reminders tab
+// =====================================================================
+
+pub(crate) fn reminders_content(rows: &[ReminderRow]) -> Markup {
+    if rows.is_empty() {
+        return html! {
+            (empty_state("No upcoming uncommitted practices to send reminders for."))
+        };
+    }
+
+    let total_non_respondents: usize = rows.iter().map(|r| r.non_respondent_count).sum();
+
+    html! {
+        div class="space-y-4" {
+            div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                @for row in rows {
+                    div class="flex items-center justify-between px-6 py-3" {
+                        div {
+                            span class="font-semibold text-slate-800" { (row.date) }
+                            span class="text-sm text-slate-500 ml-2" { (row.date.format("%A")) }
+                        }
+                        div class="flex items-center gap-3" {
+                            @if row.non_respondent_count > 0 {
+                                span class="text-sm font-medium text-amber-700" {
+                                    (row.non_respondent_count) " pending"
+                                }
+                            } @else {
+                                span class="text-sm text-emerald-600" { "All responded" }
+                            }
+                            @if row.already_sent_today {
+                                span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                                    "Sent today"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @if total_non_respondents > 0 {
+                form method="post" action="/practices/send-reminders"
+                     hx-post="/practices/send-reminders"
+                     hx-target="#practices-tab-content"
+                     hx-confirm={"Send availability reminders to " (total_non_respondents) " rower(s)?"}
+                     class="flex justify-end" {
+                    button type="submit"
+                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                        "Send reminders"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Lineups tab
+// =====================================================================
+
+pub(crate) fn lineups_content(rows: &[LineupRow]) -> Markup {
+    if rows.is_empty() {
+        return html! {
+            (empty_state("No upcoming committed lineups to notify about."))
+        };
+    }
+
+    html! {
+        div class="space-y-4" {
+            form method="post" action="/practices/send-lineups"
+                 hx-post="/practices/send-lineups"
+                 hx-target="#practices-tab-content" {
+
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in rows {
+                        div class="flex items-center justify-between px-6 py-3" {
+                            div class="flex items-center gap-3" {
+                                input type="checkbox" name="dates" value=(row.date)
+                                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                                div {
+                                    span class="font-semibold text-slate-800" { (row.date) }
+                                    span class="text-sm text-slate-500 ml-2" { (row.date.format("%A")) }
+                                }
+                            }
+                            div class="flex items-center gap-3" {
+                                span class="text-sm text-slate-600" {
+                                    (row.boat_count) " boat(s)"
+                                }
+                                @if row.already_sent_today {
+                                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                                        "Sent today"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                div class="flex items-center justify-between mt-4" {
+                    // Recipient scope toggle
+                    div class="flex items-center gap-4" {
+                        label class="flex items-center gap-2 text-sm" {
+                            input type="radio" name="scope" value="placed" checked
+                                  class="text-slate-800 focus:ring-slate-500";
+                            "Placed + bench"
+                        }
+                        label class="flex items-center gap-2 text-sm" {
+                            input type="radio" name="scope" value="all"
+                                  class="text-slate-800 focus:ring-slate-500";
+                            "All (incl. non-respondents)"
+                        }
+                    }
+                    button type="submit"
+                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                        "Send lineups"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Shared
+// =====================================================================
+
+/// Result message after sending emails.
+pub(crate) fn send_result(message: &str) -> Markup {
+    html! {
+        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm" {
+            (message)
         }
     }
 }
