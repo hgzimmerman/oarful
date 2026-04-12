@@ -207,9 +207,14 @@ pub(crate) fn lineup_editor(
             // Selection hint — fixed height so it doesn't cause reflow.
             div class="h-6 mb-2 no-print" {
                 span class="text-xs text-blue-600"
-                     x-show="selected"
+                     x-show="selected && !selectedBoat"
                      x-cloak {
                     "Click another to swap · or click again to cancel"
+                }
+                span class="text-xs text-blue-600"
+                     x-show="selectedBoat"
+                     x-cloak {
+                    "Click a boat pill to transfer rowers · or click Transfer again to cancel"
                 }
             }
 
@@ -222,9 +227,12 @@ pub(crate) fn lineup_editor(
                     } else {
                         "px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
                     };
-                    button type="button" class=(active_class)
+                    @let pill_target_class = "px-4 py-2 rounded-full text-sm font-medium bg-blue-600 text-white cursor-pointer ring-2 ring-blue-400";
+                    button type="button"
+                           class=(active_class)
                            data-boat-id=(bid)
-                           "@click"={"toggleBoat(" (bid) ")"} {
+                           ":class"={"selectedBoat !== null && selectedBoat !== " (bid) " ? '" (pill_target_class) "' : '" (active_class) "'"}
+                           "@click"={"boatPillClick(" (bid) ")"} {
                         (eb.boat.name)
                         " ("
                         (eb.boat.seat_count)
@@ -449,7 +457,15 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                     ", " (rig_label(boat))
                     ")"
                 }
-                span class="ml-auto" {
+                // Transfer button — select this boat to move rowers to another.
+                button type="button"
+                       class="ml-auto mr-2 text-xs text-slate-400 hover:text-blue-600 no-print"
+                       ":class"={"selectedBoat === " (boat.id) " ? 'ml-auto mr-2 text-xs text-blue-600 font-semibold no-print' : 'ml-auto mr-2 text-xs text-slate-400 hover:text-blue-600 no-print'"}
+                       title="Transfer rowers to another boat"
+                       "@click.stop"={"selectBoatForTransfer(" (boat.id) ")"} {
+                    "Transfer"
+                }
+                span {
                     @if boat_pin_state == "locked" {
                         button type="button"
                                class={"text-xs hover:text-violet-700 " (boat_icon_bg)}
@@ -592,6 +608,7 @@ fn editor_js() -> String {
 function lineupEditor() {
     return {
         selected: null,
+        selectedBoat: null,
 
         // Gather current placement + pin state from DOM + knobs form.
         gatherState() {
@@ -753,6 +770,36 @@ function lineupEditor() {
             el.dataset.rower = '';
             this.selected = null;
             this.rerender(this.gatherState());
+        },
+
+        // Boat pill click: when a boat is selected for transfer,
+        // clicking a pill transfers rowers to that boat. Otherwise toggle.
+        boatPillClick(boatId) {
+            if (this.selectedBoat !== null && this.selectedBoat !== boatId) {
+                // Transfer from selectedBoat → this pill's boat
+                var params = this.gatherState();
+                params += '&transfer=' + this.selectedBoat + ':' + boatId;
+                this.selectedBoat = null;
+                this.selected = null;
+                this.rerender(params);
+                return;
+            }
+            // Cancel selection if clicking the source boat's pill
+            if (this.selectedBoat === boatId) {
+                this.selectedBoat = null;
+                return;
+            }
+            // No boat selected: normal toggle
+            this.toggleBoat(boatId);
+        },
+
+        // Select a boat for transfer (called from boat card header).
+        selectBoatForTransfer(boatId) {
+            if (this.selectedBoat === boatId) {
+                this.selectedBoat = null;
+            } else {
+                this.selectedBoat = boatId;
+            }
         },
 
         toggleBoat(boatId) {

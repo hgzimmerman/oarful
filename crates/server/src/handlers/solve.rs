@@ -702,6 +702,10 @@ pub(crate) struct EditorParams {
     boat_was_pin: Vec<String>,
     #[serde(default)]
     boat_lock: Vec<String>,
+    /// Transfer rowers from one boat to another. Format: "source_boat_id:dest_boat_id".
+    /// The server maps seats by position (stern→stern, bow→bow, cox→cox).
+    #[serde(default)]
+    transfer: Option<String>,
 }
 
 /// `GET /solve/{date}/editor` — re-render the lineup editor from the
@@ -750,9 +754,76 @@ pub(crate) async fn editor_handler(
     }
 
     // Parse active boats.
-    let active_boats: std::collections::HashSet<BoatId> = params.boat.iter()
+    let mut active_boats: std::collections::HashSet<BoatId> = params.boat.iter()
         .filter_map(|s| s.parse::<BoatId>().ok())
         .collect();
+
+    // Handle boat-to-boat transfer: move rowers from source to dest
+    // with seat-position mapping, then deactivate source.
+    if let Some(ref transfer) = params.transfer {
+        let parts: Vec<&str> = transfer.splitn(2, ':').collect();
+        if parts.len() == 2 {
+            if let (Ok(src_id), Ok(dst_id)) = (parts[0].parse::<BoatId>(), parts[1].parse::<BoatId>()) {
+                let src_boat = snapshot.sweep_boats.iter().find(|b| b.id == src_id);
+                let dst_boat = snapshot.sweep_boats.iter().find(|b| b.id == dst_id);
+                if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
+                    let src_seats = placements.remove(&src_id).unwrap_or_default();
+                    let mut dst_seats = placements.remove(&dst_id).unwrap_or_default();
+                    let dst_has_cox = dst.has_cox.as_bool();
+                    let dst_seat_count = dst.seat_count;
+
+                    // Map by position: cox→cox, then numbered seats
+                    // from stroke (highest) down to bow (1).
+                    // Cox seat (0) transfers if dest has cox.
+                    if dst_has_cox {
+                        if let Some(cox_rower) = src_seats.get(&0) {
+                            dst_seats.insert(0, *cox_rower);
+                        }
+                    }
+                    // Numbered seats: map stroke→stroke, bow→bow.
+                    // Source seat N (where N=src.seat_count is stroke)
+                    // maps to dest seat at the same relative position.
+                    let src_count = src.seat_count;
+                    for src_pos in 1..=src_count {
+                        if let Some(rower) = src_seats.get(&src_pos) {
+                            // Map: stern pair stays stern, bow pair stays bow.
+                            // src stroke (src_count) → dst stroke (dst_seat_count)
+                            // src bow (1) → dst bow (1)
+                            // Middle seats: proportional mapping.
+                            let dst_pos = if src_pos == src_count {
+                                // Stroke → stroke
+                                dst_seat_count
+                            } else if src_pos == 1 {
+                                // Bow → bow
+                                1
+                            } else if src_pos == src_count - 1 && dst_seat_count > 2 {
+                                // Seat below stroke → seat below stroke
+                                dst_seat_count - 1
+                            } else if src_pos == 2 && dst_seat_count > 2 {
+                                // Seat above bow → seat above bow
+                                2
+                            } else if src_pos <= dst_seat_count {
+                                // Same position if it fits
+                                src_pos
+                            } else {
+                                // Doesn't fit (downsizing) → skip, goes to bench
+                                continue;
+                            };
+                            if dst_pos >= 1 && dst_pos <= dst_seat_count && !dst_seats.contains_key(&dst_pos) {
+                                dst_seats.insert(dst_pos, *rower);
+                            }
+                            // If seat already occupied (collision), rower goes to bench (not inserted)
+                        }
+                    }
+
+                    placements.insert(dst_id, dst_seats);
+                    // Source boat is deactivated.
+                    active_boats.remove(&src_id);
+                    active_boats.insert(dst_id);
+                }
+            }
+        }
+    }
 
     // Parse locks for display.
     let locked_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> = params.lock.iter()
