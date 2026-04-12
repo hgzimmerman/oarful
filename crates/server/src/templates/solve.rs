@@ -145,6 +145,8 @@ pub(crate) fn lineup_editor(
     date: NaiveDate,
     editor: &EditorData,
     flags: &DisplayFlags,
+    unavailable: &[&Rower],
+    walkon_ids: &[String],
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{date}");
     let editor_url = format!("/solve/{date}/editor");
@@ -218,8 +220,51 @@ pub(crate) fn lineup_editor(
                 }
             }
 
-            // Rower pool
+            // Walk-on + Rower pool
             div class="pt-4 border-t border-slate-200 text-sm space-y-2" {
+                // Walk-on: add unavailable rowers to the pool.
+                @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id.as_int().to_string()));
+                @if has_addable || !walkon_ids.is_empty() {
+                    div class="flex items-center gap-2 flex-wrap mb-2" {
+                        @if !walkon_ids.is_empty() {
+                            span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Walk-ons:" }
+                            @for id_str in walkon_ids {
+                                @if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
+                                    @let name = snapshot.rowers.iter().find(|r| r.id == id).map(|r| r.name.as_str()).unwrap_or("?");
+                                    span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
+                                        (name)
+                                    }
+                                }
+                            }
+                        }
+                        @if has_addable {
+                            @let walkon_action = format!("/solve/{date}");
+                            form method="get" action=(walkon_action)
+                                 hx-get=(walkon_action)
+                                 hx-target="#content"
+                                 hx-push-url="true"
+                                 class="inline-flex items-center gap-2" {
+                                // Carry existing knobs through.
+                                input type="hidden" name="partial" value="0";
+                                @for w in walkon_ids {
+                                    input type="hidden" name="walkon" value=(w);
+                                }
+                                select name="walkon"
+                                       class="border border-slate-300 rounded px-2 py-1.5 text-sm focus:border-slate-500 focus:outline-none" {
+                                    @for r in unavailable {
+                                        @if !walkon_ids.contains(&r.id.as_int().to_string()) {
+                                            option value=(r.id) { (r.name) }
+                                        }
+                                    }
+                                }
+                                button type="submit"
+                                       class="text-xs font-semibold text-emerald-700 hover:text-emerald-900 uppercase tracking-wide" {
+                                    "+ Walk-on"
+                                }
+                            }
+                        }
+                    }
+                }
                 @if !editor.sculling.is_empty() {
                     div {
                         strong class="text-slate-700" { "To sculling " }
@@ -543,87 +588,9 @@ pub(crate) fn landing_content(
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles, snapshot))
-                (walkon_section(date, &unavailable, knobs))
+                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
             }
-            (lineup_editor(snapshot, date, &editor, flags))
-        }
-    }
-}
-
-/// "+ Add walk-on" section: a dropdown of unavailable roster members.
-/// Selecting one adds a `walkon` param and reloads the page so the
-/// rower appears in the available pool.
-fn walkon_section(date: NaiveDate, unavailable: &[&Rower], knobs: &SolveKnobs) -> Markup {
-    if unavailable.is_empty() && knobs.walkon.is_empty() {
-        return html! {};
-    }
-    let action = format!("/solve/{date}");
-    html! {
-        section class="bg-white rounded-lg shadow p-4" {
-            div class="flex items-end gap-3 flex-wrap" {
-                // Already-added walk-ons shown as pills
-                @if !knobs.walkon.is_empty() {
-                    div class="flex flex-wrap gap-1.5 items-center mr-2" {
-                        span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Walk-ons:" }
-                        @for id_str in &knobs.walkon {
-                            span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
-                                @if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-                                    @if let Some(r) = unavailable.iter().find(|r| r.id == id) {
-                                        (r.name)
-                                    } @else {
-                                        "#" (id_str)
-                                    }
-                                } @else {
-                                    (id_str)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Add walk-on dropdown
-                @if !unavailable.is_empty() {
-                    form method="get" action=(action)
-                         hx-get=(action)
-                         hx-target="#content"
-                         hx-push-url="true"
-                         class="flex items-end gap-2" {
-                        // Carry existing knobs through
-                        input type="hidden" name="partial" value=(knobs.partial);
-                        input type="hidden" name="novelty" value=(knobs.novelty);
-                        input type="hidden" name="alts" value=(knobs.alts);
-                        input type="hidden" name="budget" value=(knobs.budget);
-                        @if !knobs.preset.is_empty() {
-                            input type="hidden" name="preset" value=(&knobs.preset);
-                        }
-                        @for l in &knobs.lock {
-                            input type="hidden" name="lock" value=(l);
-                        }
-                        @for w in &knobs.walkon {
-                            input type="hidden" name="walkon" value=(w);
-                        }
-                        div {
-                            label for="new-walkon" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
-                                "+ Add walk-on"
-                            }
-                            select id="new-walkon" name="walkon"
-                                   class="border border-slate-300 rounded px-2 py-1.5 text-sm focus:border-slate-500 focus:outline-none" {
-                                @for r in unavailable {
-                                    // Skip rowers already added as walk-ons.
-                                    @if !knobs.walkon.contains(&r.id.as_int().to_string()) {
-                                        option value=(r.id) { (r.name) }
-                                    }
-                                }
-                            }
-                        }
-                        button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
-                            "Add"
-                        }
-                    }
-                }
-            }
+            (lineup_editor(snapshot, date, &editor, flags, &unavailable, &knobs.walkon))
         }
     }
 }
@@ -649,14 +616,28 @@ pub(crate) fn view_content(
         EditorData::empty(snapshot)
     };
 
+    // Unavailable rowers for the walk-on dropdown.
+    let unavailable: Vec<&Rower> = snapshot.rowers.iter()
+        .filter(|r| r.active.as_bool())
+        .filter(|r| {
+            !snapshot.availability
+                .get(&r.id)
+                .map(|s| s.is_available_for_sweep())
+                .unwrap_or(false)
+        })
+        .collect();
+
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, true, custom_profiles, snapshot))
+                (knobs_form(date, knobs, committed_practices, true, custom_profiles, snapshot, Some(result)))
             }
-            (status_banner(date, result))
-            (lineup_editor(snapshot, date, &editor, flags))
+            // Error banners only (unsatisfiable / zero-result timeout).
+            @if result.status != SolveStatus::Satisfied {
+                (status_banner(date, result))
+            }
+            (lineup_editor(snapshot, date, &editor, flags, &unavailable, &knobs.walkon))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
                 (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
@@ -669,7 +650,7 @@ pub(crate) fn view_content(
 /// budget). Submitting hx-gets the same `/solve/{date}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot) -> Markup {
+fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot, solve_result: Option<&SolveResult>) -> Markup {
     let has_eight = snapshot.sweep_boats.iter().any(|b| b.seat_count >= 8);
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{date}");
@@ -688,10 +669,48 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     b.className = 'px-3 py-2 text-slate-700 hover:bg-slate-100';
                 });
                 btn.className = 'px-3 py-2 font-semibold bg-slate-800 text-white';
+                knobChanged();
+            }
+            function knobChanged() {
+                var m = document.getElementById('knob-metrics');
+                if (m) m.textContent = '';
+            }
+            function presetClicked(label) {
+                var p = document.getElementById('knob-preset-label');
+                if (p) p.textContent = label;
+                knobChanged();
             }
             "#))
         }
-        section class="bg-white rounded-lg shadow p-6" {
+        section class="bg-white rounded-lg shadow" {
+            // Collapsible knobs — open on landing, collapsed after generation.
+            @let preset_label = if knobs.preset.is_empty() { "Balanced" } else { &knobs.preset };
+            details open[!has_generated] class="group" {
+                summary class="list-none flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50 transition [&::-webkit-details-marker]:hidden" {
+                    div class="flex items-center gap-3 flex-wrap" {
+                        h3 class="text-sm font-semibold text-slate-800" { "Solver settings" }
+                        span #knob-preset-label class="text-xs text-slate-500" { (preset_label) }
+                        @if let Some(result) = solve_result {
+                            @if result.status == SolveStatus::Satisfied {
+                                @let elapsed_ms = result.elapsed.as_millis();
+                                @let elapsed_label = if elapsed_ms < 1000 {
+                                    format!("{elapsed_ms}ms")
+                                } else {
+                                    format!("{:.1}s", result.elapsed.as_secs_f64())
+                                };
+                                span #knob-metrics class="text-xs text-slate-400" {
+                                    "· " (elapsed_label)
+                                    @if let Some(obj) = result.objective {
+                                        " · obj " (obj)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // CSS-only chevron: rotates on open.
+                    span class="border-solid border-slate-400 border-r-2 border-b-2 border-t-0 border-l-0 inline-block w-2 h-2 transform rotate-[-45deg] group-open:rotate-45 transition-transform" {}
+                }
+                div class="px-6 pb-6 border-t border-slate-100 pt-4" {
             form method="get" action=(action)
                  hx-get=(action)
                  hx-target="#content"
@@ -707,14 +726,15 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                     "Based on"
                                 }
                                 div class="flex flex-wrap gap-3" {
-                                    @for p in practices.iter().take(8) {
+                                    @for p in practices.iter().take(5) {
                                         @let date_str = p.date.format("%Y-%m-%d").to_string();
                                         @let weekday = p.date.format("%a").to_string();
                                         @let checked = knobs.based_on.contains(&date_str);
                                         label class="inline-flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer" {
                                             input type="checkbox" name="based_on" value=(date_str)
                                                   checked[checked]
-                                                  class="rounded border-slate-300 text-blue-600 focus:ring-blue-500";
+                                                  class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                                  onchange="knobChanged()";
                                             (p.date) " (" (weekday) ")"
                                         }
                                     }
@@ -757,7 +777,8 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                    title=(tip)
                                    hx-get=(preset_url)
                                    hx-target="#preset-bar"
-                                   hx-swap="outerHTML" {
+                                   hx-swap="outerHTML"
+                                   onclick={"presetClicked('" (label) "')"} {
                                 (label)
                             }
                         }
@@ -775,7 +796,8 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                                        title=[description.as_deref()]
                                        hx-get=(preset_url)
                                        hx-target="#preset-bar"
-                                       hx-swap="outerHTML" {
+                                       hx-swap="outerHTML"
+                                       onclick={"presetClicked('" (name) "')"} {
                                     (name)
                                 }
                                 button type="button"
@@ -853,7 +875,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             input name="budget" type="range" min="1" max="10"
                                   value=(knobs.budget)
                                   class="flex-1 accent-blue-600"
-                                  oninput="document.getElementById('budget-val').textContent = this.value + 's'";
+                                  oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
                             span #budget-val class="text-sm font-mono text-slate-700 w-8" {
                                 (knobs.budget) "s"
                             }
@@ -870,7 +892,7 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                             input name="novelty" type="range" min="0" max="5"
                                   value=(knobs.novelty)
                                   class="flex-1 accent-blue-600"
-                                  oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value";
+                                  oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
                             span #novelty-val class="text-sm font-mono text-slate-700 w-8" {
                                 @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
                             }
@@ -906,6 +928,8 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                     }
                 }
             }
+                } // div.px-6 (details body)
+            } // details
         }
     }
 }
@@ -1028,39 +1052,11 @@ fn knob_input(
     }
 }
 
+/// Error-only status banner. Success metadata is shown inline in the
+/// knobs form summary. This function only renders for failures.
 fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
     match result.status {
-        // Success (optimal or timeout-with-result): no banner.
-        // The filled boat cards are the success signal. Show solver
-        // metadata in a collapsible <details> instead.
-        SolveStatus::Satisfied => {
-            let elapsed_ms = result.elapsed.as_millis();
-            let elapsed_label = if elapsed_ms < 1000 {
-                format!("{elapsed_ms}ms")
-            } else {
-                format!("{:.1}s", result.elapsed.as_secs_f64())
-            };
-            html! {
-                details class="text-xs text-slate-500 no-print" {
-                    summary class="cursor-pointer hover:text-slate-700 select-none" {
-                        "Solver details"
-                    }
-                    div class="mt-1 pl-4 space-y-0.5" {
-                        div { "Time: " (elapsed_label) }
-                        @if let Some(obj) = result.objective {
-                            div { "Objective: " (obj) " (lower is better)" }
-                        }
-                        @if !result.diagnostics.is_empty() {
-                            div class="mt-1" {
-                                @for d in &result.diagnostics {
-                                    div class="text-amber-600" { (diagnostic_message(d)) }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
+        SolveStatus::Satisfied => html! {},
         SolveStatus::Unsatisfiable => html! {
             div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
                 strong { "Unsatisfiable." }

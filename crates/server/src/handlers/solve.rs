@@ -636,15 +636,20 @@ pub(crate) async fn editor_handler(
         locked_seats,
     };
 
-    // Build a minimal SolveKnobs to carry lock + walkon params through.
-    let knobs = SolveKnobs {
-        lock: params.lock,
-        walkon: params.walkon,
-        ..SolveKnobs::default()
-    };
+    // Unavailable rowers for the walk-on dropdown.
+    let walkon_ids = params.walkon;
+    let unavailable: Vec<&lineup_db::rower::Rower> = snapshot.rowers.iter()
+        .filter(|r| r.active.as_bool())
+        .filter(|r| {
+            !snapshot.availability
+                .get(&r.id)
+                .map(|s| s.is_available_for_sweep())
+                .unwrap_or(false)
+        })
+        .collect();
 
     Ok(Html(
-        templates::solve::lineup_editor(&snapshot, date, &editor, &flags).into_string(),
+        templates::solve::lineup_editor(&snapshot, date, &editor, &flags, &unavailable, &walkon_ids).into_string(),
     ))
 }
 

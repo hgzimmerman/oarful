@@ -353,6 +353,40 @@ counts as one use of that boat.
 records which boats were used on which dates. This is purely a
 read-side feature built on existing data.
 
+#### Data export + backup/import
+
+Customers must be able to export their full data at any time — both
+for transparency and to support migration to self-hosting.
+
+**Export.** A PD-accessible endpoint (e.g. `GET /export`) that
+streams the tenant's SQLite database file as a download. The tenant
+DB already contains all rowers, boats, teams, practices, lineups,
+availability, affinities, and user accounts — a single file captures
+everything. Content-Disposition header with a timestamped filename
+(e.g. `lineup_club-name_2026-04-12.db`).
+
+**Import.** A CLI command (e.g. `cargo run -p lineup_cli -- import
+<path>`) that registers a new tenant in the master DB and copies the
+provided SQLite file into the tenant data directory. This lets a
+customer who exported from the hosted service spin up a self-hosted
+instance with their full history.
+
+**Considerations:**
+- The export is a raw SQLite file — schema migrations must be
+  compatible between hosted and self-hosted versions. Document the
+  schema version or embed it in the DB (diesel already tracks this
+  via `__diesel_schema_migrations`).
+- Passwords are bcrypt-hashed so they survive export/import without
+  leaking credentials.
+- The master DB (tenant registry) is NOT exported — it's
+  infrastructure, not customer data. The import command creates the
+  tenant registry entry.
+- Rate-limit or auth-gate the export endpoint to prevent abuse.
+- The import path doubles as test fixture injection: a pre-built
+  SQLite file with known rowers/boats/practices can be imported to
+  bootstrap a repeatable dev/test/demo environment without running
+  the seeder or sync flow.
+
 ### Parked
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
