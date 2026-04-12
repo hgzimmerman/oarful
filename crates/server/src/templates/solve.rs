@@ -460,7 +460,8 @@ function lineupEditor() {
                     boats.push('boat=' + card.dataset.editorBoat);
                 }
             });
-            // Collect locks and walk-ons from the knobs form.
+            // Collect locks, walk-ons, and no-shows from the knobs form.
+            var noshows = [];
             var knobsForm = document.querySelector('form[hx-get]');
             if (knobsForm) {
                 knobsForm.querySelectorAll('input[name="lock"]').forEach(function(el) {
@@ -469,8 +470,11 @@ function lineupEditor() {
                 knobsForm.querySelectorAll('input[name="walkon"]').forEach(function(el) {
                     walkons.push('walkon=' + el.value);
                 });
+                knobsForm.querySelectorAll('input[name="no_show"]').forEach(function(el) {
+                    noshows.push('no_show=' + el.value);
+                });
             }
-            return [].concat(seats, boats, locks, walkons).join('&');
+            return [].concat(seats, boats, locks, walkons, noshows).join('&');
         },
 
         // Trigger HTMX re-render of the editor section.
@@ -582,7 +586,25 @@ pub(crate) fn landing_content(
         })
         .collect();
 
-    let editor = EditorData::empty(snapshot);
+    // If seat params are present (e.g. from "Edit lineup" on history),
+    // pre-populate the editor with those placements.
+    let editor = if !knobs.seat.is_empty() {
+        let mut placements: HashMap<BoatId, HashMap<i32, RowerId>> = HashMap::new();
+        for entry in &knobs.seat {
+            let parts: Vec<&str> = entry.splitn(3, ':').collect();
+            if parts.len() != 3 { continue; }
+            let Ok(boat_id) = parts[0].parse::<BoatId>() else { continue };
+            let Ok(seat) = parts[1].parse::<i32>() else { continue };
+            let Ok(rower_id) = parts[2].parse::<RowerId>() else { continue };
+            placements.entry(boat_id).or_default().insert(seat, rower_id);
+        }
+        let active_boats: HashSet<BoatId> = knobs.boat.iter()
+            .filter_map(|s| s.parse::<BoatId>().ok())
+            .collect();
+        EditorData::from_placements(snapshot, &placements, &active_boats)
+    } else {
+        EditorData::empty(snapshot)
+    };
 
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
@@ -900,9 +922,12 @@ fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[Practice], has_g
                         p class="text-xs text-slate-500 mt-1" { "Avoid repeating recent lineups" }
                     }
                     input type="hidden" name="generate" value="1";
-                    // Carry walk-ons through re-solves.
+                    // Carry walk-ons and no-shows through re-solves.
                     @for w in &knobs.walkon {
                         input type="hidden" name="walkon" value=(w);
+                    }
+                    @for ns in &knobs.no_show {
+                        input type="hidden" name="no_show" value=(ns);
                     }
                     // OOB target: editor injects locks + active boats here.
                     div #editor-knob-state style="display:none" {

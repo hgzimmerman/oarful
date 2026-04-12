@@ -131,6 +131,11 @@ pub(crate) struct SolveKnobs {
     /// `boat=<boat_id>` query params injected by the editor JS.
     #[serde(default)]
     pub(crate) boat: Vec<String>,
+    /// Pre-populated seat placements for the editor. Each value is
+    /// `boat_id:seat_pos:rower_id`. Used when navigating from the
+    /// history page "Edit lineup" button.
+    #[serde(default)]
+    pub(crate) seat: Vec<String>,
 }
 
 impl Default for SolveKnobs {
@@ -148,6 +153,7 @@ impl Default for SolveKnobs {
             preset: String::new(),
             walkon: vec![],
             boat: vec![],
+            seat: vec![],
         }
     }
 }
@@ -438,9 +444,12 @@ pub(crate) async fn view_handler(
         .await
         .map_err(internal_error)?;
 
+    // Apply no-shows before anything reads availability — affects
+    // both the editor pool and the solver.
+    apply_no_shows(&mut snapshot, &knobs);
+
     // Only run the solver when explicitly requested via generate=1.
     if knobs.generate > 0 {
-        apply_no_shows(&mut snapshot, &knobs);
         let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
 
         let _permit = acquire_solve_permit(&state).await?;
@@ -476,11 +485,16 @@ pub(crate) async fn view_handler(
     }
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
+    // If seat params are present (e.g. from "Edit lineup" on history),
+    // pre-populate the editor with those placements.
     let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
+    let locked_seats = knobs.parse_locks().into_iter()
+        .map(|l| (l.rower_id, l.boat_id, l.seat))
+        .collect();
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
-        locked_seats: std::collections::HashSet::new(),
+        locked_seats,
     };
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
@@ -572,6 +586,8 @@ pub(crate) struct EditorParams {
     lock: Vec<String>,
     #[serde(default)]
     walkon: Vec<String>,
+    #[serde(default)]
+    no_show: Vec<String>,
 }
 
 /// `GET /solve/{date}/editor` — re-render the lineup editor from the
@@ -597,6 +613,13 @@ pub(crate) async fn editor_handler(
     for id_str in &params.walkon {
         if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
             snapshot.availability.insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
+        }
+    }
+
+    // Apply no-shows — remove from availability so they don't appear in pool.
+    for id_str in &params.no_show {
+        if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
+            snapshot.availability.insert(id, lineup_db::availability::types::AvailabilityStatus::No);
         }
     }
 

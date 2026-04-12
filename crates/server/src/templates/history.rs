@@ -104,24 +104,29 @@ pub(crate) fn detail_content(
                 (empty_state("No lineups committed for this date."))
             } @else if is_coach {
                 // No-show form (Coach+): wraps all lineups with
-                // checkboxes per rower.
-                form method="get" action={"/solve/" (date)} {
-                    input type="hidden" name="based_on" value=(date);
-                    input type="hidden" name="similarity" value="3";
-                    @for c in committed {
-                        (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                // checkboxes per rower. Edit button opens the editor
+                // with placements pre-loaded and no-shows emptied.
+                form id="noshow-form" method="get" action={"/solve/" (date)} {
+                    div class="space-y-4" {
+                        @for c in committed {
+                            (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                        }
                     }
+                (unplaced_section(snapshot, committed))
                     div class="mt-4 flex justify-end no-print" {
-                        button type="submit"
-                               class="px-4 py-2 text-sm bg-amber-600 text-white rounded hover:bg-amber-700 transition font-semibold" {
-                            "Re-solve without no-shows"
+                        button type="button"
+                               class="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition font-semibold"
+                               onclick=(edit_lineup_js(date, committed, snapshot)) {
+                            "Edit lineup"
                         }
                     }
                 }
             } @else {
                 // Read-only view for members — no checkboxes or re-solve.
-                @for c in committed {
-                    (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                div class="space-y-4" {
+                    @for c in committed {
+                        (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                    }
                 }
                 (unplaced_section(snapshot, committed))
             }
@@ -188,12 +193,20 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
     let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown boat>");
     let cox_at_top = force_cox_stern
         || boat.map(|b| b.cox_position.cox_first()).unwrap_or(true);
-    let mut seats = committed.seats.clone();
-    seats.sort_by_key(|s| {
-        if s.seat_position == 0 {
+    let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
+    let has_cox = boat.map(|b| b.has_cox.as_bool()).unwrap_or(false);
+
+    // Build full seat list (all positions), mapping to Option<rower>.
+    let seat_map: std::collections::HashMap<i32, &lineup_db::lineup::LineupSeatRow> =
+        committed.seats.iter().map(|s| (s.seat_position, s)).collect();
+    let mut all_positions: Vec<i32> = Vec::new();
+    if has_cox { all_positions.push(0); }
+    for s in 1..=seat_count { all_positions.push(s); }
+    all_positions.sort_by_key(|s| {
+        if *s == 0 {
             if cox_at_top { i32::MIN } else { i32::MAX }
         } else {
-            -s.seat_position
+            -*s
         }
     });
 
@@ -207,13 +220,12 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
             }
             table class="w-full text-sm" {
                 tbody {
-                    @let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
-                    @for seat in &seats {
-                        @let label = seat_label(seat.seat_position, seat_count);
-                        @let rower = snapshot.rowers.iter().find(|r| r.id == seat.rower_id);
-                        @let name = rower.map(|r| r.name.as_str()).unwrap_or("<unknown>");
+                    @for pos in &all_positions {
+                        @let label = seat_label(*pos, seat_count);
+                        @let maybe_seat = seat_map.get(pos);
+                        @let rower = maybe_seat.and_then(|s| snapshot.rowers.iter().find(|r| r.id == s.rower_id));
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let is_stale = stale_rowers.contains(&seat.rower_id);
+                        @let is_stale = maybe_seat.map(|s| stale_rowers.contains(&s.rower_id)).unwrap_or(false);
                         @let row_class = if is_stale {
                             "border-b border-slate-100 last:border-0 bg-amber-50 border-l-4 border-l-amber-400"
                         } else if is_designated_cox {
@@ -223,23 +235,31 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
                         };
                         tr class=(row_class) {
                             td class="px-4 py-2 w-12" {
-                                (seat_badge(boat, seat.seat_position, &label))
+                                (seat_badge(boat, *pos, &label))
                             }
                             td class="px-4 py-2 text-slate-800" {
-                                (name)
-                                @if is_stale {
-                                    span class="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full" {
-                                        "unavailable"
+                                @if let Some(r) = rower {
+                                    (r.name)
+                                    @if is_stale {
+                                        span class="ml-2 text-xs bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                                            "unavailable"
+                                        }
                                     }
+                                } @else {
+                                    span class="text-slate-400 italic" { "\u{2014} empty \u{2014}" }
                                 }
                             }
                             @if is_coach {
-                                td class="px-4 py-2 text-right w-16 no-print" {
-                                    label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
-                                        input type="checkbox" name="no_show" value=(seat.rower_id)
-                                              class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
-                                        "No-show"
+                                @if maybe_seat.is_some() {
+                                    td class="px-4 py-2 text-right w-16 no-print" {
+                                        label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
+                                            input type="checkbox" name="no_show" value=(maybe_seat.unwrap().rower_id)
+                                                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
+                                            "No-show"
+                                        }
                                     }
+                                } @else {
+                                    td class="w-16" {}
                                 }
                             }
                             (side_indicator(rower))
@@ -249,6 +269,50 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
             }
         }
     }
+}
+
+/// Build JS for the "Edit lineup" button. Constructs a URL to the
+/// editor endpoint with the current placements, minus any no-show
+/// checked rowers.
+fn edit_lineup_js(date: NaiveDate, committed: &[CommittedLineup], snapshot: &DbSnapshot) -> String {
+    // Pre-compute the placement params from committed lineups.
+    let mut seat_params = Vec::new();
+    let mut boat_params = Vec::new();
+    for c in committed {
+        let boat_id = c.lineup.boat_id;
+        boat_params.push(format!("boat={}", boat_id));
+        for s in &c.seats {
+            seat_params.push(format!(
+                "seat={}:{}:{}",
+                boat_id, s.seat_position, s.rower_id
+            ));
+        }
+    }
+    let base_params = [boat_params.join("&"), seat_params.join("&")].join("&");
+    // Also carry walk-on rowers that are present in the snapshot's
+    // availability but not in the roster's normal availability.
+    // (Walk-ons are already baked into the snapshot by the time we
+    // get here, so we don't need to thread them explicitly.)
+
+    let _ = snapshot; // used only for future walk-on threading
+
+    format!(
+        r#"(function(){{
+            var noshows = new Set();
+            document.querySelectorAll('#noshow-form input[name="no_show"]:checked').forEach(function(el){{
+                noshows.add(el.value);
+            }});
+            var parts = '{base_params}'.split('&').filter(function(p){{
+                if (!p.startsWith('seat=')) return true;
+                var rid = p.split(':')[2];
+                return !noshows.has(rid);
+            }});
+            noshows.forEach(function(rid){{
+                parts.push('no_show=' + rid);
+            }});
+            window.location.href = '/solve/{date}?' + parts.join('&');
+        }})()"#
+    )
 }
 
 /// Show rowers who were available but not placed in any committed
