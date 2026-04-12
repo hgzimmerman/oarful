@@ -816,6 +816,21 @@ pub(crate) async fn editor_handler(
                         }
                     }
 
+                    // If rigging differs, swap rowers within each pair
+                    // so they stay on their preferred side.
+                    if src.stroke_side != dst.stroke_side {
+                        let mut swapped = dst_seats.clone();
+                        let mut pos = dst_seat_count;
+                        while pos >= 2 {
+                            let high = swapped.remove(&pos);
+                            let low = swapped.remove(&(pos - 1));
+                            if let Some(r) = high { swapped.insert(pos - 1, r); }
+                            if let Some(r) = low { swapped.insert(pos, r); }
+                            pos -= 2;
+                        }
+                        dst_seats = swapped;
+                    }
+
                     placements.insert(dst_id, dst_seats);
                     // Source boat is deactivated.
                     active_boats.remove(&src_id);
