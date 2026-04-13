@@ -606,38 +606,73 @@ impl<'a> ModelBuilder<'a> {
     /// boats 1+ (non-top boats) to spread talent. This formulation
     /// never penalizes placement vs benching — it only affects which
     /// boat a rower goes in.
+    /// S16 — talent ordering across boats. Positive weight = tiered
+    /// (concentrate talent at the top). Negative = even speed (spread
+    /// talent to lower boats). Reward decays by boat rank:
+    ///
+    /// | Rank | Factor (positive w) | Factor (negative w) |
+    /// |------|---------------------|---------------------|
+    /// | 0    | 1.0                 | 0 (skip)            |
+    /// | 1    | 0.75                | 0.75                |
+    /// | 2    | 0.50                | 0.50                |
+    /// | 3    | 0.25                | 0.25                |
+    /// | 4    | 0.125               | 0.125               |
+    /// | 5+   | ~0                  | ~0                  |
+    ///
+    /// For tiered: boat 0 gets full quality reward, boat 1 gets 75%,
+    /// etc. For even speed: boats 1+ get reward for strong rowers
+    /// (spreading talent down), decaying so the solver still puts
+    /// *some* preference on boat 1 > boat 2.
     pub(crate) fn post_s16_top_boat_stacking(&mut self) {
         if self.cfg.top_boat_stacking_weight == 0 || self.boats.len() < 2 {
             return;
         }
         let w = self.cfg.top_boat_stacking_weight;
+        let aw = w.unsigned_abs() as i64;
+
+        // Decay factors as thousandths: 1000, 750, 500, 250, 125, 62, 31, ...
+        let factors: Vec<i64> = (0..self.boats.len())
+            .map(|rank| match rank {
+                0 => 1000,
+                1 => 750,
+                2 => 500,
+                n => 500i64 >> (n - 2), // halves after rank 2
+            })
+            .collect();
 
         if w > 0 {
-            // Tiered: reward placing strong rowers in boat 0.
-            let boat = self.boats[0];
-            for seat in 1..=boat.seat_count {
-                for (r_idx, rower) in self.available.iter().enumerate() {
-                    if let Some(&var) = self.x.get(&(r_idx, 0, seat)) {
-                        let quality = rower.skill.ordinal() + rower.strength.ordinal();
-                        let coef = -w * quality;
-                        if coef != 0 {
-                            self.obj_terms.push(var.scaled(coef));
+            // Tiered: reward placing strong rowers in each boat,
+            // scaled by rank decay.
+            for (b_idx, boat) in self.boats.iter().enumerate() {
+                let factor = factors[b_idx];
+                if factor <= 0 { continue; }
+                for seat in 1..=boat.seat_count {
+                    for (r_idx, rower) in self.available.iter().enumerate() {
+                        if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
+                            let quality = rower.skill.ordinal() as i64
+                                + rower.strength.ordinal() as i64;
+                            let coef = (-(aw * quality * factor) / 1000) as i32;
+                            if coef != 0 {
+                                self.obj_terms.push(var.scaled(coef));
+                            }
                         }
                     }
                 }
             }
         } else {
             // Even speed: reward placing strong rowers in boats 1+
-            // (spreading talent away from the top boat). Use |w| as
-            // the reward magnitude.
-            let aw = -w; // positive
+            // (spreading talent away from the top boat), decaying so
+            // the solver still prefers boat 1 over boat 2.
             for b_idx in 1..self.boats.len() {
                 let boat = self.boats[b_idx];
+                let factor = factors[b_idx];
+                if factor <= 0 { continue; }
                 for seat in 1..=boat.seat_count {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            let quality = rower.skill.ordinal() + rower.strength.ordinal();
-                            let coef = -aw * quality;
+                            let quality = rower.skill.ordinal() as i64
+                                + rower.strength.ordinal() as i64;
+                            let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
                             }

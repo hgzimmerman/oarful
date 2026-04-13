@@ -53,7 +53,7 @@ fn weight_groups(cfg: &SolverConfig) -> Vec<WeightGroup> {
         WeightGroup {
             label: "Stacking",
             fields: vec![
-                WeightField { name: "top_boat_stacking_weight", label: "Top boat stacking", value: cfg.top_boat_stacking_weight, min: -5, max: 10, help: "Positive = best rowers in the top boat. Negative = spread talent evenly." },
+                WeightField { name: "top_boat_stacking_weight", label: "Talent ordering", value: cfg.top_boat_stacking_weight, min: -5, max: 10, help: "Positive = rank boats by talent (top boat best, decaying). Negative = spread talent to lower boats." },
                 WeightField { name: "boat_size_stacking_weight", label: "Small boat priority", value: cfg.boat_size_stacking_weight, min: 0, max: 10, help: "Stack talent in smaller boats. 4s need strong rowers more than 8s do." },
             ],
         },
