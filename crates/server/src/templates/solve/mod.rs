@@ -5,6 +5,7 @@
 mod alternatives;
 mod editor;
 mod knobs;
+pub(crate) mod profile_modal;
 
 use alternatives::alternatives_panel;
 pub(crate) use editor::{DisplayFlags, EditorData, lineup_editor};

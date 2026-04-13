@@ -14,7 +14,7 @@ mod view;
 
 pub(crate) use commit::{commit_handler, commit_lineup_handler};
 pub(crate) use editor::editor_handler;
-pub(crate) use profiles::{delete_profile_handler, preset_bar_handler, save_profile_handler};
+pub(crate) use profiles::{delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler};
 pub(crate) use view::view_handler;
 
 use std::time::Duration;
@@ -612,6 +612,60 @@ pub(crate) struct SaveProfileInput {
     pub(super) preset: String,
     #[serde(default)]
     pub(super) description: Option<String>,
+    // Individual weight overrides — when present (from the modal form),
+    // they override the basis preset's values.
+    #[serde(default)]
+    pub(super) skill_variance_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) pair_affinity_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) seat_affinity_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) side_preference_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) weight_class_slack_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) cox_cooldown_penalty: Option<i32>,
+    #[serde(default)]
+    pub(super) placement_reward_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) pair_strength_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) bow_pair_strength_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) height_balance_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) end_pair_skill_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) engine_room_strength_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) partial_fill_bonus: Option<i32>,
+    #[serde(default)]
+    pub(super) non_scull_retention_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) bow_cox_fit_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) top_boat_stacking_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) pair_eligibility_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) minimize_bench_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) boat_size_stacking_weight: Option<i32>,
+    #[serde(default)]
+    pub(super) eight_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) coxed_four_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) four_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) quad_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) pair_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) double_bias: Option<i32>,
+    #[serde(default)]
+    pub(super) single_bias: Option<i32>,
 }
 
 #[cfg(test)]

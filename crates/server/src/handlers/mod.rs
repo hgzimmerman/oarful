@@ -60,6 +60,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/solve/{date}/editor", get(solve::editor_handler))
         .route("/solve/{date}/preset-bar", get(solve::preset_bar_handler))
         .route("/solver-profile", post(solve::save_profile_handler))
+        .route("/solver-profile/edit", get(solve::edit_profile_handler))
         .route("/solver-profile/{name}", delete(solve::delete_profile_handler))
         .route("/commit/{date}", post(solve::commit_handler))
         .route("/commit-lineup/{date}", post(solve::commit_lineup_handler))

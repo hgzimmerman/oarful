@@ -344,14 +344,15 @@ culprit) remains parked pending a Pumpkin API dive.
 - **CLI `create-tenant` command**
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
-- **Pair boat constraints** — only Expert/Master rowers of similar
-  strength should be eligible for pair boats
-- **Minimize benched rowers** — hard or heavily-weighted soft
-  constraint to avoid leaving rowers on the bench when seats exist
-- **Equal speed profile: boat-size weighting** — bigger boats go
-  faster, so the "even speed" profile should stack smaller boats
-  (4s) with stronger rowers rather than distributing evenly. An 8
-  tolerates weaker rowers better than a 4.
+- ~~**Pair boat constraints**~~ (shipped as H7 + S17)
+- ~~**Minimize benched rowers**~~ (shipped as S18)
+- ~~**Equal speed profile: boat-size weighting**~~ (shipped as S19)
+- **Bench cooldown** — soft penalty for benching a rower who was
+  benched at the previous practice. Similar pattern to S6 cox
+  cooldown but for bench rotation fairness.
+- **Seed built-in presets on tenant creation** — the 4 built-in
+  presets become DB rows with a `locked` flag preventing deletion.
+  New custom presets branch off an existing one as a starting point.
 - **Boat-type biases** — per-boat-class solver preferences so
   coaches can express "I want to field eights today" or "prioritize
   the 4+ over the pair." Potential approaches:

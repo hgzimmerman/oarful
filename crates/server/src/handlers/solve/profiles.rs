@@ -61,40 +61,40 @@ pub(crate) async fn save_profile_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Resolve the config from the preset (built-in or default).
-    let config = SolverConfig::from_preset(&input.preset).unwrap_or_default();
+    // Resolve the basis config, then overlay any form-supplied values.
+    let basis = SolverConfig::from_preset(&input.preset).unwrap_or_default();
 
     let description = input.description.filter(|d| !d.trim().is_empty());
     let new_profile = lineup_db::solver_profile::NewSolverProfile {
         team_id,
         name,
         description,
-        skill_variance_weight: config.skill_variance_weight,
-        pair_affinity_weight: config.pair_affinity_weight,
-        seat_affinity_weight: config.seat_affinity_weight,
-        side_preference_weight: config.side_preference_weight,
-        weight_class_slack_weight: config.weight_class_slack_weight,
-        cox_cooldown_penalty: config.cox_cooldown_penalty,
-        placement_reward_weight: config.placement_reward_weight,
-        pair_strength_weight: config.pair_strength_weight,
-        bow_pair_strength_weight: config.bow_pair_strength_weight,
-        height_balance_weight: config.height_balance_weight,
-        end_pair_skill_weight: config.end_pair_skill_weight,
-        engine_room_strength_weight: config.engine_room_strength_weight,
-        partial_fill_bonus: config.partial_fill_bonus,
-        non_scull_retention_weight: config.non_scull_retention_weight,
-        bow_cox_fit_weight: config.bow_cox_fit_weight,
-        top_boat_stacking_weight: config.top_boat_stacking_weight,
-        pair_eligibility_weight: config.pair_eligibility_weight,
-        minimize_bench_weight: config.minimize_bench_weight,
-        boat_size_stacking_weight: config.boat_size_stacking_weight,
-        eight_bias: config.eight_bias,
-        coxed_four_bias: config.coxed_four_bias,
-        four_bias: config.four_bias,
-        quad_bias: config.quad_bias,
-        pair_bias: config.pair_bias,
-        double_bias: config.double_bias,
-        single_bias: config.single_bias,
+        skill_variance_weight: input.skill_variance_weight.unwrap_or(basis.skill_variance_weight),
+        pair_affinity_weight: input.pair_affinity_weight.unwrap_or(basis.pair_affinity_weight),
+        seat_affinity_weight: input.seat_affinity_weight.unwrap_or(basis.seat_affinity_weight),
+        side_preference_weight: input.side_preference_weight.unwrap_or(basis.side_preference_weight),
+        weight_class_slack_weight: input.weight_class_slack_weight.unwrap_or(basis.weight_class_slack_weight),
+        cox_cooldown_penalty: input.cox_cooldown_penalty.unwrap_or(basis.cox_cooldown_penalty),
+        placement_reward_weight: input.placement_reward_weight.unwrap_or(basis.placement_reward_weight),
+        pair_strength_weight: input.pair_strength_weight.unwrap_or(basis.pair_strength_weight),
+        bow_pair_strength_weight: input.bow_pair_strength_weight.unwrap_or(basis.bow_pair_strength_weight),
+        height_balance_weight: input.height_balance_weight.unwrap_or(basis.height_balance_weight),
+        end_pair_skill_weight: input.end_pair_skill_weight.unwrap_or(basis.end_pair_skill_weight),
+        engine_room_strength_weight: input.engine_room_strength_weight.unwrap_or(basis.engine_room_strength_weight),
+        partial_fill_bonus: input.partial_fill_bonus.unwrap_or(basis.partial_fill_bonus),
+        non_scull_retention_weight: input.non_scull_retention_weight.unwrap_or(basis.non_scull_retention_weight),
+        bow_cox_fit_weight: input.bow_cox_fit_weight.unwrap_or(basis.bow_cox_fit_weight),
+        top_boat_stacking_weight: input.top_boat_stacking_weight.unwrap_or(basis.top_boat_stacking_weight),
+        pair_eligibility_weight: input.pair_eligibility_weight.unwrap_or(basis.pair_eligibility_weight),
+        minimize_bench_weight: input.minimize_bench_weight.unwrap_or(basis.minimize_bench_weight),
+        boat_size_stacking_weight: input.boat_size_stacking_weight.unwrap_or(basis.boat_size_stacking_weight),
+        eight_bias: input.eight_bias.unwrap_or(basis.eight_bias),
+        coxed_four_bias: input.coxed_four_bias.unwrap_or(basis.coxed_four_bias),
+        four_bias: input.four_bias.unwrap_or(basis.four_bias),
+        quad_bias: input.quad_bias.unwrap_or(basis.quad_bias),
+        pair_bias: input.pair_bias.unwrap_or(basis.pair_bias),
+        double_bias: input.double_bias.unwrap_or(basis.double_bias),
+        single_bias: input.single_bias.unwrap_or(basis.single_bias),
     };
 
     tenant
@@ -107,6 +107,76 @@ pub(crate) async fn save_profile_handler(
 
     // Redirect back to the referring page (or practices).
     Ok(Redirect::to("/practices"))
+}
+
+/// `GET /solver-profile/edit` — return the profile editor modal as an
+/// HTMX partial. Query params:
+/// - `name` — profile name to edit (empty = new)
+/// - `basis` — basis preset name (for new/duplicate)
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct EditProfileQuery {
+    #[serde(default)]
+    name: String,
+    #[serde(default = "default_basis")]
+    basis: String,
+}
+fn default_basis() -> String { "balanced".to_string() }
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn edit_profile_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    Query(query): Query<EditProfileQuery>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    let name = query.name.trim().to_string();
+    let basis = query.basis.trim().to_string();
+    let is_builtin = SolverConfig::is_builtin(&name) || (!name.is_empty() && SolverConfig::from_preset(&name).is_some());
+
+    // Resolve the config to display.
+    let (config, description, display_name, basis_name) = if is_builtin {
+        // Viewing a built-in preset (read-only).
+        let cfg = SolverConfig::from_preset(&name).unwrap_or_default();
+        (cfg, None, name.clone(), name.clone())
+    } else if !name.is_empty() {
+        // Editing an existing custom profile.
+        let name_clone = name.clone();
+        let profile = tenant
+            .db
+            .with_conn(move |conn| {
+                lineup_db::solver_profile::SolverProfile::find_by_name(conn, team_id, &name_clone)
+            })
+            .await
+            .map_err(internal_error)?;
+        match profile {
+            Some(p) => {
+                let cfg = profile_to_config(&p);
+                (cfg, p.description.clone(), name.clone(), basis.clone())
+            }
+            None => {
+                // Profile not found — treat as new with basis.
+                let cfg = SolverConfig::from_preset(&basis).unwrap_or_default();
+                (cfg, None, String::new(), basis.clone())
+            }
+        }
+    } else {
+        // Creating a new profile from a basis.
+        let cfg = SolverConfig::from_preset(&basis).unwrap_or_default();
+        (cfg, None, String::new(), basis.clone())
+    };
+
+    Ok(Html(
+        templates::solve::profile_modal::profile_editor_modal(
+            &display_name,
+            &basis_name,
+            &config,
+            description.as_deref(),
+            is_builtin,
+        )
+        .into_string(),
+    ))
 }
 
 /// `DELETE /solver-profile/{name}` — delete a custom profile.

@@ -100,61 +100,7 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
                     div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                         "Solver preset"
                     }
-                    div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
-                        @let current = &knobs.preset;
-                        @for (value, label, tip) in &[
-                            ("balanced", "Balanced", "Even-handed defaults — no emphasis on speed parity or stacking"),
-                            ("even_speed", "Even speed", "Boats matched in speed — talent spread evenly, flexible side placement"),
-                            ("tiered", "Tiered", "Top boat stacked — best rowers in key seats, skill gaps between boats OK"),
-                            ("random", "Random", "No soft preferences — only hard constraints, maximum variety"),
-                        ] {
-                            @let is_active = current == value || (current.is_empty() && *value == "balanced");
-                            @let btn_class = if is_active {
-                                "px-3 py-2 font-semibold bg-slate-800 text-white"
-                            } else {
-                                "px-3 py-2 text-slate-700 hover:bg-slate-100"
-                            };
-                            @let preset_url = preset_url_with(date, knobs, value);
-                            button type="button" class=(btn_class)
-                                   title=(tip)
-                                   hx-get=(preset_url)
-                                   hx-target="#preset-bar"
-                                   hx-swap="outerHTML"
-                                   onclick={"presetClicked('" (label) "')"} {
-                                (label)
-                            }
-                        }
-                        @for (name, description) in custom_profiles {
-                            @let is_active = current == name;
-                            @let btn_class = if is_active {
-                                "px-3 py-2 font-semibold bg-violet-700 text-white"
-                            } else {
-                                "px-3 py-2 text-violet-700 hover:bg-violet-50"
-                            };
-                            @let delete_url = format!("/solver-profile/{}", name);
-                            @let preset_url = preset_url_with(date, knobs, name);
-                            span class="relative inline-flex items-center" {
-                                button type="button" class=(btn_class)
-                                       title=[description.as_deref()]
-                                       hx-get=(preset_url)
-                                       hx-target="#preset-bar"
-                                       hx-swap="outerHTML"
-                                       onclick={"presetClicked('" (name) "')"} {
-                                    (name)
-                                }
-                                button type="button"
-                                       class="text-xs text-violet-400 hover:text-red-600 ml-0.5 -mr-1"
-                                       title="Delete this profile"
-                                       hx-delete=(delete_url)
-                                       hx-confirm={"Delete profile \"" (name) "\"?"}
-                                       hx-target="#content"
-                                       hx-swap="none"
-                                       onclick={"event.stopPropagation(); setTimeout(()=>location.reload(), 200)"} {
-                                    "×"
-                                }
-                            }
-                        }
-                    }
+                    (preset_buttons(date, knobs, custom_profiles))
                     input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
                 }
 
@@ -347,59 +293,97 @@ pub(crate) fn preset_bar(
             div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                 "Solver preset"
             }
-            div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
-                @let current = &knobs.preset;
-                @for (value, label, tip) in &[
-                    ("balanced", "Balanced", "Even-handed defaults — no emphasis on speed parity or stacking"),
-                    ("even_speed", "Even speed", "Boats matched in speed — talent spread evenly, flexible side placement"),
-                    ("tiered", "Tiered", "Top boat stacked — best rowers in key seats, skill gaps between boats OK"),
-                    ("random", "Random", "No soft preferences — only hard constraints, maximum variety"),
-                ] {
-                    @let is_active = current == value || (current.is_empty() && *value == "balanced");
-                    @let btn_class = if is_active {
-                        "px-3 py-2 font-semibold bg-slate-800 text-white"
-                    } else {
-                        "px-3 py-2 text-slate-700 hover:bg-slate-100"
-                    };
-                    @let preset_url = preset_url_with(date, knobs, value);
+            (preset_buttons(date, knobs, custom_profiles))
+            input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
+        }
+    }
+}
+
+/// Shared preset button bar used by both the full knobs form and the
+/// HTMX partial preset-bar endpoint.
+fn preset_buttons(
+    date: NaiveDate,
+    knobs: &SolveKnobs,
+    custom_profiles: &[(String, Option<String>)],
+) -> Markup {
+    let current = &knobs.preset;
+    html! {
+        div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
+            @for (value, label) in &[
+                ("balanced", "Balanced"),
+                ("even_speed", "Even speed"),
+                ("tiered", "Tiered"),
+                ("random", "Random"),
+            ] {
+                @let is_active = current == value || (current.is_empty() && *value == "balanced");
+                @let btn_class = if is_active {
+                    "px-3 py-2 font-semibold bg-slate-800 text-white"
+                } else {
+                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
+                };
+                @let preset_url = preset_url_with(date, knobs, value);
+                @let edit_url = format!("/solver-profile/edit?name={value}");
+                span class="relative inline-flex items-center" {
                     button type="button" class=(btn_class)
-                           title=(tip)
                            hx-get=(preset_url)
                            hx-target="#preset-bar"
-                           hx-swap="outerHTML" {
+                           hx-swap="outerHTML"
+                           onclick={"presetClicked('" (label) "')"} {
                         (label)
                     }
-                }
-                @for (name, description) in custom_profiles {
-                    @let is_active = current == name;
-                    @let btn_class = if is_active {
-                        "px-3 py-2 font-semibold bg-violet-700 text-white"
-                    } else {
-                        "px-3 py-2 text-violet-700 hover:bg-violet-50"
-                    };
-                    @let delete_url = format!("/solver-profile/{}", name);
-                    @let preset_url = preset_url_with(date, knobs, name);
-                    span class="relative inline-flex items-center" {
-                        button type="button" class=(btn_class)
-                               title=[description.as_deref()]
-                               hx-get=(preset_url)
-                               hx-target="#preset-bar"
-                               hx-swap="outerHTML" {
-                            (name)
-                        }
+                    @if is_active {
                         button type="button"
-                               class="text-xs text-violet-400 hover:text-red-600 ml-0.5 -mr-1"
-                               title="Delete this profile"
-                               hx-delete=(delete_url)
-                               hx-confirm={"Delete profile \"" (name) "\"?"}
-                               hx-swap="none"
-                               onclick={"event.stopPropagation(); setTimeout(()=>location.reload(), 200)"} {
-                            "×"
+                               class="text-xs text-slate-400 hover:text-slate-600 ml-0.5"
+                               title={"View " (label) " weights"}
+                               hx-get=(&edit_url)
+                               hx-target="body"
+                               hx-swap="beforeend" {
+                            "\u{2699}"
                         }
                     }
                 }
             }
-            input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
+            @for (name, description) in custom_profiles {
+                @let is_active = current == name;
+                @let btn_class = if is_active {
+                    "px-3 py-2 font-semibold bg-violet-700 text-white"
+                } else {
+                    "px-3 py-2 text-violet-700 hover:bg-violet-50"
+                };
+                @let preset_url = preset_url_with(date, knobs, name);
+                @let edit_url = format!("/solver-profile/edit?name={name}");
+                span class="relative inline-flex items-center" {
+                    button type="button" class=(btn_class)
+                           title=[description.as_deref()]
+                           hx-get=(preset_url)
+                           hx-target="#preset-bar"
+                           hx-swap="outerHTML"
+                           onclick={"presetClicked('" (name) "')"} {
+                        (name)
+                    }
+                    @if is_active {
+                        button type="button"
+                               class="text-xs text-violet-400 hover:text-violet-600 ml-0.5"
+                               title={"Edit " (name)}
+                               hx-get=(&edit_url)
+                               hx-target="body"
+                               hx-swap="beforeend" {
+                            "\u{270e}"
+                        }
+                    }
+                }
+            }
+            // "+" button to create a new profile based on the active preset
+            @let active_preset = if knobs.preset.is_empty() { "balanced" } else { &knobs.preset };
+            @let new_url = format!("/solver-profile/edit?basis={active_preset}");
+            button type="button"
+                   class="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                   title="Create new preset"
+                   hx-get=(&new_url)
+                   hx-target="body"
+                   hx-swap="beforeend" {
+                "+"
+            }
         }
     }
 }
