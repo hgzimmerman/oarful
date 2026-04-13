@@ -69,3 +69,15 @@ lineup_db = { path = "crates/db" }
 lineup_master_db = { path = "crates/master_db" }
 lineup_solver = { path = "crates/solver" }
 lineup_sheets = { path = "crates/sheets" }
+
+# Optimize the solver and its CP backend in dev builds so solve
+# times are representative. Everything else stays at opt-level 0
+# for fast compiles.
+[profile.dev.package.lineup_solver]
+opt-level = 2
+[profile.dev.package.pumpkin-core]
+opt-level = 2
+[profile.dev.package.pumpkin-constraints]
+opt-level = 2
+[profile.dev.package.pumpkin-conflict-resolvers]
+opt-level = 2
