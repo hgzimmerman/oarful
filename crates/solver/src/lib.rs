@@ -253,19 +253,25 @@ pub struct SolverConfig {
     /// light — mixed-height pairs row fine, this is just a gentle
     /// preference. Default **1**.
     pub height_balance_weight: i32,
-    /// S11 end-pair skill-reward multiplier. 8-boats only. Rewards
-    /// placing high-skill rowers in the end pairs (seats 1, 2, 7, 8)
-    /// of an eight: the bow pair sets the rhythm for the rest of the
-    /// crew and the stern pair leads the boat through the stroke.
+    /// S11 end-pair skill-reward multiplier. Rewards placing
+    /// high-skill rowers in the bow pair and stern pair zones
+    /// (e.g. seats {1,2,7,8} in an 8+, all seats in a 4+).
     /// Encoded as a negative-coefficient term on each end-pair
     /// `seat_skill` var, i.e. the solver *maximises* end-pair skill
     /// ordinals to minimise the overall objective. Default **1**.
+    ///
+    /// Most useful as a fallback when rowers don't have explicit
+    /// zone preferences (S3). Once a team has zone affinities
+    /// dialled in, S3 provides more coach-specific control.
     pub end_pair_skill_weight: i32,
-    /// S12 engine-room strength-reward multiplier. 8-boats only.
-    /// Rewards placing strong rowers in the middle four seats
-    /// (3, 4, 5, 6) — the "engine room" that provides the bulk of
-    /// an eight's propulsive power. Same negative-coefficient
-    /// encoding as S11 but over `seat_strength` vars. Default **1**.
+    /// S12 engine-room strength-reward multiplier. Rewards placing
+    /// strong rowers in the engine room zone (seats {3,4,5,6} in
+    /// an 8+, {2,3} in a 4+, empty in pairs). Same negative-
+    /// coefficient encoding as S11 but over `seat_strength` vars.
+    /// Default **1**.
+    ///
+    /// Like S11, most useful as a fallback when rowers don't have
+    /// explicit zone preferences (S3).
     pub engine_room_strength_weight: i32,
     /// Per-filled-optional-seat reward under non-strict
     /// [`PartialFillPolicy`]. Each optional seat that ends up
@@ -454,8 +460,8 @@ impl SolverConfig {
         Self {
             skill_variance_weight: 0,
             seat_affinity_weight: 2,     // yield to stacking, not ignored
-            end_pair_skill_weight: 3,
-            engine_room_strength_weight: 3,
+            end_pair_skill_weight: 1,
+            engine_room_strength_weight: 1,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
             top_boat_stacking_weight: 4,
