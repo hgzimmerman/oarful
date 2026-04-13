@@ -322,25 +322,12 @@ fn preset_buttons(
                     "px-3 py-2 text-slate-700 hover:bg-slate-100"
                 };
                 @let preset_url = preset_url_with(date, knobs, value);
-                @let edit_url = format!("/solver-profile/edit?name={value}");
-                span class="relative inline-flex items-center" {
-                    button type="button" class=(btn_class)
-                           hx-get=(preset_url)
-                           hx-target="#preset-bar"
-                           hx-swap="outerHTML"
-                           onclick={"presetClicked('" (label) "')"} {
-                        (label)
-                    }
-                    @if is_active {
-                        button type="button"
-                               class="text-xs text-slate-400 hover:text-slate-600 ml-0.5"
-                               title={"View " (label) " weights"}
-                               hx-get=(&edit_url)
-                               hx-target="body"
-                               hx-swap="beforeend" {
-                            "\u{2699}"
-                        }
-                    }
+                button type="button" class=(btn_class)
+                       hx-get=(preset_url)
+                       hx-target="#preset-bar"
+                       hx-swap="outerHTML"
+                       onclick={"presetClicked('" (label) "')"} {
+                    (label)
                 }
             }
             @for (name, description) in custom_profiles {
@@ -351,31 +338,19 @@ fn preset_buttons(
                     "px-3 py-2 text-violet-700 hover:bg-violet-50"
                 };
                 @let preset_url = preset_url_with(date, knobs, name);
-                @let edit_url = format!("/solver-profile/edit?name={name}");
-                span class="relative inline-flex items-center" {
-                    button type="button" class=(btn_class)
-                           title=[description.as_deref()]
-                           hx-get=(preset_url)
-                           hx-target="#preset-bar"
-                           hx-swap="outerHTML"
-                           onclick={"presetClicked('" (name) "')"} {
-                        (name)
-                    }
-                    @if is_active {
-                        button type="button"
-                               class="text-xs text-violet-400 hover:text-violet-600 ml-0.5"
-                               title={"Edit " (name)}
-                               hx-get=(&edit_url)
-                               hx-target="body"
-                               hx-swap="beforeend" {
-                            "\u{270e}"
-                        }
-                    }
+                button type="button" class=(btn_class)
+                       title=[description.as_deref()]
+                       hx-get=(preset_url)
+                       hx-target="#preset-bar"
+                       hx-swap="outerHTML"
+                       onclick={"presetClicked('" (name) "')"} {
+                    (name)
                 }
             }
-            // "+" button to create a new profile based on the active preset
+            // "+" and gear — static, always visible, no jumping
             @let active_preset = if knobs.preset.is_empty() { "balanced" } else { &knobs.preset };
             @let new_url = format!("/solver-profile/edit?basis={active_preset}");
+            @let edit_url = format!("/solver-profile/edit?name={active_preset}");
             button type="button"
                    class="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                    title="Create new preset"
@@ -383,6 +358,14 @@ fn preset_buttons(
                    hx-target="body"
                    hx-swap="beforeend" {
                 "+"
+            }
+            button type="button"
+                   class="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                   title="View/edit active preset"
+                   hx-get=(&edit_url)
+                   hx-target="body"
+                   hx-swap="beforeend" {
+                "\u{2699}"
             }
         }
     }
