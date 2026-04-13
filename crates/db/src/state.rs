@@ -26,7 +26,7 @@ const FILE_PRAGMAS: &str = "\
 const CONN_PRAGMAS: &str = "\
     PRAGMA busy_timeout = 5000;\
     PRAGMA synchronous = NORMAL;\
-    PRAGMA cache_size = -16000;\
+    PRAGMA cache_size = -8000;\
     PRAGMA mmap_size = 134217728;\
     PRAGMA foreign_keys = ON;\
 ";
@@ -72,7 +72,7 @@ impl Db {
 
         let manager = Manager::new(conn_str, Runtime::Tokio1);
         let pool = Pool::builder(manager)
-            .max_size(40)
+            .max_size(16)
             .build()
             .context("building deadpool-diesel pool")?;
 
