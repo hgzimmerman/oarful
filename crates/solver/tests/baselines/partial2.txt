@@ -6,15 +6,15 @@ benched:
 
 boat 1: Persephone
   cox  Lena
-  s1   Erin
-  s2   Mika
+  s1   Grace
+  s2   Ivan
   s5   Finn
-  s6   Ivan
+  s6   Bob
   s7   Carla
   s8   Diego
 
 boat 3: Hestia
-  s1   Bob
+  s1   Mika
   s2   Hana
-  s3   Grace
+  s3   Erin
   s4   Alice
