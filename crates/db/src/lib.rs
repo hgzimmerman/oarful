@@ -39,4 +39,5 @@ pub mod sql_types {
     pub use super::rower::types::{
         HeightMapping, RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
     };
+    pub use super::seat_affinity::SeatZoneMapping;
 }

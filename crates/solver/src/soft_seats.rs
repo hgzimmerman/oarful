@@ -301,16 +301,12 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S3 — seat affinities from the `rower_seat_affinity` table.
-    /// For each stored `(rower, seat_position, weight)` entry,
-    /// pushes `x[r, b, seat_position].scaled(-weight)` into
-    /// `obj_terms` for every candidate boat that has a matching
-    /// seat position. Positive weights become negative obj
-    /// contributions (rewards); negative weights become penalties.
+    /// S3 — zone-based seat affinities from `rower_seat_affinity`.
     ///
-    /// `seat_position` is boat-agnostic: a preference for seat 8
-    /// only applies to 8-boats, and a preference for seat 4
-    /// applies to 4-boats *and* to seat 4 of 8-boats.
+    /// Each affinity specifies a zone (Stroke, Engine Room, etc.)
+    /// which maps to concrete seats based on boat size. When multiple
+    /// zones overlap on the same (rower, boat, seat), we take the MAX
+    /// weight to avoid double-counting.
     pub(crate) fn post_s3_seat_affinities(
         &mut self,
         snapshot: &DbSnapshot,
@@ -326,26 +322,36 @@ impl<'a> ModelBuilder<'a> {
             cfg,
             ..
         } = self;
+
+        // Build (rower_idx, boat_idx, seat) → max weight across all
+        // matching zones. This deduplicates overlapping zones so a
+        // rower with Stroke(+5) and SternPair(+3) on seat 8 gets +5,
+        // not +8. BTreeMap keeps iteration order deterministic so the
+        // solver sees terms in a stable order.
+        let mut best: std::collections::BTreeMap<(usize, usize, i32), i32> =
+            std::collections::BTreeMap::new();
+
         for aff in &snapshot.seat_affinities {
-            // AffinityWeight forbids 0 at construction and at the SQL
-            // CHECK, so this guard is belt-and-braces to keep a future
-            // malformed row from panicking Pumpkin via `.scaled(0)`.
             if aff.weight.as_int() == 0 {
                 continue;
             }
             let r_idx = match available.iter().position(|r| r.id == aff.rower_id) {
                 Some(i) => i,
-                None => continue, // unavailable today or filtered out
+                None => continue,
             };
             for (b_idx, boat) in boats.iter().enumerate() {
-                if aff.seat_position < 1 || aff.seat_position > boat.seat_count {
-                    continue; // this boat doesn't have that seat
+                for seat in aff.zone.seats_for(boat.seat_count) {
+                    let key = (r_idx, b_idx, seat);
+                    best.entry(key)
+                        .and_modify(|w| *w = (*w).max(aff.weight.as_int()))
+                        .or_insert(aff.weight.as_int());
                 }
-                if let Some(&var) = x.get(&(r_idx, b_idx, aff.seat_position)) {
-                    obj_terms.push(
-                        var.scaled(-aff.weight.as_int() * cfg.seat_affinity_weight),
-                    );
-                }
+            }
+        }
+
+        for ((r_idx, b_idx, seat), weight) in &best {
+            if let Some(&var) = x.get(&(*r_idx, *b_idx, *seat)) {
+                obj_terms.push(var.scaled(-weight * cfg.seat_affinity_weight));
             }
         }
         Ok(())

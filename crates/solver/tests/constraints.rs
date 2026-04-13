@@ -37,7 +37,7 @@ use lineup_db::rower::types::{
     Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength,
 };
 use lineup_db::rower::Rower;
-use lineup_db::seat_affinity::SeatAffinity;
+use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::snapshot::DbSnapshot;
 use lineup_db::types::{AffinityWeight, IntBool};
 use lineup_solver::{
@@ -306,7 +306,7 @@ fn s2_pair_affinity_seats_the_pair_together() {
 
 #[test]
 fn s3_seat_affinity_places_rower_in_preferred_seat() {
-    // Grace has a +5 seat affinity for seat 4 (stroke of a 4+).
+    // Grace has a +5 Stroke zone affinity. In a 4+ that maps to seat 4.
     // With S3 on and everything else off, she should land there.
     let rowers = vec![
         rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
@@ -318,7 +318,7 @@ fn s3_seat_affinity_places_rower_in_preferred_seat() {
     let mut snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
     snap.seat_affinities.push(SeatAffinity {
         rower_id: RowerId::new(4),
-        seat_position: 4,
+        zone: SeatZone::Stroke,
         weight: AffinityWeight::new(5),
     });
 

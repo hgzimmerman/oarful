@@ -433,14 +433,14 @@ pub(crate) fn seat_affinities_section(
                     tbody {
                         @for aff in &detail.seat_affinities {
                             tr class="border-t border-slate-100" {
-                                td class="py-1 font-mono" { "s" (aff.seat_position) }
+                                td class="py-1" { (aff.zone.display_name()) }
                                 td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
                                 @if can_edit {
                                     td class="py-1 text-right" {
                                         button type="button"
                                                class="text-xs text-red-600 hover:text-red-800"
                                                hx-post=(delete_url)
-                                               hx-vals={"{\"seat_position\": " (aff.seat_position) "}"}
+                                               hx-vals={"{\"zone\": \"" (aff.zone.as_str()) "\"}"}
                                                hx-target="#seat-affinities"
                                                hx-swap="outerHTML" {
                                             "Delete"
@@ -464,11 +464,11 @@ pub(crate) fn seat_affinities_section(
                  hx-swap="outerHTML"
                  class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-slate-200" {
                 div {
-                    label for="seat_position" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Seat" }
-                    select id="seat_position" name="seat_position"
+                    label for="zone" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Zone" }
+                    select id="zone" name="zone"
                            class="border border-slate-300 rounded px-3 py-2 text-sm" {
-                        @for s in 1..=8i32 {
-                            option value=(s) { "s" (s) }
+                        @for z in lineup_db::seat_affinity::SeatZone::ALL {
+                            option value=(z.as_str()) { (z.display_name()) }
                         }
                     }
                 }

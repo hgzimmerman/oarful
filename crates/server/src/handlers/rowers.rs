@@ -24,7 +24,7 @@ use lineup_db::rower::{
     types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
     Rower,
 };
-use lineup_db::seat_affinity::SeatAffinity;
+use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
@@ -345,16 +345,16 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Sta
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SeatAffinityInput {
-    pub(crate) seat_position: i32,
+    pub(crate) zone: String,
     pub(crate) weight: i32,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SeatAffinityDelete {
-    pub(crate) seat_position: i32,
+    pub(crate) zone: String,
 }
 
-/// `POST /rowers/{id}/seat-affinity` — upsert one (rower, seat) row.
+/// `POST /rowers/{id}/seat-affinity` — upsert one (rower, zone) row.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn seat_affinity_upsert_handler(
     Extension(tenant): Extension<TenantContext>,
@@ -366,27 +366,26 @@ pub(crate) async fn seat_affinity_upsert_handler(
         Ok(w) => w,
         Err(msg) => return seat_section_with_error(&tenant.db, id, &msg).await,
     };
-    if !(1..=8).contains(&input.seat_position) {
-        return seat_section_with_error(
-            &tenant.db,
-            id,
-            &format!(
-                "seat position must be between 1 and 8, got {}",
-                input.seat_position
-            ),
-        )
-        .await;
-    }
-    let seat = input.seat_position;
+    let zone = match SeatZone::from_str_opt(&input.zone) {
+        Some(z) => z,
+        None => {
+            return seat_section_with_error(
+                &tenant.db,
+                id,
+                &format!("invalid zone: {}", input.zone),
+            )
+            .await
+        }
+    };
     tenant
         .db
-        .with_conn(move |conn| SeatAffinity::upsert(conn, id, seat, weight))
+        .with_conn(move |conn| SeatAffinity::upsert(conn, id, zone, weight))
         .await
         .map_err(internal_error)?;
     seat_section_response(&tenant.db, id).await
 }
 
-/// `POST /rowers/{id}/seat-affinity/delete` — drop one (rower, seat).
+/// `POST /rowers/{id}/seat-affinity/delete` — drop one (rower, zone).
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn seat_affinity_delete_handler(
     Extension(tenant): Extension<TenantContext>,
@@ -394,10 +393,13 @@ pub(crate) async fn seat_affinity_delete_handler(
     Form(input): Form<SeatAffinityDelete>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let seat = input.seat_position;
+    let zone = match SeatZone::from_str_opt(&input.zone) {
+        Some(z) => z,
+        None => return seat_section_with_error(&tenant.db, id, "invalid zone").await,
+    };
     tenant
         .db
-        .with_conn(move |conn| SeatAffinity::delete(conn, id, seat))
+        .with_conn(move |conn| SeatAffinity::delete(conn, id, zone))
         .await
         .map_err(internal_error)?;
     seat_section_response(&tenant.db, id).await

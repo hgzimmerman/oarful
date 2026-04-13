@@ -15,7 +15,7 @@ use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
 use crate::rower::types::{Height, RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
-use crate::seat_affinity::{NewSeatAffinity, SeatAffinity};
+use crate::seat_affinity::{NewSeatAffinity, SeatAffinity, SeatZone};
 use crate::team::{NewTeam, Team, TeamMembership};
 use crate::types::{AffinityWeight, IntBool};
 use chrono::{Datelike, NaiveDate, Weekday};
@@ -134,17 +134,19 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     //   0 Alice, 1 Bob, 2 Carla, 3 Diego, 4 Erin, 5 Finn, 6 Grace,
     //   7 Hana, 8 Ivan, 9 Juno, 10 Kai, 11 Lena, 12 Mika, 13 Nico
     //
-    // - Alice (Port, Expert) likes seat 4: she loves being at stroke of a
-    //   4-boat. Weight +3.
-    // - Hana (Port, Master) likes seat 2. Weight +3.
-    // - Ivan (Starboard, Novice) avoids seat 1 (the exposed bow seat).
-    //   Weight -2.
-    for (idx, seat, weight) in [(0usize, 4, 3), (7, 2, 3), (8, 1, -2)] {
+    // - Alice (Port, Expert) likes stroke. Weight +3.
+    // - Hana (Port, Master) likes bow pair. Weight +3.
+    // - Ivan (Starboard, Novice) avoids bow. Weight -2.
+    for (idx, zone, weight) in [
+        (0usize, SeatZone::Stroke, 3),
+        (7, SeatZone::BowPair, 3),
+        (8, SeatZone::Bow, -2),
+    ] {
         SeatAffinity::insert(
             conn,
             NewSeatAffinity {
                 rower_id: rower_ids[idx],
-                seat_position: seat,
+                zone,
                 weight: AffinityWeight::new(weight),
             },
         )?;
@@ -335,13 +337,17 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<crate::app_user::UserI
     // 25  Xena     Novice/Intermediate/Either/Medium/Medium (can cox)
 
     // --- seat affinities ---
-    // Alice likes stroke (seat 8 in an 8+).
-    // Bob likes the engine room (seat 5).
-    // Hana prefers seat 6.
-    for (idx, seat, weight) in [(0usize, 8, 3), (1, 5, 2), (7, 6, 3)] {
+    // Alice likes stroke.
+    // Bob likes the engine room.
+    // Hana prefers stern half.
+    for (idx, zone, weight) in [
+        (0usize, SeatZone::Stroke, 3),
+        (1, SeatZone::EngineRoom, 2),
+        (7, SeatZone::SternHalf, 3),
+    ] {
         SeatAffinity::insert(conn, NewSeatAffinity {
             rower_id: rower_ids[idx],
-            seat_position: seat,
+            zone,
             weight: AffinityWeight::new(weight),
         })?;
     }

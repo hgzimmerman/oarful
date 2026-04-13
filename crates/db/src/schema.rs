@@ -84,9 +84,12 @@ diesel::table! {
 }
 
 diesel::table! {
-    rower_seat_affinity (rower_id, seat_position) {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
+    rower_seat_affinity (rower_id, zone) {
         rower_id -> Integer,
-        seat_position -> Integer,
+        zone -> SeatZoneMapping,
         weight -> Integer,
     }
 }
