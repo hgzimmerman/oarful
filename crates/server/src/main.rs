@@ -22,8 +22,8 @@ async fn main() -> Result<()> {
 
     let master_db =
         std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
-    let tenant_db =
-        std::env::var("DATABASE_URL").unwrap_or_else(|_| "lineup.sql".to_string());
+    let data_dir =
+        std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -39,12 +39,16 @@ async fn main() -> Result<()> {
         "crates/server/public".to_string()
     });
 
-    tracing::info!(%master_db, %tenant_db, %port, %public_dir, "starting lineup_server");
+    tracing::info!(%master_db, %data_dir, %port, %public_dir, "starting lineup_server");
 
     let mailer: std::sync::Arc<dyn lineup_server::mailer::Mailer> =
         std::sync::Arc::new(lineup_server::mailer::LogMailer);
-    let app = lineup_server::build_router(&master_db, &tenant_db, &public_dir, mailer)?;
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let app = lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)?;
+    let host: std::net::IpAddr = std::env::var("HOST")
+        .ok()
+        .and_then(|h| h.parse().ok())
+        .unwrap_or_else(|| [127, 0, 0, 1].into());
+    let addr = std::net::SocketAddr::from((host, port));
     println!("running at http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app.into_make_service()).await?;

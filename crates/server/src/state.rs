@@ -29,6 +29,9 @@ pub(crate) struct AppState {
     /// Read from the `ORIGIN` env var. None if not set — invite URLs
     /// will be relative paths.
     pub(crate) origin: Option<url::Url>,
+    /// Base directory for tenant SQLite files. Default tenant lives at
+    /// `{data_dir}/default.db`, demos at `{data_dir}/demos/{slug}.db`.
+    pub(crate) data_dir: String,
 }
 
 /// Bundle of per-request tenant state injected into request
@@ -59,15 +62,20 @@ impl TenantContext {
 impl AppState {
     pub(crate) fn new(
         master_conn_str: &str,
-        tenant_conn_str: &str,
+        data_dir: &str,
         mailer: Arc<dyn Mailer>,
     ) -> anyhow::Result<Self> {
         let master_db = MasterDb::connect(master_conn_str)?;
 
-        let default_tenant_id = ensure_default_tenant(master_conn_str, tenant_conn_str)?;
+        // Ensure data directories exist.
+        std::fs::create_dir_all(format!("{data_dir}/demos"))
+            .map_err(|e| anyhow::anyhow!("creating data dirs: {e}"))?;
+
+        let default_db_path = format!("{data_dir}/default.db");
+        let default_tenant_id = ensure_default_tenant(master_conn_str, &default_db_path)?;
 
         // Pre-warm the cache with the default tenant.
-        let default_db = Db::connect(tenant_conn_str)?;
+        let default_db = Db::connect(&default_db_path)?;
         let default_tenant = lookup_tenant(master_conn_str, default_tenant_id)?;
         let tenant_cache = Arc::new(TenantCache::new());
         tenant_cache.insert(
@@ -131,6 +139,7 @@ impl AppState {
             jwt_keys,
             mailer,
             origin,
+            data_dir: data_dir.to_string(),
         })
     }
 

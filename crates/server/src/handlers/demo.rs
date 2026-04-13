@@ -46,13 +46,7 @@ pub(crate) async fn create_demo_handler(
         let h = RandomState::new().build_hasher().finish();
         format!("demo-{h:012x}")
     };
-    let db_path = format!("data/demos/{slug}.db");
-
-    // Ensure the demos directory exists.
-    if let Err(e) = std::fs::create_dir_all("data/demos") {
-        tracing::error!(?e, "failed to create data/demos directory");
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+    let db_path = format!("{}/demos/{slug}.db", state.data_dir);
 
     // Create the tenant in the master DB.
     let slug_clone = slug.clone();

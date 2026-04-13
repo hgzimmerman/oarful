@@ -22,16 +22,14 @@ pub(crate) use state::AppState;
 /// Build the full application router.
 ///
 /// `master_conn_str` points at the global master.db (tenant registry).
-/// `tenant_conn_str` points at the active tenant's SQLite file.
-/// Phase 4 will resolve the tenant dynamically from JWT claims;
-/// for now the single tenant is hard-coded at startup.
+/// `data_dir` is the base directory for per-tenant SQLite files.
 pub fn build_router(
     master_conn_str: &str,
-    tenant_conn_str: &str,
+    data_dir: &str,
     public_dir: &str,
     mailer: std::sync::Arc<dyn mailer::Mailer>,
 ) -> anyhow::Result<Router> {
-    let state = AppState::new(master_conn_str, tenant_conn_str, mailer)?;
+    let state = AppState::new(master_conn_str, data_dir, mailer)?;
 
     // Run demo cleanup at startup, then periodically.
     let cleanup_state = state.clone();

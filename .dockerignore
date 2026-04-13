@@ -1,0 +1,5 @@
+target/
+*.db
+*.sql
+data/
+.git/
