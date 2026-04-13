@@ -418,18 +418,21 @@ impl SolverConfig {
     /// **Even speed** — boats should be as close in speed as possible.
     /// High skill-variance penalty keeps talent spread evenly. High
     /// pair-strength balance means no boat gets all the strong rowers.
-    /// Low side preference gives the solver more flexibility to balance.
+    /// Social preferences (pair/seat affinity) dialed back so speed
+    /// parity wins. Side preference gentle but respected.
     pub fn even_speed() -> Self {
         Self {
             skill_variance_weight: 3,
+            pair_affinity_weight: 1,     // speed parity > being with friends
+            seat_affinity_weight: 2,     // nice-to-have, not priority
+            side_preference_weight: 2,   // respect side but allow overrides
             pair_strength_weight: 3,
             bow_pair_strength_weight: 3,
             height_balance_weight: 2,
-            side_preference_weight: 0,
             end_pair_skill_weight: 0,
             engine_room_strength_weight: 0,
             top_boat_stacking_weight: -2, // penalize stacking = spread talent
-            boat_size_stacking_weight: 2, // stack smaller boats for speed parity
+            boat_size_stacking_weight: 3, // stack smaller boats for speed parity
             ..Self::balanced()
         }
     }
