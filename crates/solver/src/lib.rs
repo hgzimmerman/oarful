@@ -814,12 +814,38 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     let mut diagnostics = pre_solve_diagnostics(&boats, &available);
 
     // --- Phase 2: build the model ---
+    let rss_before = rss_kb();
     let (builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     // --- Phase 3: search ---
     let mut result = search_lineups(builder, objective, request, diagnostics)?;
     result.elapsed = solve_start.elapsed();
+
+    let rss_after = rss_kb();
+    tracing::info!(
+        rss_before_kb = rss_before,
+        rss_after_kb = rss_after,
+        rss_delta_kb = rss_after.saturating_sub(rss_before),
+        elapsed_ms = result.elapsed.as_millis() as u64,
+        "solve complete"
+    );
+
     Ok(result)
+}
+
+/// Read the process RSS in KB from /proc/self/statm (Linux only).
+/// Returns 0 on non-Linux or if the read fails.
+fn rss_kb() -> u64 {
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/self/statm")
+            .ok()
+            .and_then(|s| s.split_whitespace().nth(1)?.parse::<u64>().ok())
+            .map(|pages| pages * 4) // pages are 4KB on x86/arm
+            .unwrap_or(0)
+    }
+    #[cfg(not(target_os = "linux"))]
+    { 0 }
 }
 
 /// Greedy fleet pre-selection: pick the largest boats first until
@@ -1145,6 +1171,14 @@ fn build_model<'a>(
             .post()
             .map_err(|e| anyhow!("objective link: {e:?}"))?;
     }
+
+    tracing::info!(
+        x_vars = m.x.len(),
+        boats = m.boats.len(),
+        available = m.available.len(),
+        obj_terms = m.obj_terms.len(),
+        "solver model built"
+    );
 
     Ok((m, objective))
 }
