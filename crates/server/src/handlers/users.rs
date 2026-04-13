@@ -145,7 +145,7 @@ pub(crate) async fn invite_handler(
         .map_err(super::internal_error)?;
 
     match result {
-        Ok(_user_id) => {
+        Ok(new_user_id) => {
             let invite_path = format!("/invite/{token}");
             let invite_url = state.full_url(&invite_path);
 
@@ -158,6 +158,15 @@ pub(crate) async fn invite_handler(
             {
                 tracing::warn!(?err, %email_for_mailer, "mailer failed to send invite");
             }
+
+            crate::audit::record(
+                &tenant.db,
+                Some(tenant.claims.user_id().as_int()),
+                "invite.create",
+                "user",
+                &new_user_id.to_string(),
+                Some(serde_json::json!({"role": input.role}).to_string()),
+            );
 
             let content = templates::users::invite_result(Some(&invite_url), None);
             Ok(super::maybe_page_authed("Invite sent", content, hx, &tenant))
@@ -224,6 +233,15 @@ pub(crate) async fn resend_invite_handler(
     {
         tracing::warn!(?err, email = %user.email, "mailer failed to resend invite");
     }
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "invite.resend",
+        "user",
+        &user_id.to_string(),
+        None,
+    );
 
     // Return the updated row for HTMX swap. We need the roles map
     // and rower link for rendering.

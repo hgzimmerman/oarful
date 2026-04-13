@@ -162,6 +162,15 @@ pub(crate) async fn update_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.update",
+        "rower",
+        &saved.id.to_string(),
+        None,
+    );
+
     Ok(Html(
         templates::rowers::attribute_section(&saved, None, &perms).into_string(),
     ))
@@ -382,6 +391,14 @@ pub(crate) async fn seat_affinity_upsert_handler(
         .with_conn(move |conn| SeatAffinity::upsert(conn, id, zone, weight))
         .await
         .map_err(internal_error)?;
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.seat_affinity.update",
+        "rower",
+        &id.to_string(),
+        Some(serde_json::json!({"zone": input.zone, "weight": input.weight}).to_string()),
+    );
     seat_section_response(&tenant.db, id).await
 }
 
@@ -402,6 +419,14 @@ pub(crate) async fn seat_affinity_delete_handler(
         .with_conn(move |conn| SeatAffinity::delete(conn, id, zone))
         .await
         .map_err(internal_error)?;
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.seat_affinity.delete",
+        "rower",
+        &id.to_string(),
+        Some(serde_json::json!({"zone": input.zone}).to_string()),
+    );
     seat_section_response(&tenant.db, id).await
 }
 
@@ -461,6 +486,14 @@ pub(crate) async fn pair_affinity_upsert_handler(
         .with_conn(move |conn| PairAffinity::upsert(conn, id, partner, weight))
         .await
         .map_err(internal_error)?;
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.pair_affinity.update",
+        "rower",
+        &id.to_string(),
+        Some(serde_json::json!({"partner_id": partner.to_string(), "weight": input.weight}).to_string()),
+    );
     pair_section_response(&tenant.db, id).await
 }
 
@@ -478,6 +511,14 @@ pub(crate) async fn pair_affinity_delete_handler(
         .with_conn(move |conn| PairAffinity::delete(conn, id, partner))
         .await
         .map_err(internal_error)?;
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.pair_affinity.delete",
+        "rower",
+        &id.to_string(),
+        Some(serde_json::json!({"partner_id": partner.to_string()}).to_string()),
+    );
     pair_section_response(&tenant.db, id).await
 }
 

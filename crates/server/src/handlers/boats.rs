@@ -158,7 +158,7 @@ pub(crate) async fn create_handler(
         }
     };
 
-    tenant
+    let boat = tenant
         .db
         .with_conn(move |conn| {
             Boat::insert(
@@ -178,6 +178,15 @@ pub(crate) async fn create_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "boat.create",
+        "boat",
+        &boat.id.to_string(),
+        Some(serde_json::json!({"name": boat.name}).to_string()),
+    );
 
     redirect_or_list(&tenant.db, hx).await
 }
@@ -256,11 +265,20 @@ pub(crate) async fn update_handler(
     boat.relinquished_at = parsed.relinquished_at;
     boat.stroke_side = parsed.stroke_side;
 
-    tenant
+    let saved = tenant
         .db
         .with_conn(move |conn| Boat::save(conn, &boat))
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "boat.update",
+        "boat",
+        &id.to_string(),
+        Some(serde_json::json!({"name": saved.name}).to_string()),
+    );
 
     redirect_or_list(&tenant.db, hx).await
 }

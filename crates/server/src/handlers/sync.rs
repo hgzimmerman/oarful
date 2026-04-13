@@ -146,6 +146,19 @@ pub(crate) async fn sync_handler(
                     Ok(())
                 })
                 .await;
+            crate::audit::record(
+                &tenant.db,
+                Some(tenant.claims.user_id().as_int()),
+                "sync.import",
+                "sync_source",
+                "google_sheet",
+                Some(serde_json::json!({
+                    "rows": summary.rows_read,
+                    "created": summary.rowers_created,
+                    "updated": summary.rowers_updated,
+                }).to_string()),
+            );
+
             let now = Some(chrono::Utc::now().naive_utc());
             let content =
                 templates::sync::form_content(Some(&input), Some(&summary), None, now);
@@ -277,6 +290,18 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
                         updated = summary.rowers_updated,
                         avail = summary.availabilities_upserted,
                         "sync poll: success"
+                    );
+                    crate::audit::record(
+                        &db,
+                        None, // system action
+                        "sync.poll",
+                        "sync_source",
+                        "google_sheet",
+                        Some(serde_json::json!({
+                            "rows": summary.rows_read,
+                            "created": summary.rowers_created,
+                            "updated": summary.rowers_updated,
+                        }).to_string()),
                     );
                     let _ = db
                         .with_conn(move |conn| {

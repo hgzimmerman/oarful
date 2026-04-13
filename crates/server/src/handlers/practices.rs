@@ -169,6 +169,15 @@ pub(crate) async fn create_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "practice.create",
+        "practice",
+        &date.to_string(),
+        None,
+    );
+
     Ok(Redirect::to("/practices"))
 }
 
@@ -181,16 +190,26 @@ pub(crate) async fn cancel_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    tenant
+    let new_cancelled = tenant
         .db
         .with_conn(move |conn| {
             let practice = Practice::find_by_date(conn, team_id, date)?
                 .ok_or(diesel::result::Error::NotFound)?;
             let new_cancelled = !practice.cancelled.as_bool();
-            Practice::set_cancelled(conn, team_id, date, new_cancelled)
+            Practice::set_cancelled(conn, team_id, date, new_cancelled)?;
+            Ok(new_cancelled)
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "practice.cancel",
+        "practice",
+        &date.to_string(),
+        Some(serde_json::json!({"cancelled": new_cancelled}).to_string()),
+    );
 
     Ok(Redirect::to("/practices"))
 }
@@ -389,6 +408,17 @@ pub(crate) async fn send_reminders_handler(
         } else {
             sent_count += 1;
         }
+    }
+
+    if sent_count > 0 {
+        crate::audit::record(
+            &tenant.db,
+            Some(tenant.claims.user_id().as_int()),
+            "practices.send_reminders",
+            "practice",
+            &format!("{sent_count} recipients"),
+            Some(serde_json::json!({"sent_count": sent_count}).to_string()),
+        );
     }
 
     let msg = if sent_count > 0 {
@@ -676,6 +706,18 @@ pub(crate) async fn send_lineups_handler(
                 sent_count += 1;
             }
         }
+    }
+
+    if sent_count > 0 {
+        let date_strs: Vec<String> = summaries.iter().map(|s| s.date.to_string()).collect();
+        crate::audit::record(
+            &tenant.db,
+            Some(tenant.claims.user_id().as_int()),
+            "practices.send_lineups",
+            "practice",
+            &date_strs.join(","),
+            Some(serde_json::json!({"sent_count": sent_count, "dates": date_strs}).to_string()),
+        );
     }
 
     let msg = if sent_count > 0 {

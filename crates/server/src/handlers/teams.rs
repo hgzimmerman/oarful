@@ -87,6 +87,15 @@ pub(crate) async fn create_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "team.create",
+        "team",
+        &team.id.to_string(),
+        Some(serde_json::json!({"name": team.name}).to_string()),
+    );
+
     // Redirect to the new team's detail page.
     let content = templates::teams::detail_content(&team);
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
@@ -160,6 +169,15 @@ pub(crate) async fn update_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "team.update",
+        "team",
+        &id.to_string(),
+        None,
+    );
 
     // Re-load and re-render.
     let team = tenant

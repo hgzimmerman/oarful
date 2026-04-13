@@ -6,6 +6,7 @@
 //! query functions that take `&mut SqliteConnection`.
 
 pub mod app_user;
+pub mod audit_log;
 pub mod availability;
 pub mod boat;
 pub mod email_log;

@@ -15,6 +15,7 @@ use serde::Deserialize;
 
 use crate::{state::AppState, templates};
 
+pub(crate) mod audit;
 pub(crate) mod auth;
 pub(crate) mod boats;
 pub(crate) mod demo;
@@ -122,6 +123,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/my/email-preferences",
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
         )
+        .route("/audit", get(audit::list_handler))
+        .route("/audit/rows", get(audit::rows_handler))
         .route("/teams", get(teams::list_handler).post(teams::create_handler))
         .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
         .route("/teams/selector", get(teams::selector_handler))

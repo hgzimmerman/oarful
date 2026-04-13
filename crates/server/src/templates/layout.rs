@@ -86,6 +86,7 @@ fn navbar(role: Option<Role>) -> Markup {
                     @if is_pd {
                         (nav_link("/teams", "Teams"))
                         (nav_link("/users", "Users"))
+                        (nav_link("/audit", "Audit"))
                     }
                     li class="ml-4" {}
                     (nav_link("/my/profile", "Profile"))
@@ -125,6 +126,7 @@ fn navbar(role: Option<Role>) -> Markup {
                 @if is_pd {
                     (nav_link("/teams", "Teams"))
                     (nav_link("/users", "Users"))
+                    (nav_link("/audit", "Audit"))
                 }
                 li class="border-t border-slate-700 my-1 pt-1" {}
                 (nav_link("/my/profile", "Profile"))

@@ -58,6 +58,7 @@ pub(crate) async fn commit_handler(
         .filter(|l| l.used)
         .collect();
 
+    let boat_count = used.len();
     tenant
         .db
         .with_conn(move |conn| {
@@ -78,6 +79,15 @@ pub(crate) async fn commit_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "lineup.commit",
+        "practice",
+        &date.to_string(),
+        Some(serde_json::json!({"boat_count": boat_count}).to_string()),
+    );
 
     Ok(Redirect::to(&format!("/history/{date}")))
 }
@@ -124,6 +134,7 @@ pub(crate) async fn commit_lineup_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let boat_count = by_boat.len();
     tenant
         .db
         .with_conn(move |conn| {
@@ -135,6 +146,15 @@ pub(crate) async fn commit_lineup_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "lineup.commit",
+        "practice",
+        &date.to_string(),
+        Some(serde_json::json!({"boat_count": boat_count, "direct": true}).to_string()),
+    );
 
     Ok(Redirect::to(&format!("/history/{date}")))
 }

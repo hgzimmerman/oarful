@@ -60,6 +60,7 @@ pub(crate) async fn save_profile_handler(
     if name.is_empty() || SolverConfig::is_builtin(&name) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let audit_name = name.clone();
 
     // Resolve the basis config, then overlay any form-supplied values.
     let basis = SolverConfig::from_preset(&input.preset).unwrap_or_default();
@@ -105,6 +106,15 @@ pub(crate) async fn save_profile_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "solver_profile.save",
+        "solver_profile",
+        &audit_name,
+        None,
+    );
 
     // Redirect back to the referring page (or practices).
     Ok(Redirect::to("/practices"))
@@ -196,6 +206,7 @@ pub(crate) async fn delete_profile_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
+    let profile_name = name.clone();
     tenant
         .db
         .with_conn(move |conn| {
@@ -207,6 +218,15 @@ pub(crate) async fn delete_profile_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "solver_profile.delete",
+        "solver_profile",
+        &profile_name,
+        None,
+    );
 
     Ok(StatusCode::OK)
 }

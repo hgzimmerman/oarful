@@ -7,6 +7,7 @@
 use axum::Router;
 use tower_http::services::ServeDir;
 
+pub(crate) mod audit;
 pub(crate) mod extract;
 pub(crate) mod handlers;
 pub(crate) mod jwt;
@@ -53,6 +54,18 @@ pub fn build_router(
         loop {
             interval.tick().await;
             handlers::sync::poll_sync_sources(&sync_state).await;
+        }
+    });
+
+    // Audit log cleanup — prune entries older than 90 days, daily.
+    let audit_state = state.clone();
+    tokio::spawn(async move {
+        audit::cleanup_all(&audit_state).await;
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86400));
+        interval.tick().await; // skip immediate tick
+        loop {
+            interval.tick().await;
+            audit::cleanup_all(&audit_state).await;
         }
     });
 

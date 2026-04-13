@@ -103,6 +103,15 @@ pub(crate) async fn profile_update_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "rower.update",
+        "rower",
+        &saved.id.to_string(),
+        Some(serde_json::json!({"self_edit": true}).to_string()),
+    );
+
     // Re-render the full detail page with correct permissions.
     let rower_id = saved.id;
     let detail = load_detail(&tenant.db, rower_id).await?;
@@ -290,6 +299,15 @@ pub(crate) async fn availability_update_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "availability.update",
+        "availability",
+        &format!("{rower_id}:{date}"),
+        Some(serde_json::json!({"status": input.status, "date": date.to_string()}).to_string()),
+    );
+
     // Re-render the full availability page.
     availability_handler(jar, Extension(tenant), hx).await
 }
@@ -341,6 +359,15 @@ pub(crate) async fn email_prefs_update_handler(
         })
         .await
         .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "email_prefs.update",
+        "user",
+        &user_id.to_string(),
+        Some(serde_json::json!({"reminders": reminders, "lineups": lineups}).to_string()),
+    );
 
     // Re-render with updated state.
     let user = tenant

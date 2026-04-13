@@ -102,6 +102,15 @@ pub(crate) async fn notes_handler(
         .await
         .map_err(internal_error)?;
 
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "practice.notes.update",
+        "practice",
+        &date.to_string(),
+        None,
+    );
+
     Ok(Html(
         templates::history::notes_display(&practice, date).into_string(),
     ))

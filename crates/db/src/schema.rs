@@ -226,6 +226,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    audit_log (id) {
+        id -> Integer,
+        timestamp -> Timestamp,
+        user_id -> Nullable<Integer>,
+        action -> Text,
+        resource_type -> Text,
+        resource_id -> Text,
+        detail -> Nullable<Text>,
+    }
+}
+
+diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(sync_source -> team (team_id));
 diesel::joinable!(solver_profile -> team (team_id));
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
@@ -246,6 +259,7 @@ diesel::joinable!(lineup_seat -> lineup (lineup_id));
 diesel::joinable!(lineup_seat -> rower (rower_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    audit_log,
     rower,
     boat,
     rower_seat_affinity,
