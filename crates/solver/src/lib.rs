@@ -392,7 +392,7 @@ impl SolverConfig {
             side_preference_weight: 2,
             weight_class_slack_weight: 1,
             cox_cooldown_penalty: 5,
-            placement_reward_weight: 5,
+            placement_reward_weight: 4,
             pair_strength_weight: 1,
             bow_pair_strength_weight: 2,
             height_balance_weight: 1,
