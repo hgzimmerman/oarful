@@ -441,15 +441,20 @@ impl SolverConfig {
     /// Low skill-variance penalty lets talent concentrate. High
     /// end-pair skill and engine-room strength rewards place the
     /// strongest rowers in the most impactful seats.
+    /// **Tiered / coached** — top boat stacked with the best rowers.
+    /// Skill gaps between boats are expected. Seat preferences yield
+    /// to stacking but pair affinity stays high (coach set those
+    /// pairs for a reason).
     pub fn tiered() -> Self {
         Self {
             skill_variance_weight: 0,
+            seat_affinity_weight: 2,     // yield to stacking, not ignored
             end_pair_skill_weight: 3,
             engine_room_strength_weight: 3,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
             top_boat_stacking_weight: 4,
-            minimize_bench_weight: 2, // lower — benching weaker rowers to stack is OK
+            minimize_bench_weight: 2,    // strategic benching OK, not aggressive
             ..Self::balanced()
         }
     }
