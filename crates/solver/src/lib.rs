@@ -823,9 +823,9 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
     let rss_after = rss_kb();
     tracing::info!(
-        rss_before_kb = rss_before,
-        rss_after_kb = rss_after,
-        rss_delta_kb = rss_after.saturating_sub(rss_before),
+        rss_before_mib = format!("{:.2}", rss_before as f64 / 1024.0),
+        rss_after_mib = format!("{:.2}", rss_after as f64 / 1024.0),
+        rss_delta_mib = format!("{:.2}", rss_after.saturating_sub(rss_before) as f64 / 1024.0),
         elapsed_ms = result.elapsed.as_millis() as u64,
         "solve complete"
     );
