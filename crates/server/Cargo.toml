@@ -25,6 +25,7 @@ jsonwebtoken.workspace = true
 rayon.workspace = true
 chrono.workspace = true
 reqwest.workspace = true
+csv.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true

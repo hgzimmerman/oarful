@@ -1217,6 +1217,7 @@ dependencies = [
  "axum-htmx",
  "bcrypt",
  "chrono",
+ "csv",
  "diesel",
  "hex",
  "jsonwebtoken",

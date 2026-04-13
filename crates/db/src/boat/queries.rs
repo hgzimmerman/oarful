@@ -1,8 +1,18 @@
 use super::types::BoatId;
 use super::{Boat, NewBoat};
-use crate::schema::boat;
+use crate::schema::{boat, lineup, practice};
+use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
+
+/// Usage statistics derived from committed lineups for past practices.
+#[derive(Debug, Clone)]
+pub struct BoatUsageSummary {
+    pub total_uses: i64,
+    pub last_used: Option<NaiveDate>,
+    /// Distinct practice dates this boat was used, most recent first.
+    pub recent_uses: Vec<NaiveDate>,
+}
 
 impl Boat {
     #[tracing::instrument(level = "debug", skip(conn), err)]
@@ -55,6 +65,34 @@ impl Boat {
             .select(Boat::as_select())
             .first(conn)
             .optional()
+    }
+
+    /// Usage summary for a single boat, derived from committed lineups
+    /// where the practice date is in the past.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn usage_summary(
+        conn: &mut SqliteConnection,
+        id: BoatId,
+    ) -> Result<BoatUsageSummary, diesel::result::Error> {
+        let today = chrono::Local::now().date_naive();
+
+        let recent_uses: Vec<NaiveDate> = lineup::table
+            .inner_join(practice::table)
+            .filter(lineup::boat_id.eq(id))
+            .filter(practice::date.lt(today))
+            .select(practice::date)
+            .distinct()
+            .order(practice::date.desc())
+            .get_results(conn)?;
+
+        let total_uses = recent_uses.len() as i64;
+        let last_used = recent_uses.first().copied();
+
+        Ok(BoatUsageSummary {
+            total_uses,
+            last_used,
+            recent_uses,
+        })
     }
 
     /// Persist all fields of `boat` back to its row. Mirrors

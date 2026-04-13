@@ -20,7 +20,7 @@ use lineup_db::boat::{
 use lineup_db::rower::types::Side;
 use lineup_db::state::Db;
 use lineup_db::types::IntBool;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use lineup_db::app_user::Role;
 
@@ -37,8 +37,96 @@ pub(crate) async fn list_handler(
         .with_conn(|conn| Boat::list_all(conn))
         .await
         .map_err(internal_error)?;
-    let content = templates::boats::list_content(&boats);
+    let can_export = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::ProgramDirector);
+    let content = templates::boats::list_content(&boats, can_export);
     Ok(super::maybe_page_authed("Boats", content, hx, &tenant))
+}
+
+/// `GET /boats/export.csv` — fleet CSV download. ProgramDirector+ only.
+///
+/// Mirrors `boat_tracking`'s `export_boats_csv_handler` format: one row
+/// per boat with serde-derived headers via the `csv` crate.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn export_csv_handler(
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<impl IntoResponse, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let rows = tenant
+        .db
+        .with_conn(|conn| {
+            let boats = Boat::list_all(conn)?;
+            let mut rows = Vec::with_capacity(boats.len());
+            for b in &boats {
+                let usage = Boat::usage_summary(conn, b.id)?;
+                rows.push(BoatCsvRow {
+                    boat_id: b.id,
+                    boat_name: b.name.clone(),
+                    boat_type: boat_type_label(b),
+                    boat_weight_class: b.weight_class,
+                    manufactured_at: b.manufactured_at,
+                    acquired_at: b.acquired_at,
+                    relinquished_at: b.relinquished_at,
+                    total_uses: usage.total_uses as u64,
+                    last_used: usage.last_used,
+                });
+            }
+            Ok(rows)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(CsvDownload(rows))
+}
+
+/// One row in the fleet CSV export. Field order = column order.
+#[derive(Serialize)]
+struct BoatCsvRow {
+    boat_id: BoatId,
+    boat_name: String,
+    boat_type: String,
+    boat_weight_class: WeightClass,
+    manufactured_at: Option<NaiveDate>,
+    acquired_at: Option<NaiveDate>,
+    relinquished_at: Option<NaiveDate>,
+    total_uses: u64,
+    last_used: Option<NaiveDate>,
+}
+
+/// Generic CSV download wrapper — serialises `Vec<T>` via the `csv` crate
+/// and returns it as a `text/csv` attachment.
+struct CsvDownload<T>(Vec<T>);
+
+impl<T: Serialize> IntoResponse for CsvDownload<T> {
+    fn into_response(self) -> axum::response::Response {
+        match csv_serialize(self.0) {
+            Ok(body) => (
+                [
+                    (axum::http::header::CONTENT_TYPE, "text/csv"),
+                    (
+                        axum::http::header::CONTENT_DISPOSITION,
+                        "attachment; filename=\"fleet.csv\"",
+                    ),
+                ],
+                body,
+            )
+                .into_response(),
+            Err(err) => {
+                tracing::error!(?err, "CSV serialization failed");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            }
+        }
+    }
+}
+
+fn csv_serialize<T: Serialize>(rows: Vec<T>) -> Result<String, Box<dyn std::error::Error>> {
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(true)
+        .from_writer(Vec::with_capacity(2048));
+    for row in rows {
+        writer.serialize(row)?;
+    }
+    Ok(String::from_utf8(writer.into_inner()?)?)
 }
 
 /// `GET /boats/new` — empty creation form.
@@ -94,7 +182,29 @@ pub(crate) async fn create_handler(
     redirect_or_list(&tenant.db, hx).await
 }
 
-/// `GET /boats/{id}` — edit form pre-filled with current values.
+/// `GET /boats/{id}` — read-only detail page with usage stats.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn detail_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<BoatId>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    let (boat, usage) = tenant
+        .db
+        .with_conn(move |conn| {
+            let boat = Boat::get(conn, id)?
+                .ok_or(diesel::result::Error::NotFound)?;
+            let usage = Boat::usage_summary(conn, id)?;
+            Ok((boat, usage))
+        })
+        .await
+        .map_err(internal_error)?;
+    let can_edit = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::ProgramDirector);
+    let content = templates::boats::detail_content(&boat, &usage, can_edit);
+    Ok(super::maybe_page_authed(&boat.name, content, hx, &tenant))
+}
+
+/// `GET /boats/{id}/edit` — edit form pre-filled with current values.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn edit_handler(
     Extension(tenant): Extension<TenantContext>,
@@ -166,7 +276,8 @@ async fn redirect_or_list(
             .with_conn(|conn| Boat::list_all(conn))
             .await
             .map_err(internal_error)?;
-        Ok(Html(templates::boats::list_content(&boats).into_string()).into_response())
+        // Only PDs can create/update boats, so can_export is always true here.
+        Ok(Html(templates::boats::list_content(&boats, true).into_string()).into_response())
     } else {
         Ok(Redirect::to("/boats").into_response())
     }

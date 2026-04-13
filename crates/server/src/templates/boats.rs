@@ -1,12 +1,13 @@
-//! Boat fleet templates — list view + shared add/edit form.
+//! Boat fleet templates — list view, detail page, + shared add/edit form.
 
+use lineup_db::boat::queries::BoatUsageSummary;
 use lineup_db::boat::Boat;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
 use crate::handlers::boats::{BoatFormData, FormMode};
 
-pub(crate) fn list_content(boats: &[Boat]) -> Markup {
+pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
     let in_service: Vec<&Boat> = boats.iter().filter(|b| b.in_service()).collect();
     let relinquished: Vec<&Boat> = boats.iter().filter(|b| !b.in_service()).collect();
     let subtitle = format!(
@@ -22,12 +23,20 @@ pub(crate) fn list_content(boats: &[Boat]) -> Markup {
                     h1 class="text-2xl font-bold text-slate-800" { "Fleet" }
                     p class="text-sm text-slate-500 mt-1" { (subtitle) }
                 }
-                a href="/boats/new"
-                  hx-get="/boats/new"
-                  hx-target="#content"
-                  hx-push-url="true"
-                  class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
-                    "Add shell"
+                div class="flex items-center gap-2" {
+                    @if can_export {
+                        a href="/boats/export.csv"
+                          class="text-slate-500 hover:text-slate-800 text-sm font-semibold border border-slate-300 px-4 py-2 rounded transition" {
+                            "Export CSV"
+                        }
+                    }
+                    a href="/boats/new"
+                      hx-get="/boats/new"
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                        "Add shell"
+                    }
                 }
             }
         }
@@ -60,7 +69,6 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
                             th class="px-4 py-2" { "Weight" }
                             th class="px-4 py-2" { "Seats" }
                             th class="px-4 py-2" { "Rig" }
-                            th class="px-4 py-2 text-right" { "" }
                         }
                     }
                     tbody {
@@ -89,20 +97,139 @@ fn boat_row(b: &Boat) -> Markup {
     let href = format!("/boats/{}", b.id);
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
-            td class="px-4 py-2 font-medium text-slate-800" { (b.name) }
-            td class="px-4 py-2" { (type_label) }
-            td class="px-4 py-2" { (b.weight_class) }
-            td class="px-4 py-2 font-mono" { (seats) }
-            td class="px-4 py-2 text-xs" { (rig) }
-            td class="px-4 py-2 text-right" {
+            td class="px-4 py-2 font-medium" {
                 a href=(href)
                   hx-get=(href)
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-slate-500 hover:text-slate-800 text-xs font-semibold uppercase tracking-wide cursor-pointer" {
-                    "Edit"
+                  class="text-blue-700 hover:text-blue-900 underline" {
+                    (b.name)
                 }
             }
+            td class="px-4 py-2" { (type_label) }
+            td class="px-4 py-2" { (b.weight_class) }
+            td class="px-4 py-2 font-mono" { (seats) }
+            td class="px-4 py-2 text-xs" { (rig) }
+        }
+    }
+}
+
+// =====================================================================
+// Detail page
+// =====================================================================
+
+pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bool) -> Markup {
+    let type_label = crate::handlers::boats::type_label(boat);
+    let rig = if boat.oars_per_seat == 1 {
+        format!("{} rigged", boat.stroke_side)
+    } else {
+        "sculling".into()
+    };
+    let seats = if boat.has_cox.as_bool() {
+        format!("{}+", boat.seat_count)
+    } else {
+        format!("{}-", boat.seat_count)
+    };
+
+    html! {
+        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+            div class="flex items-center gap-3" {
+                a href="/boats"
+                  onclick="if (history.length > 1) { history.back(); return false; }"
+                  class="text-slate-400 hover:text-slate-700"
+                  title="Back" {
+                    "←"
+                }
+                div {
+                    h1 class="text-2xl font-bold text-slate-800" { (boat.name) }
+                    p class="text-sm text-slate-500 mt-1" {
+                        (type_label) " · " (seats) " · " (rig)
+                    }
+                }
+            }
+        }
+
+        div class="px-4 sm:px-8 py-6 space-y-6 max-w-3xl mx-auto" {
+            // Boat info
+            div class="bg-white rounded-lg shadow p-6" {
+                div class="flex items-center justify-between mb-4" {
+                    h2 class="text-lg font-bold text-slate-800" { "Details" }
+                    @if can_edit {
+                        a href=(format!("/boats/{}/edit", boat.id))
+                          hx-get=(format!("/boats/{}/edit", boat.id))
+                          hx-target="#content"
+                          hx-push-url="true"
+                          class="text-sm font-semibold text-blue-700 hover:text-blue-900" {
+                            "Edit"
+                        }
+                    }
+                }
+
+                dl class="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4 text-sm" {
+                    (detail_item("Weight class", &boat.weight_class.to_string()))
+                    (detail_item("Cox position", &boat.cox_position.to_string()))
+                    @if let Some(d) = boat.acquired_at {
+                        (detail_item("Acquired", &d.format("%Y-%m-%d").to_string()))
+                    }
+                    @if let Some(d) = boat.manufactured_at {
+                        (detail_item("Manufactured", &d.format("%Y-%m-%d").to_string()))
+                    }
+                    @if let Some(d) = boat.relinquished_at {
+                        (detail_item("Relinquished", &d.format("%Y-%m-%d").to_string()))
+                    }
+                }
+            }
+
+            // Usage stats
+            div class="bg-white rounded-lg shadow p-6" {
+                h2 class="text-lg font-bold text-slate-800 mb-4" { "Usage" }
+
+                @if usage.total_uses == 0 {
+                    p class="text-sm text-slate-500 italic" {
+                        "No committed lineups found for this boat."
+                    }
+                } @else {
+                    div class="flex gap-8 mb-4" {
+                        div {
+                            div class="text-3xl font-bold text-slate-800" { (usage.total_uses) }
+                            div class="text-xs text-slate-500 uppercase tracking-wide" { "Total outings" }
+                        }
+                        @if let Some(last) = usage.last_used {
+                            div {
+                                div class="text-3xl font-bold text-slate-800" { (last.format("%b %-d")) }
+                                div class="text-xs text-slate-500 uppercase tracking-wide" { "Last used" }
+                            }
+                        }
+                    }
+
+                    h3 class="text-sm font-semibold text-slate-700 mb-2" { "Recent outings" }
+                    div class="divide-y divide-slate-100 text-sm" {
+                        @for date in usage.recent_uses.iter().take(20) {
+                            a href=(format!("/history/{}", date.format("%Y-%m-%d")))
+                              hx-get=(format!("/history/{}", date.format("%Y-%m-%d")))
+                              hx-target="#content"
+                              hx-push-url="true"
+                              class="block px-2 py-1.5 hover:bg-slate-50 text-blue-700 hover:text-blue-900" {
+                                (date.format("%A, %b %-d, %Y"))
+                            }
+                        }
+                        @if usage.recent_uses.len() > 20 {
+                            p class="px-2 py-1.5 text-slate-500 text-xs" {
+                                (format!("… and {} more", usage.recent_uses.len() - 20))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn detail_item(label: &str, value: &str) -> Markup {
+    html! {
+        div {
+            dt class="text-xs text-slate-500 uppercase tracking-wide" { (label) }
+            dd class="font-medium text-slate-800" { (value) }
         }
     }
 }
@@ -116,9 +243,9 @@ pub(crate) fn form_content(
     data: &BoatFormData,
     error: Option<&str>,
 ) -> Markup {
-    let (title, action, submit_label) = match mode {
-        FormMode::New => ("New shell", "/boats".to_string(), "Create"),
-        FormMode::Edit(id) => ("Edit shell", format!("/boats/{id}"), "Save"),
+    let (title, action, submit_label, cancel_href) = match mode {
+        FormMode::New => ("New shell", "/boats".to_string(), "Create", "/boats".to_string()),
+        FormMode::Edit(id) => ("Edit shell", format!("/boats/{id}"), "Save", format!("/boats/{id}")),
     };
 
     html! {
@@ -226,8 +353,8 @@ pub(crate) fn form_content(
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                         (submit_label)
                     }
-                    a href="/boats"
-                      hx-get="/boats"
+                    a href=(cancel_href)
+                      hx-get=(cancel_href)
                       hx-target="#content"
                       hx-push-url="true"
                       class="text-slate-500 hover:text-slate-800 text-sm font-semibold" {

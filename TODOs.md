@@ -226,23 +226,11 @@ Replace CDN with local `tailwind.config.js` scanning
 
 ### Infrastructure
 
-#### Periodic sync polling
+#### ~~Periodic sync polling~~ (shipped)
 
-Saved sync config is shipped (`sync_source` table stores
-sheet ID + GID per team, form pre-fills, last-sync timestamp
-and errors tracked). Remaining:
-
-**Periodic polling.** An optional background task that re-syncs
-on a schedule (e.g. every 30 minutes, configurable). Only runs
-if a sync config exists for the team. Uses the same sync logic
-as the manual flow. Logs results; surfaces last-sync timestamp
-and any errors on the sync page.
-
-**Considerations:**
-- Polling requires a background task runtime (tokio::spawn with
-  a timer, or a cron-like scheduler). Keep it simple — a loop
-  with `tokio::time::interval` is sufficient.
-- Rate-limit to avoid hammering Google's export endpoint.
+Background task re-syncs on a schedule when a sync config exists.
+Uses `tokio::time::interval`, logs results, surfaces last-sync
+timestamp and errors on the sync page.
 
 #### Audit log
 
@@ -266,26 +254,13 @@ by date range). Lower priority than the write instrumentation —
 the data is valuable even before there's a dedicated UI (queryable
 via SQLite directly).
 
-#### Boat usage tracking from committed lineups
+#### ~~Boat usage tracking from committed lineups~~ (shipped)
 
-The sibling `boat_tracking` project tracks boat uses for
-depreciation/maintenance purposes. Rather than maintaining a
-separate logging workflow, derive boat usage from committed
-lineups — once a practice date has passed, each committed lineup
-counts as one use of that boat.
-
-**Approach:**
-- Query committed lineups with `practice.date < today`, grouped
-  by `boat_id`, to get a usage count and usage history.
-- Surface on the boat detail page: total uses, last used date,
-  usage over time (simple count, not a chart initially).
-- Salvage any useful schema or logic from `boat_tracking` (lives
-  in the adjacent directory) — particularly maintenance intervals,
-  damage reporting, or depreciation formulas if they exist.
-
-**No new data entry needed** — the lineup commit flow already
-records which boats were used on which dates. This is purely a
-read-side feature built on existing data.
+Usage stats derived from committed lineups (lineup → practice join,
+past dates only). Boat detail page at `/boats/{id}` shows total
+outings, last used date, and clickable recent-outing list. Fleet
+CSV export at `/boats/export.csv` (PD-only, serde `csv` crate,
+matches `boat_tracking` format).
 
 #### Data export + backup/import
 
@@ -588,4 +563,3 @@ Start with push-only; bidirectional can follow if there's demand.
 1. **Batch invite from roster** — bulk user creation for linked rowers.
 2. **Email visibility tenant config** — `emails_visible` boolean.
 3. **#56** Custom Tailwind build pipeline — replace CDN.
-4. **Periodic sync polling** — background auto-sync on a schedule.

@@ -72,12 +72,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(boats::list_handler).post(boats::create_handler),
         )
         .route("/boats/new", get(boats::new_handler))
+        .route("/boats/export.csv", get(boats::export_csv_handler))
         .route(
             "/boats/{id}",
-            get(boats::edit_handler)
+            get(boats::detail_handler)
                 .put(boats::update_handler)
                 .post(boats::update_handler),
         )
+        .route("/boats/{id}/edit", get(boats::edit_handler))
         .route("/rowers", get(rowers::list_handler))
         .route(
             "/rowers/{id}",
