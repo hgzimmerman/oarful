@@ -424,6 +424,13 @@ pub(super) fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) ->
         pair_eligibility_weight: p.pair_eligibility_weight,
         minimize_bench_weight: p.minimize_bench_weight,
         boat_size_stacking_weight: p.boat_size_stacking_weight,
+        eight_bias: p.eight_bias,
+        coxed_four_bias: p.coxed_four_bias,
+        four_bias: p.four_bias,
+        quad_bias: p.quad_bias,
+        pair_bias: p.pair_bias,
+        double_bias: p.double_bias,
+        single_bias: p.single_bias,
     }
 }
 

@@ -190,6 +190,13 @@ fn silent_config() -> SolverConfig {
         pair_eligibility_weight: 0,
         minimize_bench_weight: 0,
         boat_size_stacking_weight: 0,
+        eight_bias: 0,
+        coxed_four_bias: 0,
+        four_bias: 0,
+        quad_bias: 0,
+        pair_bias: 0,
+        double_bias: 0,
+        single_bias: 0,
     }
 }
 

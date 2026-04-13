@@ -323,6 +323,62 @@ pub struct SolverConfig {
     /// (which need it more than 8s). Default **0** (off; even_speed
     /// sets it to 2).
     pub boat_size_stacking_weight: i32,
+    /// Per-boat-class biases. Scales the S8 placement reward for
+    /// boats of each class by `(1 + bias)`. All default **0** (no
+    /// preference). Positive = prefer fielding that class.
+    pub eight_bias: i32,
+    pub coxed_four_bias: i32,
+    pub four_bias: i32,
+    pub quad_bias: i32,
+    pub pair_bias: i32,
+    pub double_bias: i32,
+    pub single_bias: i32,
+}
+
+/// Boat class determined by (seat_count, has_cox, oars_per_seat).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoatClass {
+    Eight,     // 8+
+    CoxedFour, // 4+
+    Four,      // 4-
+    Quad,      // 4x
+    Pair,      // 2-
+    Double,    // 2x
+    Single,    // 1x
+}
+
+impl BoatClass {
+    /// Classify a boat by its physical properties.
+    pub fn from_boat(boat: &Boat) -> Self {
+        match (boat.seat_count, boat.has_cox.as_bool(), boat.oars_per_seat) {
+            (8, _, 1) => Self::Eight,
+            (4, true, 1) => Self::CoxedFour,
+            (4, false, 1) => Self::Four,
+            (4, _, 2) => Self::Quad,
+            (2, _, 1) => Self::Pair,
+            (2, _, 2) => Self::Double,
+            (1, _, _) => Self::Single,
+            // Fallback: treat anything large as eight-like, small as four-like.
+            (n, _, _) if n >= 8 => Self::Eight,
+            (n, true, _) if n >= 2 => Self::CoxedFour,
+            _ => Self::Four,
+        }
+    }
+}
+
+impl SolverConfig {
+    /// Look up the bias for a given boat class.
+    pub fn class_bias(&self, class: BoatClass) -> i32 {
+        match class {
+            BoatClass::Eight => self.eight_bias,
+            BoatClass::CoxedFour => self.coxed_four_bias,
+            BoatClass::Four => self.four_bias,
+            BoatClass::Quad => self.quad_bias,
+            BoatClass::Pair => self.pair_bias,
+            BoatClass::Double => self.double_bias,
+            BoatClass::Single => self.single_bias,
+        }
+    }
 }
 
 impl SolverConfig {
@@ -349,6 +405,13 @@ impl SolverConfig {
             pair_eligibility_weight: 3,
             minimize_bench_weight: 4,
             boat_size_stacking_weight: 0,
+            eight_bias: 0,
+            coxed_four_bias: 0,
+            four_bias: 0,
+            quad_bias: 0,
+            pair_bias: 0,
+            double_bias: 0,
+            single_bias: 0,
         }
     }
 
@@ -413,6 +476,13 @@ impl SolverConfig {
             pair_eligibility_weight: 0,
             minimize_bench_weight: 0,
             boat_size_stacking_weight: 0,
+            eight_bias: 0,
+            coxed_four_bias: 0,
+            four_bias: 0,
+            quad_bias: 0,
+            pair_bias: 0,
+            double_bias: 0,
+            single_bias: 0,
         }
     }
 

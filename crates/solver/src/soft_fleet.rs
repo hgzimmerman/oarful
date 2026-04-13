@@ -40,7 +40,12 @@ impl<'a> ModelBuilder<'a> {
         for (b_idx, boat) in self.boats.iter().enumerate() {
             let seats_total =
                 boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
-            let coef = -seats_total * self.cfg.placement_reward_weight;
+            // Scale the base reward by the boat-class bias: (1 + bias).
+            // A bias of 0 = normal reward; positive = prefer this class.
+            let class = crate::BoatClass::from_boat(boat);
+            let bias = self.cfg.class_bias(class);
+            let effective_weight = self.cfg.placement_reward_weight * (1 + bias);
+            let coef = -seats_total * effective_weight;
             if coef != 0 {
                 self.obj_terms.push(self.use_b[b_idx].scaled(coef));
             }

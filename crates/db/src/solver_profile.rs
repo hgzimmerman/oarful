@@ -45,6 +45,13 @@ pub struct SolverProfile {
     pub pair_eligibility_weight: i32,
     pub minimize_bench_weight: i32,
     pub boat_size_stacking_weight: i32,
+    pub eight_bias: i32,
+    pub coxed_four_bias: i32,
+    pub four_bias: i32,
+    pub quad_bias: i32,
+    pub pair_bias: i32,
+    pub double_bias: i32,
+    pub single_bias: i32,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -72,6 +79,13 @@ pub struct NewSolverProfile {
     pub pair_eligibility_weight: i32,
     pub minimize_bench_weight: i32,
     pub boat_size_stacking_weight: i32,
+    pub eight_bias: i32,
+    pub coxed_four_bias: i32,
+    pub four_bias: i32,
+    pub quad_bias: i32,
+    pub pair_bias: i32,
+    pub double_bias: i32,
+    pub single_bias: i32,
 }
 
 impl SolverProfile {

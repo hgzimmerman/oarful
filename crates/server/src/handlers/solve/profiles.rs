@@ -88,6 +88,13 @@ pub(crate) async fn save_profile_handler(
         pair_eligibility_weight: config.pair_eligibility_weight,
         minimize_bench_weight: config.minimize_bench_weight,
         boat_size_stacking_weight: config.boat_size_stacking_weight,
+        eight_bias: config.eight_bias,
+        coxed_four_bias: config.coxed_four_bias,
+        four_bias: config.four_bias,
+        quad_bias: config.quad_bias,
+        pair_bias: config.pair_bias,
+        double_bias: config.double_bias,
+        single_bias: config.single_bias,
     };
 
     tenant

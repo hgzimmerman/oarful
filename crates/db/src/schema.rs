@@ -187,6 +187,13 @@ diesel::table! {
         pair_eligibility_weight -> Integer,
         minimize_bench_weight -> Integer,
         boat_size_stacking_weight -> Integer,
+        eight_bias -> Integer,
+        coxed_four_bias -> Integer,
+        four_bias -> Integer,
+        quad_bias -> Integer,
+        pair_bias -> Integer,
+        double_bias -> Integer,
+        single_bias -> Integer,
     }
 }
 
