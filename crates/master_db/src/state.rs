@@ -4,11 +4,22 @@
 use anyhow::Context;
 use deadpool_diesel::sqlite::{Manager, Object, Pool};
 use deadpool_diesel::Runtime;
-use diesel::{Connection, SqliteConnection};
+use diesel::{Connection, RunQueryDsl, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use std::sync::Arc;
 
 use crate::MIGRATIONS;
+
+const FILE_PRAGMAS: &str = "\
+    PRAGMA journal_mode = WAL;\
+    PRAGMA foreign_keys = ON;\
+";
+
+const CONN_PRAGMAS: &str = "\
+    PRAGMA busy_timeout = 5000;\
+    PRAGMA synchronous = NORMAL;\
+    PRAGMA foreign_keys = ON;\
+";
 
 #[derive(Clone)]
 pub struct MasterDb {
@@ -26,6 +37,11 @@ impl MasterDb {
         tracing::info!(conn_str, "Opening master database...");
         let mut conn = SqliteConnection::establish(conn_str)
             .with_context(|| format!("establishing sync conn for master migrations: {conn_str}"))?;
+
+        diesel::sql_query(FILE_PRAGMAS)
+            .execute(&mut conn)
+            .with_context(|| "setting master file PRAGMAs")?;
+
         let applied = conn
             .run_pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("running master migrations: {e}"))?;
@@ -57,9 +73,12 @@ impl MasterDb {
             .get()
             .await
             .context("acquiring master pool connection")?;
-        obj.interact(f)
-            .await
-            .map_err(|e| anyhow::anyhow!("master pool interact panic: {e}"))?
-            .context("master database query")
+        obj.interact(move |conn| {
+            let _ = diesel::sql_query(CONN_PRAGMAS).execute(conn);
+            f(conn)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("master pool interact panic: {e}"))?
+        .context("master database query")
     }
 }

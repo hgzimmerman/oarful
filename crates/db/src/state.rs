@@ -8,11 +8,28 @@
 use anyhow::Context;
 use deadpool_diesel::sqlite::{Manager, Object, Pool};
 use deadpool_diesel::Runtime;
-use diesel::{Connection, SqliteConnection};
+use diesel::{Connection, RunQueryDsl, SqliteConnection};
 use diesel_migrations::MigrationHarness;
 use std::sync::Arc;
 
 use crate::MIGRATIONS;
+
+/// Per-file PRAGMAs. These persist across connections so we only need
+/// to set them once per database file (on the migration connection).
+const FILE_PRAGMAS: &str = "\
+    PRAGMA journal_mode = WAL;\
+    PRAGMA foreign_keys = ON;\
+";
+
+/// Per-connection PRAGMAs. These reset on each new connection so we
+/// apply them on every pool checkout.
+const CONN_PRAGMAS: &str = "\
+    PRAGMA busy_timeout = 5000;\
+    PRAGMA synchronous = NORMAL;\
+    PRAGMA cache_size = -16000;\
+    PRAGMA mmap_size = 134217728;\
+    PRAGMA foreign_keys = ON;\
+";
 
 #[derive(Clone)]
 pub struct Db {
@@ -36,6 +53,13 @@ impl Db {
         tracing::info!(conn_str, "Checking for pending database migrations...");
         let mut conn = SqliteConnection::establish(conn_str)
             .with_context(|| format!("establishing sync conn for migrations: {conn_str}"))?;
+
+        // Set file-level PRAGMAs before migrations (WAL mode makes
+        // migrations faster and is required for Litestream backups).
+        diesel::sql_query(FILE_PRAGMAS)
+            .execute(&mut conn)
+            .with_context(|| "setting file PRAGMAs")?;
+
         let applied = conn
             .run_pending_migrations(MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("running migrations: {e}"))?;
@@ -65,8 +89,9 @@ impl Db {
     ///
     /// This is the primary data-access entry point for async code. It:
     ///   1. checks out a connection from the pool,
-    ///   2. runs the closure on the pool's blocking runtime via `interact`,
-    ///   3. flattens the three error layers (pool, interact panic, diesel)
+    ///   2. applies per-connection PRAGMAs (busy_timeout, synchronous, etc.),
+    ///   3. runs the closure on the pool's blocking runtime via `interact`,
+    ///   4. flattens the three error layers (pool, interact panic, diesel)
     ///      into one `anyhow::Error`.
     ///
     /// Wrap multi-statement work in `conn.transaction(|c| ...)` inside the
@@ -81,9 +106,16 @@ impl Db {
             .get()
             .await
             .context("acquiring pool connection")?;
-        obj.interact(f)
-            .await
-            .map_err(|e| anyhow::anyhow!("pool interact panic: {e}"))?
-            .context("database query")
+        obj.interact(move |conn| {
+            // Per-connection PRAGMAs. These are cheap (no I/O) and
+            // idempotent, so re-applying on every checkout is fine.
+            // The alternative (a post_create hook) isn't available
+            // in deadpool-diesel.
+            let _ = diesel::sql_query(CONN_PRAGMAS).execute(conn);
+            f(conn)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("pool interact panic: {e}"))?
+        .context("database query")
     }
 }
