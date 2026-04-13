@@ -460,7 +460,7 @@ impl SolverConfig {
             bow_pair_strength_weight: 1,
             top_boat_stacking_weight: 4,
             minimize_bench_weight: 2,    // strategic benching OK, not aggressive
-            bench_cooldown_penalty: 0,   // benching is intentional in tiered
+            bench_cooldown_penalty: 1,   // rotate who gets benched, don't repeat
             ..Self::balanced()
         }
     }
