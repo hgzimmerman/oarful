@@ -166,8 +166,8 @@ each soft constraint's contribution to the objective. Defaults:
 | `pair_strength_weight` | 1 | S9 per-partition `max − min` strength diff |
 | `bow_pair_strength_weight` | 2 | S9b extra weight on the (1, 2) bow-pair strength diff, layered on top of S9 |
 | `height_balance_weight` | 1 | S10 per-partition `max − min` height diff |
-| `end_pair_skill_weight` | 1 | S11 8-boat end-pair skill reward (seats 1/2/7/8) |
-| `engine_room_strength_weight` | 1 | S12 8-boat engine-room strength reward (seats 3-6) |
+| `end_pair_skill_weight` | 1 | S11 end-pair skill reward (bow pair + stern pair zones; see `docs/seat-zones.md`) |
+| `engine_room_strength_weight` | 1 | S12 engine-room strength reward (engine room zone; see `docs/seat-zones.md`) |
 | `partial_fill_bonus` | 1 | Per-filled-optional-seat reward under `Allowed(k)` partial-fill; inert under `Strict` |
 | `non_scull_retention_weight` | 2 | S13 per-sweep-only-rower placement reward; biases "who gets benched" toward can_scull rowers |
 
@@ -619,14 +619,16 @@ pair diff). Under `Allowed`, the (3,4) partition of a partial-fill
 8+ falls through to the `None` arm of the lookup and is silently
 skipped — same behaviour as S9.
 
-### S11. End-pair skill reward — **enabled** *(8-boats only)*
-In an eight, seats 1/2 are the bow pair and seats 7/8 are the stern
-pair. Both are high-skill positions but for different reasons: the
-stern pair leads the stroke and sets rhythm for the rest of the
-crew; the bow pair is where set and steering live — balance
-problems and course corrections both originate there. Both jobs
-reward technical skill over raw power, so we nudge the solver to
-put the most technically skilled rowers in the ends of an eight.
+### S11. End-pair skill reward — **enabled**
+Rewards placing high-skill rowers in the bow pair and stern pair
+zones of any boat. Both are high-skill positions: the stern pair
+leads the stroke and sets rhythm; the bow pair is where set and
+steering live. Both jobs reward technical skill over raw power.
+
+Zone mapping (see `docs/seat-zones.md` for the full spec):
+- 8+: seats {1, 2, 7, 8} (4 of 8)
+- 4+: seats {1, 2, 3, 4} (all seats — a 4 is entirely end pairs)
+- Pair: no seats (bow pair and stern pair zones skip N < 3)
 
 The bow pair's separate sensitivity to *strength mismatch* (a
 distinct concern from skill) is handled by the S9b
@@ -636,8 +638,8 @@ distinct concern from skill) is handled by the S9b
 variables or linking constraints:
 
 ```
-for each 8-boat b:
-  for seat s ∈ {1, 2, 7, 8}:
+for each boat b:
+  for seat s ∈ BowPair.seats_for(b.seat_count) ∪ SternPair.seats_for(b.seat_count):
     obj_terms.push(seat_skill_by_seat[(b, s)].scaled(-end_pair_skill_weight))
 ```
 
@@ -651,29 +653,35 @@ nothing, so there's no phantom "reward for benching a boat" effect.
 `end_pair_skill_weight ≠ 0`, so S11 reuses S1's per-seat aux vars
 rather than creating a parallel set.
 
-**8-boats only.** A 4-boat has no engine-room/ends distinction — the
-whole thing is ends. Smaller boats are even more so. The constraint
-is gated on `boat.seat_count == 8` inside the loop; 4-boats and pairs
-are skipped silently.
+**Fallback role.** Most useful for teams that haven't set explicit
+zone preferences (S3). Once a team has zone affinities dialled in,
+S3 provides more coach-specific control over seat placement.
 
-### S12. Engine-room strength reward — **enabled** *(8-boats only)*
-Seats 3, 4, 5, 6 of an eight are the "engine room" — the four middle
+### S12. Engine-room strength reward — **enabled**
+Rewards placing strong rowers in the engine room zone — the middle
 seats that provide the bulk of the propulsive power. Unlike the
-end pairs, their job is pure force application, so we reward placing
-the strongest rowers here.
+end pairs, their job is pure force application.
+
+Zone mapping:
+- 8+: seats {3, 4, 5, 6} (4 of 8)
+- 4+: seats {2, 3} (2 of 4)
+- Pair/single: no seats (engine room zone skips N < 4)
 
 **Encoding** is structurally identical to S11 but over the
-`seat_strength_by_seat` map and the engine-room seat set:
+`seat_strength_by_seat` map and the engine room zone:
 
 ```
-for each 8-boat b:
-  for seat s ∈ {3, 4, 5, 6}:
+for each boat b:
+  for seat s ∈ EngineRoom.seats_for(b.seat_count):
     obj_terms.push(seat_strength_by_seat[(b, s)].scaled(-engine_room_strength_weight))
 ```
 
 Same piggyback pattern: `seat_strength_by_seat` is built when either
 `pair_strength_weight ≠ 0` or `engine_room_strength_weight ≠ 0`, so
 S9 and S12 share the per-seat aux vars.
+
+**Fallback role.** Like S11, most useful for teams without explicit
+zone preferences (S3).
 
 **Interaction with S11.** They're complementary — S11 pulls skilled
 rowers toward the ends, S12 pulls strong rowers toward the middle.
