@@ -30,6 +30,9 @@ pub struct DbSnapshot {
     pub sweep_boats: Vec<Boat>,
     /// Derived from `lineup_seat` history.
     pub last_coxed: HashMap<RowerId, NaiveDate>,
+    /// Most recent committed practice where each rower was available
+    /// but not placed in any lineup. Drives S20 bench cooldown.
+    pub last_benched: HashMap<RowerId, NaiveDate>,
     /// Per-rower seat preferences (boat-agnostic position). Drives S3.
     pub seat_affinities: Vec<SeatAffinity>,
     /// Rower-pair affinities (two rowers should form a rowing pair — a
@@ -69,6 +72,7 @@ impl DbSnapshot {
             availability: Availability::map_for_team_date(conn, team_id, date)?,
             sweep_boats: Boat::list_sweep(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
+            last_benched: Rower::last_benched_dates(conn)?,
             seat_affinities: SeatAffinity::list_all(conn)?,
             pair_affinities: PairAffinity::list_all(conn)?,
             recent_placements: Lineup::recent_placements(conn, RECENT_LINEUP_WINDOW)?,

@@ -73,6 +73,7 @@ fn weight_groups(cfg: &SolverConfig) -> Vec<WeightGroup> {
             label: "Other",
             fields: vec![
                 WeightField { name: "cox_cooldown_penalty", label: "Cox cooldown", value: cfg.cox_cooldown_penalty, min: 0, max: 10, help: "Avoid coxing the same non-designated rower in consecutive practices." },
+                WeightField { name: "bench_cooldown_penalty", label: "Bench cooldown", value: cfg.bench_cooldown_penalty, min: 0, max: 10, help: "Avoid benching the same rower in consecutive practices. Fairer rotation." },
                 WeightField { name: "bow_cox_fit_weight", label: "Bow cox fit", value: cfg.bow_cox_fit_weight, min: 0, max: 10, help: "Penalize tall/heavy rowers in bow-loader cox seats. Tight compartment." },
             ],
         },

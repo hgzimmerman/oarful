@@ -559,4 +559,79 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
+    /// S20 — bench cooldown. Penalises benching a rower who was
+    /// benched at a recent committed practice. Uses the same
+    /// linear-decay pattern as S6 (cox cooldown): rowers benched
+    /// recently pay more, rowers benched longer ago pay less.
+    ///
+    /// The penalty is applied by *not* rewarding placement — i.e.
+    /// if a recently-benched rower is benched again, the solver pays
+    /// a penalty. Encoding: for each rower in the cooldown window,
+    /// create a `rower_used ∈ {0,1}` aux var, then push
+    /// `rower_used.scaled(-effective)` so the solver is rewarded
+    /// for placing them (= penalised for benching them again).
+    pub(crate) fn post_s20_bench_cooldown(
+        &mut self,
+        snapshot: &DbSnapshot,
+        date: NaiveDate,
+    ) -> Result<()> {
+        if self.cfg.bench_cooldown_penalty == 0 {
+            return Ok(());
+        }
+        let ModelBuilder {
+            solver,
+            available,
+            x,
+            obj_terms,
+            cfg,
+            ..
+        } = self;
+
+        const BENCH_COOLDOWN_DAYS: i64 = 7;
+
+        for (r_idx, rower) in available.iter().enumerate() {
+            if rower.is_designated_cox.as_bool() {
+                continue;
+            }
+            let Some(last_date) = snapshot.last_benched.get(&rower.id) else {
+                continue;
+            };
+            let days_since = (date - *last_date).num_days();
+            if days_since < 0 || days_since >= BENCH_COOLDOWN_DAYS {
+                continue;
+            }
+
+            // Linear decay: recently benched = full penalty, older = less.
+            let numerator = cfg.bench_cooldown_penalty as i64
+                * (BENCH_COOLDOWN_DAYS - days_since);
+            let effective =
+                ((numerator + BENCH_COOLDOWN_DAYS - 1) / BENCH_COOLDOWN_DAYS) as i32;
+            if effective <= 0 {
+                continue;
+            }
+
+            let rower_vars: Vec<DomainId> = x
+                .iter()
+                .filter_map(|(&(r, _, _), &v)| if r == r_idx { Some(v) } else { None })
+                .collect();
+            if rower_vars.is_empty() {
+                continue;
+            }
+
+            let rower_used = solver.new_bounded_integer(0, 1);
+            let mut link: Vec<AffineView<DomainId>> =
+                rower_vars.iter().map(|v| v.scaled(1)).collect();
+            link.push(rower_used.scaled(-1));
+            let tag = solver.new_constraint_tag();
+            solver
+                .add_constraint(pumpkin_constraints::equals(link, 0, tag))
+                .post()
+                .map_err(|e| anyhow!("S20 bench-cooldown link: {e:?}"))?;
+
+            // Reward placing = penalise benching again.
+            obj_terms.push(rower_used.scaled(-effective));
+        }
+        Ok(())
+    }
 }

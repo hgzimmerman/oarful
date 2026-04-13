@@ -1,6 +1,6 @@
 use super::types::{RowerId, Side};
 use super::{NewRower, Rower};
-use crate::schema::{lineup, lineup_seat, practice, rower};
+use crate::schema::{availability, lineup, lineup_seat, practice, rower};
 use crate::types::IntBool;
 use chrono::NaiveDate;
 use diesel::prelude::*;
@@ -127,6 +127,90 @@ impl Rower {
                     }
                 })
                 .or_insert(date);
+        }
+        Ok(map)
+    }
+
+    /// For each rower, find the most recent committed practice date
+    /// where they were available (status = Yes) but not placed in any
+    /// lineup seat. "Benched" = available AND not in lineup_seat.
+    ///
+    /// Strategy: load all (rower_id, date) pairs where the rower had
+    /// availability = Yes for a practice that has at least one committed
+    /// lineup, then subtract rowers who appear in a lineup_seat for
+    /// that practice. Reduce per-rower to the most recent such date.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn last_benched_dates(
+        conn: &mut SqliteConnection,
+    ) -> Result<HashMap<RowerId, NaiveDate>, diesel::result::Error> {
+        use crate::availability::types::AvailabilityStatus;
+        use std::collections::HashSet;
+
+        // Step 1: all (rower, date) pairs where the rower was available
+        // for a committed practice (practice has at least one lineup).
+        let committed_practice_ids: Vec<i32> = practice::table
+            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .select(practice::id)
+            .get_results(conn)?;
+
+        if committed_practice_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        // Load the practice dates for committed practices.
+        let committed_dates: Vec<(i32, NaiveDate)> = practice::table
+            .filter(practice::id.eq_any(&committed_practice_ids))
+            .select((practice::id, practice::date))
+            .get_results(conn)?;
+        let practice_id_to_date: HashMap<i32, NaiveDate> = committed_dates
+            .iter()
+            .map(|(id, d)| (*id, *d))
+            .collect();
+        let dates: Vec<NaiveDate> = committed_dates.iter().map(|(_, d)| *d).collect();
+
+        // All available rowers per committed date.
+        let avail_rows: Vec<(RowerId, NaiveDate, AvailabilityStatus)> = availability::table
+            .filter(availability::date.eq_any(&dates))
+            .select((availability::rower_id, availability::date, availability::status))
+            .get_results(conn)?;
+
+        let mut available_by_date: HashMap<NaiveDate, HashSet<RowerId>> = HashMap::new();
+        for (rid, date, status) in &avail_rows {
+            if status.is_available_for_sweep() {
+                available_by_date.entry(*date).or_default().insert(*rid);
+            }
+        }
+
+        // Step 2: all placed rowers per committed practice.
+        let placed_rows: Vec<(RowerId, i32)> = lineup_seat::table
+            .inner_join(lineup::table.on(lineup::id.eq(lineup_seat::lineup_id)))
+            .filter(lineup::practice_id.eq_any(&committed_practice_ids))
+            .select((lineup_seat::rower_id, lineup::practice_id))
+            .get_results(conn)?;
+
+        let mut placed_by_date: HashMap<NaiveDate, HashSet<RowerId>> = HashMap::new();
+        for (rid, pid) in &placed_rows {
+            if let Some(&date) = practice_id_to_date.get(pid) {
+                placed_by_date.entry(date).or_default().insert(*rid);
+            }
+        }
+
+        // Step 3: benched = available - placed, per date. Keep most recent.
+        let mut map: HashMap<RowerId, NaiveDate> = HashMap::new();
+        for (date, available) in &available_by_date {
+            let placed = placed_by_date.get(date);
+            for rid in available {
+                let was_placed = placed.map(|s| s.contains(rid)).unwrap_or(false);
+                if !was_placed {
+                    map.entry(*rid)
+                        .and_modify(|existing| {
+                            if *date > *existing {
+                                *existing = *date;
+                            }
+                        })
+                        .or_insert(*date);
+                }
+            }
         }
         Ok(map)
     }
