@@ -26,6 +26,7 @@ pub struct SyncSource {
     pub last_synced_at: Option<NaiveDateTime>,
     pub last_error: Option<String>,
     pub created_at: NaiveDateTime,
+    pub poll_interval_minutes: Option<i32>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -34,6 +35,7 @@ pub struct NewSyncSource {
     pub team_id: TeamId,
     pub source_type: String,
     pub config: String,
+    pub poll_interval_minutes: Option<i32>,
 }
 
 
@@ -71,12 +73,14 @@ impl SyncSource {
         team_id: TeamId,
         source_type: &str,
         config: &str,
+        poll_interval_minutes: Option<i32>,
     ) -> Result<(), diesel::result::Error> {
         if let Some(existing) = Self::find_by_type(conn, team_id, source_type)? {
             diesel::update(sync_source::table.find(existing.id))
                 .set((
                     sync_source::config.eq(config),
                     sync_source::last_error.eq(None::<String>),
+                    sync_source::poll_interval_minutes.eq(poll_interval_minutes),
                 ))
                 .execute(conn)?;
         } else {
@@ -85,10 +89,21 @@ impl SyncSource {
                     team_id,
                     source_type: source_type.to_string(),
                     config: config.to_string(),
+                    poll_interval_minutes,
                 })
                 .execute(conn)?;
         }
         Ok(())
+    }
+
+    /// All sync sources across all teams that have polling enabled.
+    pub fn list_pollable(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<SyncSource>, diesel::result::Error> {
+        sync_source::table
+            .filter(sync_source::poll_interval_minutes.is_not_null())
+            .select(SyncSource::as_select())
+            .get_results(conn)
     }
 
     /// Record a successful sync timestamp.

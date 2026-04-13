@@ -45,6 +45,17 @@ pub fn build_router(
         }
     });
 
+    // Periodic sync polling — check every 5 minutes for sources that
+    // need re-syncing. Each source tracks its own interval internally.
+    let sync_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            handlers::sync::poll_sync_sources(&sync_state).await;
+        }
+    });
+
     Ok(handlers::create_router(state)
         .fallback_service(ServeDir::new(public_dir))
         .layer(axum::middleware::from_fn(request_id::request_tracing)))

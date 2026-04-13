@@ -207,6 +207,7 @@ diesel::table! {
         last_synced_at -> Nullable<Timestamp>,
         last_error -> Nullable<Text>,
         created_at -> Timestamp,
+        poll_interval_minutes -> Nullable<Integer>,
     }
 }
 

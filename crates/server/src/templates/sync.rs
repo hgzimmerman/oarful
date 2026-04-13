@@ -68,6 +68,19 @@ pub(crate) fn form_content(
                         " value in the tab's URL."
                     }
                 }
+                div {
+                    label for="poll_interval_minutes" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Auto-sync interval (minutes)"
+                    }
+                    input id="poll_interval_minutes" name="poll_interval_minutes" type="number"
+                          min="0" step="1"
+                          value=(prev.and_then(|p| p.poll_interval_minutes).map(|m| m.to_string()).unwrap_or_default())
+                          placeholder="Off"
+                          class="w-32 border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                    p class="text-xs text-slate-500 mt-1" {
+                        "Leave empty or 0 to disable. When set, the sheet is re-synced automatically on this interval."
+                    }
+                }
                 div class="flex items-center space-x-3" {
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
