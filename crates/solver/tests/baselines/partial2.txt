@@ -9,12 +9,12 @@ boat 1: Persephone
   s1   Hana
   s2   Bob
   s5   Finn
-  s6   Mika
-  s7   Diego
-  s8   Ivan
+  s6   Ivan
+  s7   Carla
+  s8   Diego
 
 boat 3: Hestia
   s1   Grace
-  s2   Carla
+  s2   Mika
   s3   Erin
   s4   Alice

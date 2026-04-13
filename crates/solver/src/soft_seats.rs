@@ -16,6 +16,7 @@
 //! S8 placement reward) live in `soft_fleet.rs`.
 
 use anyhow::{anyhow, Result};
+use lineup_db::seat_affinity::SeatZone;
 use lineup_db::snapshot::DbSnapshot;
 use pumpkin_core::variables::{DomainId, TransformableVariable};
 
@@ -541,27 +542,23 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S11 — end-pair skill reward (8-boats only). Rewards placing
-    /// high-skill rowers in seats {1, 2, 7, 8} of an eight by
-    /// pushing `seat_skill[b, s].scaled(-end_pair_skill_weight)`
-    /// for each end-pair seat. The objective is minimised, so a
-    /// negative-coefficient term on `seat_skill` effectively
-    /// maximises it.
+    /// S11 — end-pair skill reward. Rewards placing high-skill
+    /// rowers in the bow pair and stern pair zones by pushing
+    /// `seat_skill[b, s].scaled(-end_pair_skill_weight)` for each
+    /// matching seat. The zone mapping generalises across boat
+    /// sizes (e.g. seats {1,2,7,8} in an 8+, {1,2,3,4} in a 4+).
     ///
     /// Unused boats have all `x = 0`, forcing `seat_skill = 0`, so
-    /// the reward contributes nothing — no phantom "bench a boat"
-    /// incentive. Piggybacks on the shared `seat_skill_by_seat`
-    /// map alongside S1.
+    /// the reward contributes nothing. Piggybacks on the shared
+    /// `seat_skill_by_seat` map alongside S1.
     pub(crate) fn post_s11_end_pair_skill(&mut self) {
         if self.cfg.end_pair_skill_weight == 0 {
             return;
         }
-        const END_PAIR_SEATS: [i32; 4] = [1, 2, 7, 8];
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            if boat.seat_count != 8 {
-                continue;
-            }
-            for seat in END_PAIR_SEATS {
+            let mut end_seats = SeatZone::BowPair.seats_for(boat.seat_count);
+            end_seats.extend(SeatZone::SternPair.seats_for(boat.seat_count));
+            for seat in end_seats {
                 if let Some(&s_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
                     self.obj_terms
                         .push(s_var.scaled(-self.cfg.end_pair_skill_weight));
@@ -570,22 +567,17 @@ impl<'a> ModelBuilder<'a> {
         }
     }
 
-    /// S12 — engine-room strength reward (8-boats only).
-    /// Structurally identical to S11 but over the
-    /// `seat_strength_by_seat` map and the engine-room seat set
-    /// {3, 4, 5, 6}. Rewards placing the strongest rowers in the
-    /// middle four seats of an eight, where raw propulsive force
-    /// matters more than technical skill.
+    /// S12 — engine-room strength reward. Rewards placing the
+    /// strongest rowers in the engine room zone, where raw
+    /// propulsive force matters more than technical skill. The zone
+    /// mapping generalises across boat sizes (seats {3,4,5,6} in
+    /// an 8+, {2,3} in a 4+, empty in pairs/singles).
     pub(crate) fn post_s12_engine_room_strength(&mut self) {
         if self.cfg.engine_room_strength_weight == 0 {
             return;
         }
-        const ENGINE_ROOM_SEATS: [i32; 4] = [3, 4, 5, 6];
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            if boat.seat_count != 8 {
-                continue;
-            }
-            for seat in ENGINE_ROOM_SEATS {
+            for seat in SeatZone::EngineRoom.seats_for(boat.seat_count) {
                 if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat))
                 {
                     self.obj_terms
