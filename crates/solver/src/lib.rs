@@ -459,30 +459,30 @@ impl SolverConfig {
         }
     }
 
-    /// **Random** — most soft constraints off. The solver only
-    /// enforces hard requirements plus side preferences (without
-    /// side respect, lineups are unusable). Placement is otherwise
-    /// arbitrary, giving maximum variety.
+    /// **Random** — talent shuffled freely for maximum variety.
+    /// Quality and social constraints off, but safety-critical floors
+    /// kept: side preference, weight class, pair eligibility, bow cox
+    /// fit. Everyone still rows (minimize bench + placement reward).
     pub fn random() -> Self {
         Self {
             skill_variance_weight: 0,
             pair_affinity_weight: 0,
             seat_affinity_weight: 0,
-            side_preference_weight: 1, // keep — wrong-side lineups are unusable
-            weight_class_slack_weight: 0,
+            side_preference_weight: 2,       // wrong-side is hard to row
+            weight_class_slack_weight: 1,    // sensible boat sizes
             cox_cooldown_penalty: 0,
-            placement_reward_weight: 1, // keep this so the solver fields boats
+            placement_reward_weight: 2,      // field boats, don't leave them idle
             pair_strength_weight: 0,
             bow_pair_strength_weight: 0,
             height_balance_weight: 0,
             end_pair_skill_weight: 0,
             engine_room_strength_weight: 0,
-            partial_fill_bonus: 1, // keep so partial-fill still prefers filling
+            partial_fill_bonus: 1,           // partial-fill still prefers filling
             non_scull_retention_weight: 0,
-            bow_cox_fit_weight: 0,
+            bow_cox_fit_weight: 1,           // don't stuff heavyweights in bow cox
             top_boat_stacking_weight: 0,
-            pair_eligibility_weight: 0,
-            minimize_bench_weight: 0,
+            pair_eligibility_weight: 1,      // floor for pair boat safety
+            minimize_bench_weight: 2,        // everyone rows
             boat_size_stacking_weight: 0,
             eight_bias: 0,
             coxed_four_bias: 0,
