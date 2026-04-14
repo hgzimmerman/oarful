@@ -3,8 +3,8 @@ function updateActiveNav() {
     // Map related paths to a single nav section.
     var aliases = {
         '/practices': ['/history', '/solve', '/commit'],
-        '/club': ['/rowers', '/boats', '/sync'],
-        '/admin': ['/users', '/teams', '/audit']
+        '/team': ['/rowers', '/sync'],
+        '/admin': ['/users', '/teams', '/audit', '/boats']
     };
     document.querySelectorAll('[data-nav]').forEach(function(a) {
         var href = a.dataset.nav;

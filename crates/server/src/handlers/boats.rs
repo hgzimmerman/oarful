@@ -26,7 +26,7 @@ use lineup_db::app_user::Role;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
-/// Build the fleet list markup (shared by `/boats` and `/club/fleet`).
+/// Build the fleet list markup (shared by `/boats` and `/admin/fleet`).
 pub(crate) async fn fleet_content(
     tenant: &TenantContext,
 ) -> Result<maud::Markup, StatusCode> {
@@ -295,7 +295,7 @@ async fn redirect_or_list(
         // Only PDs can create/update boats, so can_export is always true here.
         Ok(Html(templates::boats::list_content(&boats, true).into_string()).into_response())
     } else {
-        Ok(Redirect::to("/club/fleet").into_response())
+        Ok(Redirect::to("/admin/fleet").into_response())
     }
 }
 

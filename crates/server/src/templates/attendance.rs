@@ -37,17 +37,17 @@ pub(crate) fn grid_content(
                 }
                 div {
                     @if show_past {
-                        a href="/club/attendance"
-                          hx-get="/club/attendance"
-                          hx-target="#club-tab-content"
+                        a href="/team/attendance"
+                          hx-get="/team/attendance"
+                          hx-target="#team-tab-content"
                           hx-push-url="true"
                           class="text-sm font-semibold text-slate-600 border border-slate-300 px-3 py-1.5 rounded transition hover:bg-slate-50" {
                             "Future only"
                         }
                     } @else {
-                        a href="/club/attendance?show_past=1"
-                          hx-get="/club/attendance?show_past=1"
-                          hx-target="#club-tab-content"
+                        a href="/team/attendance?show_past=1"
+                          hx-get="/team/attendance?show_past=1"
+                          hx-target="#team-tab-content"
                           hx-push-url="true"
                           class="text-sm font-semibold text-slate-600 border border-slate-300 px-3 py-1.5 rounded transition hover:bg-slate-50" {
                             "Show past year"

@@ -37,7 +37,7 @@ use lineup_db::team::{SelfEditLevel, Team};
 
 use crate::{handlers::internal_error, state::{AppState, TenantContext}, templates};
 
-/// Build the roster list markup (shared by `/rowers` and `/club/roster`).
+/// Build the roster list markup (shared by `/rowers` and `/team/roster`).
 pub(crate) async fn roster_content(
     jar: &CookieJar,
     tenant: &TenantContext,
@@ -74,7 +74,7 @@ pub(crate) async fn roster_content(
     Ok(templates::rowers::list_content(&rows, is_coach))
 }
 
-/// `POST /club/roster/batch-invite` — create accounts + send invite
+/// `POST /team/roster/batch-invite` — create accounts + send invite
 /// emails for all roster members with an email but no linked user.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn batch_invite_handler(

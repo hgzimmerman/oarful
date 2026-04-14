@@ -1,4 +1,4 @@
-//! `/club` — Coach+ hub with tabs: Roster, Fleet, Sync.
+//! `/team` — Coach+ hub with tabs: Roster, Attendance, Sync.
 
 use axum::{
     http::{HeaderMap, StatusCode},
@@ -14,13 +14,13 @@ use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 use crate::handlers;
 
 const TABS: &[TabDef] = &[
-    TabDef { label: "Roster", url: "/club/roster", id: "roster" },
-    TabDef { label: "Attendance", url: "/club/attendance", id: "attendance" },
-    TabDef { label: "Sync", url: "/club/sync", id: "sync" },
+    TabDef { label: "Roster", url: "/team/roster", id: "roster" },
+    TabDef { label: "Attendance", url: "/team/attendance", id: "attendance" },
+    TabDef { label: "Sync", url: "/team/sync", id: "sync" },
 ];
-const TARGET: &str = "club-tab-content";
+const TARGET: &str = "team-tab-content";
 
-/// `GET /club` — render the default tab (Roster).
+/// `GET /team` — render the default tab (Roster).
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn index_handler(
     jar: CookieJar,
@@ -35,10 +35,10 @@ pub(crate) async fn index_handler(
         return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
+    Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
-/// `GET /club/roster`
+/// `GET /team/roster`
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn roster_handler(
     jar: CookieJar,
@@ -53,10 +53,10 @@ pub(crate) async fn roster_handler(
         return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
+    Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
-/// `GET /club/sync`
+/// `GET /team/sync`
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn sync_handler(
     jar: CookieJar,
@@ -71,10 +71,10 @@ pub(crate) async fn sync_handler(
         return Ok(Html(tab_swap(TABS, "sync", TARGET, tab_content).into_string()));
     }
     let page = tabbed_section(TABS, "sync", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
+    Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
-/// `GET /club/attendance`
+/// `GET /team/attendance`
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn attendance_handler(
     jar: CookieJar,
@@ -90,7 +90,7 @@ pub(crate) async fn attendance_handler(
         return Ok(Html(tab_swap(TABS, "attendance", TARGET, tab_content).into_string()));
     }
     let page = tabbed_section(TABS, "attendance", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
+    Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
 #[derive(Debug, Default, serde::Deserialize)]

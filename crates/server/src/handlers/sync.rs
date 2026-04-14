@@ -58,7 +58,7 @@ pub(crate) struct SyncFormInput {
     pub(crate) poll_interval_minutes: Option<u32>,
 }
 
-/// Build the sync form markup (shared by `/sync` and `/club/sync`).
+/// Build the sync form markup (shared by `/sync` and `/team/sync`).
 pub(crate) async fn sync_content(
     jar: &CookieJar,
     tenant: &TenantContext,

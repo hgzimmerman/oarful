@@ -79,7 +79,7 @@ fn navbar(role: Option<Role>) -> Markup {
                 ul class="hidden lg:flex items-center space-x-4" {
                     (nav_link("/practices", "Practices"))
                     @if is_coach {
-                        (nav_link("/club", "Club"))
+                        (nav_link("/team", "Team"))
                     }
                     @if is_pd {
                         (nav_link("/admin", "Admin"))
@@ -115,7 +115,7 @@ fn navbar(role: Option<Role>) -> Markup {
                "@click"="open = false" {
                 (nav_link("/practices", "Practices"))
                 @if is_coach {
-                    (nav_link("/club", "Club"))
+                    (nav_link("/team", "Team"))
                 }
                 @if is_pd {
                     (nav_link("/admin", "Admin"))
@@ -157,7 +157,7 @@ pub(crate) struct TabDef {
     pub id: &'static str,
 }
 
-/// Shared tabbed page wrapper used by `/club` and `/admin`.
+/// Shared tabbed page wrapper used by `/team` and `/admin`.
 /// Each tab's content already includes its own header, so this only
 /// renders the tab bar + a swap target div.
 pub(crate) fn tabbed_section(

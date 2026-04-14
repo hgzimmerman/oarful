@@ -69,9 +69,9 @@ pub(crate) fn list_content(rows: &[RosterRow], is_coach: bool) -> Markup {
         (page_header("Roster", Some(&subtitle)))
         div class="px-4 sm:px-8 py-6" {
             @if is_coach && invitable_count > 0 {
-                form method="post" action="/club/roster/batch-invite"
-                     hx-post="/club/roster/batch-invite"
-                     hx-target="#club-tab-content"
+                form method="post" action="/team/roster/batch-invite"
+                     hx-post="/team/roster/batch-invite"
+                     hx-target="#team-tab-content"
                      hx-confirm={(format!("Send invites to {invitable_count} rower(s) with email addresses?"))}
                      class="flex justify-end mb-4" {
                     button type="submit"
@@ -230,7 +230,7 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
-                a href="/club/roster"
+                a href="/team/roster"
                   onclick="if (history.length > 1) { history.back(); return false; }"
                   class="text-slate-400 hover:text-slate-700"
                   title="Back" {
