@@ -130,10 +130,12 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
                   hx-target="#content"
                   hx-push-url="true"
                   class="text-blue-700 hover:text-blue-900" {
+                    div class="text-[10px] uppercase" { (date.format("%a")) }
                     div { (date.format("%b")) }
                     div class="text-sm font-bold" { (date.format("%-d")) }
                 }
             } @else {
+                div class="text-[10px] text-slate-400 uppercase" { (date.format("%a")) }
                 div class="text-slate-600" { (date.format("%b")) }
                 div class="text-sm font-bold text-slate-600" { (date.format("%-d")) }
             }
