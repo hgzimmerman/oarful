@@ -82,9 +82,11 @@ async fn schedule_tab_content(
         .unwrap_or(Role::Member)
         .at_least(Role::Coach);
 
-    let rows = tenant
+    let (rows, default_time) = tenant
         .db
         .with_conn(move |conn| {
+            let default_time = lineup_db::team::Team::get(conn, team_id)?
+                .and_then(|t| t.default_practice_time);
             // Upcoming practices (non-cancelled).
             let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
             // Also include practices that have availability responses.
@@ -136,12 +138,12 @@ async fn schedule_tab_content(
                     cancelled: practice.cancelled.as_bool(),
                 });
             }
-            Ok(rows)
+            Ok((rows, default_time))
         })
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::schedule_content(&rows, is_coach))
+    Ok(templates::practices::schedule_content(&rows, is_coach, today, default_time))
 }
 
 // =====================================================================

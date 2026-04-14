@@ -66,9 +66,16 @@ fn tab_button(label: &str, url: &str, tab_id: &str, active: &str) -> Markup {
 // Schedule tab
 // =====================================================================
 
-pub(crate) fn schedule_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
+pub(crate) fn schedule_content(
+    rows: &[PracticeRow],
+    is_coach: bool,
+    today: chrono::NaiveDate,
+    default_time: Option<chrono::NaiveTime>,
+) -> Markup {
     let upcoming: Vec<&PracticeRow> = rows.iter().filter(|r| r.is_upcoming).collect();
     let past: Vec<&PracticeRow> = rows.iter().filter(|r| !r.is_upcoming).collect();
+    let min_date = today.format("%Y-%m-%d").to_string();
+    let time_value = default_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
 
     html! {
         // Add practice form (Coach+ only)
@@ -83,6 +90,15 @@ pub(crate) fn schedule_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
                         "Add practice"
                     }
                     input id="date" name="date" type="date"
+                          min=(min_date)
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                div {
+                    label for="time" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        "Time"
+                    }
+                    input id="time" name="time" type="time"
+                          value=(time_value)
                           class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                 }
                 button type="submit"
