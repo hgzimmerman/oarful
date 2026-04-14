@@ -312,7 +312,7 @@ pub(crate) fn view_content(
             (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
-                (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))
+                (alternatives_panel(snapshot, practice_id, &result.primary, &result.alternatives, flags))
             }
         }
     }

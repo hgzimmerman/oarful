@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use lineup_db::{
     boat::{types::BoatId, Boat},
+    practice::PracticeId,
     rower::types::RowerId,
     snapshot::DbSnapshot,
 };
@@ -19,6 +20,7 @@ use super::editor::DisplayFlags;
 
 pub(super) fn alternatives_panel(
     snapshot: &DbSnapshot,
+    practice_id: PracticeId,
     primary: &ProposedSolution,
     alternatives: &[ProposedSolution],
     flags: &DisplayFlags,
@@ -40,7 +42,7 @@ pub(super) fn alternatives_panel(
 
             div x-show="open" class="mt-4 space-y-6" {
                 @for (idx, alt) in alternatives.iter().enumerate() {
-                    (alternative_block(snapshot, primary, idx + 2, alt, flags))
+                    (alternative_block(snapshot, practice_id, primary, idx + 2, alt, flags))
                 }
             }
         }
@@ -49,6 +51,7 @@ pub(super) fn alternatives_panel(
 
 fn alternative_block(
     snapshot: &DbSnapshot,
+    practice_id: PracticeId,
     primary: &ProposedSolution,
     rank: usize,
     alt: &ProposedSolution,
@@ -57,16 +60,39 @@ fn alternative_block(
     let diff = build_diff(primary, alt);
     let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
     let used: Vec<&ProposedLineup> = alt.lineups.iter().filter(|l| l.used).collect();
+
+    // Build a promote URL that loads this alternative into the editor.
+    // Uses seat=boat:seat:rower + boat=id params — no pins/locks.
+    let promote_url = {
+        let mut params = Vec::new();
+        for lineup in &used {
+            params.push(format!("boat={}", lineup.boat_id));
+            for (seat, rower_id) in &lineup.seats {
+                params.push(format!("seat={}:{}:{}", lineup.boat_id, seat, rower_id));
+            }
+        }
+        format!("/solve/{}?{}", practice_id, params.join("&"))
+    };
+
     html! {
         div class="border border-slate-200 rounded-lg p-4" {
-            div class="flex items-center space-x-3 mb-3" {
-                h3 class="font-bold text-slate-700" { "Alternative #" (rank) }
-                @if changed_count > 0 {
-                    span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" {
-                        (changed_count) " seat"
-                        @if changed_count != 1 { "s" }
-                        " changed"
+            div class="flex items-center justify-between mb-3" {
+                div class="flex items-center space-x-3" {
+                    h3 class="font-bold text-slate-700" { "Alternative #" (rank) }
+                    @if changed_count > 0 {
+                        span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" {
+                            (changed_count) " seat"
+                            @if changed_count != 1 { "s" }
+                            " changed"
+                        }
                     }
+                }
+                a href=(promote_url)
+                  hx-get=(promote_url)
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="text-sm font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-300 px-3 py-1 rounded transition hover:bg-emerald-50" {
+                    "Use this"
                 }
             }
             @if used.is_empty() {
