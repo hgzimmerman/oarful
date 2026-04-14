@@ -90,7 +90,14 @@ pub(crate) async fn roster_handler(
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
-/// `GET /admin/fleet`
+// ── Fleet subtabs ────────────────────────────────────────────────
+const FLEET_SUBTABS: &[TabDef] = &[
+    TabDef { label: "Boats", url: "/admin/fleet/boats", id: "boats" },
+    TabDef { label: "Team defaults", url: "/admin/fleet/defaults", id: "defaults" },
+];
+const FLEET_TARGET: &str = "admin-fleet-content";
+
+/// `GET /admin/fleet` — default to Boats subtab.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn fleet_handler(
     Extension(tenant): Extension<TenantContext>,
@@ -98,13 +105,63 @@ pub(crate) async fn fleet_handler(
     headers: HeaderMap,
 ) -> Result<Html<String>, StatusCode> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let tab_content = handlers::teams::fleet_matrix_content(&tenant).await?;
+    let boats_content = handlers::boats::fleet_content(&tenant).await?;
+    let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "fleet", TARGET, tab_content).into_string()));
+        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
     }
-    let page = tabbed_section(TABS, "fleet", TARGET, tab_content);
+    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+/// `GET /admin/fleet/boats` — boat list subtab.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn fleet_boats_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
+) -> Result<Html<String>, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let boats_content = handlers::boats::fleet_content(&tenant).await?;
+
+    if is_fleet_subtab_swap(&headers) {
+        return Ok(Html(tab_swap(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content).into_string()));
+    }
+    let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
+    if is_tab_swap(&headers) {
+        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
+    }
+    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+/// `GET /admin/fleet/defaults` — team boat defaults subtab.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn fleet_defaults_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
+) -> Result<Html<String>, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let defaults_content = handlers::teams::fleet_matrix_content(&tenant).await?;
+
+    if is_fleet_subtab_swap(&headers) {
+        return Ok(Html(tab_swap(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content).into_string()));
+    }
+    let fleet_section = tabbed_section(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content);
+    if is_tab_swap(&headers) {
+        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
+    }
+    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+fn is_fleet_subtab_swap(headers: &HeaderMap) -> bool {
+    headers
+        .get("HX-Target")
+        .and_then(|v| v.to_str().ok())
+        == Some(FLEET_TARGET)
 }
 
 /// `GET /admin/audit`

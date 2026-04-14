@@ -321,9 +321,9 @@ fn fleet_matrix_inner(
             } @else if boats.is_empty() {
                 div class="text-slate-500 italic" { "No sweep boats in the fleet." }
             } @else {
-                form method="post" action="/admin/fleet"
-                     hx-post="/admin/fleet"
-                     hx-target="#admin-tab-content" {
+                form method="post" action="/admin/fleet/defaults"
+                     hx-post="/admin/fleet/defaults"
+                     hx-target="#admin-fleet-content" {
                     div class="flex justify-end mb-3" {
                         button type="submit"
                                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {

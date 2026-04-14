@@ -16,7 +16,6 @@ use crate::handlers;
 const TABS: &[TabDef] = &[
     TabDef { label: "Roster", url: "/club/roster", id: "roster" },
     TabDef { label: "Attendance", url: "/club/attendance", id: "attendance" },
-    TabDef { label: "Fleet", url: "/club/fleet", id: "fleet" },
     TabDef { label: "Sync", url: "/club/sync", id: "sync" },
 ];
 const TARGET: &str = "club-tab-content";
@@ -54,23 +53,6 @@ pub(crate) async fn roster_handler(
         return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
-}
-
-/// `GET /club/fleet`
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn fleet_handler(
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-    headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
-    handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let tab_content = handlers::boats::fleet_content(&tenant).await?;
-
-    if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "fleet", TARGET, tab_content).into_string()));
-    }
-    let page = tabbed_section(TABS, "fleet", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Club", page, hx, &tenant))
 }
 
