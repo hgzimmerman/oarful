@@ -1,9 +1,8 @@
 use super::types::AvailabilityStatus;
 use super::{Availability, NewAvailability};
+use crate::practice::PracticeId;
 use crate::rower::types::RowerId;
 use crate::schema::availability;
-use crate::team::TeamId;
-use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
@@ -18,8 +17,7 @@ impl Availability {
             .values(&new)
             .on_conflict((
                 availability::rower_id,
-                availability::team_id,
-                availability::date,
+                availability::practice_id,
             ))
             .do_update()
             .set(availability::status.eq(new.status))
@@ -27,66 +25,57 @@ impl Availability {
         Ok(())
     }
 
+    /// All availability records for a single practice.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn list_for_team_date(
+    pub fn list_for_practice(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        date: NaiveDate,
+        practice_id: PracticeId,
     ) -> Result<Vec<Availability>, diesel::result::Error> {
         availability::table
-            .filter(availability::team_id.eq(team_id))
-            .filter(availability::date.eq(date))
+            .filter(availability::practice_id.eq(practice_id))
             .select(Availability::as_select())
             .get_results(conn)
     }
 
-    /// Indexed view keyed by rower id for snapshot joins. Scoped to
-    /// one (team, date).
+    /// Indexed view keyed by rower id for a single practice.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn map_for_team_date(
+    pub fn map_for_practice(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        date: NaiveDate,
+        practice_id: PracticeId,
     ) -> Result<HashMap<RowerId, AvailabilityStatus>, diesel::result::Error> {
-        Ok(Self::list_for_team_date(conn, team_id, date)?
+        Ok(Self::list_for_practice(conn, practice_id)?
             .into_iter()
             .map(|a| (a.rower_id, a.status))
             .collect())
     }
 
-    /// All availability records for a team across a range of dates.
-    /// Returns a map of (rower_id, date) → status for efficient grid lookups.
+    /// All availability records across multiple practices.
+    /// Returns a map of (rower_id, practice_id) → status for grid lookups.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn map_for_team_dates(
+    pub fn map_for_practices(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        dates: &[NaiveDate],
-    ) -> Result<HashMap<(RowerId, NaiveDate), AvailabilityStatus>, diesel::result::Error> {
+        practice_ids: &[PracticeId],
+    ) -> Result<HashMap<(RowerId, PracticeId), AvailabilityStatus>, diesel::result::Error> {
         let rows: Vec<Availability> = availability::table
-            .filter(availability::team_id.eq(team_id))
-            .filter(availability::date.eq_any(dates))
+            .filter(availability::practice_id.eq_any(practice_ids))
             .select(Availability::as_select())
             .get_results(conn)?;
         Ok(rows
             .into_iter()
-            .map(|a| ((a.rower_id, a.date), a.status))
+            .map(|a| ((a.rower_id, a.practice_id), a.status))
             .collect())
     }
 
-    /// Distinct practice dates on or after `today` that have any
-    /// availability rows for the given team. Chronological order.
+    /// Practice IDs that have any availability rows.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn upcoming_dates(
+    pub fn practices_with_responses(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        today: NaiveDate,
-    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+        practice_ids: &[PracticeId],
+    ) -> Result<Vec<PracticeId>, diesel::result::Error> {
         availability::table
-            .filter(availability::team_id.eq(team_id))
-            .filter(availability::date.ge(today))
-            .select(availability::date)
+            .filter(availability::practice_id.eq_any(practice_ids))
+            .select(availability::practice_id)
             .distinct()
-            .order(availability::date.asc())
             .get_results(conn)
     }
 }

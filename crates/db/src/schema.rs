@@ -138,6 +138,7 @@ diesel::table! {
         id -> Integer,
         team_id -> Integer,
         date -> Date,
+        time -> Nullable<Time>,
         notes -> Nullable<Text>,
         cancelled -> Integer,
     }
@@ -147,10 +148,9 @@ diesel::table! {
     use diesel::sql_types::*;
     use crate::sql_types::*;
 
-    availability (rower_id, team_id, date) {
+    availability (rower_id, practice_id) {
         rower_id -> Integer,
-        team_id -> Integer,
-        date -> Date,
+        practice_id -> Integer,
         status -> AvailabilityStatusMapping,
     }
 }
@@ -256,7 +256,7 @@ diesel::joinable!(user_invite -> app_user (user_id));
 diesel::joinable!(magic_link -> app_user (user_id));
 diesel::joinable!(email_log -> team (team_id));
 diesel::joinable!(availability -> rower (rower_id));
-diesel::joinable!(availability -> team (team_id));
+diesel::joinable!(availability -> practice (practice_id));
 diesel::joinable!(practice -> team (team_id));
 diesel::joinable!(team_membership -> team (team_id));
 diesel::joinable!(team_membership -> rower (rower_id));

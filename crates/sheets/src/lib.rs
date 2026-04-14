@@ -287,12 +287,13 @@ fn sync_row(
                 continue;
             }
         };
+        // Ensure practice exists for this date so we can key availability on it.
+        let practice = lineup_db::practice::Practice::upsert(conn, team_id, *date, None, None)?;
         Availability::upsert(
             conn,
             NewAvailability {
                 rower_id: rower.id,
-                team_id,
-                date: *date,
+                practice_id: practice.id,
                 status,
             },
         )?;
@@ -414,7 +415,7 @@ mod tests {
 
     fn all_availabilities(conn: &mut SqliteConnection) -> Vec<Availability> {
         availability_schema::table
-            .order((availability_schema::rower_id.asc(), availability_schema::date.asc()))
+            .order((availability_schema::rower_id.asc(), availability_schema::practice_id.asc()))
             .select(Availability::as_select())
             .load(conn)
             .unwrap()

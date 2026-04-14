@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::NaiveDate;
 use lineup_db::{
     boat::{types::BoatId, Boat},
-    practice::Practice,
+    practice::{Practice, PracticeId},
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
@@ -206,6 +206,7 @@ pub(super) fn find_rower(snapshot: &DbSnapshot, id: RowerId) -> Option<&Rower> {
 /// available rower pool.
 pub(crate) fn landing_content(
     snapshot: &DbSnapshot,
+    practice_id: PracticeId,
     date: NaiveDate,
     knobs: &SolveKnobs,
     committed_practices: &[Practice],
@@ -258,15 +259,16 @@ pub(crate) fn landing_content(
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
+                (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
             }
-            (lineup_editor(snapshot, date, &editor, flags, &unavailable, &knobs.walkon))
+            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon))
         }
     }
 }
 
 pub(crate) fn view_content(
     snapshot: &DbSnapshot,
+    practice_id: PracticeId,
     date: NaiveDate,
     knobs: &SolveKnobs,
     result: &SolveResult,
@@ -301,13 +303,13 @@ pub(crate) fn view_content(
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
-                (knobs_form(date, knobs, committed_practices, true, custom_profiles, snapshot, Some(result)))
+                (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, Some(result)))
             }
             // Error banners only (unsatisfiable / zero-result timeout).
             @if result.status != SolveStatus::Satisfied {
                 (knobs::status_banner(date, result))
             }
-            (lineup_editor(snapshot, date, &editor, flags, &unavailable, &knobs.walkon))
+            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
                 (alternatives_panel(snapshot, &result.primary, &result.alternatives, flags))

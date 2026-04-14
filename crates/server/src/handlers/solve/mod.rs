@@ -23,8 +23,8 @@ use axum::http::StatusCode;
 use chrono::NaiveDate;
 use lineup_db::{
     boat::types::BoatId,
-    lineup::{Lineup},
-    practice::Practice,
+    lineup::Lineup,
+    practice::{Practice, PracticeId},
     snapshot::DbSnapshot,
 };
 use lineup_solver::{
@@ -320,13 +320,13 @@ impl SolveKnobs {
     }
 }
 
-/// Build baseline reference lineups from the `based_on` dates in the
+/// Build baseline reference lineups from the `based_on` practice IDs in the
 /// knobs. Each checked practice's committed lineup becomes one
 /// `ReferenceLineup` with negative weight (prefer similarity).
 pub(super) async fn build_baselines(
     knobs: &SolveKnobs,
     db: &lineup_db::state::Db,
-    team_id: lineup_db::team::TeamId,
+    _team_id: lineup_db::team::TeamId,
 ) -> Result<Vec<lineup_solver::ReferenceLineup>, StatusCode> {
     use lineup_solver::{ReferenceLineup, ReferencePlacement};
 
@@ -335,23 +335,23 @@ pub(super) async fn build_baselines(
         return Ok(vec![]);
     }
 
-    let dates: Vec<NaiveDate> = knobs
+    let practice_ids: Vec<PracticeId> = knobs
         .based_on
         .iter()
-        .filter_map(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        .filter_map(|s| s.parse::<PracticeId>().ok())
         .collect();
-    if dates.is_empty() {
+    if practice_ids.is_empty() {
         return Ok(vec![]);
     }
 
     let refs = db
         .with_conn(move |conn| {
             let mut refs = Vec::new();
-            for date in &dates {
-                let Some(practice) = Practice::find_by_date(conn, team_id, *date)? else {
+            for pid in &practice_ids {
+                let Some(_practice) = Practice::get(conn, *pid)? else {
                     continue;
                 };
-                let committed = Lineup::for_practice(conn, practice.id)?;
+                let committed = Lineup::for_practice(conn, *pid)?;
                 let placements: Vec<ReferencePlacement> = committed
                     .iter()
                     .flat_map(|c| {

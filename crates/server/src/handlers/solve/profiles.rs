@@ -7,7 +7,7 @@ use axum::{
     Extension,
 };
 use axum_extra::extract::{CookieJar, Query};
-use chrono::NaiveDate;
+use lineup_db::practice::PracticeId;
 use lineup_solver::SolverConfig;
 use lineup_db::app_user::Role;
 
@@ -22,11 +22,21 @@ use super::*;
 pub(crate) async fn preset_bar_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
     Query(knobs): Query<SolveKnobs>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    let practice = tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::practice::Practice::get(conn, practice_id)?
+                .ok_or(diesel::result::Error::NotFound)
+        })
+        .await
+        .map_err(internal_error)?;
+    let _date = practice.date;
 
     let custom_profiles = tenant
         .db
@@ -42,7 +52,7 @@ pub(crate) async fn preset_bar_handler(
         .collect();
 
     Ok(Html(
-        templates::solve::preset_bar(date, &knobs, &profile_names).into_string(),
+        templates::solve::preset_bar(practice_id, &knobs, &profile_names).into_string(),
     ))
 }
 

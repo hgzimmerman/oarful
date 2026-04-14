@@ -17,7 +17,22 @@ use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::{Datelike, Utc};
 use lineup_sheets::SyncSummary;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+
+/// Deserialize an empty string as `None` for optional numeric form fields.
+fn empty_string_as_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    let s = String::deserialize(deserializer)?;
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        s.parse::<T>().map(Some).map_err(serde::de::Error::custom)
+    }
+}
 
 use lineup_db::app_user::Role;
 
@@ -39,7 +54,7 @@ pub(crate) struct SyncFormInput {
     pub(crate) gid: u32,
     /// Optional auto-sync interval in minutes. `None` or `Some(0)`
     /// disables polling; any positive value enables it.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "empty_string_as_none")]
     pub(crate) poll_interval_minutes: Option<u32>,
 }
 

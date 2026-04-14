@@ -74,7 +74,9 @@ fn fixture_snapshot() -> DbSnapshot {
     let team = lineup_db::team::Team::first(&mut conn)
         .expect("querying first team")
         .expect("fixture should seed a team");
-    DbSnapshot::for_team_date(&mut conn, team.id, fixture_date())
+    let practice = lineup_db::practice::Practice::upsert(&mut conn, team.id, fixture_date(), None, None)
+        .expect("creating/finding practice for fixture date");
+    DbSnapshot::for_practice(&mut conn, &practice)
         .expect("building snapshot from seeded fixture")
 }
 

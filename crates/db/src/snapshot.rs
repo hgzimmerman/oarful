@@ -1,12 +1,13 @@
-//! A point-in-time view of everything the solver needs for one practice date.
+//! A point-in-time view of everything the solver needs for one practice.
 
 use crate::availability::{types::AvailabilityStatus, Availability};
 use crate::boat::Boat;
 use crate::lineup::{Lineup, RecentPlacement};
 use crate::pair_affinity::PairAffinity;
+use crate::practice::Practice;
 use crate::rower::{types::RowerId, Rower};
 use crate::seat_affinity::SeatAffinity;
-use crate::team::{TeamId, TeamMembership};
+use crate::team::TeamMembership;
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
@@ -47,18 +48,19 @@ pub struct DbSnapshot {
 }
 
 impl DbSnapshot {
-    /// Build a snapshot for a specific team on a specific date.
+    /// Build a snapshot for a specific practice.
     ///
     /// Rowers are filtered to those on the team (via `team_membership`).
-    /// Availability is scoped to the (team, date) pair. Boats are the
-    /// full shared fleet (not team-filtered). Affinities are loaded for
-    /// all rowers on the team.
+    /// Availability is scoped to the practice. Boats are the full shared
+    /// fleet (not team-filtered). Affinities are loaded for all rowers
+    /// on the team.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn for_team_date(
+    pub fn for_practice(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        date: NaiveDate,
+        practice: &Practice,
     ) -> Result<Self, diesel::result::Error> {
+        let team_id = practice.team_id;
+
         // Rowers on this team (active only).
         let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
         let all_active = Rower::list_active(conn)?;
@@ -68,8 +70,8 @@ impl DbSnapshot {
             .collect();
 
         Ok(Self {
-            date,
-            availability: Availability::map_for_team_date(conn, team_id, date)?,
+            date: practice.date,
+            availability: Availability::map_for_practice(conn, practice.id)?,
             sweep_boats: Boat::list_sweep(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
             last_benched: Rower::last_benched_dates(conn)?,

@@ -3,9 +3,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::NaiveDate;
 use lineup_db::{
     boat::types::BoatId,
+    practice::PracticeId,
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
@@ -170,18 +170,18 @@ impl<'a> EditorData<'a> {
 /// pre-generate landing and the post-generate result.
 pub(crate) fn lineup_editor(
     snapshot: &DbSnapshot,
-    date: NaiveDate,
+    practice_id: PracticeId,
     editor: &EditorData,
     flags: &DisplayFlags,
     unavailable: &[&Rower],
     walkon_ids: &[String],
 ) -> Markup {
-    let commit_action = format!("/commit-lineup/{date}");
-    let editor_url = format!("/solve/{date}/editor");
+    let commit_action = format!("/commit-lineup/{practice_id}");
+    let editor_url = format!("/solve/{practice_id}/editor");
 
     html! {
         section #lineup-editor class="bg-white rounded-lg shadow p-4 sm:p-6"
-               data-date=(date)
+               data-practice-id=(practice_id)
                data-editor-url=(editor_url)
                x-data="lineupEditor()" {
 
@@ -281,7 +281,7 @@ pub(crate) fn lineup_editor(
                             }
                         }
                         @if has_addable {
-                            @let walkon_action = format!("/solve/{date}");
+                            @let walkon_action = format!("/solve/{practice_id}");
                             form method="get" action=(walkon_action)
                                  hx-get=(walkon_action)
                                  hx-target="#content"

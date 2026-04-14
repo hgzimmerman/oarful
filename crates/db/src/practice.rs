@@ -1,7 +1,7 @@
 use crate::schema::{lineup, practice};
 use crate::team::TeamId;
 use crate::types::IntBool;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
@@ -62,6 +62,7 @@ pub struct Practice {
     pub id: PracticeId,
     pub team_id: TeamId,
     pub date: NaiveDate,
+    pub time: Option<NaiveTime>,
     pub notes: Option<String>,
     pub cancelled: IntBool,
 }
@@ -71,22 +72,44 @@ pub struct Practice {
 pub struct NewPractice {
     pub team_id: TeamId,
     pub date: NaiveDate,
+    pub time: Option<NaiveTime>,
     pub notes: Option<String>,
 }
 
 impl Practice {
-    /// Find or create a practice for a (team, date) pair. If one
+    /// Look up a practice by its primary key.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn get(
+        conn: &mut SqliteConnection,
+        id: PracticeId,
+    ) -> Result<Option<Practice>, diesel::result::Error> {
+        practice::table
+            .find(id)
+            .select(Practice::as_select())
+            .first(conn)
+            .optional()
+    }
+
+    /// Find or create a practice for a (team, date, time) triple. If one
     /// already exists, returns it unchanged (notes are not overwritten).
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn upsert_by_date(
+    pub fn upsert(
         conn: &mut SqliteConnection,
         team_id: TeamId,
         date: NaiveDate,
+        time: Option<NaiveTime>,
         notes: Option<String>,
     ) -> Result<Practice, diesel::result::Error> {
-        if let Some(existing) = practice::table
+        let mut query = practice::table
             .filter(practice::team_id.eq(team_id))
             .filter(practice::date.eq(date))
+            .into_boxed();
+        if let Some(t) = time {
+            query = query.filter(practice::time.eq(t));
+        } else {
+            query = query.filter(practice::time.is_null());
+        }
+        if let Some(existing) = query
             .select(Practice::as_select())
             .first(conn)
             .optional()?
@@ -97,6 +120,7 @@ impl Practice {
             .values(NewPractice {
                 team_id,
                 date,
+                time,
                 notes,
             })
             .returning(Practice::as_returning())
@@ -118,93 +142,83 @@ impl Practice {
             .get_results(conn)
     }
 
-    /// Which of the given dates have at least one committed lineup?
-    /// Returns only the dates that match, as a set-friendly vec.
+    /// Which of the given practice IDs have at least one committed lineup?
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn committed_dates(
+    pub fn committed_ids(
         conn: &mut SqliteConnection,
         team_id: TeamId,
-        dates: &[NaiveDate],
-    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+        ids: &[PracticeId],
+    ) -> Result<Vec<PracticeId>, diesel::result::Error> {
         practice::table
             .filter(practice::team_id.eq(team_id))
-            .filter(practice::date.eq_any(dates))
+            .filter(practice::id.eq_any(ids))
             .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
-            .select(practice::date)
+            .select(practice::id)
             .get_results(conn)
     }
 
     /// Update the notes on an existing practice row.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn update_notes(
+    pub fn update_notes_by_id(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        date: NaiveDate,
+        id: PracticeId,
         notes: Option<String>,
     ) -> Result<Practice, diesel::result::Error> {
-        diesel::update(
-            practice::table
-                .filter(practice::team_id.eq(team_id))
-                .filter(practice::date.eq(date)),
-        )
-        .set(practice::notes.eq(notes))
-        .returning(Practice::as_returning())
-        .get_result(conn)
+        diesel::update(practice::table.find(id))
+            .set(practice::notes.eq(notes))
+            .returning(Practice::as_returning())
+            .get_result(conn)
     }
 
-    /// Future practice dates (on or after `today`), ordered ascending.
+    /// Future practices (on or after `today`), ordered ascending.
     /// Excludes cancelled practices.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn list_upcoming(
         conn: &mut SqliteConnection,
         team_id: TeamId,
         today: NaiveDate,
-    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
         practice::table
             .filter(practice::team_id.eq(team_id))
             .filter(practice::date.ge(today))
             .filter(practice::cancelled.eq(0))
-            .select(practice::date)
-            .order(practice::date.asc())
+            .select(Practice::as_select())
+            .order((practice::date.asc(), practice::time.asc()))
             .get_results(conn)
     }
 
-    /// Toggle the cancelled flag on a practice.
+    /// Toggle the cancelled flag on a practice by ID.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn set_cancelled(
+    pub fn set_cancelled_by_id(
         conn: &mut SqliteConnection,
-        team_id: TeamId,
-        date: NaiveDate,
+        id: PracticeId,
         cancelled: bool,
     ) -> Result<Practice, diesel::result::Error> {
-        diesel::update(
-            practice::table
-                .filter(practice::team_id.eq(team_id))
-                .filter(practice::date.eq(date)),
-        )
-        .set(practice::cancelled.eq(if cancelled { 1 } else { 0 }))
-        .returning(Practice::as_returning())
-        .get_result(conn)
+        diesel::update(practice::table.find(id))
+            .set(practice::cancelled.eq(if cancelled { 1 } else { 0 }))
+            .returning(Practice::as_returning())
+            .get_result(conn)
     }
 
-    /// Non-cancelled practice dates for a team on or after `since`,
+    /// Non-cancelled practices for a team on or after `since`,
     /// ordered ascending.
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn list_dates_since(
+    pub fn list_since(
         conn: &mut SqliteConnection,
         team_id: TeamId,
         since: NaiveDate,
-    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
         practice::table
             .filter(practice::team_id.eq(team_id))
             .filter(practice::date.ge(since))
             .filter(practice::cancelled.eq(0))
-            .select(practice::date)
-            .order(practice::date.asc())
+            .select(Practice::as_select())
+            .order((practice::date.asc(), practice::time.asc()))
             .get_results(conn)
     }
 
     /// Find an existing practice for a (team, date) pair.
+    /// When multiple practices exist on the same date, returns the first.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn find_by_date(
         conn: &mut SqliteConnection,
@@ -217,5 +231,22 @@ impl Practice {
             .select(Practice::as_select())
             .first(conn)
             .optional()
+    }
+
+    /// Display label for a practice. Shows just the date when alone,
+    /// or date + time when `show_time` is true (multiple on same day).
+    pub fn label(&self) -> String {
+        match self.time {
+            Some(t) => format!("{} · {}", self.date.format("%b %-d"), t.format("%-I:%M %p")),
+            None => self.date.format("%b %-d").to_string(),
+        }
+    }
+
+    /// Full label including year.
+    pub fn label_full(&self) -> String {
+        match self.time {
+            Some(t) => format!("{} · {}", self.date.format("%A, %B %-d, %Y"), t.format("%-I:%M %p")),
+            None => self.date.format("%A, %B %-d, %Y").to_string(),
+        }
     }
 }

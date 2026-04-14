@@ -158,26 +158,27 @@ impl Rower {
         }
 
         // Load the practice dates for committed practices.
-        let committed_dates: Vec<(i32, NaiveDate)> = practice::table
+        let committed_practices: Vec<(i32, NaiveDate)> = practice::table
             .filter(practice::id.eq_any(&committed_practice_ids))
             .select((practice::id, practice::date))
             .get_results(conn)?;
-        let practice_id_to_date: HashMap<i32, NaiveDate> = committed_dates
+        let practice_id_to_date: HashMap<i32, NaiveDate> = committed_practices
             .iter()
             .map(|(id, d)| (*id, *d))
             .collect();
-        let dates: Vec<NaiveDate> = committed_dates.iter().map(|(_, d)| *d).collect();
 
-        // All available rowers per committed date.
-        let avail_rows: Vec<(RowerId, NaiveDate, AvailabilityStatus)> = availability::table
-            .filter(availability::date.eq_any(&dates))
-            .select((availability::rower_id, availability::date, availability::status))
+        // All available rowers per committed practice.
+        let avail_rows: Vec<(RowerId, i32, AvailabilityStatus)> = availability::table
+            .filter(availability::practice_id.eq_any(&committed_practice_ids))
+            .select((availability::rower_id, availability::practice_id, availability::status))
             .get_results(conn)?;
 
         let mut available_by_date: HashMap<NaiveDate, HashSet<RowerId>> = HashMap::new();
-        for (rid, date, status) in &avail_rows {
+        for (rid, pid, status) in &avail_rows {
             if status.is_available_for_sweep() {
-                available_by_date.entry(*date).or_default().insert(*rid);
+                if let Some(&date) = practice_id_to_date.get(pid) {
+                    available_by_date.entry(date).or_default().insert(*rid);
+                }
             }
         }
 

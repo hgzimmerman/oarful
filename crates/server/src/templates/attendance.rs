@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::NaiveDate;
 use lineup_db::availability::types::AvailabilityStatus;
+use lineup_db::practice::PracticeId;
 use lineup_db::rower::Rower;
 use lineup_db::rower::types::RowerId;
 use maud::{html, Markup};
@@ -15,6 +16,8 @@ pub(crate) fn grid_content(
     dates: &[NaiveDate],
     avail_map: &HashMap<(RowerId, NaiveDate), AvailabilityStatus>,
     committed_dates: &HashSet<NaiveDate>,
+    // Maps committed dates to their practice IDs for link generation.
+    committed_practice_ids: &HashMap<NaiveDate, PracticeId>,
     show_past: bool,
     today: NaiveDate,
 ) -> Markup {
@@ -74,7 +77,7 @@ pub(crate) fn grid_content(
                                     "Rower"
                                 }
                                 @for date in dates {
-                                    (date_header(date, today, committed_dates.contains(date)))
+                                    (date_header(date, today, committed_practice_ids.get(date)))
                                 }
                             }
                         }
@@ -113,7 +116,7 @@ pub(crate) fn grid_content(
     }
 }
 
-fn date_header(date: &NaiveDate, today: NaiveDate, link_to_lineup: bool) -> Markup {
+fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&PracticeId>) -> Markup {
     let is_today = *date == today;
     let bg = if is_today { "bg-blue-50" } else { "bg-slate-100" };
     let base_class = format!("sticky top-0 z-10 {bg} px-1.5 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[44px]");
@@ -121,9 +124,9 @@ fn date_header(date: &NaiveDate, today: NaiveDate, link_to_lineup: bool) -> Mark
 
     html! {
         th class=(base_class) title=(full_date) {
-            @if link_to_lineup {
-                a href=(format!("/history/{}", date.format("%Y-%m-%d")))
-                  hx-get=(format!("/history/{}", date.format("%Y-%m-%d")))
+            @if let Some(pid) = practice_id {
+                a href=(format!("/history/{pid}"))
+                  hx-get=(format!("/history/{pid}"))
                   hx-target="#content"
                   hx-push-url="true"
                   class="text-blue-700 hover:text-blue-900" {

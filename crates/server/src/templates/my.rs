@@ -3,6 +3,7 @@
 use chrono::NaiveDate;
 use lineup_db::app_user::AppUser;
 use lineup_db::availability::types::AvailabilityStatus;
+use lineup_db::practice::PracticeId;
 use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
@@ -22,6 +23,7 @@ pub(crate) fn no_rower_content(title: &str, message: &str) -> Markup {
 /// a date with existing availability, plus the rower's current
 /// response (if any).
 pub(crate) struct AvailabilityRow {
+    pub(crate) practice_id: PracticeId,
     pub(crate) date: NaiveDate,
     pub(crate) status: Option<AvailabilityStatus>,
     pub(crate) has_committed: bool,
@@ -74,8 +76,8 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
                     span class="font-medium text-slate-800" { (row.date) }
                     span class="text-xs text-slate-500" { (weekday) }
                     @if row.has_committed {
-                        a href={"/history/" (row.date)}
-                          hx-get={"/history/" (row.date)}
+                        a href={"/history/" (row.practice_id)}
+                          hx-get={"/history/" (row.practice_id)}
                           hx-target="#content"
                           hx-push-url="true"
                           class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full hover:bg-emerald-200" {
@@ -89,7 +91,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
                      hx-post="/my/availability"
                      hx-target="#content"
                      class="flex items-center gap-2" {
-                    input type="hidden" name="date" value=(row.date);
+                    input type="hidden" name="practice_id" value=(row.practice_id);
                     (status_select(&format!("status-{}", row.date), row.status))
                     button type="submit"
                            class="text-xs text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide" {

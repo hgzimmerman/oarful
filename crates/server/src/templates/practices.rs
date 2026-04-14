@@ -1,6 +1,7 @@
 //! Practices dashboard template — tabbed view: Schedule, Reminders, Lineups.
 
 use chrono::NaiveDate;
+use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
@@ -8,6 +9,7 @@ use crate::handlers::practices::{LineupRow, ReminderRow};
 
 /// Per-row summary for the schedule tab.
 pub(crate) struct PracticeRow {
+    pub(crate) practice_id: PracticeId,
     pub(crate) date: NaiveDate,
     pub(crate) yes_count: usize,
     pub(crate) total_responses: usize,
@@ -123,9 +125,9 @@ pub(crate) fn schedule_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
 fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     let weekday = row.date.format("%A").to_string();
     let href = if row.has_committed {
-        format!("/history/{}", row.date)
+        format!("/history/{}", row.practice_id)
     } else if is_coach {
-        format!("/solve/{}", row.date)
+        format!("/solve/{}", row.practice_id)
     } else {
         String::new()
     };
@@ -157,7 +159,7 @@ fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
 }
 
 fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
-    let cancel_action = format!("/practices/{}/cancel", row.date);
+    let cancel_action = format!("/practices/{}/cancel", row.practice_id);
     html! {
         div {
             div class="flex items-center gap-2" {

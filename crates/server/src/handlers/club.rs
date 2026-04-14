@@ -123,7 +123,7 @@ async fn attendance_content(
     query: &AttendanceQuery,
 ) -> Result<maud::Markup, StatusCode> {
     use lineup_db::availability::Availability;
-    use lineup_db::practice::Practice;
+    use lineup_db::practice::{Practice, PracticeId};
     use lineup_db::rower::Rower;
     use lineup_db::team::TeamMembership;
 
@@ -131,7 +131,7 @@ async fn attendance_content(
     let show_past = query.show_past.as_deref() == Some("1");
     let today = chrono::Utc::now().date_naive();
 
-    let (rowers, dates, avail_map, committed_dates) = tenant
+    let (rowers, practices, avail_map, committed_ids) = tenant
         .db
         .with_conn(move |conn| {
             let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
@@ -147,20 +147,41 @@ async fn attendance_content(
             } else {
                 today
             };
-            let dates = Practice::list_dates_since(conn, team_id, since)?;
-            let avail_map = Availability::map_for_team_dates(conn, team_id, &dates)?;
-            let committed_dates: std::collections::HashSet<chrono::NaiveDate> =
-                Practice::committed_dates(conn, team_id, &dates)?
+            let practices = Practice::list_since(conn, team_id, since)?;
+            let practice_ids: Vec<PracticeId> = practices.iter().map(|p| p.id).collect();
+            let avail_map = Availability::map_for_practices(conn, &practice_ids)?;
+            let committed_ids: std::collections::HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &practice_ids)?
                     .into_iter()
                     .collect();
 
-            Ok((rowers, dates, avail_map, committed_dates))
+            Ok((rowers, practices, avail_map, committed_ids))
         })
         .await
         .map_err(handlers::internal_error)?;
 
+    // Extract dates for the template (it still expects dates for column headers).
+    let dates: Vec<chrono::NaiveDate> = practices.iter().map(|p| p.date).collect();
+    // Convert the (RowerId, PracticeId) map to (RowerId, NaiveDate) for template compatibility.
+    // NOTE: This is a simplification — if multiple practices share the same date,
+    // the last one wins. The template will need updating for full practice-id support.
+    let date_avail: std::collections::HashMap<(lineup_db::rower::types::RowerId, chrono::NaiveDate), lineup_db::availability::types::AvailabilityStatus> =
+        avail_map.into_iter()
+            .filter_map(|((rid, pid), status)| {
+                practices.iter().find(|p| p.id == pid).map(|p| ((rid, p.date), status))
+            })
+            .collect();
+    let committed_dates: std::collections::HashSet<chrono::NaiveDate> =
+        committed_ids.iter()
+            .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| p.date))
+            .collect();
+    let committed_practice_ids: std::collections::HashMap<chrono::NaiveDate, lineup_db::practice::PracticeId> =
+        committed_ids.iter()
+            .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| (p.date, p.id)))
+            .collect();
+
     Ok(crate::templates::attendance::grid_content(
-        &rowers, &dates, &avail_map, &committed_dates, show_past, today,
+        &rowers, &dates, &date_avail, &committed_dates, &committed_practice_ids, show_past, today,
     ))
 }
 

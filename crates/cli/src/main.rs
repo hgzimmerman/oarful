@@ -178,7 +178,10 @@ fn parse_date(s: Option<&String>) -> Result<NaiveDate> {
 
 async fn cmd_dump(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
     let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
+        .with_conn(move |conn| {
+            let practice = Practice::upsert(conn, team_id, date, None, None)?;
+            DbSnapshot::for_practice(conn, &practice)
+        })
         .await?;
     print!("{snapshot}");
     Ok(())
@@ -193,7 +196,10 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
         top_n,
     } = opts;
     let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
+        .with_conn(move |conn| {
+            let practice = Practice::upsert(conn, team_id, date, None, None)?;
+            DbSnapshot::for_practice(conn, &practice)
+        })
         .await?;
 
     let num_available = snapshot.available_rowers().count();
@@ -422,7 +428,7 @@ async fn commit_lineups(
 ) -> Result<usize> {
     let used_owned: Vec<ProposedLineup> = used.to_vec();
     db.with_conn(move |conn| {
-        let practice = Practice::upsert_by_date(conn, team_id, date, None)?;
+        let practice = Practice::upsert(conn, team_id, date, None, None)?;
         let mut count = 0usize;
         for lineup in &used_owned {
             let seats: Vec<CommitSeat> = lineup
@@ -443,15 +449,18 @@ async fn commit_lineups(
 }
 
 async fn cmd_history(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
-    let snapshot = db
-        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
-        .await?;
-    let committed = db
+    let (snapshot, committed) = db
         .with_conn(move |conn| {
             let Some(practice) = Practice::find_by_date(conn, team_id, date)? else {
-                return Ok(None);
+                // No practice exists — build a minimal snapshot via upsert
+                // and return empty lineups.
+                let practice = Practice::upsert(conn, team_id, date, None, None)?;
+                let snapshot = DbSnapshot::for_practice(conn, &practice)?;
+                return Ok((snapshot, None));
             };
-            Lineup::for_practice(conn, practice.id).map(Some)
+            let snapshot = DbSnapshot::for_practice(conn, &practice)?;
+            let lineups = Lineup::for_practice(conn, practice.id)?;
+            Ok((snapshot, Some(lineups)))
         })
         .await?;
 

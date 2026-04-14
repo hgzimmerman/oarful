@@ -1,9 +1,8 @@
 pub mod queries;
 pub mod types;
 
+use crate::practice::PracticeId;
 use crate::rower::types::RowerId;
-use crate::team::TeamId;
-use chrono::NaiveDate;
 use types::AvailabilityStatus;
 
 #[derive(
@@ -19,8 +18,7 @@ use types::AvailabilityStatus;
 #[diesel(table_name = crate::schema::availability)]
 pub struct Availability {
     pub rower_id: RowerId,
-    pub team_id: TeamId,
-    pub date: NaiveDate,
+    pub practice_id: PracticeId,
     pub status: AvailabilityStatus,
 }
 
@@ -28,7 +26,6 @@ pub struct Availability {
 #[diesel(table_name = crate::schema::availability)]
 pub struct NewAvailability {
     pub rower_id: RowerId,
-    pub team_id: TeamId,
-    pub date: NaiveDate,
+    pub practice_id: PracticeId,
     pub status: AvailabilityStatus,
 }

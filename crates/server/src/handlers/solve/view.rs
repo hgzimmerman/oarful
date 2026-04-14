@@ -1,4 +1,4 @@
-//! `GET /solve/{date}` — main solve view handler.
+//! `GET /solve/{id}` — main solve view handler.
 
 use axum::{
     extract::{Path, State},
@@ -8,9 +8,8 @@ use axum::{
 };
 use axum_extra::extract::{CookieJar, Query};
 use axum_htmx::HxRequest;
-use chrono::NaiveDate;
 use lineup_db::snapshot::DbSnapshot;
-use lineup_db::practice::Practice;
+use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::app_user::Role;
 
 use crate::{state::AppState, templates};
@@ -22,29 +21,31 @@ pub(crate) async fn view_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (mut snapshot, committed_practices, has_committed) = tenant
+    let (practice, mut snapshot, committed_practices, has_committed) = tenant
         .db
         .with_conn(move |conn| {
-            let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;
+            let practice = Practice::get(conn, practice_id)?
+                .ok_or(diesel::result::Error::NotFound)?;
+            let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             let practices = Practice::list_committed(conn, team_id)?;
-            let has_committed = Practice::find_by_date(conn, team_id, date)?
-                .map(|p| {
-                    use lineup_db::lineup::Lineup;
-                    Lineup::for_practice(conn, p.id)
-                        .map(|l| !l.is_empty())
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false);
-            Ok((snapshot, practices, has_committed))
+            let has_committed = {
+                use lineup_db::lineup::Lineup;
+                Lineup::for_practice(conn, practice.id)
+                    .map(|l| !l.is_empty())
+                    .unwrap_or(false)
+            };
+            Ok((practice, snapshot, practices, has_committed))
         })
         .await
         .map_err(internal_error)?;
+
+    let date = practice.date;
 
     // Apply walk-on overrides before anything reads availability.
     apply_walkons(&mut snapshot, &knobs);
@@ -91,9 +92,6 @@ pub(crate) async fn view_handler(
         let result = run_solve(&state, snapshot.clone(), request).await?;
 
         // State transitions: pin→was_pin, was_pin→dropped, lock→lock.
-        // Pins reference a specific boat, but the solver may have moved
-        // the rower to a different boat. Match pinned rowers against
-        // their actual placement in the solver output.
         let locked_seats = SolveKnobs::parse_triples(&knobs.lock);
         let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
             knobs.pin.iter().filter_map(|e| {
@@ -130,7 +128,7 @@ pub(crate) async fn view_handler(
         };
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
-            &snapshot, date, &response_knobs, &result, &committed_practices,
+            &snapshot, practice_id, date, &response_knobs, &result, &committed_practices,
             &flags, &profile_names,
         );
         return Ok(crate::handlers::maybe_page_authed(
@@ -164,8 +162,6 @@ pub(crate) async fn view_handler(
     };
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
-    // If seat params are present (e.g. from "Edit lineup" on history),
-    // pre-populate the editor with those placements.
     let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
@@ -178,7 +174,7 @@ pub(crate) async fn view_handler(
         locked_boats: SolveKnobs::parse_boat_ids(&knobs.boat_lock),
     };
     let content = templates::solve::landing_content(
-        &snapshot, date, &knobs, &committed_practices, has_committed,
+        &snapshot, practice_id, date, &knobs, &committed_practices, has_committed,
         &profile_names, &flags, &default_boats,
     );
     Ok(crate::handlers::maybe_page_authed(

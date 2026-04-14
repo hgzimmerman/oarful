@@ -10,8 +10,8 @@ use diesel::SqliteConnection;
 pub struct BoatUsageSummary {
     pub total_uses: i64,
     pub last_used: Option<NaiveDate>,
-    /// Distinct practice dates this boat was used, most recent first.
-    pub recent_uses: Vec<NaiveDate>,
+    /// Distinct practice (id, date) pairs this boat was used, most recent first.
+    pub recent_uses: Vec<(crate::practice::PracticeId, NaiveDate)>,
 }
 
 impl Boat {
@@ -76,17 +76,17 @@ impl Boat {
     ) -> Result<BoatUsageSummary, diesel::result::Error> {
         let today = chrono::Local::now().date_naive();
 
-        let recent_uses: Vec<NaiveDate> = lineup::table
+        let recent_uses: Vec<(crate::practice::PracticeId, NaiveDate)> = lineup::table
             .inner_join(practice::table)
             .filter(lineup::boat_id.eq(id))
             .filter(practice::date.lt(today))
-            .select(practice::date)
+            .select((practice::id, practice::date))
             .distinct()
             .order(practice::date.desc())
             .get_results(conn)?;
 
         let total_uses = recent_uses.len() as i64;
-        let last_used = recent_uses.first().copied();
+        let last_used = recent_uses.first().map(|(_, d)| *d);
 
         Ok(BoatUsageSummary {
             total_uses,

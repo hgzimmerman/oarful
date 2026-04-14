@@ -100,7 +100,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
 
     // --- practice + availabilities for an upcoming date ---
     let date = NaiveDate::from_ymd_opt(2026, 4, 11).expect("valid date");
-    Practice::upsert_by_date(conn, team.id, date, Some("Toy seeded practice".to_string()))?;
+    let practice = Practice::upsert(conn, team.id, date, None, Some("Toy seeded practice".to_string()))?;
 
     let statuses = [
         AvailabilityStatus::Yes,         // Alice
@@ -123,8 +123,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             conn,
             NewAvailability {
                 rower_id,
-                team_id: team.id,
-                date,
+                practice_id: practice.id,
                 status,
             },
         )?;
@@ -367,29 +366,24 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<crate::app_user::UserI
     let wed = next_weekday(today, Weekday::Wed);
     let fri = next_weekday(today, Weekday::Fri);
 
-    let p_mon = Practice::upsert_by_date(conn, team.id, mon, Some("Steady state pieces".to_string()))?;
-    Practice::upsert_by_date(conn, team.id, wed, Some("Technique drills".to_string()))?;
-    Practice::upsert_by_date(conn, team.id, fri, None)?;
+    let p_mon = Practice::upsert(conn, team.id, mon, None, Some("Steady state pieces".to_string()))?;
+    let p_wed = Practice::upsert(conn, team.id, wed, None, Some("Technique drills".to_string()))?;
+    let p_fri = Practice::upsert(conn, team.id, fri, None, None)?;
 
     // --- availability ---
     // Monday: most available (Ravi, Theo, Vera say No)
     let mon_no = [19usize, 21, 23];
     for (i, rid) in rower_ids.iter().enumerate() {
-        let status = if mon_no.contains(&i) {
-            AvailabilityStatus::Yes // we'll override below
-        } else {
-            AvailabilityStatus::Yes
-        };
-        let status = if mon_no.contains(&i) { AvailabilityStatus::No } else { status };
+        let status = if mon_no.contains(&i) { AvailabilityStatus::No } else { AvailabilityStatus::Yes };
         Availability::upsert(conn, NewAvailability {
-            rower_id: *rid, team_id: team.id, date: mon, status,
+            rower_id: *rid, practice_id: p_mon.id, status,
         })?;
     }
 
     // Wednesday: everyone available
     for rid in &rower_ids {
         Availability::upsert(conn, NewAvailability {
-            rower_id: *rid, team_id: team.id, date: wed, status: AvailabilityStatus::Yes,
+            rower_id: *rid, practice_id: p_wed.id, status: AvailabilityStatus::Yes,
         })?;
     }
 
@@ -400,7 +394,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<crate::app_user::UserI
             _ => AvailabilityStatus::Yes,
         };
         Availability::upsert(conn, NewAvailability {
-            rower_id: *rid, team_id: team.id, date: fri, status,
+            rower_id: *rid, practice_id: p_fri.id, status,
         })?;
     }
 

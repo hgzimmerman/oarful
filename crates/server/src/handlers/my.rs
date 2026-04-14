@@ -3,7 +3,7 @@
 //! - `GET /my/profile` — view + edit own attributes
 //! - `POST /my/profile` — update own attributes
 //! - `GET /my/availability` — view + edit own availability
-//! - `POST /my/availability` — upsert one (date, status) entry
+//! - `POST /my/availability` — upsert one (practice_id, status) entry
 
 use std::collections::BTreeMap;
 
@@ -12,7 +12,7 @@ use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::availability::{types::AvailabilityStatus, Availability, NewAvailability};
-use lineup_db::practice::Practice;
+use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
 use lineup_db::types::IntBool;
 use serde::Deserialize;
@@ -208,41 +208,44 @@ pub(crate) async fn availability_handler(
         .with_conn(move |conn| {
             let today = chrono::Utc::now().date_naive();
 
-            // Gather all relevant dates: scheduled practices + dates
-            // that already have availability records for anyone.
-            let practice_dates = Practice::list_upcoming(conn, team_id, today)?;
-            let avail_dates = Availability::upcoming_dates(conn, team_id, today)?;
-            let mut all_dates: BTreeMap<NaiveDate, Option<AvailabilityStatus>> = BTreeMap::new();
-            for d in practice_dates.into_iter().chain(avail_dates) {
-                all_dates.entry(d).or_insert(None);
+            // Gather all relevant practices: upcoming scheduled practices.
+            let practices = Practice::list_upcoming(conn, team_id, today)?;
+            let mut all_practices: BTreeMap<PracticeId, (NaiveDate, Option<AvailabilityStatus>)> = BTreeMap::new();
+            for p in &practices {
+                all_practices.entry(p.id).or_insert((p.date, None));
             }
 
             // Load this rower's existing responses and overlay.
-            use diesel::prelude::*;
-            use lineup_db::schema::availability;
-            let my_avail: Vec<Availability> = availability::table
-                .filter(availability::rower_id.eq(rower_id))
-                .filter(availability::team_id.eq(team_id))
-                .filter(availability::date.ge(today))
-                .select(Availability::as_select())
-                .get_results(conn)?;
+            let practice_ids: Vec<PracticeId> = all_practices.keys().copied().collect();
+            let my_avail: Vec<Availability> = {
+                use diesel::prelude::*;
+                use lineup_db::schema::availability;
+                availability::table
+                    .filter(availability::rower_id.eq(rower_id))
+                    .filter(availability::practice_id.eq_any(&practice_ids))
+                    .select(Availability::as_select())
+                    .get_results(conn)?
+            };
             for a in &my_avail {
-                all_dates.insert(a.date, Some(a.status));
+                if let Some(entry) = all_practices.get_mut(&a.practice_id) {
+                    entry.1 = Some(a.status);
+                }
             }
 
-            // Which dates have committed lineups?
-            let date_vec: Vec<_> = all_dates.keys().copied().collect();
-            let committed_dates: std::collections::HashSet<_> =
-                Practice::committed_dates(conn, team_id, &date_vec)?
+            // Which practices have committed lineups?
+            let id_vec: Vec<PracticeId> = all_practices.keys().copied().collect();
+            let committed_ids: std::collections::HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &id_vec)?
                     .into_iter()
                     .collect();
 
-            let rows: Vec<templates::my::AvailabilityRow> = all_dates
+            let rows: Vec<templates::my::AvailabilityRow> = all_practices
                 .into_iter()
-                .map(|(date, status)| templates::my::AvailabilityRow {
+                .map(|(pid, (date, status))| templates::my::AvailabilityRow {
+                    practice_id: pid,
                     date,
                     status,
-                    has_committed: committed_dates.contains(&date),
+                    has_committed: committed_ids.contains(&pid),
                 })
                 .collect();
             Ok(rows)
@@ -256,7 +259,7 @@ pub(crate) async fn availability_handler(
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct AvailabilityInput {
-    pub(crate) date: NaiveDate,
+    pub(crate) practice_id: PracticeId,
     pub(crate) status: String,
 }
 
@@ -267,7 +270,7 @@ pub(crate) async fn availability_update_handler(
     hx: HxRequest,
     Form(input): Form<AvailabilityInput>,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let rower = load_my_rower(&tenant).await?;
 
     let status = match input.status.as_str() {
@@ -282,7 +285,7 @@ pub(crate) async fn availability_update_handler(
     };
 
     let rower_id = rower.id;
-    let date = input.date;
+    let practice_id = input.practice_id;
     tenant
         .db
         .with_conn(move |conn| {
@@ -290,8 +293,7 @@ pub(crate) async fn availability_update_handler(
                 conn,
                 NewAvailability {
                     rower_id,
-                    team_id,
-                    date,
+                    practice_id,
                     status,
                 },
             )
@@ -304,8 +306,8 @@ pub(crate) async fn availability_update_handler(
         Some(tenant.claims.user_id().as_int()),
         "availability.update",
         "availability",
-        &format!("{rower_id}:{date}"),
-        Some(serde_json::json!({"status": input.status, "date": date.to_string()}).to_string()),
+        &format!("{rower_id}:{practice_id}"),
+        Some(serde_json::json!({"status": input.status, "practice_id": practice_id.as_int()}).to_string()),
     );
 
     // Re-render the full availability page.

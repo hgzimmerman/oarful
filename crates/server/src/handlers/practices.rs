@@ -14,13 +14,13 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
-use chrono::{NaiveDate, Utc};
+use chrono::{NaiveDate, NaiveTime, Utc};
 use lineup_db::app_user::{AppUser, Role};
 use lineup_db::availability::Availability;
 use lineup_db::boat::Boat;
 use lineup_db::email_log::{EmailLog, NewEmailLog};
 use lineup_db::lineup::Lineup;
-use lineup_db::practice::Practice;
+use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
 use serde::Deserialize;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -85,53 +85,55 @@ async fn schedule_tab_content(
     let rows = tenant
         .db
         .with_conn(move |conn| {
-            let avail_dates = Availability::upcoming_dates(conn, team_id, today)?;
-            let practice_dates = Practice::list_upcoming(conn, team_id, today)?;
-            let upcoming: BTreeSet<_> = avail_dates.into_iter().chain(practice_dates).collect();
+            // Upcoming practices (non-cancelled).
+            let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
+            // Also include practices that have availability responses.
+            let upcoming_ids: Vec<PracticeId> = upcoming_practices.iter().map(|p| p.id).collect();
+            let avail_practice_ids = Availability::practices_with_responses(conn, &upcoming_ids)?;
+            let avail_set: HashSet<PracticeId> = avail_practice_ids.into_iter().collect();
 
+            // Past committed practices.
             let past_committed = Practice::list_committed(conn, team_id)?;
-            let past_dates: BTreeSet<_> = past_committed
-                .iter()
-                .map(|p| p.date)
-                .filter(|d| *d < today)
-                .collect();
 
-            let all_dates: BTreeSet<_> =
-                upcoming.iter().chain(past_dates.iter()).copied().collect();
-            let date_vec: Vec<_> = all_dates.iter().copied().collect();
-            let committed_dates: HashSet<_> =
-                Practice::committed_dates(conn, team_id, &date_vec)?
+            // Combine all practices, dedup by id.
+            let mut all_practices: Vec<Practice> = Vec::new();
+            let mut seen_ids: HashSet<PracticeId> = HashSet::new();
+            for p in upcoming_practices {
+                if seen_ids.insert(p.id) {
+                    all_practices.push(p);
+                }
+            }
+            for p in past_committed {
+                if p.date < today && seen_ids.insert(p.id) {
+                    all_practices.push(p);
+                }
+            }
+            // Sort descending by date.
+            all_practices.sort_by(|a, b| b.date.cmp(&a.date).then(b.id.cmp(&a.id)));
+
+            let all_ids: Vec<PracticeId> = all_practices.iter().map(|p| p.id).collect();
+            let committed_ids: HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &all_ids)?
                     .into_iter()
                     .collect();
-            let cancelled_dates: HashSet<NaiveDate> = {
-                use diesel::prelude::*;
-                use lineup_db::schema::practice as p;
-                p::table
-                    .filter(p::team_id.eq(team_id))
-                    .filter(p::date.eq_any(&date_vec))
-                    .filter(p::cancelled.ne(0))
-                    .select(p::date)
-                    .get_results::<NaiveDate>(conn)?
-                    .into_iter()
-                    .collect()
-            };
 
-            let mut rows = Vec::with_capacity(all_dates.len());
-            for date in all_dates.iter().rev() {
-                let (yes_count, total_responses) = if *date >= today {
-                    let map = Availability::map_for_team_date(conn, team_id, *date)?;
+            let mut rows = Vec::with_capacity(all_practices.len());
+            for practice in &all_practices {
+                let (yes_count, total_responses) = if practice.date >= today {
+                    let map = Availability::map_for_practice(conn, practice.id)?;
                     let yes = map.values().filter(|s| s.is_available_for_sweep()).count();
                     (yes, map.len())
                 } else {
                     (0, 0)
                 };
                 rows.push(templates::practices::PracticeRow {
-                    date: *date,
+                    practice_id: practice.id,
+                    date: practice.date,
                     yes_count,
                     total_responses,
-                    has_committed: committed_dates.contains(date),
-                    is_upcoming: *date >= today,
-                    cancelled: cancelled_dates.contains(date),
+                    has_committed: committed_ids.contains(&practice.id),
+                    is_upcoming: practice.date >= today,
+                    cancelled: practice.cancelled.as_bool(),
                 });
             }
             Ok(rows)
@@ -149,6 +151,8 @@ async fn schedule_tab_content(
 #[derive(Debug, Deserialize)]
 pub(crate) struct CreatePracticeInput {
     date: String,
+    #[serde(default)]
+    time: Option<String>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -162,10 +166,15 @@ pub(crate) async fn create_handler(
 
     let date = NaiveDate::parse_from_str(input.date.trim(), "%Y-%m-%d")
         .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let time: Option<NaiveTime> = input.time
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| StatusCode::BAD_REQUEST))
+        .transpose()?;
 
     tenant
         .db
-        .with_conn(move |conn| Practice::upsert_by_date(conn, team_id, date, None))
+        .with_conn(move |conn| Practice::upsert(conn, team_id, date, time, None))
         .await
         .map_err(internal_error)?;
 
@@ -185,18 +194,18 @@ pub(crate) async fn create_handler(
 pub(crate) async fn cancel_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
 ) -> Result<impl IntoResponse, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     let new_cancelled = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::find_by_date(conn, team_id, date)?
+            let practice = Practice::get(conn, practice_id)?
                 .ok_or(diesel::result::Error::NotFound)?;
             let new_cancelled = !practice.cancelled.as_bool();
-            Practice::set_cancelled(conn, team_id, date, new_cancelled)?;
+            Practice::set_cancelled_by_id(conn, practice_id, new_cancelled)?;
             Ok(new_cancelled)
         })
         .await
@@ -207,7 +216,7 @@ pub(crate) async fn cancel_handler(
         Some(tenant.claims.user_id().as_int()),
         "practice.cancel",
         "practice",
-        &date.to_string(),
+        &practice_id.to_string(),
         Some(serde_json::json!({"cancelled": new_cancelled}).to_string()),
     );
 
@@ -238,9 +247,10 @@ pub(crate) async fn reminders_handler(
         .db
         .with_conn(move |conn| {
             let upcoming = Practice::list_upcoming(conn, team_id, today)?;
-            // Filter to non-cancelled, uncommitted dates.
-            let committed: HashSet<_> =
-                Practice::committed_dates(conn, team_id, &upcoming)?
+            // Filter to non-cancelled, uncommitted practices.
+            let upcoming_ids: Vec<PracticeId> = upcoming.iter().map(|p| p.id).collect();
+            let committed: HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &upcoming_ids)?
                     .into_iter()
                     .collect();
 
@@ -251,21 +261,21 @@ pub(crate) async fn reminders_handler(
                 .collect();
 
             let mut rows = Vec::new();
-            for date in &upcoming {
-                if committed.contains(date) {
+            for practice in &upcoming {
+                if committed.contains(&practice.id) {
                     continue;
                 }
-                let responses = Availability::map_for_team_date(conn, team_id, *date)?;
+                let responses = Availability::map_for_practice(conn, practice.id)?;
                 let non_respondents = rowers_with_user
                     .iter()
                     .filter(|r| !responses.contains_key(&r.id))
                     .count();
 
                 let already_sent =
-                    EmailLog::already_sent_today(conn, team_id, "reminder", *date)?;
+                    EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)?;
 
                 rows.push(ReminderRow {
-                    date: *date,
+                    date: practice.date,
                     non_respondent_count: non_respondents,
                     already_sent_today: already_sent,
                 });
@@ -301,16 +311,17 @@ pub(crate) async fn send_reminders_handler(
         .db
         .with_conn(move |conn| {
             let upcoming = Practice::list_upcoming(conn, team_id, today)?;
-            let committed: HashSet<_> =
-                Practice::committed_dates(conn, team_id, &upcoming)?
+            let upcoming_ids: Vec<PracticeId> = upcoming.iter().map(|p| p.id).collect();
+            let committed: HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &upcoming_ids)?
                     .into_iter()
                     .collect();
-            let pending_dates: Vec<NaiveDate> = upcoming
-                .into_iter()
-                .filter(|d| !committed.contains(d))
+            let pending: Vec<&Practice> = upcoming
+                .iter()
+                .filter(|p| !committed.contains(&p.id))
                 .collect();
 
-            if pending_dates.is_empty() {
+            if pending.is_empty() {
                 return Ok(Vec::new());
             }
 
@@ -332,17 +343,17 @@ pub(crate) async fn send_reminders_handler(
                 }
             }
 
-            // For each rower, find which pending dates they haven't responded to.
+            // For each rower, find which pending practices they haven't responded to.
             let mut result: Vec<(lineup_db::app_user::UserId, String, String, Vec<NaiveDate>)> =
                 Vec::new();
             for (rower_id, (user_id, email, name)) in &rower_users {
                 let mut missing = Vec::new();
-                for date in &pending_dates {
-                    let responses = Availability::map_for_team_date(conn, team_id, *date)?;
+                for practice in &pending {
+                    let responses = Availability::map_for_practice(conn, practice.id)?;
                     if !responses.contains_key(rower_id) {
                         // Check rate limit per date.
-                        if !EmailLog::already_sent_today(conn, team_id, "reminder", *date)? {
-                            missing.push(*date);
+                        if !EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)? {
+                            missing.push(practice.date);
                         }
                     }
                 }
@@ -456,23 +467,22 @@ pub(crate) async fn lineups_handler(
         .db
         .with_conn(move |conn| {
             let upcoming = Practice::list_upcoming(conn, team_id, today)?;
-            let committed: HashSet<_> =
-                Practice::committed_dates(conn, team_id, &upcoming)?
+            let upcoming_ids: Vec<PracticeId> = upcoming.iter().map(|p| p.id).collect();
+            let committed: HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &upcoming_ids)?
                     .into_iter()
                     .collect();
 
             let mut rows = Vec::new();
-            for date in &upcoming {
-                if !committed.contains(date) {
+            for practice in &upcoming {
+                if !committed.contains(&practice.id) {
                     continue;
                 }
-                let practice = Practice::find_by_date(conn, team_id, *date)?
-                    .ok_or(diesel::result::Error::NotFound)?;
                 let lineups = Lineup::for_practice(conn, practice.id)?;
                 let already_sent =
-                    EmailLog::already_sent_today(conn, team_id, "lineup", *date)?;
+                    EmailLog::already_sent_today(conn, team_id, "lineup", practice.date)?;
                 rows.push(LineupRow {
-                    date: *date,
+                    date: practice.date,
                     boat_count: lineups.len(),
                     already_sent_today: already_sent,
                 });
@@ -531,7 +541,7 @@ pub(crate) async fn send_lineups_handler(
     }
 
     // Build lineup summaries + recipient lists.
-    let (summaries, recipients) = tenant
+    let (summaries, recipients, first_practice_id) = tenant
         .db
         .with_conn(move |conn| {
             let all_rowers = Rower::list_active(conn)?;
@@ -539,6 +549,7 @@ pub(crate) async fn send_lineups_handler(
                 all_rowers.iter().map(|r| (r.id, r)).collect();
 
             let mut summaries = Vec::new();
+            let mut first_practice_id: Option<PracticeId> = None;
             // Track all placed + benched rower IDs across all dates.
             let mut placed_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
             let mut benched_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
@@ -556,6 +567,9 @@ pub(crate) async fn send_lineups_handler(
                 let committed = Lineup::for_practice(conn, practice.id)?;
                 if committed.is_empty() {
                     continue;
+                }
+                if first_practice_id.is_none() {
+                    first_practice_id = Some(practice.id);
                 }
 
                 // Build email-friendly lineup data.
@@ -587,7 +601,7 @@ pub(crate) async fn send_lineups_handler(
                 }
 
                 // Benched = available rowers not placed in any boat.
-                let available = Availability::map_for_team_date(conn, team_id, *date)?;
+                let available = Availability::map_for_practice(conn, practice.id)?;
                 let mut benched_names = Vec::new();
                 let mut date_benched: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
                 for (rid, status) in &available {
@@ -610,7 +624,7 @@ pub(crate) async fn send_lineups_handler(
             }
 
             if summaries.is_empty() {
-                return Ok((summaries, Vec::new()));
+                return Ok((summaries, Vec::new(), first_practice_id));
             }
 
             // Determine recipients based on scope.
@@ -623,12 +637,14 @@ pub(crate) async fn send_lineups_handler(
             if scope_all {
                 // Add non-respondents (those who haven't said No).
                 for date in &dates {
-                    let responses = Availability::map_for_team_date(conn, team_id, *date)?;
-                    for r in &all_rowers {
-                        if r.user_id.is_some() && !recipient_rower_ids.contains(&r.id) {
-                            // Include if no response at all.
-                            if !responses.contains_key(&r.id) {
-                                recipient_rower_ids.insert(r.id);
+                    if let Some(practice) = Practice::find_by_date(conn, team_id, *date)? {
+                        let responses = Availability::map_for_practice(conn, practice.id)?;
+                        for r in &all_rowers {
+                            if r.user_id.is_some() && !recipient_rower_ids.contains(&r.id) {
+                                // Include if no response at all.
+                                if !responses.contains_key(&r.id) {
+                                    recipient_rower_ids.insert(r.id);
+                                }
                             }
                         }
                     }
@@ -669,7 +685,7 @@ pub(crate) async fn send_lineups_handler(
                 )?;
             }
 
-            Ok((summaries, recipients))
+            Ok((summaries, recipients, first_practice_id))
         })
         .await
         .map_err(internal_error)?;
@@ -683,8 +699,10 @@ pub(crate) async fn send_lineups_handler(
 
         for (user_id, email, name) in &recipients {
             // Each user gets their own magic link (different tokens).
-            let first_date = summaries.first().map(|s| s.date).unwrap();
-            let redirect = format!("/history/{first_date}");
+            let redirect = match first_practice_id {
+                Some(pid) => format!("/history/{pid}"),
+                None => "/history".to_string(),
+            };
             let created = create_magic_link(*user_id, &redirect, expires_at, Some(team_id));
             let raw_token = created.raw_token.clone();
             let row = created.row;

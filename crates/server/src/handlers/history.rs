@@ -1,6 +1,6 @@
 //! `GET /history` — list of committed practices.
-//! `GET /history/{date}` — detail view for one committed practice.
-//! `POST /history/{date}/notes` — update practice notes.
+//! `GET /history/{id}` — detail view for one committed practice.
+//! `POST /history/{id}/notes` — update practice notes.
 
 use axum::{
     extract::Path,
@@ -10,8 +10,7 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
-use chrono::NaiveDate;
-use lineup_db::{app_user::Role, lineup::Lineup, practice::Practice, snapshot::DbSnapshot};
+use lineup_db::{app_user::Role, lineup::Lineup, practice::{Practice, PracticeId}, snapshot::DbSnapshot};
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
@@ -37,31 +36,28 @@ pub(crate) async fn list_handler(
 pub(crate) async fn detail_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
     hx: HxRequest,
 ) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let (snapshot, practice, committed) = tenant
         .db
         .with_conn(move |conn| {
-            let snapshot = DbSnapshot::for_team_date(conn, team_id, date)?;
-            let (practice, committed) = match Practice::find_by_date(conn, team_id, date)? {
-                Some(p) => {
-                    let lineups = Lineup::for_practice(conn, p.id)?;
-                    (Some(p), lineups)
-                }
-                None => (None, Vec::new()),
-            };
-            Ok((snapshot, practice, committed))
+            let practice = Practice::get(conn, practice_id)?
+                .ok_or(diesel::result::Error::NotFound)?;
+            let snapshot = DbSnapshot::for_practice(conn, &practice)?;
+            let lineups = Lineup::for_practice(conn, practice.id)?;
+            Ok((snapshot, practice, lineups))
         })
         .await
         .map_err(internal_error)?;
 
+    let date = practice.date;
     let is_coach = tenant.claims.role()
         .unwrap_or(lineup_db::app_user::Role::Member)
         .at_least(lineup_db::app_user::Role::Coach);
     let content = templates::history::detail_content(
-        &snapshot, date, practice.as_ref(), &committed, tenant.config.force_cox_stern,
+        &snapshot, practice_id, date, Some(&practice), &committed, tenant.config.force_cox_stern,
         is_coach,
     );
     Ok(super::maybe_page_authed(
@@ -81,11 +77,11 @@ pub(crate) struct NotesInput {
 pub(crate) async fn notes_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
     Form(input): Form<NotesInput>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let notes = if input.notes.trim().is_empty() {
         None
     } else {
@@ -95,9 +91,7 @@ pub(crate) async fn notes_handler(
     let practice = tenant
         .db
         .with_conn(move |conn| {
-            // Ensure the practice exists (coach may add notes before committing).
-            let p = Practice::upsert_by_date(conn, team_id, date, None)?;
-            Practice::update_notes(conn, team_id, p.date, notes)
+            Practice::update_notes_by_id(conn, practice_id, notes)
         })
         .await
         .map_err(internal_error)?;
@@ -107,11 +101,11 @@ pub(crate) async fn notes_handler(
         Some(tenant.claims.user_id().as_int()),
         "practice.notes.update",
         "practice",
-        &date.to_string(),
+        &practice_id.to_string(),
         None,
     );
 
     Ok(Html(
-        templates::history::notes_display(&practice, date).into_string(),
+        templates::history::notes_display(&practice).into_string(),
     ))
 }

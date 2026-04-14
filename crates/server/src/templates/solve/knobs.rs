@@ -1,6 +1,7 @@
 //! Solver knobs form, preset bar, and status banners.
 
 use chrono::NaiveDate;
+use lineup_db::practice::PracticeId;
 use lineup_db::snapshot::DbSnapshot;
 use lineup_solver::{Diagnostic, SolveResult, SolveStatus};
 use maud::{html, Markup};
@@ -8,13 +9,13 @@ use maud::{html, Markup};
 use crate::handlers::solve::SolveKnobs;
 
 /// Coach-tunable knobs (partial fill / novelty / alternatives / time
-/// budget). Submitting hx-gets the same `/solve/{date}` URL with the
+/// budget). Submitting hx-gets the same `/solve/{id}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineup_db::practice::Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot, solve_result: Option<&SolveResult>) -> Markup {
+pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices: &[lineup_db::practice::Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot, solve_result: Option<&SolveResult>) -> Markup {
     let has_eight = snapshot.sweep_boats.iter().any(|b| b.seat_count >= 8);
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
-    let action = format!("/solve/{date}");
+    let action = format!("/solve/{practice_id}");
     html! {
         // Segmented button helper: update hidden input + toggle active style.
         // Knob helpers: segmentedSelect() updates hidden inputs +
@@ -100,7 +101,7 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
                     div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                         "Solver preset"
                     }
-                    (preset_buttons(date, knobs, custom_profiles))
+                    (preset_buttons(practice_id, knobs, custom_profiles))
                     input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
                 }
 
@@ -241,7 +242,7 @@ pub(super) fn knobs_form(date: NaiveDate, knobs: &SolveKnobs, practices: &[lineu
 }
 
 /// Build a URL that switches the preset while carrying all other knobs.
-fn preset_url_with(date: NaiveDate, knobs: &SolveKnobs, new_preset: &str) -> String {
+fn preset_url_with(practice_id: PracticeId, knobs: &SolveKnobs, new_preset: &str) -> String {
     let mut parts = vec![
         format!("preset={new_preset}"),
         format!("partial={}", knobs.partial),
@@ -276,13 +277,13 @@ fn preset_url_with(date: NaiveDate, knobs: &SolveKnobs, new_preset: &str) -> Str
     for bl in &knobs.boat_lock {
         parts.push(format!("boat_lock={bl}"));
     }
-    format!("/solve/{date}/preset-bar?{}", parts.join("&"))
+    format!("/solve/{practice_id}/preset-bar?{}", parts.join("&"))
 }
 
 /// Render just the preset bar section for HTMX `outerHTML` swaps.
-/// Called by the `GET /solve/{date}/preset-bar` endpoint.
+/// Called by the `GET /solve/{id}/preset-bar` endpoint.
 pub(crate) fn preset_bar(
-    date: NaiveDate,
+    practice_id: PracticeId,
     knobs: &SolveKnobs,
     custom_profiles: &[(String, Option<String>)],
 ) -> Markup {
@@ -293,7 +294,7 @@ pub(crate) fn preset_bar(
             div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
                 "Solver preset"
             }
-            (preset_buttons(date, knobs, custom_profiles))
+            (preset_buttons(practice_id, knobs, custom_profiles))
             input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
         }
     }
@@ -302,7 +303,7 @@ pub(crate) fn preset_bar(
 /// Shared preset button bar used by both the full knobs form and the
 /// HTMX partial preset-bar endpoint.
 fn preset_buttons(
-    date: NaiveDate,
+    practice_id: PracticeId,
     knobs: &SolveKnobs,
     custom_profiles: &[(String, Option<String>)],
 ) -> Markup {
@@ -321,7 +322,7 @@ fn preset_buttons(
                 } else {
                     "px-3 py-2 text-slate-700 hover:bg-slate-100"
                 };
-                @let preset_url = preset_url_with(date, knobs, value);
+                @let preset_url = preset_url_with(practice_id, knobs, value);
                 button type="button" class=(btn_class)
                        hx-get=(preset_url)
                        hx-target="#preset-bar"
@@ -337,7 +338,7 @@ fn preset_buttons(
                 } else {
                     "px-3 py-2 text-violet-700 hover:bg-violet-50"
                 };
-                @let preset_url = preset_url_with(date, knobs, name);
+                @let preset_url = preset_url_with(practice_id, knobs, name);
                 button type="button" class=(btn_class)
                        title=[description.as_deref()]
                        hx-get=(preset_url)

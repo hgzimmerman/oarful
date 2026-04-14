@@ -1,4 +1,4 @@
-//! `GET /solve/{date}/editor` — re-render the lineup editor partial.
+//! `GET /solve/{id}/editor` — re-render the lineup editor partial.
 
 use axum::{
     extract::Path,
@@ -7,9 +7,9 @@ use axum::{
     Extension,
 };
 use axum_extra::extract::{CookieJar, Query};
-use chrono::NaiveDate;
 use lineup_db::boat::types::BoatId;
 use lineup_db::snapshot::DbSnapshot;
+use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::app_user::Role;
 
 use crate::templates;
@@ -17,24 +17,31 @@ use crate::handlers::internal_error;
 
 use super::*;
 
-/// `GET /solve/{date}/editor` — re-render the lineup editor from the
+/// `GET /solve/{id}/editor` — re-render the lineup editor from the
 /// given placement state. No solver run — just snapshot lookup + template.
 /// Used by the Alpine component after each client-side operation.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn editor_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
-    Path(date): Path<NaiveDate>,
+    Path(practice_id): Path<PracticeId>,
     Query(params): Query<EditorParams>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let _team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    let mut snapshot = tenant
+    let (practice, mut snapshot) = tenant
         .db
-        .with_conn(move |conn| DbSnapshot::for_team_date(conn, team_id, date))
+        .with_conn(move |conn| {
+            let practice = Practice::get(conn, practice_id)?
+                .ok_or(diesel::result::Error::NotFound)?;
+            let snapshot = DbSnapshot::for_practice(conn, &practice)?;
+            Ok((practice, snapshot))
+        })
         .await
         .map_err(internal_error)?;
+
+    let _date = practice.date;
 
     // Apply walk-on overrides.
     for id_str in &params.walkon {
@@ -141,6 +148,6 @@ pub(crate) async fn editor_handler(
         .collect();
 
     Ok(Html(
-        templates::solve::lineup_editor(&snapshot, date, &editor, &flags, &unavailable, &walkon_ids).into_string(),
+        templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags, &unavailable, &walkon_ids).into_string(),
     ))
 }

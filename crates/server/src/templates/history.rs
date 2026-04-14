@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use chrono::NaiveDate;
 use lineup_db::{
     lineup::CommittedLineup,
-    practice::Practice,
+    practice::{Practice, PracticeId},
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
@@ -32,7 +32,7 @@ pub(crate) fn list_content(practices: &[Practice]) -> Markup {
 }
 
 fn row(p: &Practice) -> Markup {
-    let href = format!("/history/{}", p.date);
+    let href = format!("/history/{}", p.id);
     let weekday = p.date.format("%A").to_string();
     html! {
         a href=(href)
@@ -65,6 +65,7 @@ fn row(p: &Practice) -> Markup {
 
 pub(crate) fn detail_content(
     snapshot: &DbSnapshot,
+    practice_id: PracticeId,
     date: NaiveDate,
     practice: Option<&Practice>,
     committed: &[CommittedLineup],
@@ -86,7 +87,7 @@ pub(crate) fn detail_content(
     let has_stale = !stale_rowers.is_empty();
 
     let is_cancelled = practice.map(|p| p.cancelled.as_bool()).unwrap_or(false);
-    let cancel_action = format!("/practices/{date}/cancel");
+    let cancel_action = format!("/practices/{practice_id}/cancel");
 
     html! {
         (page_header(&format!("Lineups · {date}"), None))
@@ -113,7 +114,7 @@ pub(crate) fn detail_content(
 
             @if is_coach {
                 div class="no-print flex items-center justify-between" {
-                    div { (notes_section(practice, date)) }
+                    div { (notes_section(practice, practice_id)) }
                     @if !is_cancelled {
                         form method="post" action=(cancel_action)
                              hx-post=(cancel_action)
@@ -141,7 +142,7 @@ pub(crate) fn detail_content(
                 // No-show form (Coach+): wraps all lineups with
                 // checkboxes per rower. Edit button opens the editor
                 // with placements pre-loaded and no-shows emptied.
-                form id="noshow-form" method="get" action={"/solve/" (date)} {
+                form id="noshow-form" method="get" action={"/solve/" (practice_id)} {
                     div class="space-y-4" {
                         @for c in committed {
                             (lineup_block_with_noshow(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
@@ -151,7 +152,7 @@ pub(crate) fn detail_content(
                     div class="mt-4 flex justify-end no-print" {
                         button type="button"
                                class="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition font-semibold"
-                               onclick=(edit_lineup_js(date, committed, snapshot)) {
+                               onclick=(edit_lineup_js(practice_id, committed, snapshot)) {
                             "Edit lineup"
                         }
                     }
@@ -169,27 +170,27 @@ pub(crate) fn detail_content(
     }
 }
 
-fn notes_section(practice: Option<&Practice>, date: NaiveDate) -> Markup {
+fn notes_section(practice: Option<&Practice>, practice_id: PracticeId) -> Markup {
     let existing_notes = practice.and_then(|p| p.notes.as_deref()).unwrap_or("");
     html! {
         div id="practice-notes" {
-            (notes_display_inner(existing_notes, date))
+            (notes_display_inner(existing_notes, practice_id))
         }
     }
 }
 
 /// Rendered by the HTMX swap after saving notes.
-pub(crate) fn notes_display(practice: &Practice, date: NaiveDate) -> Markup {
+pub(crate) fn notes_display(practice: &Practice) -> Markup {
     let notes = practice.notes.as_deref().unwrap_or("");
     html! {
         div id="practice-notes" {
-            (notes_display_inner(notes, date))
+            (notes_display_inner(notes, practice.id))
         }
     }
 }
 
-fn notes_display_inner(notes: &str, date: NaiveDate) -> Markup {
-    let action = format!("/history/{date}/notes");
+fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
+    let action = format!("/history/{practice_id}/notes");
     html! {
         form
             hx-post=(action)
@@ -309,7 +310,7 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
 /// Build JS for the "Edit lineup" button. Constructs a URL to the
 /// editor endpoint with the current placements, minus any no-show
 /// checked rowers.
-fn edit_lineup_js(date: NaiveDate, committed: &[CommittedLineup], snapshot: &DbSnapshot) -> String {
+fn edit_lineup_js(practice_id: PracticeId, committed: &[CommittedLineup], snapshot: &DbSnapshot) -> String {
     // Pre-compute the placement params from committed lineups.
     let mut seat_params = Vec::new();
     let mut boat_params = Vec::new();
@@ -345,7 +346,7 @@ fn edit_lineup_js(date: NaiveDate, committed: &[CommittedLineup], snapshot: &DbS
             noshows.forEach(function(rid){{
                 parts.push('no_show=' + rid);
             }});
-            window.location.href = '/solve/{date}?' + parts.join('&');
+            window.location.href = '/solve/{practice_id}?' + parts.join('&');
         }})()"#
     )
 }
