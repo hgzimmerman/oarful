@@ -7,6 +7,7 @@ members = [
     "crates/sheets",
     "crates/server",
     "crates/cli",
+    "e2e",
 ]
 default-members = ["crates/cli", "crates/server"]
 

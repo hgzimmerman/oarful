@@ -88,26 +88,21 @@ pub(crate) async fn create_demo_handler(
         .await
         .map_err(super::internal_error)?;
 
-    // Seed the demo fixture and get the demo user's ID.
-    let demo_user_id = db
+    // Seed the demo fixture.
+    let demo_seed = db
         .with_conn(|conn| lineup_db::fixture::seed_demo(conn))
         .await
         .map_err(super::internal_error)?;
 
-    // Look up the demo user to get their role and default team.
-    let (role, default_team) = db
-        .with_conn(move |conn| {
-            let role = AppUser::role(conn, demo_user_id)?;
-            let team = lineup_db::team::Team::first(conn)?;
-            Ok((role, team))
-        })
-        .await
-        .map_err(super::internal_error)?;
+    let demo_user_id = demo_seed.user_id;
+    let team_id = demo_seed.team_id;
 
-    let role = role.unwrap_or(Role::Member);
-    let team_id = default_team
-        .map(|t| t.id)
-        .unwrap_or(lineup_db::team::TeamId::new(1));
+    // Look up the demo user's role.
+    let role = db
+        .with_conn(move |conn| AppUser::role(conn, demo_user_id))
+        .await
+        .map_err(super::internal_error)?
+        .unwrap_or(Role::Member);
 
     // Issue a long-lived JWT (matches demo lifetime).
     let exp_unix = expires.and_utc().timestamp() as u64;

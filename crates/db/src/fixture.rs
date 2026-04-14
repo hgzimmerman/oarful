@@ -274,13 +274,19 @@ fn next_weekday(from: NaiveDate, day: Weekday) -> NaiveDate {
     from + chrono::TimeDelta::try_days(days_ahead).unwrap()
 }
 
-/// Seed a demo tenant with a rich fixture. Returns the demo user's ID.
+/// Result of seeding a demo tenant.
+pub struct DemoSeed {
+    pub user_id: crate::app_user::UserId,
+    pub team_id: crate::team::TeamId,
+}
+
+/// Seed a demo tenant with a rich fixture.
 #[tracing::instrument(level = "info", skip(conn), err)]
-pub fn seed_demo(conn: &mut SqliteConnection) -> Result<crate::app_user::UserId, diesel::result::Error> {
+pub fn seed_demo(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::result::Error> {
     conn.transaction(|conn| seed_demo_inner(conn))
 }
 
-fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<crate::app_user::UserId, diesel::result::Error> {
+fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::result::Error> {
     tracing::info!("Seeding demo fixture");
     let now = chrono::Utc::now().naive_utc();
     let today = chrono::Utc::now().date_naive();
@@ -437,7 +443,10 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<crate::app_user::UserI
     })?;
     AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
 
-    Ok(user.id)
+    Ok(DemoSeed {
+        user_id: user.id,
+        team_id: team.id,
+    })
 }
 
 fn demo_boats() -> Vec<NewBoat> {

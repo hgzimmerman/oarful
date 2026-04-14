@@ -23,6 +23,7 @@
           pkgs.sqlite
           pkgs.openssl
           pkgs.pkg-config
+          pkgs.webkitgtk_4_1
         ];
       in
       {
