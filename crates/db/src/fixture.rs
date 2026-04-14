@@ -534,7 +534,7 @@ fn demo_rowers() -> Vec<NewRower> {
     use Strength as St;
     vec![
         // --- experienced rowers (17) ---
-        NewRower::sweep("Alice",  Medium, Sk::Expert,        St::Strong,       H::Tall,     Port),       //  0
+        { let mut r = NewRower::sweep("Alice", Medium, Sk::Expert, St::Strong, H::Tall, Port); r.email = Some("alice@test.example.com".into()); r }, //  0
         NewRower::sweep("Bob",    Heavy,  Sk::Master,        St::VeryStrong,   H::VeryTall, Starboard),  //  1
         NewRower::sweep("Carla",  Light,  Sk::Intermediate,  St::Intermediate, H::Short,    Port),       //  2
         NewRower::sweep("Diego",  Medium, Sk::Master,        St::Strong,       H::Tall,     Starboard),  //  3

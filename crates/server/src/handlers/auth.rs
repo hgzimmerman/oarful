@@ -123,7 +123,7 @@ pub(crate) async fn login_handler(
                     return Ok(None);
                 };
                 let role = AppUser::role(conn, user.id)?;
-                let default_team = Team::first(conn)?;
+                let default_team = Team::default_for_user(conn, user.id)?;
                 Ok(Some((user, role, default_team)))
             })
             .await
@@ -278,7 +278,7 @@ pub(crate) async fn pick_handler(
                 return Ok(None);
             };
             let role = AppUser::role(conn, user.id)?;
-            let default_team = Team::first(conn)?;
+            let default_team = Team::default_for_user(conn, user.id)?;
             Ok(Some((user, role, default_team)))
         })
         .await
@@ -506,7 +506,7 @@ pub(crate) async fn magic_link_handler(
             let user = AppUser::get(conn, magic_user_id)?
                 .ok_or(diesel::result::Error::NotFound)?;
             let role = AppUser::role(conn, magic_user_id)?;
-            let default_team = Team::first(conn)?;
+            let default_team = Team::default_for_user(conn, user.id)?;
             Ok((user, role, default_team))
         })
         .await

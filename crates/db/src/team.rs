@@ -170,6 +170,24 @@ impl Team {
             .first(conn)
             .optional()
     }
+
+    /// Best-effort default team for a user: look up their linked rower's
+    /// team membership first, then fall back to `Team::first`.
+    pub fn default_for_user(
+        conn: &mut SqliteConnection,
+        user_id: crate::app_user::UserId,
+    ) -> Result<Option<Team>, diesel::result::Error> {
+        use crate::rower::Rower;
+        if let Some(rower) = Rower::find_by_user_id(conn, user_id.as_int())? {
+            let team_ids = TeamMembership::team_ids_for_rower(conn, rower.id)?;
+            if let Some(tid) = team_ids.first() {
+                if let Some(t) = team::table.find(*tid).select(Team::as_select()).first(conn).optional()? {
+                    return Ok(Some(t));
+                }
+            }
+        }
+        Self::first(conn)
+    }
 }
 
 impl TeamMembership {
