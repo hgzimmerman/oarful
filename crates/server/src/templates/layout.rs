@@ -79,14 +79,10 @@ fn navbar(role: Option<Role>) -> Markup {
                 ul class="hidden lg:flex items-center space-x-4" {
                     (nav_link("/practices", "Practices"))
                     @if is_coach {
-                        (nav_link("/boats", "Fleet"))
-                        (nav_link("/rowers", "Roster"))
-                        (nav_link("/sync", "Sync"))
+                        (nav_link("/club", "Club"))
                     }
                     @if is_pd {
-                        (nav_link("/teams", "Teams"))
-                        (nav_link("/users", "Users"))
-                        (nav_link("/audit", "Audit"))
+                        (nav_link("/admin", "Admin"))
                     }
                     li class="ml-4" {}
                     (nav_link("/my/profile", "Profile"))
@@ -119,14 +115,10 @@ fn navbar(role: Option<Role>) -> Markup {
                "@click"="open = false" {
                 (nav_link("/practices", "Practices"))
                 @if is_coach {
-                    (nav_link("/boats", "Fleet"))
-                    (nav_link("/rowers", "Roster"))
-                    (nav_link("/sync", "Sync"))
+                    (nav_link("/club", "Club"))
                 }
                 @if is_pd {
-                    (nav_link("/teams", "Teams"))
-                    (nav_link("/users", "Users"))
-                    (nav_link("/audit", "Audit"))
+                    (nav_link("/admin", "Admin"))
                 }
                 li class="border-t border-slate-700 my-1 pt-1" {}
                 (nav_link("/my/profile", "Profile"))
@@ -154,6 +146,81 @@ fn nav_link(href: &str, label: &str) -> Markup {
               hx-target="#content"
               hx-push-url="true"
               { (label) }
+        }
+    }
+}
+
+/// Tab definition for the shared tabbed section.
+pub(crate) struct TabDef {
+    pub label: &'static str,
+    pub url: &'static str,
+    pub id: &'static str,
+}
+
+/// Shared tabbed page wrapper used by `/club` and `/admin`.
+/// Each tab's content already includes its own header, so this only
+/// renders the tab bar + a swap target div.
+pub(crate) fn tabbed_section(
+    tabs: &[TabDef],
+    active_tab: &str,
+    target_id: &str,
+    tab_content: Markup,
+) -> Markup {
+    let bar_id = format!("{target_id}-bar");
+    html! {
+        div id=(bar_id)
+            class="border-b border-slate-200 bg-white px-4 sm:px-8 pt-3" {
+            div class="flex gap-1" {
+                @for tab in tabs {
+                    (section_tab(tab, active_tab, target_id))
+                }
+            }
+        }
+        div id=(target_id) {
+            (tab_content)
+        }
+    }
+}
+
+/// Render tab content + an OOB swap of the tab bar for HTMX tab
+/// switches. The content replaces the target div normally; the tab
+/// bar is swapped out-of-band so its active state updates.
+pub(crate) fn tab_swap(
+    tabs: &[TabDef],
+    active_tab: &str,
+    target_id: &str,
+    tab_content: Markup,
+) -> Markup {
+    let bar_id = format!("{target_id}-bar");
+    html! {
+        // Main swap: replaces the tab content div
+        (tab_content)
+        // OOB swap: updates the tab bar with new active state
+        div id=(bar_id) hx-swap-oob="true"
+            class="border-b border-slate-200 bg-white px-4 sm:px-8 pt-3" {
+            div class="flex gap-1" {
+                @for tab in tabs {
+                    (section_tab(tab, active_tab, target_id))
+                }
+            }
+        }
+    }
+}
+
+fn section_tab(tab: &TabDef, active: &str, target_id: &str) -> Markup {
+    let is_active = tab.id == active;
+    let base = "px-4 py-2 text-sm font-medium border-b-2 transition cursor-pointer";
+    let classes = if is_active {
+        format!("{base} border-slate-800 text-slate-800")
+    } else {
+        format!("{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")
+    };
+    html! {
+        button hx-get=(tab.url)
+               hx-target=(format!("#{target_id}"))
+               hx-push-url="true"
+               class=(classes) {
+            (tab.label)
         }
     }
 }

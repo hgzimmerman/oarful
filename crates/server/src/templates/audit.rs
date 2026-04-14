@@ -155,8 +155,8 @@ fn filter_bar(
     ];
 
     html! {
-        form method="get" action="/audit"
-             hx-get="/audit"
+        form method="get" action="/admin/audit"
+             hx-get="/admin/audit"
              hx-target="#content"
              hx-push-url="true"
              class="flex flex-wrap items-end gap-3" {
@@ -213,8 +213,8 @@ fn filter_bar(
             }
 
             @if query.action.is_some() || query.user_id.is_some() || query.resource_type.is_some() {
-                a href="/audit"
-                  hx-get="/audit"
+                a href="/admin/audit"
+                  hx-get="/admin/audit"
                   hx-target="#content"
                   hx-push-url="true"
                   class="text-sm text-slate-500 hover:text-slate-800" {

@@ -1,7 +1,6 @@
 //! `GET /audit` — PD-only audit log viewer with filters and pagination.
 
 use axum::{http::StatusCode, response::Html, Extension};
-use axum_htmx::HxRequest;
 use lineup_db::app_user::{AppUser, Role, UserId};
 use lineup_db::audit_log::{AuditFilter, AuditLog};
 use serde::Deserialize;
@@ -26,15 +25,11 @@ pub(crate) struct AuditQuery {
     pub(crate) offset: Option<i64>,
 }
 
-/// `GET /audit` — full page with filters + log table.
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-    axum::extract::Query(query): axum::extract::Query<AuditQuery>,
-) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-
+/// Build the audit log markup (shared by `/audit` and `/admin/audit`).
+pub(crate) async fn audit_content(
+    tenant: &TenantContext,
+    query: &AuditQuery,
+) -> Result<maud::Markup, StatusCode> {
     let offset = query.offset.unwrap_or(0);
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
@@ -64,17 +59,16 @@ pub(crate) async fn list_handler(
     let has_more = entries.len() as i64 > PAGE_SIZE;
     let entries: Vec<AuditLog> = entries.into_iter().take(PAGE_SIZE as usize).collect();
 
-    let content = templates::audit::list_content(
+    Ok(templates::audit::list_content(
         &entries,
         &actions,
         &user_map,
-        &query,
+        query,
         offset,
         has_more,
-    );
-
-    Ok(super::maybe_page_authed("Audit log", content, hx, &tenant))
+    ))
 }
+
 
 /// `GET /audit/rows` — HTMX partial returning just the table rows
 /// for "load more" pagination.

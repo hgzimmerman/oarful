@@ -54,6 +54,25 @@ impl Availability {
             .collect())
     }
 
+    /// All availability records for a team across a range of dates.
+    /// Returns a map of (rower_id, date) → status for efficient grid lookups.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn map_for_team_dates(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        dates: &[NaiveDate],
+    ) -> Result<HashMap<(RowerId, NaiveDate), AvailabilityStatus>, diesel::result::Error> {
+        let rows: Vec<Availability> = availability::table
+            .filter(availability::team_id.eq(team_id))
+            .filter(availability::date.eq_any(dates))
+            .select(Availability::as_select())
+            .get_results(conn)?;
+        Ok(rows
+            .into_iter()
+            .map(|a| ((a.rower_id, a.date), a.status))
+            .collect())
+    }
+
     /// Distinct practice dates on or after `today` that have any
     /// availability rows for the given team. Chronological order.
     #[tracing::instrument(level = "debug", skip_all, err)]

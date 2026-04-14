@@ -134,7 +134,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
-                a href="/boats"
+                a href="/club/fleet"
                   onclick="if (history.length > 1) { history.back(); return false; }"
                   class="text-slate-400 hover:text-slate-700"
                   title="Back" {
@@ -265,7 +265,7 @@ pub(crate) fn form_content(
             form method="post" action=(action)
                  hx-post=(action)
                  hx-target="#content"
-                 hx-push-url="/boats"
+                 hx-push-url="/club/fleet"
                  class="bg-white rounded-lg shadow p-6 space-y-4" {
                 // Name
                 (text_field("name", "Name", &data.name, true))

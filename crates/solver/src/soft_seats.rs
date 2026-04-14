@@ -542,11 +542,26 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S11 — end-pair skill reward. Rewards placing high-skill
-    /// rowers in the bow pair and stern pair zones by pushing
-    /// `seat_skill[b, s].scaled(-end_pair_skill_weight)` for each
-    /// matching seat. The zone mapping generalises across boat
-    /// sizes (e.g. seats {1,2,7,8} in an 8+, {1,2,3,4} in a 4+).
+    /// S11 — skill gradient across all seats. Full reward on bow
+    /// pair and stern pair zones, with a gradient into the engine
+    /// room that tapers toward the outer seats. This creates a
+    /// skill ordering within the engine room (5/6 attract more
+    /// skilled rowers than 3/4) without treating all engine room
+    /// seats as interchangeable.
+    ///
+    /// Coefficients by distance from nearest end (bow or stroke):
+    /// - Distance 0 (end pair seats): `end_pair_skill_weight`
+    /// - Distance 1 (one inward):     `max(1, weight * 3/4)`
+    /// - Distance 2 (two inward):     `max(1, weight * 1/2)`
+    /// - Distance 3+ (deep interior): `max(1, weight * 1/4)`
+    ///
+    /// The `max(1, …)` floor ensures the gradient exists even at
+    /// low config weights — the interior seats always get at least
+    /// 1 unit of skill reward when S11 is enabled.
+    ///
+    /// For an 8+: s1,s2,s7,s8 → full; s3,s6 → 3/4; s4,s5 → 1/2.
+    /// For a 4+: all seats are distance 0 or 1 → full or 3/4.
+    /// For pairs/singles: no seats (N < 2 skipped).
     ///
     /// Unused boats have all `x = 0`, forcing `seat_skill = 0`, so
     /// the reward contributes nothing. Piggybacks on the shared
@@ -555,13 +570,23 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.end_pair_skill_weight == 0 {
             return;
         }
+        let w = self.cfg.end_pair_skill_weight;
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let mut end_seats = SeatZone::BowPair.seats_for(boat.seat_count);
-            end_seats.extend(SeatZone::SternPair.seats_for(boat.seat_count));
-            for seat in end_seats {
+            let n = boat.seat_count;
+            if n < 2 {
+                continue;
+            }
+            for seat in 1..=n {
+                // Distance from the nearest end (bow=1 or stroke=N).
+                let dist = (seat - 1).min(n - seat);
+                let coef = match dist {
+                    0 => w,
+                    1 => (w * 3 / 4).max(1),
+                    2 => (w / 2).max(1),
+                    _ => (w / 4).max(1),
+                };
                 if let Some(&s_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
-                    self.obj_terms
-                        .push(s_var.scaled(-self.cfg.end_pair_skill_weight));
+                    self.obj_terms.push(s_var.scaled(-coef));
                 }
             }
         }

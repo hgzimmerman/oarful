@@ -26,21 +26,19 @@ use lineup_db::app_user::Role;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
-/// `GET /boats` — full fleet list.
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+/// Build the fleet list markup (shared by `/boats` and `/club/fleet`).
+pub(crate) async fn fleet_content(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
     let boats = tenant
         .db
         .with_conn(|conn| Boat::list_all(conn))
         .await
         .map_err(internal_error)?;
     let can_export = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::ProgramDirector);
-    let content = templates::boats::list_content(&boats, can_export);
-    Ok(super::maybe_page_authed("Boats", content, hx, &tenant))
+    Ok(templates::boats::list_content(&boats, can_export))
 }
+
 
 /// `GET /boats/export.csv` — fleet CSV download. ProgramDirector+ only.
 ///
@@ -297,7 +295,7 @@ async fn redirect_or_list(
         // Only PDs can create/update boats, so can_export is always true here.
         Ok(Html(templates::boats::list_content(&boats, true).into_string()).into_response())
     } else {
-        Ok(Redirect::to("/boats").into_response())
+        Ok(Redirect::to("/club/fleet").into_response())
     }
 }
 

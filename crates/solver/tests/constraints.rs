@@ -633,6 +633,13 @@ fn s11_end_pair_skill_puts_experts_in_the_ends() {
     // the Experts should end up in seats {1, 2, 7, 8} and the
     // Novices in seats {3, 4, 5, 6}.
     //
+    // S11 uses a skill gradient: full weight on end pairs, tapering
+    // into the engine room. At weight=4 the gradient is:
+    //   dist 0 (seats 1,2,7,8) → 4
+    //   dist 1 (seats 3,6)     → 3
+    //   dist 2 (seats 4,5)     → 2
+    // This is enough to pull Experts to the ends.
+    //
     // Side layout on a Starboard-stroke 8+:
     //   Port seats     = {1, 3, 5, 7}  (4 Port rowers needed)
     //   Starboard seats= {2, 4, 6, 8}  (4 Starboard rowers needed)
@@ -654,7 +661,7 @@ fn s11_end_pair_skill_puts_experts_in_the_ends() {
     let snap = snapshot(rowers, vec![eight_boat(1, "TestEight")]);
 
     let mut cfg = silent_config();
-    cfg.end_pair_skill_weight = 1;
+    cfg.end_pair_skill_weight = 4;
 
     let result = solve(&snap, &request(cfg)).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);

@@ -187,6 +187,23 @@ impl Practice {
         .get_result(conn)
     }
 
+    /// Non-cancelled practice dates for a team on or after `since`,
+    /// ordered ascending.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_dates_since(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        since: NaiveDate,
+    ) -> Result<Vec<NaiveDate>, diesel::result::Error> {
+        practice::table
+            .filter(practice::team_id.eq(team_id))
+            .filter(practice::date.ge(since))
+            .filter(practice::cancelled.eq(0))
+            .select(practice::date)
+            .order(practice::date.asc())
+            .get_results(conn)
+    }
+
     /// Find an existing practice for a (team, date) pair.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn find_by_date(

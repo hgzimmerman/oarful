@@ -253,12 +253,17 @@ pub struct SolverConfig {
     /// light — mixed-height pairs row fine, this is just a gentle
     /// preference. Default **1**.
     pub height_balance_weight: i32,
-    /// S11 end-pair skill-reward multiplier. Rewards placing
-    /// high-skill rowers in the bow pair and stern pair zones
-    /// (e.g. seats {1,2,7,8} in an 8+, all seats in a 4+).
-    /// Encoded as a negative-coefficient term on each end-pair
-    /// `seat_skill` var, i.e. the solver *maximises* end-pair skill
-    /// ordinals to minimise the overall objective. Default **1**.
+    /// S11 skill-gradient multiplier. Applies a tapering skill
+    /// reward across all seats: full weight on end pairs (bow pair
+    /// + stern pair zones), with a gradient into the engine room
+    /// (3/4, 1/2, 1/4 by distance from the nearest end). This
+    /// creates a skill ordering within the engine room — seats 5/6
+    /// in an 8+ attract more skilled rowers than 3/4.
+    ///
+    /// The gradient uses integer arithmetic with a `max(1, …)`
+    /// floor, so **weights below 4 produce a flat reward** across
+    /// all seats (no gradient). Set to 4+ for the full tapering
+    /// effect. Default **1** (flat fallback).
     ///
     /// Most useful as a fallback when rowers don't have explicit
     /// zone preferences (S3). Once a team has zone affinities

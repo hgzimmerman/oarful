@@ -43,16 +43,12 @@ pub(crate) struct SyncFormInput {
     pub(crate) poll_interval_minutes: Option<u32>,
 }
 
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn form_handler(
-    jar: CookieJar,
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-
-    // Pre-fill from saved sync config if available.
+/// Build the sync form markup (shared by `/sync` and `/club/sync`).
+pub(crate) async fn sync_content(
+    jar: &CookieJar,
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
+    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let saved = tenant
         .db
         .with_conn(move |conn| {
@@ -68,9 +64,9 @@ pub(crate) async fn form_handler(
             poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
         })
     });
-    let content = templates::sync::form_content(prefill.as_ref(), None, None, last_synced);
-    Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
+    Ok(templates::sync::form_content(prefill.as_ref(), None, None, last_synced))
 }
+
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn sync_handler(
