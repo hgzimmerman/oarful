@@ -222,12 +222,19 @@ async fn transfer_between_boats() {
         .unwrap()
         .to_string();
 
-    // Navigate to the editor URL with transfer param.
-    let transfer_url = format!(
-        "{}{editor_url}?{state}&transfer={source_id}:{dest_id}",
-        instance.base_url()
-    );
-    client.goto(&transfer_url).await.unwrap();
+    // Trigger the transfer via HTMX (same mechanism the editor JS uses),
+    // keeping the full page layout intact.
+    let transfer_params = format!("{state}&transfer={source_id}:{dest_id}");
+    client
+        .execute(
+            &format!(
+                r#"htmx.ajax('GET', '{editor_url}?{transfer_params}',
+                    {{target: document.querySelector('#lineup-editor'), swap: 'outerHTML'}});"#,
+            ),
+            vec![],
+        )
+        .await
+        .unwrap();
 
     // Wait for HTMX re-render.
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;

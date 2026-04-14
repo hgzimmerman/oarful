@@ -11,7 +11,7 @@ fn auth_shell(title: &str, body: Markup) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Lineup Generator" }
-                script src="https://cdn.tailwindcss.com" {}
+                script src="/tailwindcss.js" {}
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
