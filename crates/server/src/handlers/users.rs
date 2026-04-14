@@ -272,9 +272,9 @@ pub(crate) async fn accept_page(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Html<String>, StatusCode> {
-    let (db, _config) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
-    let valid = validate_invite(&db, &token).await?;
-    if !valid {
+    // Scan all tenants for the invite token (the invite URL doesn't
+    // encode which tenant it belongs to).
+    if find_invite_tenant(&state, &token).await?.is_none() {
         return Ok(Html(
             templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
         ));
@@ -320,7 +320,14 @@ pub(crate) async fn accept_handler(
     .map_err(super::internal_error)?
     .map_err(super::internal_error)?;
 
-    let (db, _config) = state.tenant_db(state.default_tenant_id).await.map_err(super::internal_error)?;
+    // Find which tenant owns this invite token.
+    let Some(db) = find_invite_tenant(&state, &token).await? else {
+        return Ok(Html(
+            templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
+        )
+        .into_response());
+    };
+
     let token_for_db = token.clone();
     let result = db
         .with_conn(move |conn| {
@@ -363,6 +370,28 @@ pub(crate) async fn accept_handler(
 // =====================================================================
 // Helpers
 // =====================================================================
+
+/// Scan all tenants to find which one owns an invite token.
+async fn find_invite_tenant(
+    state: &AppState,
+    token: &str,
+) -> Result<Option<lineup_db::state::Db>, StatusCode> {
+    use lineup_master_db::tenant::Tenant;
+
+    let tenants = state
+        .master_db
+        .with_conn(|conn| Tenant::list_all(conn))
+        .await
+        .map_err(super::internal_error)?;
+
+    for t in &tenants {
+        let (db, _config) = state.tenant_db(t.id).await.map_err(super::internal_error)?;
+        if validate_invite(&db, token).await? {
+            return Ok(Some(db));
+        }
+    }
+    Ok(None)
+}
 
 async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool, StatusCode> {
     let token = token.to_string();
