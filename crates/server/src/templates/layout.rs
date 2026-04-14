@@ -18,9 +18,9 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Lineup Generator" }
-                // Tailwind via CDN (dev-only; swap for a built CSS file
-                // once we add a pipeline — see DESIGN.md defer list).
-                script src="https://cdn.tailwindcss.com" {}
+                // Tailwind JIT compiler (local copy of the CDN script).
+                // Swap for a built CSS file once we add a pipeline.
+                script src="/tailwindcss.js" {}
                 script src="/htmx.min.js" {}
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
