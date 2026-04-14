@@ -192,14 +192,12 @@ for details.
 Two-step login (email → password) with "Email me a sign-in link"
 for returning users. Multi-tenant: per-club links in the email.
 
-#### Team management — roster management
+#### ~~Team management — roster management~~ (shipped)
 
-Team CRUD is shipped (`/teams` list, create, `/teams/{id}` detail
-with name + self-edit level editing). Remaining:
-
-- View the team's roster on the team detail page
-- Add/remove rowers from a team
-- Role-gated to ProgramDirector+
+Team CRUD (`/teams` list, create, `/teams/{id}` detail). Roster
+view at `/team/roster` (Coach+ hub tab) with account status and
+batch invite. Admin roster matrix at `/admin/roster` for cross-team
+rower assignment (PD-gated).
 
 ### Polish
 
@@ -610,4 +608,3 @@ Start with push-only; bidirectional can follow if there's demand.
 
 1. **Email visibility tenant config** — `emails_visible` boolean.
 2. **#56** Custom Tailwind build pipeline — replace CDN.
-3. **Team management — roster view** — view/add/remove rowers on team detail page.
