@@ -12,6 +12,7 @@ use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::availability::{types::AvailabilityStatus, Availability, NewAvailability};
+use lineup_db::lineup::Lineup;
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
 use lineup_db::types::IntBool;
@@ -253,7 +254,7 @@ pub(crate) async fn availability_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::my::availability_content(&rower, &rows);
+    let content = templates::my::availability_content(&rower, &rows, None);
     Ok(super::maybe_page_authed("My availability", content, hx, &tenant))
 }
 
@@ -310,8 +311,84 @@ pub(crate) async fn availability_update_handler(
         Some(serde_json::json!({"status": input.status, "practice_id": practice_id.as_int()}).to_string()),
     );
 
-    // Re-render the full availability page.
-    availability_handler(jar, Extension(tenant), hx).await
+    // Check if this change affects a committed lineup.
+    let stale_warning = if !status.is_available_for_sweep() {
+        let pid = practice_id;
+        let rid = rower_id;
+        let affected = tenant
+            .db
+            .with_conn(move |conn| Lineup::is_rower_in_committed_lineup(conn, pid, rid))
+            .await
+            .map_err(internal_error)?;
+        if affected {
+            // Look up the practice date for the warning message.
+            let date = tenant
+                .db
+                .with_conn(move |conn| Practice::get(conn, pid))
+                .await
+                .map_err(internal_error)?
+                .map(|p| p.date);
+            date.map(|d| (pid, d))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Re-render the full availability page with optional warning.
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let rows = tenant
+        .db
+        .with_conn(move |conn| {
+            let today = chrono::Utc::now().date_naive();
+            let practices = Practice::list_upcoming(conn, team_id, today)?;
+            let mut all_practices: BTreeMap<PracticeId, (NaiveDate, Option<AvailabilityStatus>)> =
+                BTreeMap::new();
+            for p in &practices {
+                all_practices.entry(p.id).or_insert((p.date, None));
+            }
+            let practice_ids: Vec<PracticeId> = all_practices.keys().copied().collect();
+            let my_avail: Vec<Availability> = {
+                use diesel::prelude::*;
+                use lineup_db::schema::availability;
+                availability::table
+                    .filter(availability::rower_id.eq(rower_id))
+                    .filter(availability::practice_id.eq_any(&practice_ids))
+                    .select(Availability::as_select())
+                    .get_results(conn)?
+            };
+            for a in &my_avail {
+                if let Some(entry) = all_practices.get_mut(&a.practice_id) {
+                    entry.1 = Some(a.status);
+                }
+            }
+            let id_vec: Vec<PracticeId> = all_practices.keys().copied().collect();
+            let committed_ids: std::collections::HashSet<PracticeId> =
+                Practice::committed_ids(conn, team_id, &id_vec)?
+                    .into_iter()
+                    .collect();
+            let rows: Vec<templates::my::AvailabilityRow> = all_practices
+                .into_iter()
+                .map(|(pid, (date, status))| templates::my::AvailabilityRow {
+                    practice_id: pid,
+                    date,
+                    status,
+                    has_committed: committed_ids.contains(&pid),
+                })
+                .collect();
+            Ok(rows)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let content = templates::my::availability_content(&rower, &rows, stale_warning);
+    Ok(super::maybe_page_authed(
+        "My availability",
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 // =====================================================================

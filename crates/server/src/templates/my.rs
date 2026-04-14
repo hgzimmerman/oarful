@@ -36,10 +36,25 @@ pub(crate) struct AvailabilityRow {
 pub(crate) fn availability_content(
     rower: &Rower,
     rows: &[AvailabilityRow],
+    stale_warning: Option<(PracticeId, NaiveDate)>,
 ) -> Markup {
     html! {
         (page_header("My availability", Some(&rower.name)))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+            @if let Some((pid, date)) = stale_warning {
+                div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
+                    strong { "Heads up: " }
+                    "Your change affects a "
+                    a href={"/history/" (pid)}
+                      hx-get={"/history/" (pid)}
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="font-semibold underline hover:text-amber-700" {
+                        "committed lineup for " (date)
+                    }
+                    ". The coach may need to adjust it."
+                }
+            }
             // Upcoming practice dates with inline status dropdowns
             @if rows.is_empty() {
                 div class="text-slate-500 italic" {

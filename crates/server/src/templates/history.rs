@@ -14,7 +14,7 @@ use maud::{html, Markup};
 use super::layout::{empty_state, page_header};
 use super::solve::{seat_badge, seat_label, side_indicator};
 
-pub(crate) fn list_content(practices: &[Practice]) -> Markup {
+pub(crate) fn list_content(practices: &[Practice], stale_ids: &HashSet<PracticeId>) -> Markup {
     html! {
         (page_header("Committed practices", Some("Lineups that have been committed to the database.")))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto" {
@@ -23,7 +23,7 @@ pub(crate) fn list_content(practices: &[Practice]) -> Markup {
             } @else {
                 div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
                     @for p in practices {
-                        (row(p))
+                        (row(p, stale_ids.contains(&p.id)))
                     }
                 }
             }
@@ -31,7 +31,7 @@ pub(crate) fn list_content(practices: &[Practice]) -> Markup {
     }
 }
 
-fn row(p: &Practice) -> Markup {
+fn row(p: &Practice, is_stale: bool) -> Markup {
     let href = format!("/history/{}", p.id);
     let weekday = p.date.format("%A").to_string();
     html! {
@@ -41,7 +41,14 @@ fn row(p: &Practice) -> Markup {
           hx-target="#content"
           hx-push-url="true" {
             div {
-                div class="font-semibold text-slate-800" { (p.date) }
+                div class="flex items-center gap-2" {
+                    span class="font-semibold text-slate-800" { (p.date) }
+                    @if is_stale {
+                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                            "Availability changed"
+                        }
+                    }
+                }
                 div class="text-sm text-slate-500" {
                     (weekday)
                     @if let Some(ref notes) = p.notes {

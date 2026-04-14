@@ -284,4 +284,42 @@ impl Lineup {
             })
             .collect())
     }
+
+    /// For a set of practice IDs, return the rower IDs placed in committed
+    /// lineups. Used by the history list to detect stale lineups at a glance.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn committed_rower_ids_for_practices(
+        conn: &mut SqliteConnection,
+        practice_ids: &[PracticeId],
+    ) -> Result<std::collections::HashMap<PracticeId, Vec<RowerId>>, diesel::result::Error> {
+        let rows: Vec<(PracticeId, RowerId)> = lineup::table
+            .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
+            .filter(lineup::practice_id.eq_any(practice_ids))
+            .select((lineup::practice_id, lineup_seat::rower_id))
+            .get_results(conn)?;
+
+        let mut map: std::collections::HashMap<PracticeId, Vec<RowerId>> =
+            std::collections::HashMap::new();
+        for (pid, rid) in rows {
+            map.entry(pid).or_default().push(rid);
+        }
+        Ok(map)
+    }
+
+    /// Check whether a specific rower is placed in any committed lineup
+    /// for a given practice.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn is_rower_in_committed_lineup(
+        conn: &mut SqliteConnection,
+        practice_id: PracticeId,
+        rower_id: RowerId,
+    ) -> Result<bool, diesel::result::Error> {
+        let count: i64 = lineup::table
+            .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
+            .filter(lineup::practice_id.eq(practice_id))
+            .filter(lineup_seat::rower_id.eq(rower_id))
+            .count()
+            .get_result(conn)?;
+        Ok(count > 0)
+    }
 }
