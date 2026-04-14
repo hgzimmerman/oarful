@@ -80,6 +80,112 @@ pub trait Mailer: Send + Sync {
     ) -> Result<()>;
 }
 
+/// A captured email message for test assertions.
+#[derive(Debug, Clone)]
+pub enum MailMessage {
+    Invite {
+        to_email: String,
+        to_name: String,
+        invite_url: String,
+    },
+    Reminder {
+        to_email: String,
+        to_name: String,
+        team_name: String,
+        dates: Vec<NaiveDate>,
+        magic_url: String,
+    },
+    MagicLogin {
+        to_email: String,
+        to_name: String,
+        clubs: Vec<(String, String)>,
+    },
+    Lineup {
+        to_email: String,
+        to_name: String,
+        team_name: String,
+        lineups: Vec<EmailLineupSummary>,
+        magic_url: String,
+    },
+}
+
+/// Test mailer that sends structured [`MailMessage`]s through a channel
+/// so tests can receive and assert on them. Also useful for extracting
+/// magic-link tokens to log in as different users.
+pub struct ChannelMailer {
+    tx: tokio::sync::mpsc::UnboundedSender<MailMessage>,
+}
+
+impl ChannelMailer {
+    /// Create a new channel mailer and its receiving half.
+    pub fn new() -> (Self, tokio::sync::mpsc::UnboundedReceiver<MailMessage>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        (Self { tx }, rx)
+    }
+}
+
+#[async_trait::async_trait]
+impl Mailer for ChannelMailer {
+    async fn send_invite(&self, to_email: &str, to_name: &str, invite_url: &str) -> Result<()> {
+        let _ = self.tx.send(MailMessage::Invite {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            invite_url: invite_url.to_string(),
+        });
+        Ok(())
+    }
+
+    async fn send_magic_login(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::MagicLogin {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            clubs: clubs.to_vec(),
+        });
+        Ok(())
+    }
+
+    async fn send_reminder(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        dates: &[NaiveDate],
+        magic_url: &str,
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::Reminder {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            team_name: team_name.to_string(),
+            dates: dates.to_vec(),
+            magic_url: magic_url.to_string(),
+        });
+        Ok(())
+    }
+
+    async fn send_lineup(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        lineups: &[EmailLineupSummary],
+        magic_url: &str,
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::Lineup {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            team_name: team_name.to_string(),
+            lineups: lineups.to_vec(),
+            magic_url: magic_url.to_string(),
+        });
+        Ok(())
+    }
+}
+
 /// Development mailer that logs email content via `tracing` instead
 /// of actually sending anything. Good for local dev and self-hosted
 /// deployments.

@@ -1,9 +1,11 @@
 use fantoccini::{Client, ClientBuilder};
+pub use lineup_server::mailer::{ChannelMailer, MailMessage};
 use std::net::TcpListener;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::{sleep, Duration};
 
 /// Finds an available TCP port by binding to port 0 and returning the assigned port.
@@ -40,8 +42,23 @@ pub struct TestInstance {
 
 impl TestInstance {
     /// Spawns Xvfb + WebKitWebDriver and starts the Axum server in-process
-    /// with fresh ephemeral databases.
+    /// with fresh ephemeral databases. Uses `LogMailer` (emails are discarded).
     pub async fn start() -> Self {
+        let mailer: Arc<dyn lineup_server::mailer::Mailer> =
+            Arc::new(lineup_server::mailer::LogMailer);
+        Self::start_inner(mailer).await
+    }
+
+    /// Like [`start`](Self::start) but with a [`ChannelMailer`] so tests can
+    /// receive and assert on sent emails. Returns the instance and the
+    /// receiving half of the mail channel.
+    pub async fn start_with_mail() -> (Self, UnboundedReceiver<MailMessage>) {
+        let (mailer, rx) = ChannelMailer::new();
+        let mailer: Arc<dyn lineup_server::mailer::Mailer> = Arc::new(mailer);
+        (Self::start_inner(mailer).await, rx)
+    }
+
+    async fn start_inner(mailer: Arc<dyn lineup_server::mailer::Mailer>) -> Self {
         let app_port = available_port();
         let driver_port = available_port();
         let display_num = xvfb_display(app_port);
@@ -61,8 +78,6 @@ impl TestInstance {
             .into_owned();
 
         // Start the Axum server in-process.
-        let mailer: Arc<dyn lineup_server::mailer::Mailer> =
-            Arc::new(lineup_server::mailer::LogMailer);
         let router = lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)
             .expect("should build router");
 
