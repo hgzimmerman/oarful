@@ -1,5 +1,7 @@
 //! Team selector and management.
 
+use std::collections::HashSet;
+
 use axum::{
     extract::Path,
     http::StatusCode,
@@ -9,7 +11,11 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::app_user::Role;
-use lineup_db::team::{Team, TeamId};
+use lineup_db::boat::Boat;
+use lineup_db::boat::types::BoatId;
+use lineup_db::rower::Rower;
+use lineup_db::rower::types::RowerId;
+use lineup_db::team::{Team, TeamBoatDefault, TeamId, TeamMembership};
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
@@ -101,21 +107,18 @@ pub(crate) async fn create_handler(
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }
 
-/// `GET /teams` — list all teams (PD only).
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
-    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+/// Build the teams list markup (shared by `/teams` and `/admin/teams`).
+pub(crate) async fn teams_content(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
     let teams = tenant
         .db
         .with_conn(|conn| Team::list_all(conn))
         .await
         .map_err(internal_error)?;
-    let content = templates::teams::list_content(&teams);
-    Ok(super::maybe_page_authed("Teams", content, hx, &tenant))
+    Ok(templates::teams::list_content(&teams))
 }
+
 
 /// `GET /teams/{id}` — team detail + config (PD only).
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -139,6 +142,8 @@ pub(crate) async fn detail_handler(
 pub(crate) struct TeamUpdateInput {
     name: String,
     self_edit_level: String,
+    #[serde(default)]
+    default_practice_time: Option<String>,
 }
 
 /// `POST /teams/{id}` — update team config (PD only).
@@ -155,6 +160,11 @@ pub(crate) async fn update_handler(
     if name.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let practice_time = input
+        .default_practice_time
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::NaiveTime::parse_from_str(s, "%H:%M").ok());
     tenant
         .db
         .with_conn(move |conn| {
@@ -164,6 +174,7 @@ pub(crate) async fn update_handler(
                 .set((
                     team::name.eq(&name),
                     team::self_edit_level.eq(&level),
+                    team::default_practice_time.eq(practice_time),
                 ))
                 .execute(conn)
         })
@@ -188,4 +199,206 @@ pub(crate) async fn update_handler(
         .ok_or(StatusCode::NOT_FOUND)?;
     let content = templates::teams::detail_content(&team);
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+}
+
+// =====================================================================
+// Roster matrix — rowers × teams assignment grid
+// =====================================================================
+
+/// Build the roster assignment matrix markup.
+pub(crate) async fn roster_matrix_content(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
+    let (rowers, teams, memberships) = tenant
+        .db
+        .with_conn(|conn| {
+            let rowers = Rower::list_active(conn)?;
+            let teams = Team::list_all(conn)?;
+            let memberships = TeamMembership::all(conn)?;
+            Ok((rowers, teams, memberships))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let member_set: HashSet<(TeamId, RowerId)> = memberships
+        .iter()
+        .map(|m| (m.team_id, m.rower_id))
+        .collect();
+
+    Ok(templates::teams::roster_matrix(&rowers, &teams, &member_set))
+}
+
+/// `POST /admin/roster` — batch save team membership assignments.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn roster_matrix_save_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Form(form): Form<std::collections::HashMap<String, String>>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    // Parse checkbox values. Form fields are named "m_{team_id}_{rower_id}"
+    // — present means checked.
+    let desired: HashSet<(TeamId, RowerId)> = form
+        .keys()
+        .filter_map(|key| {
+            let rest = key.strip_prefix("m_")?;
+            let (tid, rid) = rest.split_once('_')?;
+            Some((tid.parse::<TeamId>().ok()?, rid.parse::<RowerId>().ok()?))
+        })
+        .collect();
+
+    let user_id = tenant.claims.user_id().as_int();
+    let (added, removed) = tenant
+        .db
+        .with_conn(move |conn| {
+            let current: HashSet<(TeamId, RowerId)> = TeamMembership::all(conn)?
+                .into_iter()
+                .map(|m| (m.team_id, m.rower_id))
+                .collect();
+
+            let to_add: Vec<_> = desired.difference(&current).copied().collect();
+            let to_remove: Vec<_> = current.difference(&desired).copied().collect();
+
+            for (team_id, rower_id) in &to_add {
+                TeamMembership::add(conn, *team_id, *rower_id)?;
+            }
+            for (team_id, rower_id) in &to_remove {
+                TeamMembership::remove(conn, *team_id, *rower_id)?;
+            }
+            Ok((to_add.len(), to_remove.len()))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(user_id),
+        "team.roster.update",
+        "roster",
+        "all",
+        Some(serde_json::json!({"added": added, "removed": removed}).to_string()),
+    );
+
+    // Re-render the matrix with a toast.
+    let (rowers, teams, memberships) = tenant
+        .db
+        .with_conn(|conn| {
+            let rowers = Rower::list_active(conn)?;
+            let teams = Team::list_all(conn)?;
+            let memberships = TeamMembership::all(conn)?;
+            Ok((rowers, teams, memberships))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let member_set: HashSet<(TeamId, RowerId)> = memberships
+        .iter()
+        .map(|m| (m.team_id, m.rower_id))
+        .collect();
+
+    let msg = format!("Saved. {added} added, {removed} removed.");
+    Ok(Html(
+        templates::teams::roster_matrix_with_toast(&msg, &rowers, &teams, &member_set)
+            .into_string(),
+    ))
+}
+
+// =====================================================================
+// Fleet matrix — boats × teams default selection
+// =====================================================================
+
+/// Build the fleet assignment matrix markup.
+pub(crate) async fn fleet_matrix_content(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
+    let (boats, teams, defaults) = tenant
+        .db
+        .with_conn(|conn| {
+            let boats = Boat::list_sweep(conn)?;
+            let teams = Team::list_all(conn)?;
+            let defaults = TeamBoatDefault::all(conn)?;
+            Ok((boats, teams, defaults))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let default_set: HashSet<(TeamId, BoatId)> = defaults
+        .iter()
+        .map(|d| (d.team_id, d.boat_id))
+        .collect();
+
+    Ok(templates::teams::fleet_matrix(&boats, &teams, &default_set))
+}
+
+/// `POST /admin/fleet` — batch save team boat defaults.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn fleet_matrix_save_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Form(form): Form<std::collections::HashMap<String, String>>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    // Form fields named "b_{team_id}_{boat_id}" — present means checked.
+    let desired: HashSet<(TeamId, BoatId)> = form
+        .keys()
+        .filter_map(|key| {
+            let rest = key.strip_prefix("b_")?;
+            let (tid, bid) = rest.split_once('_')?;
+            Some((tid.parse::<TeamId>().ok()?, bid.parse::<BoatId>().ok()?))
+        })
+        .collect();
+
+    let user_id = tenant.claims.user_id().as_int();
+    let (added, removed) = tenant
+        .db
+        .with_conn(move |conn| {
+            let current: HashSet<(TeamId, BoatId)> = TeamBoatDefault::all(conn)?
+                .into_iter()
+                .map(|d| (d.team_id, d.boat_id))
+                .collect();
+
+            let to_add: Vec<_> = desired.difference(&current).copied().collect();
+            let to_remove: Vec<_> = current.difference(&desired).copied().collect();
+
+            for (team_id, boat_id) in &to_add {
+                TeamBoatDefault::add(conn, *team_id, *boat_id)?;
+            }
+            for (team_id, boat_id) in &to_remove {
+                TeamBoatDefault::remove(conn, *team_id, *boat_id)?;
+            }
+            Ok((to_add.len(), to_remove.len()))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(user_id),
+        "team.fleet.update",
+        "fleet",
+        "all",
+        Some(serde_json::json!({"added": added, "removed": removed}).to_string()),
+    );
+
+    let (boats, teams, defaults) = tenant
+        .db
+        .with_conn(|conn| {
+            let boats = Boat::list_sweep(conn)?;
+            let teams = Team::list_all(conn)?;
+            let defaults = TeamBoatDefault::all(conn)?;
+            Ok((boats, teams, defaults))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let default_set: HashSet<(TeamId, BoatId)> = defaults
+        .iter()
+        .map(|d| (d.team_id, d.boat_id))
+        .collect();
+
+    let msg = format!("Saved. {added} added, {removed} removed.");
+    Ok(Html(
+        templates::teams::fleet_matrix_with_toast(&msg, &boats, &teams, &default_set)
+            .into_string(),
+    ))
 }

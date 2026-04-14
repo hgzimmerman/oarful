@@ -2,9 +2,10 @@
 //! fleet. Rowers and coaches can belong to multiple teams; the solver
 //! runs per (team, date).
 
+use crate::boat::types::BoatId;
 use crate::rower::types::RowerId;
-use crate::schema::{team, team_membership};
-use chrono::NaiveDateTime;
+use crate::schema::{team, team_boat_default, team_membership};
+use chrono::{NaiveDateTime, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
@@ -66,6 +67,8 @@ pub struct Team {
     /// Controls what members can self-edit on their profile.
     /// "low" | "medium" | "high". Default "low".
     pub self_edit_level: String,
+    /// Default time of day for new practices. None = not set.
+    pub default_practice_time: Option<NaiveTime>,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.
@@ -215,6 +218,104 @@ impl TeamMembership {
         team_membership::table
             .filter(team_membership::team_id.eq(team_id))
             .select(team_membership::rower_id)
+            .get_results(conn)
+    }
+
+    /// Remove a rower from a team.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn remove(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        rower_id: RowerId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::delete(
+            team_membership::table
+                .filter(team_membership::team_id.eq(team_id))
+                .filter(team_membership::rower_id.eq(rower_id)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
+
+    /// All (team_id, rower_id) pairs across the tenant.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn all(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<TeamMembership>, diesel::result::Error> {
+        team_membership::table
+            .select(TeamMembership::as_select())
+            .get_results(conn)
+    }
+}
+
+// =====================================================================
+// Per-team default boat selection
+// =====================================================================
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    diesel::Queryable,
+    diesel::Selectable,
+    diesel::Insertable,
+)]
+#[diesel(table_name = crate::schema::team_boat_default)]
+pub struct TeamBoatDefault {
+    pub team_id: TeamId,
+    pub boat_id: BoatId,
+}
+
+impl TeamBoatDefault {
+    /// Add a boat to a team's default set.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn add(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        boat_id: BoatId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::insert_or_ignore_into(team_boat_default::table)
+            .values(TeamBoatDefault { team_id, boat_id })
+            .execute(conn)?;
+        Ok(())
+    }
+
+    /// Remove a boat from a team's default set.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn remove(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        boat_id: BoatId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::delete(
+            team_boat_default::table
+                .filter(team_boat_default::team_id.eq(team_id))
+                .filter(team_boat_default::boat_id.eq(boat_id)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
+
+    /// Default boat IDs for a team. Returns empty vec if none configured.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn boat_ids_for_team(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+    ) -> Result<Vec<BoatId>, diesel::result::Error> {
+        team_boat_default::table
+            .filter(team_boat_default::team_id.eq(team_id))
+            .select(team_boat_default::boat_id)
+            .get_results(conn)
+    }
+
+    /// All (team_id, boat_id) pairs across the tenant.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn all(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<TeamBoatDefault>, diesel::result::Error> {
+        team_boat_default::table
+            .select(TeamBoatDefault::as_select())
             .get_results(conn)
     }
 }

@@ -108,6 +108,7 @@ diesel::table! {
         name -> Text,
         created_at -> Timestamp,
         self_edit_level -> Text,
+        default_practice_time -> Nullable<Time>,
     }
 }
 
@@ -122,6 +123,13 @@ diesel::table! {
     team_coach (team_id, user_id) {
         team_id -> Integer,
         user_id -> Integer,
+    }
+}
+
+diesel::table! {
+    team_boat_default (team_id, boat_id) {
+        team_id -> Integer,
+        boat_id -> Integer,
     }
 }
 
@@ -253,6 +261,8 @@ diesel::joinable!(practice -> team (team_id));
 diesel::joinable!(team_membership -> team (team_id));
 diesel::joinable!(team_membership -> rower (rower_id));
 diesel::joinable!(team_coach -> team (team_id));
+diesel::joinable!(team_boat_default -> team (team_id));
+diesel::joinable!(team_boat_default -> boat (boat_id));
 diesel::joinable!(lineup -> practice (practice_id));
 diesel::joinable!(lineup -> boat (boat_id));
 diesel::joinable!(lineup_seat -> lineup (lineup_id));
@@ -267,6 +277,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     team,
     team_membership,
     team_coach,
+    team_boat_default,
     practice,
     availability,
     lineup,

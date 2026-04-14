@@ -71,14 +71,17 @@ impl<'a> EditorData<'a> {
     }
 
     /// Build from a snapshot with no solver result — all boats empty,
-    /// all available rowers in pool.
-    pub(crate) fn empty(snapshot: &'a DbSnapshot) -> Self {
+    /// all available rowers in pool. When `default_boats` is non-empty,
+    /// only those boats start active; otherwise all boats are active.
+    pub(crate) fn empty(snapshot: &'a DbSnapshot, default_boats: &HashSet<BoatId>) -> Self {
+        let use_defaults = !default_boats.is_empty();
         let boats = snapshot.sweep_boats.iter().map(|b| {
             let has_cox = b.has_cox.as_bool();
             let mut seats = Vec::new();
             if has_cox { seats.push((0, None)); }
             for s in 1..=b.seat_count { seats.push((s, None)); }
-            EditorBoat { boat: b, seats, active: true }
+            let active = if use_defaults { default_boats.contains(&b.id) } else { true };
+            EditorBoat { boat: b, seats, active }
         }).collect();
         let mut pool: Vec<&Rower> = snapshot.available_rowers().collect();
         Self::sort_pool(&mut pool);

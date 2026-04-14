@@ -27,12 +27,10 @@ use crate::{state::{AppState, TenantContext}, templates};
 // User list (PD only)
 // =====================================================================
 
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
-    require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+/// Build the users list markup (shared by `/users` and `/admin/users`).
+pub(crate) async fn users_content(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
     let (users, roles, unlinked_rowers, user_rower_map) = tenant
         .db
         .with_conn(|conn| {
@@ -48,13 +46,11 @@ pub(crate) async fn list_handler(
                 .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
                 .collect();
             let all_rowers = Rower::list_active(conn)?;
-            // Roster members with email but no linked user account.
             let unlinked: Vec<Rower> = all_rowers
                 .iter()
                 .filter(|r| r.user_id.is_none() && r.email.is_some())
                 .cloned()
                 .collect();
-            // Map user_id → rower_id for linked members.
             let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = all_rowers
                 .iter()
                 .filter_map(|r| r.user_id.map(|uid| (UserId::new(uid), r.id)))
@@ -63,9 +59,9 @@ pub(crate) async fn list_handler(
         })
         .await
         .map_err(super::internal_error)?;
-    let content = templates::users::list_content(&users, &roles, &unlinked_rowers, &user_rower_map);
-    Ok(super::maybe_page_authed("Users", content, hx, &tenant))
+    Ok(templates::users::list_content(&users, &roles, &unlinked_rowers, &user_rower_map))
 }
+
 
 // =====================================================================
 // Invite creation (PD only)
@@ -398,7 +394,7 @@ pub(crate) fn require_at_least_role(claims: &crate::jwt::Claims, min: Role) -> R
 }
 
 /// Generate a random 32-hex-char invite token.
-fn generate_token() -> String {
+pub(crate) fn generate_token() -> String {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};
     let a = RandomState::new().build_hasher().finish();

@@ -120,6 +120,17 @@ can resume without re-deriving context.
   `known_user` cookie, 1-year). Multi-tenant: one email with a
   "Sign in to [Club]" button per matching tenant. Always shows
   "link sent" regardless of email existence (no enumeration leak).
+- **Zone-based seat affinities** — replaced absolute seat positions
+  with zone-based system (SeatZone). S11/S12 constraints generalized
+  to all boat sizes. Tiered preset weights tuned.
+- **Audit log** — `audit_log` table with fire-and-forget writes,
+  90-day retention cleanup, PD-only filterable viewer at `/audit`.
+  Instrumented across handlers: availability, lineups, rower edits,
+  role changes, invites, boat CRUD, practices, notes.
+- **Batch invite from roster** — "Send invites" button on roster
+  page (Coach+ gated) bulk-creates Member accounts + sends invite
+  emails for all rowers with email but no linked user. Toast feedback
+  with invited/skipped counts. Invite status badges on roster rows.
 
 ## Open work
 
@@ -142,18 +153,12 @@ to the coach. Lower priority than the detection/display (which
 shipped), but would close the feedback loop so the coach doesn't
 have to manually check the history page.
 
-#### Batch invite from roster
+#### ~~Batch invite from roster~~ (shipped)
 
-The coach syncs a sheet → rowers appear on the roster with emails
-but no user accounts. Currently each rower must be individually
-invited from the Users page. Need a bulk flow:
-
-- A "Send invites" button on the roster page (Coach+ gated) that
-  creates AppUser accounts + sends invites for all roster members
-  who have an email but no linked user account.
-- Show invite status per rower on the roster (uninvited / pending /
-  active) so the coach can see who still needs an invite.
-- Use the existing Mailer trait (LogMailer for dev).
+"Send invites (N)" button on roster page, Coach+ gated. Creates
+Member accounts + sends invite emails for all rowers with email
+but no linked user. Toast with invited/skipped counts. Button
+hidden when no invitable rowers exist.
 
 #### ~~Self-edit trust levels — UI for team config~~ (shipped)
 
@@ -204,6 +209,14 @@ Grid collapses (`grid-cols-1` → `sm:`/`md:` step-up), touch
 targets bumped to `py-2` (44px), affinity forms stack on mobile,
 hamburger at `lg` breakpoint for PD nav overflow.
 
+#### Styled confirmation modals
+
+Replace native `confirm()` dialogs (used by `hx-confirm`) with
+Alpine.js-powered modals styled with Tailwind. Currently the batch
+invite button on the roster page uses a plain browser confirm box.
+Any future destructive/bulk actions would benefit from the same
+pattern.
+
 #### ~~#54 — Print-friendly stylesheet~~ (shipped)
 
 `@media print` rules hide navbar, knobs, interactive controls.
@@ -226,33 +239,68 @@ Replace CDN with local `tailwind.config.js` scanning
 
 ### Infrastructure
 
+#### Practice datetime migration
+
+Practices are currently date-only, which means: (a) can't represent
+two practices per day (e.g. morning/evening), (b) can't detect when
+a practice has finished (waits until end-of-day), (c) no time-of-day
+for co-incident boat usage warnings across teams.
+
+**Schema changes:**
+- `practice`: add `time` column (`TIME`, nullable initially for
+  backfill). Unique constraint becomes `(team_id, date, time)`
+  instead of `(team_id, date)`. The `team.default_practice_time`
+  column (already added) pre-fills new practices.
+- `availability`: re-key from `(rower_id, team_id, date)` to
+  `(rower_id, practice_id)`. Each availability response is tied
+  to a specific practice, not a calendar day.
+
+**URL migration:**
+- `/solve/{date}` → `/solve/{practice_id}`
+- `/history/{date}` → `/history/{practice_id}`
+- `/practices/{date}/cancel` → `/practices/{id}/cancel`
+- `/history/{date}/notes` → `/history/{id}/notes`
+- `/commit/{date}` → `/commit/{id}`
+
+**UI:**
+- Practice list, availability form, solve page, history — all
+  change from date display to date+time. When only one practice
+  per day exists, show just the date as shorthand. When multiple
+  exist on the same day, disambiguate with time (e.g.
+  "Apr 15 · 6:00 AM" vs "Apr 15 · 5:30 PM").
+- Practice creation form pre-fills time from
+  `team.default_practice_time`.
+- Availability UI shows per-practice dropdowns instead of
+  per-date.
+
+**Migration path:**
+- Add `time` column nullable, backfill existing practices with
+  the team's default time (or NULL).
+- Migrate availability FK from `(rower_id, team_id, date)` to
+  `(rower_id, practice_id)` — join on `team_id + date` to map
+  existing rows.
+- Update all handlers and templates to use practice ID in URLs.
+- Add redirects from old date-based URLs for bookmarks.
+
+**Downstream benefits:**
+- "Practice finished" detection: compare `now` against
+  `practice.date + practice.time + estimated_duration`.
+- Cross-team boat conflict warnings: detect overlapping
+  `(date, time)` ranges across teams that share boats.
+- Foundation for regatta scheduling (multiple events per day).
+
 #### ~~Periodic sync polling~~ (shipped)
 
 Background task re-syncs on a schedule when a sync config exists.
 Uses `tokio::time::interval`, logs results, surfaces last-sync
 timestamp and errors on the sync page.
 
-#### Audit log
+#### ~~Audit log~~ (shipped)
 
-Track who changed what and when. Useful for coaches reviewing
-availability changes, PDs auditing role grants, and debugging
-unexpected state.
-
-**Schema.** A single `audit_log` table in the per-tenant DB:
-- `id`, `timestamp`, `user_id` (nullable — system actions have
-  no user), `action` (enum or free text: e.g. "availability.update",
-  "lineup.commit", "rower.update", "invite.create"),
-  `resource_type`, `resource_id`, `detail` (JSON blob with
-  before/after or relevant context).
-
-**Write points.** Instrument handlers that mutate state:
-availability upserts, lineup commits, rower edits, role changes,
-invite creation, boat CRUD, practice creation, notes updates.
-
-**Read UI.** A filterable log view for PD+ (by resource, by user,
-by date range). Lower priority than the write instrumentation —
-the data is valuable even before there's a dedicated UI (queryable
-via SQLite directly).
+`audit_log` table with fire-and-forget writes, 90-day retention
+cleanup, PD-only filterable viewer at `/audit` with pagination.
+Instrumented across handlers: availability, lineups, rower edits,
+role changes, invites, boat CRUD, practices, notes.
 
 #### ~~Boat usage tracking from committed lineups~~ (shipped)
 
@@ -315,9 +363,9 @@ culprit) remains parked pending a Pumpkin API dive.
 - **Bench cooldown** — soft penalty for benching a rower who was
   benched at the previous practice. Similar pattern to S6 cox
   cooldown but for bench rotation fairness.
-- **Seed built-in presets on tenant creation** — the 4 built-in
-  presets become DB rows with a `locked` flag preventing deletion.
-  New custom presets branch off an existing one as a starting point.
+- ~~**Seed built-in presets on tenant creation**~~ (not needed —
+  built-ins are hardcoded in `SolverConfig` and always available;
+  custom profiles branch off the active config at save time)
 - **Boat-type biases** — per-boat-class solver preferences so
   coaches can express "I want to field eights today" or "prioritize
   the 4+ over the pair." Potential approaches:
@@ -560,6 +608,6 @@ Start with push-only; bidirectional can follow if there's demand.
 
 ## Suggested next moves
 
-1. **Batch invite from roster** — bulk user creation for linked rowers.
-2. **Email visibility tenant config** — `emails_visible` boolean.
-3. **#56** Custom Tailwind build pipeline — replace CDN.
+1. **Email visibility tenant config** — `emails_visible` boolean.
+2. **#56** Custom Tailwind build pipeline — replace CDN.
+3. **Team management — roster view** — view/add/remove rowers on team detail page.

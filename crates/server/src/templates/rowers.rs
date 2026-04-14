@@ -59,11 +59,27 @@ pub(crate) struct RosterRow {
     pub(crate) account_status: Option<String>,
 }
 
-pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
+pub(crate) fn list_content(rows: &[RosterRow], is_coach: bool) -> Markup {
     let subtitle = format!("{} active members", rows.len());
+    let invitable_count = rows
+        .iter()
+        .filter(|r| r.rower.email.is_some() && r.account_status.is_none())
+        .count();
     html! {
         (page_header("Roster", Some(&subtitle)))
         div class="px-4 sm:px-8 py-6" {
+            @if is_coach && invitable_count > 0 {
+                form method="post" action="/club/roster/batch-invite"
+                     hx-post="/club/roster/batch-invite"
+                     hx-target="#club-tab-content"
+                     hx-confirm={(format!("Send invites to {invitable_count} rower(s) with email addresses?"))}
+                     class="flex justify-end mb-4" {
+                    button type="submit"
+                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                        "Send invites (" (invitable_count) ")"
+                    }
+                }
+            }
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
@@ -97,6 +113,16 @@ pub(crate) fn list_content(rows: &[RosterRow]) -> Markup {
                 }
             }
         }
+    }
+}
+
+/// Toast banner + refreshed roster after a batch invite.
+pub(crate) fn batch_invite_result(message: &str, rows: &[RosterRow], is_coach: bool) -> Markup {
+    html! {
+        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
+            (message)
+        }
+        (list_content(rows, is_coach))
     }
 }
 
@@ -204,7 +230,7 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
-                a href="/rowers"
+                a href="/club/roster"
                   onclick="if (history.length > 1) { history.back(); return false; }"
                   class="text-slate-400 hover:text-slate-700"
                   title="Back" {

@@ -141,6 +141,28 @@ pub(crate) async fn view_handler(
         ));
     }
 
+    // Load team boat defaults. For single-team tenants with no
+    // defaults configured, all boats remain active (empty set).
+    let default_boats: std::collections::HashSet<lineup_db::boat::types::BoatId> = {
+        let team_count = tenant
+            .db
+            .with_conn(|conn| lineup_db::team::Team::list_all(conn).map(|t| t.len()))
+            .await
+            .map_err(internal_error)?;
+        let defaults = tenant
+            .db
+            .with_conn(move |conn| lineup_db::team::TeamBoatDefault::boat_ids_for_team(conn, team_id))
+            .await
+            .map_err(internal_error)?;
+        // Single-team tenant with no defaults → all boats (empty set signals "all").
+        // Multi-team tenant: use whatever is configured (even if empty → none pre-selected).
+        if team_count <= 1 && defaults.is_empty() {
+            std::collections::HashSet::new()
+        } else {
+            defaults.into_iter().collect()
+        }
+    };
+
     // Landing page: show knobs + "Generate" / "Re-generate" button.
     // If seat params are present (e.g. from "Edit lineup" on history),
     // pre-populate the editor with those placements.
@@ -157,7 +179,7 @@ pub(crate) async fn view_handler(
     };
     let content = templates::solve::landing_content(
         &snapshot, date, &knobs, &committed_practices, has_committed,
-        &profile_names, &flags,
+        &profile_names, &flags, &default_boats,
     );
     Ok(crate::handlers::maybe_page_authed(
         &format!("Set Lineups · {date}"),

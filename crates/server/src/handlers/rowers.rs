@@ -12,13 +12,15 @@
 //!    read-only view.
 
 use axum::{
-    extract::Path,
+    extract::{Path, State},
     http::StatusCode,
     response::Html,
     Extension, Form,
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
+use chrono::Utc;
+use diesel::prelude::*;
 use lineup_db::pair_affinity::PairAffinity;
 use lineup_db::rower::{
     types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
@@ -29,22 +31,22 @@ use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
-use lineup_db::app_user::Role;
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId};
+use lineup_db::schema::{user_invite};
 use lineup_db::team::{SelfEditLevel, Team};
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::internal_error, state::{AppState, TenantContext}, templates};
 
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    jar: CookieJar,
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+/// Build the roster list markup (shared by `/rowers` and `/club/roster`).
+pub(crate) async fn roster_content(
+    jar: &CookieJar,
+    tenant: &TenantContext,
+) -> Result<maud::Markup, StatusCode> {
+    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
+    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
     let rows = tenant
         .db
         .with_conn(move |conn| {
-            use lineup_db::app_user::AppUser;
             let team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
             let all_active = Rower::list_active(conn)?;
             let rowers: Vec<Rower> = all_active
@@ -54,7 +56,7 @@ pub(crate) async fn list_handler(
             let mut rows = Vec::with_capacity(rowers.len());
             for r in rowers {
                 let account_status = if let Some(uid) = r.user_id {
-                    AppUser::get(conn, lineup_db::app_user::UserId::new(uid))?
+                    AppUser::get(conn, UserId::new(uid))?
                         .and_then(|u| u.parsed_status())
                         .map(|s| s.as_str().to_string())
                 } else {
@@ -69,9 +71,162 @@ pub(crate) async fn list_handler(
         })
         .await
         .map_err(internal_error)?;
-    let content = templates::rowers::list_content(&rows);
-    Ok(super::maybe_page_authed("Roster", content, hx, &tenant))
+    Ok(templates::rowers::list_content(&rows, is_coach))
 }
+
+/// `POST /club/roster/batch-invite` — create accounts + send invite
+/// emails for all roster members with an email but no linked user.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn batch_invite_handler(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<Html<String>, StatusCode> {
+    super::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    // Identify invitable rowers and create accounts in one DB call.
+    let result = tenant
+        .db
+        .with_conn(move |conn| {
+            let team_rower_ids =
+                lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
+            let all_active = Rower::list_active(conn)?;
+            let team_rowers: Vec<Rower> = all_active
+                .into_iter()
+                .filter(|r| team_rower_ids.contains(&r.id))
+                .collect();
+
+            let mut invited: Vec<(String, String, String)> = Vec::new(); // (email, name, token)
+            let mut skipped_no_email: usize = 0;
+            let mut skipped_existing: usize = 0;
+
+            for r in &team_rowers {
+                let Some(ref email) = r.email else {
+                    skipped_no_email += 1;
+                    continue;
+                };
+                if r.user_id.is_some() {
+                    continue; // already linked
+                }
+                // Guard against race: another account with same email.
+                if AppUser::find_by_email(conn, email)?.is_some() {
+                    skipped_existing += 1;
+                    continue;
+                }
+
+                let now = Utc::now().naive_utc();
+                let user = AppUser::create(
+                    conn,
+                    NewAppUser {
+                        email: email.clone(),
+                        password_hash: None,
+                        name: r.name.clone(),
+                        status: "invited".to_string(),
+                        created_at: now,
+                        updated_at: now,
+                    },
+                )?;
+                AppUser::set_role(conn, user.id, Role::Member)?;
+                Rower::link_to_user(conn, r.id, user.id.as_int())?;
+
+                let token = super::users::generate_token();
+                let expires = now + chrono::TimeDelta::try_days(7).unwrap();
+                diesel::insert_into(user_invite::table)
+                    .values((
+                        user_invite::token_hash.eq(&token),
+                        user_invite::user_id.eq(user.id),
+                        user_invite::expires_at.eq(expires),
+                    ))
+                    .execute(conn)?;
+
+                invited.push((email.clone(), r.name.clone(), token));
+            }
+
+            Ok((invited, skipped_no_email, skipped_existing))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let (invited, skipped_no_email, skipped_existing) = result;
+    let invited_count = invited.len();
+
+    // Send emails best-effort (fire-and-forget per rower).
+    for (email, name, token) in &invited {
+        let invite_path = format!("/invite/{token}");
+        let invite_url = state.full_url(&invite_path);
+        if let Err(err) = state.mailer.send_invite(email, name, &invite_url).await {
+            tracing::warn!(?err, %email, "batch invite: mailer failed");
+        }
+    }
+
+    // Audit log.
+    let detail = serde_json::json!({
+        "invited": invited_count,
+        "skipped_no_email": skipped_no_email,
+        "skipped_existing": skipped_existing,
+    });
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "invite.batch",
+        "team",
+        &team_id.to_string(),
+        Some(detail.to_string()),
+    );
+
+    // Build toast message.
+    let mut parts = Vec::new();
+    if invited_count > 0 {
+        parts.push(format!("Invited {invited_count} rower(s)."));
+    }
+    if skipped_no_email > 0 {
+        parts.push(format!("{skipped_no_email} skipped (no email)."));
+    }
+    if skipped_existing > 0 {
+        parts.push(format!("{skipped_existing} skipped (account exists)."));
+    }
+    if parts.is_empty() {
+        parts.push("No rowers to invite.".to_string());
+    }
+    let msg = parts.join(" ");
+
+    // Re-render roster with toast.
+    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let rows = tenant
+        .db
+        .with_conn(move |conn| {
+            let team_rower_ids =
+                lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
+            let all_active = Rower::list_active(conn)?;
+            let rowers: Vec<Rower> = all_active
+                .into_iter()
+                .filter(|r| team_rower_ids.contains(&r.id))
+                .collect();
+            let mut rows = Vec::with_capacity(rowers.len());
+            for r in rowers {
+                let account_status = if let Some(uid) = r.user_id {
+                    AppUser::get(conn, UserId::new(uid))?
+                        .and_then(|u| u.parsed_status())
+                        .map(|s| s.as_str().to_string())
+                } else {
+                    None
+                };
+                rows.push(templates::rowers::RosterRow {
+                    rower: r,
+                    account_status,
+                });
+            }
+            Ok(rows)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Html(
+        templates::rowers::batch_invite_result(&msg, &rows, is_coach).into_string(),
+    ))
+}
+
 
 /// `GET /rowers/{id}/attributes` — read-only attribute section partial.
 /// Used by the Cancel button to restore the display view.

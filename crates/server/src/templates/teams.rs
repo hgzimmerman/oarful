@@ -1,5 +1,11 @@
 //! Team selector dropdown + management pages.
 
+use std::collections::HashSet;
+
+use lineup_db::boat::Boat;
+use lineup_db::boat::types::BoatId;
+use lineup_db::rower::Rower;
+use lineup_db::rower::types::RowerId;
 use lineup_db::team::{Team, TeamId};
 use maud::{html, Markup};
 
@@ -145,9 +151,238 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                         "Controls which attributes members can edit on their own profile. Coach+ always has full access."
                     }
                 }
+                div {
+                    label for="default_practice_time" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Default practice time"
+                    }
+                    @let time_value = team.default_practice_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+                    input id="default_practice_time" name="default_practice_time" type="time"
+                          value=(time_value)
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    p class="text-xs text-slate-500 mt-1" {
+                        "Pre-fills the time when creating new practices. Leave blank if not applicable."
+                    }
+                }
                 button type="submit"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                     "Save"
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Roster assignment matrix — rowers × teams
+// =====================================================================
+
+pub(crate) fn roster_matrix(
+    rowers: &[Rower],
+    teams: &[Team],
+    memberships: &HashSet<(TeamId, RowerId)>,
+) -> Markup {
+    roster_matrix_inner(None, rowers, teams, memberships)
+}
+
+pub(crate) fn roster_matrix_with_toast(
+    message: &str,
+    rowers: &[Rower],
+    teams: &[Team],
+    memberships: &HashSet<(TeamId, RowerId)>,
+) -> Markup {
+    roster_matrix_inner(Some(message), rowers, teams, memberships)
+}
+
+fn roster_matrix_inner(
+    toast: Option<&str>,
+    rowers: &[Rower],
+    teams: &[Team],
+    memberships: &HashSet<(TeamId, RowerId)>,
+) -> Markup {
+    let subtitle = format!("{} rowers · {} teams", rowers.len(), teams.len());
+    html! {
+        (page_header("Roster assignments", Some(&subtitle)))
+        div class="px-4 sm:px-8 py-6" {
+            @if let Some(msg) = toast {
+                div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mb-4" {
+                    (msg)
+                }
+            }
+            @if teams.is_empty() {
+                div class="text-slate-500 italic" { "No teams. Create teams first." }
+            } @else if rowers.is_empty() {
+                div class="text-slate-500 italic" { "No active rowers." }
+            } @else {
+                form method="post" action="/admin/roster"
+                     hx-post="/admin/roster"
+                     hx-target="#admin-tab-content" {
+                    div class="flex justify-end mb-3" {
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Save"
+                        }
+                    }
+                    div class="overflow-auto bg-white rounded-lg shadow max-h-[75vh]" {
+                        table class="text-xs border-collapse" {
+                            thead {
+                                tr {
+                                    th class="sticky top-0 left-0 z-20 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700 border-b border-r border-slate-200 min-w-[160px]" {
+                                        "Rower"
+                                    }
+                                    @for team in teams {
+                                        th class="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[80px]" {
+                                            (team.name)
+                                        }
+                                    }
+                                }
+                            }
+                            tbody {
+                                @for rower in rowers {
+                                    tr class="border-t border-slate-100 hover:bg-slate-50" {
+                                        td class="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-slate-800 border-r border-slate-200 whitespace-nowrap" {
+                                            a href={"/rowers/" (rower.id)}
+                                              hx-get={"/rowers/" (rower.id)}
+                                              hx-target="#content"
+                                              hx-push-url="true"
+                                              class="text-blue-700 hover:text-blue-900" {
+                                                (rower.name)
+                                            }
+                                        }
+                                        @for team in teams {
+                                            td class="text-center border-slate-100 px-1" {
+                                                @let field_name = format!("m_{}_{}", team.id, rower.id);
+                                                @let checked = memberships.contains(&(team.id, rower.id));
+                                                input type="checkbox"
+                                                       name=(field_name)
+                                                       value="1"
+                                                       checked[checked]
+                                                       class="w-4 h-4 accent-emerald-600 cursor-pointer";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div class="flex justify-end mt-3" {
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Save"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Fleet assignment matrix — boats × teams
+// =====================================================================
+
+pub(crate) fn fleet_matrix(
+    boats: &[Boat],
+    teams: &[Team],
+    defaults: &HashSet<(TeamId, BoatId)>,
+) -> Markup {
+    fleet_matrix_inner(None, boats, teams, defaults)
+}
+
+pub(crate) fn fleet_matrix_with_toast(
+    message: &str,
+    boats: &[Boat],
+    teams: &[Team],
+    defaults: &HashSet<(TeamId, BoatId)>,
+) -> Markup {
+    fleet_matrix_inner(Some(message), boats, teams, defaults)
+}
+
+fn fleet_matrix_inner(
+    toast: Option<&str>,
+    boats: &[Boat],
+    teams: &[Team],
+    defaults: &HashSet<(TeamId, BoatId)>,
+) -> Markup {
+    let subtitle = format!("{} sweep boats · {} teams", boats.len(), teams.len());
+    html! {
+        (page_header("Default fleet", Some(&subtitle)))
+        div class="px-4 sm:px-8 py-6" {
+            @if let Some(msg) = toast {
+                div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mb-4" {
+                    (msg)
+                }
+            }
+            p class="text-sm text-slate-500 mb-4" {
+                "Select which boats are pre-selected in the generation pool for each team. "
+                "Single-team tenants default to all boats if none are selected."
+            }
+            @if teams.is_empty() {
+                div class="text-slate-500 italic" { "No teams. Create teams first." }
+            } @else if boats.is_empty() {
+                div class="text-slate-500 italic" { "No sweep boats in the fleet." }
+            } @else {
+                form method="post" action="/admin/fleet"
+                     hx-post="/admin/fleet"
+                     hx-target="#admin-tab-content" {
+                    div class="flex justify-end mb-3" {
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Save"
+                        }
+                    }
+                    div class="overflow-auto bg-white rounded-lg shadow max-h-[75vh]" {
+                        table class="text-xs border-collapse" {
+                            thead {
+                                tr {
+                                    th class="sticky top-0 left-0 z-20 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700 border-b border-r border-slate-200 min-w-[160px]" {
+                                        "Boat"
+                                    }
+                                    @for team in teams {
+                                        th class="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[80px]" {
+                                            (team.name)
+                                        }
+                                    }
+                                }
+                            }
+                            tbody {
+                                @for boat in boats {
+                                    tr class="border-t border-slate-100 hover:bg-slate-50" {
+                                        td class="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-slate-800 border-r border-slate-200 whitespace-nowrap" {
+                                            a href={"/boats/" (boat.id)}
+                                              hx-get={"/boats/" (boat.id)}
+                                              hx-target="#content"
+                                              hx-push-url="true"
+                                              class="text-blue-700 hover:text-blue-900" {
+                                                (boat.name)
+                                            }
+                                            span class="text-slate-400 ml-1" {
+                                                "(" (boat.seat_count)
+                                                @if boat.has_cox.as_bool() { "+" }
+                                                ")"
+                                            }
+                                        }
+                                        @for team in teams {
+                                            td class="text-center border-slate-100 px-1" {
+                                                @let field_name = format!("b_{}_{}", team.id, boat.id);
+                                                @let checked = defaults.contains(&(team.id, boat.id));
+                                                input type="checkbox"
+                                                       name=(field_name)
+                                                       value="1"
+                                                       checked[checked]
+                                                       class="w-4 h-4 accent-emerald-600 cursor-pointer";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div class="flex justify-end mt-3" {
+                        button type="submit"
+                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Save"
+                        }
+                    }
                 }
             }
         }

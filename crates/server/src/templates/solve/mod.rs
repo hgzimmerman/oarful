@@ -212,6 +212,7 @@ pub(crate) fn landing_content(
     has_committed: bool,
     custom_profiles: &[(String, Option<String>)],
     flags: &DisplayFlags,
+    default_boats: &HashSet<BoatId>,
 ) -> Markup {
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
@@ -250,7 +251,7 @@ pub(crate) fn landing_content(
             .collect();
         EditorData::from_placements(snapshot, &placements, &active_boats)
     } else {
-        EditorData::empty(snapshot)
+        EditorData::empty(snapshot, default_boats)
     };
 
     html! {
@@ -282,7 +283,7 @@ pub(crate) fn view_content(
     let editor = if result.status == SolveStatus::Satisfied {
         EditorData::from_solve(snapshot, &result.primary)
     } else {
-        EditorData::empty(snapshot)
+        EditorData::empty(snapshot, &HashSet::new())
     };
 
     // Unavailable rowers for the walk-on dropdown.

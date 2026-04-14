@@ -15,9 +15,11 @@ use serde::Deserialize;
 
 use crate::{state::AppState, templates};
 
+pub(crate) mod admin;
 pub(crate) mod audit;
 pub(crate) mod auth;
 pub(crate) mod boats;
+pub(crate) mod club;
 pub(crate) mod demo;
 pub(crate) mod my;
 pub(crate) mod users;
@@ -68,10 +70,29 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/history", get(history::list_handler))
         .route("/history/{date}", get(history::detail_handler))
         .route("/history/{date}/notes", post(history::notes_handler))
-        .route(
-            "/boats",
-            get(boats::list_handler).post(boats::create_handler),
-        )
+        // Club hub (Coach+)
+        .route("/club", get(club::index_handler))
+        .route("/club/roster", get(club::roster_handler))
+        .route("/club/attendance", get(club::attendance_handler))
+        .route("/club/fleet", get(club::fleet_handler))
+        .route("/club/roster/batch-invite", post(rowers::batch_invite_handler))
+        .route("/club/sync", get(club::sync_handler).post(sync::sync_handler))
+        // Admin hub (PD+)
+        .route("/admin", get(admin::index_handler))
+        .route("/admin/users", get(admin::users_handler))
+        .route("/admin/teams", get(admin::teams_handler))
+        .route("/admin/roster", get(admin::roster_handler).post(teams::roster_matrix_save_handler))
+        .route("/admin/fleet", get(admin::fleet_handler).post(teams::fleet_matrix_save_handler))
+        .route("/admin/audit", get(admin::audit_handler))
+        .route("/audit/rows", get(audit::rows_handler))
+        // Old list URLs → redirect to new hubs (keep POSTs working)
+        .route("/rowers", get(|| async { Redirect::permanent("/club/roster") }))
+        .route("/boats", get(|| async { Redirect::permanent("/club/fleet") }).post(boats::create_handler))
+        .route("/sync", get(|| async { Redirect::permanent("/club/sync") }).post(sync::sync_handler))
+        .route("/users", get(|| async { Redirect::permanent("/admin/users") }))
+        .route("/audit", get(|| async { Redirect::permanent("/admin/audit") }))
+        .route("/teams", get(|| async { Redirect::permanent("/admin/teams") }).post(teams::create_handler))
+        // Detail routes (unchanged)
         .route("/boats/new", get(boats::new_handler))
         .route("/boats/export.csv", get(boats::export_csv_handler))
         .route(
@@ -81,7 +102,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
                 .post(boats::update_handler),
         )
         .route("/boats/{id}/edit", get(boats::edit_handler))
-        .route("/rowers", get(rowers::list_handler))
         .route(
             "/rowers/{id}",
             get(rowers::detail_handler).post(rowers::update_handler),
@@ -104,13 +124,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/rowers/{id}/pair-affinity/delete",
             post(rowers::pair_affinity_delete_handler),
         )
-        .route("/sync", get(sync::form_handler).post(sync::sync_handler))
-        .route("/users", get(users::list_handler))
         .route("/users/invite", post(users::invite_handler))
         .route(
             "/users/{id}/resend-invite",
             post(users::resend_invite_handler),
         )
+        .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
+        .route("/teams/selector", get(teams::selector_handler))
+        // My pages
         .route(
             "/my/profile",
             get(my::profile_handler).post(my::profile_update_handler),
@@ -123,11 +144,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/my/email-preferences",
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
         )
-        .route("/audit", get(audit::list_handler))
-        .route("/audit/rows", get(audit::rows_handler))
-        .route("/teams", get(teams::list_handler).post(teams::create_handler))
-        .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
-        .route("/teams/selector", get(teams::selector_handler))
         .route("/switch-team", post(switch_team_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
