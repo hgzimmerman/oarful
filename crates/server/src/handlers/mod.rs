@@ -19,7 +19,7 @@ pub(crate) mod admin;
 pub(crate) mod audit;
 pub(crate) mod auth;
 pub(crate) mod boats;
-pub(crate) mod club;
+pub(crate) mod team_hub;
 pub(crate) mod demo;
 pub(crate) mod my;
 pub(crate) mod users;
@@ -71,11 +71,11 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/history/{id}", get(history::detail_handler))
         .route("/history/{id}/notes", post(history::notes_handler))
         // Club hub (Coach+)
-        .route("/team", get(club::index_handler))
-        .route("/team/roster", get(club::roster_handler))
-        .route("/team/attendance", get(club::attendance_handler))
+        .route("/team", get(team_hub::index_handler))
+        .route("/team/roster", get(team_hub::roster_handler))
+        .route("/team/attendance", get(team_hub::attendance_handler))
         .route("/team/roster/batch-invite", post(rowers::batch_invite_handler))
-        .route("/team/sync", get(club::sync_handler).post(sync::sync_handler))
+        .route("/team/sync", get(team_hub::sync_handler).post(sync::sync_handler))
         // Admin hub (PD+)
         .route("/admin", get(admin::index_handler))
         .route("/admin/users", get(admin::users_handler))
