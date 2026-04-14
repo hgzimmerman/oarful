@@ -100,6 +100,7 @@ pub(crate) async fn save_profile_handler(
         minimize_bench_weight: input.minimize_bench_weight.unwrap_or(basis.minimize_bench_weight),
         boat_size_stacking_weight: input.boat_size_stacking_weight.unwrap_or(basis.boat_size_stacking_weight),
         bench_cooldown_penalty: input.bench_cooldown_penalty.unwrap_or(basis.bench_cooldown_penalty),
+        stroke_spread_weight: input.stroke_spread_weight.unwrap_or(basis.stroke_spread_weight),
         eight_bias: input.eight_bias.unwrap_or(basis.eight_bias),
         coxed_four_bias: input.coxed_four_bias.unwrap_or(basis.coxed_four_bias),
         four_bias: input.four_bias.unwrap_or(basis.four_bias),

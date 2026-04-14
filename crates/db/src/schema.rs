@@ -199,6 +199,7 @@ diesel::table! {
         minimize_bench_weight -> Integer,
         boat_size_stacking_weight -> Integer,
         bench_cooldown_penalty -> Integer,
+        stroke_spread_weight -> Integer,
         eight_bias -> Integer,
         coxed_four_bias -> Integer,
         four_bias -> Integer,

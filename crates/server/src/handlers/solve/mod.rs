@@ -425,6 +425,7 @@ pub(super) fn profile_to_config(p: &lineup_db::solver_profile::SolverProfile) ->
         minimize_bench_weight: p.minimize_bench_weight,
         boat_size_stacking_weight: p.boat_size_stacking_weight,
         bench_cooldown_penalty: p.bench_cooldown_penalty,
+        stroke_spread_weight: p.stroke_spread_weight,
         eight_bias: p.eight_bias,
         coxed_four_bias: p.coxed_four_bias,
         four_bias: p.four_bias,
@@ -655,6 +656,8 @@ pub(crate) struct SaveProfileInput {
     pub(super) boat_size_stacking_weight: Option<i32>,
     #[serde(default)]
     pub(super) bench_cooldown_penalty: Option<i32>,
+    #[serde(default)]
+    pub(super) stroke_spread_weight: Option<i32>,
     #[serde(default)]
     pub(super) eight_bias: Option<i32>,
     #[serde(default)]

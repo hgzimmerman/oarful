@@ -338,6 +338,13 @@ pub struct SolverConfig {
     /// was benched at a recent practice. Linear decay over a window
     /// (like S6 cox cooldown). Default **2**.
     pub bench_cooldown_penalty: i32,
+    /// S21 stroke-spread penalty. Penalises placing multiple
+    /// "designated strokes" (rowers with SeatZone::Stroke affinity
+    /// weight >= 2) in the same boat. For N designated strokes in
+    /// one boat, the penalty is `weight * (1 + 2 + ... + (N-1))` =
+    /// `weight * N*(N-1)/2`. This spreads stroke talent across boats
+    /// without preventing them from being placed. Default **2**.
+    pub stroke_spread_weight: i32,
     /// Per-boat-class biases. Scales the S8 placement reward for
     /// boats of each class by `(1 + bias)`. All default **0** (no
     /// preference). Positive = prefer fielding that class.
@@ -421,6 +428,7 @@ impl SolverConfig {
             minimize_bench_weight: 4,
             boat_size_stacking_weight: 0,
             bench_cooldown_penalty: 2,
+            stroke_spread_weight: 2,
             eight_bias: 0,
             coxed_four_bias: 0,
             four_bias: 0,
@@ -502,6 +510,7 @@ impl SolverConfig {
             minimize_bench_weight: 2,        // everyone rows
             boat_size_stacking_weight: 0,
             bench_cooldown_penalty: 0,
+            stroke_spread_weight: 0,
             eight_bias: 0,
             coxed_four_bias: 0,
             four_bias: 0,
@@ -1130,6 +1139,7 @@ fn build_model<'a>(
     m.post_s20_bench_cooldown(snapshot, request.date)?;
     m.post_s14_bow_cox_fit()?;
     m.post_s15_designated_cox_retention()?;
+    m.post_s21_stroke_spread(snapshot)?;
     m.post_reference_similarity(&request.reference_lineups)?;
 
     // Hard constraints: H1 seat fill + partial-fill cap, H2

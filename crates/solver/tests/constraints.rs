@@ -192,6 +192,7 @@ fn silent_config() -> SolverConfig {
         minimize_bench_weight: 0,
         boat_size_stacking_weight: 0,
         bench_cooldown_penalty: 0,
+        stroke_spread_weight: 0,
         eight_bias: 0,
         coxed_four_bias: 0,
         four_bias: 0,

@@ -634,4 +634,114 @@ impl<'a> ModelBuilder<'a> {
         }
         Ok(())
     }
+
+    /// **S21 — stroke spread.** Penalise placing multiple "designated
+    /// strokes" (rowers with a Stroke zone affinity of weight >= 2) in
+    /// the same boat. For each pair of designated strokes (i, j), a
+    /// "together" indicator is reified per boat — if both are placed in
+    /// the same boat the penalty is `weight`. With N strokes in one
+    /// boat the total penalty is `weight * C(N,2)` = 0, 0, 1w, 3w, 6w.
+    pub(crate) fn post_s21_stroke_spread(
+        &mut self,
+        snapshot: &lineup_db::snapshot::DbSnapshot,
+    ) -> Result<()> {
+        if self.cfg.stroke_spread_weight == 0 {
+            return Ok(());
+        }
+        let ModelBuilder {
+            solver,
+            boats,
+            available,
+            x,
+            obj_terms,
+            cfg,
+            ..
+        } = self;
+
+        // Identify designated strokes: rowers with Stroke zone affinity >= 2.
+        let stroke_rower_indices: Vec<usize> = {
+            use lineup_db::seat_affinity::SeatZone;
+            use std::collections::HashSet;
+
+            let stroke_rower_ids: HashSet<lineup_db::rower::types::RowerId> = snapshot
+                .seat_affinities
+                .iter()
+                .filter(|a| a.zone == SeatZone::Stroke && a.weight.as_int() >= 2)
+                .map(|a| a.rower_id)
+                .collect();
+
+            available
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| stroke_rower_ids.contains(&r.id))
+                .map(|(i, _)| i)
+                .collect()
+        };
+
+        if stroke_rower_indices.len() <= 1 {
+            return Ok(()); // 0 or 1 designated stroke — no spreading needed
+        }
+
+        // For each pair of designated strokes, for each boat, penalize
+        // both being placed in that boat.
+        for i in 0..stroke_rower_indices.len() {
+            for j in (i + 1)..stroke_rower_indices.len() {
+                let r_a = stroke_rower_indices[i];
+                let r_b = stroke_rower_indices[j];
+
+                for (b_idx, boat) in boats.iter().enumerate() {
+                    // Collect x vars for rower A in this boat (any seat).
+                    let a_vars: Vec<DomainId> = (0..=boat.seat_count)
+                        .filter(|&s| s == 0 && boat.has_cox.as_bool() || s >= 1)
+                        .filter_map(|s| x.get(&(r_a, b_idx, s)).copied())
+                        .collect();
+                    let b_vars: Vec<DomainId> = (0..=boat.seat_count)
+                        .filter(|&s| s == 0 && boat.has_cox.as_bool() || s >= 1)
+                        .filter_map(|s| x.get(&(r_b, b_idx, s)).copied())
+                        .collect();
+
+                    if a_vars.is_empty() || b_vars.is_empty() {
+                        continue;
+                    }
+
+                    // a_in_boat = Σ a_vars (0 or 1)
+                    let a_in = solver.new_bounded_integer(0, 1);
+                    let mut link_a: Vec<AffineView<DomainId>> =
+                        a_vars.iter().map(|v| v.scaled(1)).collect();
+                    link_a.push(a_in.scaled(-1));
+                    let tag = solver.new_constraint_tag();
+                    solver
+                        .add_constraint(pumpkin_constraints::equals(link_a, 0, tag))
+                        .post()
+                        .map_err(|e| anyhow!("S21 stroke-spread a_in link: {e:?}"))?;
+
+                    // b_in_boat = Σ b_vars (0 or 1)
+                    let b_in = solver.new_bounded_integer(0, 1);
+                    let mut link_b: Vec<AffineView<DomainId>> =
+                        b_vars.iter().map(|v| v.scaled(1)).collect();
+                    link_b.push(b_in.scaled(-1));
+                    let tag = solver.new_constraint_tag();
+                    solver
+                        .add_constraint(pumpkin_constraints::equals(link_b, 0, tag))
+                        .post()
+                        .map_err(|e| anyhow!("S21 stroke-spread b_in link: {e:?}"))?;
+
+                    // together = min(a_in, b_in): 1 iff both are in this boat
+                    let together = solver.new_bounded_integer(0, 1);
+                    let tag = solver.new_constraint_tag();
+                    solver
+                        .add_constraint(pumpkin_constraints::minimum(
+                            vec![a_in, b_in],
+                            together,
+                            tag,
+                        ))
+                        .post()
+                        .map_err(|e| anyhow!("S21 stroke-spread together: {e:?}"))?;
+
+                    obj_terms.push(together.scaled(cfg.stroke_spread_weight));
+                }
+            }
+        }
+        Ok(())
+    }
 }
