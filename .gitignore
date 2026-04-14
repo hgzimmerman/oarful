@@ -5,4 +5,6 @@ lineup.sql-journal
 .direnv
 .envrc.local
 master.db
+*.db-shm
+*.db-wal
 .claude/
