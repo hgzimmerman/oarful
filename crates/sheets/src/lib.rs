@@ -56,6 +56,26 @@ use lineup_db::availability::{Availability, NewAvailability};
 use lineup_db::rower::types::{Side, SweepBias};
 use lineup_db::rower::{NewRower, Rower};
 
+/// Controls which rows from the spreadsheet are imported based on
+/// the Sweep/Scull column. Allows two teams to share the same
+/// spreadsheet with different sync sources — one importing sweep
+/// rowers, the other importing scullers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum RowFilter {
+    /// Import all rows regardless of Sweep/Scull value.
+    All,
+    /// Import only rows where column 0 is "Sweep" (or anything other than "Sculling").
+    Sweep,
+    /// Import only rows where column 0 is "Sculling".
+    Sculling,
+}
+
+impl Default for RowFilter {
+    fn default() -> Self {
+        Self::All
+    }
+}
+
 /// Count summary returned from a sync run, intended for logging /
 /// CLI display so the operator can see what happened.
 #[derive(Debug, Clone, Default)]
@@ -89,6 +109,7 @@ pub async fn sync_public_sheet(
     spreadsheet_id: &str,
     gid: u32,
     team_id: lineup_db::team::TeamId,
+    row_filter: RowFilter,
     conn: &mut SqliteConnection,
 ) -> Result<SyncSummary> {
     let url = format!(
@@ -118,7 +139,7 @@ pub async fn sync_public_sheet(
         .context("reading sheet csv body")?;
 
     let year = Utc::now().year();
-    sync_csv(&csv_text, year, team_id, conn)
+    sync_csv(&csv_text, year, team_id, row_filter, conn)
 }
 
 /// Pure parser + upsert logic. Separated from the HTTP fetching so
@@ -134,6 +155,7 @@ pub fn sync_csv(
     csv_text: &str,
     year: i32,
     team_id: lineup_db::team::TeamId,
+    row_filter: RowFilter,
     conn: &mut SqliteConnection,
 ) -> Result<SyncSummary> {
     let mut reader = csv::ReaderBuilder::new()
@@ -168,7 +190,7 @@ pub fn sync_csv(
 
     for record in &all_records[header_idx + 1..] {
         summary.rows_read += 1;
-        match sync_row(record, &date_columns, team_id, conn, &mut summary) {
+        match sync_row(record, &date_columns, team_id, row_filter, conn, &mut summary) {
             Ok(()) => {}
             Err(e) => summary.warnings.push(format!(
                 "row {}: {e}",
@@ -184,6 +206,7 @@ fn sync_row(
     record: &csv::StringRecord,
     date_columns: &[(usize, NaiveDate)],
     team_id: lineup_db::team::TeamId,
+    row_filter: RowFilter,
     conn: &mut SqliteConnection,
     summary: &mut SyncSummary,
 ) -> Result<()> {
@@ -198,6 +221,17 @@ fn sync_row(
     if first_name.is_empty() && last_name.is_empty() {
         return Ok(()); // blank row — silently skip
     }
+
+    let is_sculling = team.eq_ignore_ascii_case("sculling");
+
+    // Apply row filter — skip rows that don't match the configured filter.
+    match row_filter {
+        RowFilter::All => {}
+        RowFilter::Sweep if is_sculling => return Ok(()),
+        RowFilter::Sculling if !is_sculling => return Ok(()),
+        _ => {}
+    }
+
     if email.is_empty() {
         summary.rows_skipped_no_email += 1;
         summary.warnings.push(format!(
@@ -206,7 +240,6 @@ fn sync_row(
         return Ok(());
     }
 
-    let is_sculling = team.eq_ignore_ascii_case("sculling");
     if is_sculling {
         summary.sculling_rows += 1;
     } else {
@@ -445,7 +478,7 @@ mod tests {
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 2);
         assert_eq!(summary.rowers_created, 2);
@@ -492,7 +525,7 @@ mod tests {
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 1);
         assert_eq!(summary.rowers_created, 1);
@@ -510,7 +543,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 1);
         assert_eq!(summary.sculling_rows, 1);
@@ -538,7 +571,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rows_read, 2);
         assert_eq!(summary.rows_skipped_no_email, 1);
@@ -558,7 +591,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rowers_created, 1);
         assert_eq!(summary.availabilities_upserted, 0); // Maybe isn't upserted
@@ -582,7 +615,7 @@ mod tests {
             header_with_dates(&["4/11", "4/13"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         assert_eq!(summary.rowers_created, 1);
         assert_eq!(summary.availabilities_upserted, 1);
@@ -637,7 +670,7 @@ mod tests {
              Sweep,Smith,Alice,she/her,alice@example.com,No,Both,Attending\n",
             header_with_dates(&["4/11"]),
         );
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
         assert_eq!(summary.rowers_created, 0);
 
         let rowers = all_rowers(&mut conn);
@@ -660,7 +693,7 @@ mod tests {
             header_with_dates(&["not-a-date"]),
         );
 
-        let err = sync_csv(&csv, YEAR, tid, &mut conn).unwrap_err();
+        let err = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap_err();
         let msg = format!("{err:#}");
         assert!(
             msg.contains("not-a-date") || msg.contains("M/D"),
@@ -677,7 +710,7 @@ mod tests {
         let csv = "Team,Last,First,Pronoun,Email,Scull,Side,4/11\n\
                    Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n";
 
-        let err = sync_csv(csv, YEAR, tid, &mut conn).unwrap_err();
+        let err = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap_err();
         let msg = format!("{err:#}");
         assert!(
             msg.contains("header"),
@@ -697,7 +730,7 @@ mod tests {
             header_with_dates(&["4/11"]),
         );
 
-        let summary = sync_csv(&csv, YEAR, tid, &mut conn).unwrap();
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
 
         // The blank row is counted in rows_read but produces no
         // warning, no rower, and no availability.
@@ -705,6 +738,50 @@ mod tests {
         assert_eq!(summary.rowers_created, 2);
         assert_eq!(summary.availabilities_upserted, 2);
         assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+    }
+
+    #[test]
+    fn row_filter_sweep_skips_sculling_rows() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n\
+             Sculling,Scully,Nico,they/them,nico@example.com,Yes,Port,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::Sweep, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 2);
+        assert_eq!(summary.sweep_rows, 1);
+        assert_eq!(summary.sculling_rows, 0);
+        assert_eq!(summary.rowers_created, 1);
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers.len(), 1);
+        assert_eq!(rowers[0].name, "Alice Smith");
+    }
+
+    #[test]
+    fn row_filter_sculling_skips_sweep_rows() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = format!(
+            "{}\n\
+             Sweep,Smith,Alice,she/her,alice@example.com,Yes,Port,Attending\n\
+             Sculling,Scully,Nico,they/them,nico@example.com,Yes,Port,Attending\n",
+            header_with_dates(&["4/11"]),
+        );
+
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::Sculling, &mut conn).unwrap();
+
+        assert_eq!(summary.rows_read, 2);
+        assert_eq!(summary.sweep_rows, 0);
+        assert_eq!(summary.sculling_rows, 1);
+        assert_eq!(summary.rowers_created, 1);
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers.len(), 1);
+        assert_eq!(rowers[0].name, "Nico Scully");
     }
 }
 

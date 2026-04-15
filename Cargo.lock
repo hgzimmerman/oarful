@@ -1444,6 +1444,7 @@ dependencies = [
  "diesel",
  "lineup_db",
  "reqwest",
+ "serde",
  "tracing",
 ]
 

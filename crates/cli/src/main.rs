@@ -551,7 +551,7 @@ async fn cmd_sync_sheet(db: &Db, team_id: TeamId, args: &[String]) -> Result<()>
     // on the outside.
     let sync_result: Result<lineup_sheets::SyncSummary> = db
         .with_conn(move |conn| {
-            match lineup_sheets::sync_csv(&csv_text, year, team_id, conn) {
+            match lineup_sheets::sync_csv(&csv_text, year, team_id, lineup_sheets::RowFilter::All, conn) {
                 Ok(summary) => Ok(Ok(summary)),
                 Err(e) => Ok(Err(e)),
             }

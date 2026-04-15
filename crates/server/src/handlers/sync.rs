@@ -43,6 +43,8 @@ use crate::{handlers::internal_error, state::TenantContext, templates};
 struct GoogleSheetConfig {
     sheet_id: String,
     gid: u32,
+    #[serde(default)]
+    row_filter: lineup_sheets::RowFilter,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +54,9 @@ pub(crate) struct SyncFormInput {
     /// first/only tab on most sheets.
     #[serde(default)]
     pub(crate) gid: u32,
+    /// Which rows to import: "All", "Sweep", or "Sculling".
+    #[serde(default)]
+    pub(crate) row_filter: lineup_sheets::RowFilter,
     /// Optional auto-sync interval in minutes. `None` or `Some(0)`
     /// disables polling; any positive value enables it.
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -76,6 +81,7 @@ pub(crate) async fn sync_content(
         serde_json::from_str::<GoogleSheetConfig>(&s.config).ok().map(|cfg| SyncFormInput {
             spreadsheet_id: cfg.sheet_id,
             gid: cfg.gid,
+            row_filter: cfg.row_filter,
             poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
         })
     });
@@ -123,9 +129,10 @@ pub(crate) async fn sync_handler(
     // anyhow into an Ok(Result<...>) and unwrapping outside.
     let year = Utc::now().year();
     let csv_for_sync = csv_text.clone();
+    let row_filter = input.row_filter;
     let sync_outcome: anyhow::Result<SyncSummary> = tenant
         .db
-        .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, conn)))
+        .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, row_filter, conn)))
         .await
         .map_err(internal_error)?;
 
@@ -135,6 +142,7 @@ pub(crate) async fn sync_handler(
             let config_json = serde_json::to_string(&GoogleSheetConfig {
                 sheet_id: trimmed.clone(),
                 gid: input.gid,
+                row_filter,
             })
             .unwrap_or_default();
             // Normalize: 0 or None → no polling.
@@ -278,9 +286,10 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
             let year = chrono::Utc::now().year();
             let team_id = src.team_id;
             let src_id = src.id;
+            let poll_row_filter = config.row_filter;
             let sync_result: anyhow::Result<lineup_sheets::SyncSummary> = match db
                 .with_conn(move |conn| {
-                    Ok(lineup_sheets::sync_csv(&csv_text, year, team_id, conn))
+                    Ok(lineup_sheets::sync_csv(&csv_text, year, team_id, poll_row_filter, conn))
                 })
                 .await
             {

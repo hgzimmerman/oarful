@@ -69,6 +69,21 @@ pub(crate) fn form_content(
                     }
                 }
                 div {
+                    @let current_filter = prev.map(|p| p.row_filter).unwrap_or_default();
+                    label for="row_filter" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Row filter"
+                    }
+                    select id="row_filter" name="row_filter"
+                           class="w-48 border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                        option value="All" selected[matches!(current_filter, lineup_sheets::RowFilter::All)] { "All rows" }
+                        option value="Sweep" selected[matches!(current_filter, lineup_sheets::RowFilter::Sweep)] { "Sweep only" }
+                        option value="Sculling" selected[matches!(current_filter, lineup_sheets::RowFilter::Sculling)] { "Sculling only" }
+                    }
+                    p class="text-xs text-slate-500 mt-1" {
+                        "Filter by the Sweep/Scull column. Use this to import only sweep or sculling rowers from a shared spreadsheet."
+                    }
+                }
+                div {
                     label for="poll_interval_minutes" class="block text-sm font-semibold text-slate-700 mb-1" {
                         "Auto-sync interval (minutes)"
                     }
