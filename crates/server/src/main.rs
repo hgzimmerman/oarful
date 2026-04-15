@@ -22,10 +22,11 @@ async fn main() -> Result<()> {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 
-    // Subcommands: reset-tenant, reset-all
+    // Subcommands
     match args.first().map(String::as_str) {
         Some("reset-tenant") => return cmd_reset_tenant(&args[1..]),
         Some("reset-all") => return cmd_reset_all(),
+        Some("seed") => return cmd_seed().await,
         _ => {}
     }
 
@@ -120,5 +121,46 @@ fn cmd_reset_all() -> Result<()> {
         println!("Master DB {master_db} does not exist — nothing to reset.");
     }
 
+    Ok(())
+}
+
+/// `cargo run -p lineup_server -- seed`
+/// Ensures the default tenant exists and seeds it with the fleet-only
+/// fixture (boats + team + dev coach account, no rowers). Safe to run
+/// repeatedly — skips if already seeded.
+async fn cmd_seed() -> Result<()> {
+    let master_db = std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+
+    // Ensure data directories exist.
+    std::fs::create_dir_all(format!("{data_dir}/demos"))?;
+
+    // Ensure master DB + default tenant exist (MasterDb::connect runs migrations).
+    let master = lineup_master_db::state::MasterDb::connect(&master_db)?;
+
+    let db_path = format!("{data_dir}/default.db");
+    let db_path_for_closure = db_path.clone();
+    master.with_conn(move |conn| {
+        if lineup_master_db::tenant::Tenant::find_by_slug(conn, "default")?.is_none() {
+            let now = chrono::Utc::now().naive_utc();
+            lineup_master_db::tenant::Tenant::create(
+                conn,
+                lineup_master_db::tenant::NewTenant {
+                    name: "Default Club".to_string(),
+                    slug: "default".to_string(),
+                    db_path: db_path_for_closure,
+                    created_at: now,
+                },
+            )?;
+        }
+        Ok(())
+    }).await?;
+
+    // Connect to tenant DB (runs migrations), seed fixture.
+    let db = lineup_db::state::Db::connect(&db_path)?;
+    db.with_conn(|conn| lineup_db::fixture::seed_fleet_only(conn)).await?;
+
+    println!("Default tenant seeded (fleet + dev coach account).");
+    println!("  Login: coach@test.com / 12345");
     Ok(())
 }
