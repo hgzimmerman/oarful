@@ -23,7 +23,7 @@ use lineup_db::lineup::Lineup;
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
 use serde::Deserialize;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use crate::extract::HtmlForm;
 use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
@@ -89,11 +89,6 @@ async fn schedule_tab_content(
                 .and_then(|t| t.default_practice_time);
             // Upcoming practices (non-cancelled).
             let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
-            // Also include practices that have availability responses.
-            let upcoming_ids: Vec<PracticeId> = upcoming_practices.iter().map(|p| p.id).collect();
-            let avail_practice_ids = Availability::practices_with_responses(conn, &upcoming_ids)?;
-            let avail_set: HashSet<PracticeId> = avail_practice_ids.into_iter().collect();
-
             // Past committed practices.
             let past_committed = Practice::list_committed(conn, team_id)?;
 

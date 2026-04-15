@@ -20,6 +20,7 @@ pub(crate) struct AppState {
     pub(crate) tenant_cache: Arc<TenantCache>,
     /// The default tenant's ID, used for backward compat and startup
     /// seeding. Phase 5+ may remove this once all access is JWT-driven.
+    #[allow(dead_code)]
     pub(crate) default_tenant_id: TenantId,
     pub(crate) solve_semaphore: Arc<Semaphore>,
     pub(crate) solver_pool: Arc<rayon::ThreadPool>,
@@ -40,6 +41,7 @@ pub(crate) struct AppState {
 #[derive(Clone)]
 pub(crate) struct TenantContext {
     pub(crate) db: Db,
+    #[allow(dead_code)]
     pub(crate) tenant_id: TenantId,
     pub(crate) claims: Claims,
     pub(crate) config: TenantConfig,

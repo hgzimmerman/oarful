@@ -15,7 +15,7 @@ pub(crate) fn grid_content(
     rowers: &[Rower],
     dates: &[NaiveDate],
     avail_map: &HashMap<(RowerId, NaiveDate), AvailabilityStatus>,
-    committed_dates: &HashSet<NaiveDate>,
+    _committed_dates: &HashSet<NaiveDate>,
     // Maps committed dates to their practice IDs for link generation.
     committed_practice_ids: &HashMap<NaiveDate, PracticeId>,
     show_past: bool,

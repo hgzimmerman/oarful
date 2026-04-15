@@ -193,7 +193,7 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
 
 /// Read-only attribute display with an Edit button that swaps to an
 /// inline form. The section has id `#attributes` for HTMX `outerHTML`.
-pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, perms: &DetailPermissions) -> Markup {
+pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, _perms: &DetailPermissions) -> Markup {
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     html! {
         section #attributes class="bg-white rounded-lg shadow p-6" {
