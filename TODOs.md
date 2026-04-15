@@ -365,9 +365,8 @@ culprit) remains parked pending a Pumpkin API dive.
 - ~~**Pair boat constraints**~~ (shipped as H7 + S17)
 - ~~**Minimize benched rowers**~~ (shipped as S18)
 - ~~**Equal speed profile: boat-size weighting**~~ (shipped as S19)
-- **Bench cooldown** — soft penalty for benching a rower who was
-  benched at the previous practice. Similar pattern to S6 cox
-  cooldown but for bench rotation fairness.
+- ~~**Bench cooldown**~~ (shipped as S20 — linear-decay penalty for
+  consecutive benching, configurable via `bench_cooldown_penalty`)
 - ~~**Seed built-in presets on tenant creation**~~ (not needed —
   built-ins are hardcoded in `SolverConfig` and always available;
   custom profiles branch off the active config at save time)
