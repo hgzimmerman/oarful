@@ -44,6 +44,7 @@ use lineup_db::types::{AffinityWeight, IntBool};
 use lineup_solver::{
     solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveStatus, SolverConfig,
 };
+use tracing_test::traced_test;
 
 const TEST_DATE: (i32, u32, u32) = (2026, 5, 1);
 
@@ -1102,4 +1103,35 @@ fn h2_designated_cox_never_rows() {
             "designated cox must not row seat {seat}"
         );
     }
+}
+
+// ---------- Diagnostic log emission ----------
+
+#[traced_test]
+#[test]
+fn solver_emits_debug_diagnostics() {
+    // Run a basic solve and verify that key debug log lines are emitted.
+    let rowers = vec![
+        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
+        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(3, "PortB", RowerWeightClass::Medium, Skill::Intermediate, Strength::Intermediate, Height::Medium, Side::Port),
+        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Intermediate, Strength::Intermediate, Height::Medium, Side::Starboard),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestFour")]);
+    let result = solve(&snap, &request(SolverConfig::default())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // Eligibility summary
+    assert!(logs_contain("eligibility: x variables created"));
+    // Greedy fleet selection
+    assert!(logs_contain("greedy: selected boat"));
+    // Model summary (already existed at info level)
+    assert!(logs_contain("model built"));
+    // Constraint contributions
+    assert!(logs_contain("S8 placement reward"));
+    assert!(logs_contain("S13 non-scull retention"));
+    assert!(logs_contain("S18 minimize bench"));
+    // Unplaced rowers
+    assert!(logs_contain("unplaced rowers"));
 }
