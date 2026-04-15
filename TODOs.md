@@ -1,6 +1,6 @@
 # lineup_generator — open TODOs
 
-A snapshot of the work backlog as of 2026-04-10. Captures the design
+A snapshot of the work backlog as of 2026-04-15. Captures the design
 intent behind each pending task so the next session (human or agent)
 can resume without re-deriving context.
 
@@ -131,6 +131,48 @@ can resume without re-deriving context.
   page (Coach+ gated) bulk-creates Member accounts + sends invite
   emails for all rowers with email but no linked user. Toast feedback
   with invited/skipped counts. Invite status badges on roster rows.
+- **Email→app_user refactor** — moved email ownership from `rower` to
+  `app_user`, reversed FK direction (`app_user.rower_id` replaces
+  `rower.user_id`). Sheet sync now creates passwordless active users
+  alongside new rowers. Roster no longer shows Account status column
+  (redundant — every synced rower has an account). Disabled users
+  filtered from roster.
+- **Sweep bias** — replaced boolean `can_scull` with `sweep_bias`
+  integer (-2..2) on rower. Simplified `AvailabilityStatus` to Yes/No
+  (removed Maybe, ScullingOnly). S13 retention reward scales linearly
+  with `abs(sweep_bias)+1`. New sweep-bias alignment penalty steers
+  rowers toward preferred boat type.
+- **Scull boat support in solver** — solver now places rowers in both
+  sweep and scull boats in a single pass. `Boat::seat_side()` returns
+  None for scull boats (no side distinction). Eligibility gate: hard
+  sweepers blocked from scull boats and vice versa. S11/S12 (skill on
+  ends, strength in middle) apply to scull boats automatically.
+- **Sync row filter** — `RowFilter` enum (All/Sweep/Sculling) on sync
+  source config. Two teams can share the same spreadsheet with
+  different filters. Row filter dropdown on sync form, mandatory with
+  no default (prevents accidental full imports).
+- **Practice duration + cross-team overlap detection** —
+  `default_practice_duration_minutes` on team,
+  `duration_minutes` on practice (per-practice override).
+  `Practice::find_overlapping()` finds concurrent practices across
+  teams using time-window intersection. Practice create form shows
+  start/end time inputs. Schedule list shows time windows.
+- **Cross-team coordination in editor** — "Available from other teams"
+  section shows benched rowers from overlapping practices. Boat pills
+  and cards show "In use by {Team}" warnings when another team has
+  committed a lineup with that boat for a concurrent practice.
+- **Soft-delete rowers + archive teams** — rower `active` flag
+  togglable via PD-only endpoint. Deactivate/reactivate button on
+  rower detail page. Inactive rowers hidden from operational views,
+  preserved in history. Team `archived` flag with PD-only toggle.
+  Archived teams hidden from Coach/Member team switcher. Sheet sync
+  reactivates inactive rowers when they reappear.
+- **CLI commands** — `reset-tenant <slug>` (delete tenant DB + master
+  entry), `reset-all` (wipe everything), `seed` (create default
+  tenant with fleet-only fixture).
+- **Boat form UX** — stroke side (rig) input hidden for scull boat
+  types, cox position input hidden for coxless boat types. Fleet
+  defaults matrix shows all in-service boats (not just sweep).
 
 ## Open work
 
@@ -237,55 +279,12 @@ Replace CDN with local `tailwind.config.js` scanning
 
 ### Infrastructure
 
-#### Practice datetime migration
+#### ~~Practice datetime migration~~ (shipped)
 
-Practices are currently date-only, which means: (a) can't represent
-two practices per day (e.g. morning/evening), (b) can't detect when
-a practice has finished (waits until end-of-day), (c) no time-of-day
-for co-incident boat usage warnings across teams.
-
-**Schema changes:**
-- `practice`: add `time` column (`TIME`, nullable initially for
-  backfill). Unique constraint becomes `(team_id, date, time)`
-  instead of `(team_id, date)`. The `team.default_practice_time`
-  column (already added) pre-fills new practices.
-- `availability`: re-key from `(rower_id, team_id, date)` to
-  `(rower_id, practice_id)`. Each availability response is tied
-  to a specific practice, not a calendar day.
-
-**URL migration:**
-- `/solve/{date}` → `/solve/{practice_id}`
-- `/history/{date}` → `/history/{practice_id}`
-- `/practices/{date}/cancel` → `/practices/{id}/cancel`
-- `/history/{date}/notes` → `/history/{id}/notes`
-- `/commit/{date}` → `/commit/{id}`
-
-**UI:**
-- Practice list, availability form, solve page, history — all
-  change from date display to date+time. When only one practice
-  per day exists, show just the date as shorthand. When multiple
-  exist on the same day, disambiguate with time (e.g.
-  "Apr 15 · 6:00 AM" vs "Apr 15 · 5:30 PM").
-- Practice creation form pre-fills time from
-  `team.default_practice_time`.
-- Availability UI shows per-practice dropdowns instead of
-  per-date.
-
-**Migration path:**
-- Add `time` column nullable, backfill existing practices with
-  the team's default time (or NULL).
-- Migrate availability FK from `(rower_id, team_id, date)` to
-  `(rower_id, practice_id)` — join on `team_id + date` to map
-  existing rows.
-- Update all handlers and templates to use practice ID in URLs.
-- Add redirects from old date-based URLs for bookmarks.
-
-**Downstream benefits:**
-- "Practice finished" detection: compare `now` against
-  `practice.date + practice.time + estimated_duration`.
-- Cross-team boat conflict warnings: detect overlapping
-  `(date, time)` ranges across teams that share boats.
-- Foundation for regatta scheduling (multiple events per day).
+Practice `time` + `duration_minutes` columns shipped. Availability
+re-keyed to `(rower_id, practice_id)`. URLs use practice IDs. Practice
+creation form shows start/end time. Cross-team overlap detection uses
+time windows. Default practice time + duration on team config.
 
 #### ~~Periodic sync polling~~ (shipped)
 
@@ -352,7 +351,7 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Follow-ups not yet tracked as tasks
 
-- **CLI `create-tenant` command**
+- ~~**CLI `create-tenant` command**~~ (shipped as `seed` CLI command)
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
 - ~~**Pair boat constraints**~~ (shipped as H7 + S17)
@@ -364,22 +363,8 @@ culprit) remains parked pending a Pumpkin API dive.
 - ~~**Seed built-in presets on tenant creation**~~ (not needed —
   built-ins are hardcoded in `SolverConfig` and always available;
   custom profiles branch off the active config at save time)
-- **Boat-type biases** — per-boat-class solver preferences so
-  coaches can express "I want to field eights today" or "prioritize
-  the 4+ over the pair." Potential approaches:
-  - Per-boat-class priority weight on `SolveRequest` (e.g.
-    `eight_bias`, `four_bias`, `pair_bias`) that scales the S8
-    placement reward by boat class. Higher bias = solver tries
-    harder to field that class.
-  - Per-boat toggle in the UI: "must field" (hard), "prefer"
-    (soft bonus), "avoid" (soft penalty), "exclude" (hard).
-    Currently the boat pill on/off is binary include/exclude;
-    this would add intermediate states.
-  - Greedy fleet pre-selection could rank by bias before size,
-    letting the coach override the default largest-first heuristic.
-  - Interaction with boat-size stacking (S19): if the coach biases
-    towards 4s, the even-speed profile should stack them
-    accordingly rather than treating them as overflow.
+- ~~**Boat-type biases**~~ (shipped as S8 class biases with
+  `eight_bias`, `four_bias`, `pair_bias`, etc. on `SolverConfig`)
 
 ### Per-team roles
 
@@ -608,3 +593,7 @@ Start with push-only; bidirectional can follow if there's demand.
 
 1. **Email visibility tenant config** — `emails_visible` boolean.
 2. **#56** Custom Tailwind build pipeline — replace CDN.
+3. **Data export + backup/import** — PD-accessible SQLite download +
+   CLI import command.
+4. **Styled confirmation modals** — replace native `confirm()` with
+   Alpine.js modals.
