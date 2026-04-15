@@ -13,7 +13,7 @@ use crate::handlers::solve::SolveKnobs;
 /// new query string, so the result is bookmarkable and the back
 /// button works.
 pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices: &[lineup_db::practice::Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot, solve_result: Option<&SolveResult>) -> Markup {
-    let has_eight = snapshot.sweep_boats.iter().any(|b| b.seat_count >= 8);
+    let has_eight = snapshot.boats.iter().any(|b| b.seat_count >= 8);
     let button_label = if has_generated { "Re-generate" } else { "Generate" };
     let action = format!("/solve/{practice_id}");
     html! {

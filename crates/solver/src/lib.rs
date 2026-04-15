@@ -53,8 +53,8 @@ pub struct SolveRequest {
     /// which of these to actually use via per-boat `use[b]` binary
     /// decision variables, driven by S8 (maximise rowers placed) and the
     /// weight-class / skill trade-offs. IDs must refer to entries in
-    /// `snapshot.sweep_boats`. An empty list means "use every in-service
-    /// sweep boat as a candidate".
+    /// `snapshot.boats`. An empty list means "use every in-service
+    /// boat as a candidate".
     ///
     /// Primitive coach-override semantics: to require a specific boat,
     /// pass it alone; to forbid a boat, just don't include it.
@@ -291,20 +291,17 @@ pub struct SolverConfig {
     /// enough not to override S1 / S9 / S11 / S12 structural
     /// preferences that would make the extra placement worse.
     pub partial_fill_bonus: i32,
-    /// S13 sweep-bias retention reward. Per-rower bonus for
-    /// *keeping a sweep-biased rower in a sweep seat*, scaled by
-    /// `(sweep_bias + 1)` so higher sweep_bias rowers get stronger
-    /// retention. Rowers with `sweep_bias <= -1` are skipped (they
-    /// prefer sculling and have a natural fallback). Rowers with
-    /// `sweep_bias = 0` get 1x, `1` gets 2x, `2` gets 3x the
-    /// base weight. Encoded as one `rower_used[r] ∈ {0, 1}`
-    /// aux var per eligible rower, linked to
-    /// `Σ_{b, s} x[r, b, s]`, with a single scaled obj term so
-    /// the total contribution is O(sweep-biased rowers). Default
-    /// **2** — breaks the "who gets benched" tie against
-    /// sculling-leaning rowers without overriding hard structural
-    /// preferences (side, skill, weight-class) that might make
-    /// placing a specific sweep-biased rower uneconomical.
+    /// S13 retention reward. Per-rower bonus for placing a rower,
+    /// scaled by `abs(sweep_bias) + 1` so hard-locked rowers (±2)
+    /// get the strongest retention and ambivalent rowers (0) get
+    /// the weakest. All rowers get some retention. Encoded as one
+    /// `rower_used[r] ∈ {0, 1}` aux var per eligible rower,
+    /// linked to `Σ_{b, s} x[r, b, s]`, with a single scaled obj
+    /// term so the total contribution is O(available rowers).
+    /// Default **2** — breaks the "who gets benched" tie toward
+    /// rowers with strong type preferences without overriding hard
+    /// structural preferences (side, skill, weight-class) that
+    /// might make placing a specific rower uneconomical.
     pub non_scull_retention_weight: i32,
     /// S14 bow-loader cox fit penalty. Penalises tall and heavy
     /// rowers in the cox seat of bow-loader boats, where the
@@ -325,7 +322,7 @@ pub struct SolverConfig {
     pub pair_eligibility_weight: i32,
     /// S18 minimize-bench weight. Per-rower reward for being placed
     /// in any seat. Applies to all available rowers (unlike S13 which
-    /// only covers non-scull rowers). Higher = fewer benched rowers.
+    /// scales by sweep_bias). Higher = fewer benched rowers.
     /// Default **4**.
     pub minimize_bench_weight: i32,
     /// S19 boat-size stacking weight. Quality reward inversely scaled
@@ -657,28 +654,20 @@ pub struct ProposedSolution {
     /// with `used = false` have empty `seats` — they were
     /// candidates the solver rejected.
     pub lineups: Vec<ProposedLineup>,
-    /// Available rowers who didn't make it into `lineups`,
-    /// bucketed by `sweep_bias` so the coach can redirect
-    /// sculling-leaning rowers to that team rather than
-    /// benching them. See [`UnplacedRowers`].
+    /// Available rowers who didn't make it into `lineups`.
+    /// See [`UnplacedRowers`].
     pub unplaced: UnplacedRowers,
 }
 
-/// Rowers who were available for sweep seating today but didn't
+/// Rowers who were available for seating today but didn't
 /// land in a given lineup set. Split by `sweep_bias` so the
-/// coach can see at a glance who to redirect to the scullers
-/// team (`to_sculling`, sweep_bias <= 0) versus who stays on
-/// the dock (`benched`, sweep_bias > 0). Both buckets preserve
-/// the stable iteration order of `DbSnapshot.available_rowers()`.
+/// coach can see at a glance who wasn't placed. Since the solver
+/// now handles both sweep and scull boats, all unplaced rowers
+/// are simply "benched". The list preserves the stable iteration
+/// order of `DbSnapshot.available_rowers()`.
 #[derive(Debug, Clone, Default)]
 pub struct UnplacedRowers {
-    /// Rowers with `sweep_bias <= 0` who weren't placed.
-    /// These are overflow candidates for the sculling team — the
-    /// coach should funnel them there rather than bench them.
-    pub to_sculling: Vec<RowerId>,
-    /// Rowers with `sweep_bias > 0` who weren't placed. They
-    /// prefer sweep and have no natural sculling fallback; they
-    /// stay on the dock today unless the coach shuffles the fleet.
+    /// Rowers who weren't placed in any boat (sweep or scull).
     pub benched: Vec<RowerId>,
 }
 
@@ -749,7 +738,7 @@ pub struct ProposedLineup {
 /// The body is a thin three-phase orchestrator:
 ///
 /// 1. **Resolve inputs.** Turn `request.boats` into a concrete
-///    `Vec<&Boat>` (empty = "every in-service sweep boat"),
+///    `Vec<&Boat>` (empty = "every in-service boat"),
 ///    gather the available rowers for the date, and short-circuit
 ///    the trivial cases where there's nothing to do.
 /// 2. **Build the model.** Delegate to [`build_model`] to
@@ -767,20 +756,20 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // --- Phase 1: resolve inputs ---
     //
     // Turn `request.boats` into a concrete fleet vec. An empty
-    // request means "consider every in-service sweep boat"; any
+    // request means "consider every in-service boat"; any
     // explicit IDs must correspond to actual snapshot entries.
     let boats: Vec<&Boat> = if request.boats.is_empty() {
-        snapshot.sweep_boats.iter().collect()
+        snapshot.boats.iter().collect()
     } else {
         request
             .boats
             .iter()
             .map(|bid| {
                 snapshot
-                    .sweep_boats
+                    .boats
                     .iter()
                     .find(|b| b.id == *bid)
-                    .ok_or_else(|| anyhow!("boat {} not in snapshot sweep fleet", bid))
+                    .ok_or_else(|| anyhow!("boat {} not in snapshot fleet", bid))
             })
             .collect::<Result<_>>()?
     };
@@ -799,7 +788,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
     let available: Vec<&Rower> = snapshot.available_rowers().collect();
     if available.is_empty() {
-        bail!("no rowers are available for sweep seating on {}", request.date);
+        bail!("no rowers are available for seating on {}", request.date);
     }
 
     // --- Phase 1b: greedy fleet pre-selection ---
@@ -816,7 +805,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // Ensure required boats (from pins/locks) survive greedy selection.
     for &req_bid in &request.required_boats {
         if !boats.iter().any(|b| b.id == req_bid) {
-            if let Some(b) = snapshot.sweep_boats.iter().find(|b| b.id == req_bid) {
+            if let Some(b) = snapshot.boats.iter().find(|b| b.id == req_bid) {
                 boats.push(b);
             }
         }
@@ -824,7 +813,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // Also ensure boats with seat locks survive greedy selection.
     for lock in &request.locks {
         if !boats.iter().any(|b| b.id == lock.boat_id) {
-            if let Some(b) = snapshot.sweep_boats.iter().find(|b| b.id == lock.boat_id) {
+            if let Some(b) = snapshot.boats.iter().find(|b| b.id == lock.boat_id) {
                 boats.push(b);
             }
         }
@@ -874,7 +863,7 @@ fn rss_kb() -> u64 {
 ///
 /// This is a heuristic — the solver still decides the final fleet
 /// via `use[b]` variables. But narrowing the candidate set from
-/// "all in-service sweep boats" to "the ones that actually fit"
+/// "all in-service boats" to "the ones that actually fit"
 /// dramatically reduces the search space and prevents timeout on
 /// fleet-configuration exploration.
 fn greedy_fleet_select<'a>(
@@ -1128,13 +1117,14 @@ fn build_model<'a>(
 
     // Fleet-level soft constraints: S4 wrong-side aggregation,
     // S6 cox cooldown, S7 novelty vs recent lineups, S13
-    // non-scull retention. These live in `soft_fleet.rs` as
+    // retention. These live in `soft_fleet.rs` as
     // ModelBuilder methods. S8 already ran above because it
     // only needs `use_b` / `boats` / `cfg` and doesn't touch
     // `x`.
     m.post_s4_wrong_side()?;
     m.post_s6_cox_cooldown(snapshot, request.date)?;
     m.post_s13_non_scull_retention()?;
+    m.post_sweep_bias_penalty();
     m.post_s18_minimize_bench()?;
     m.post_s20_bench_cooldown(snapshot, request.date)?;
     m.post_s14_bow_cox_fit()?;
@@ -1450,9 +1440,9 @@ fn search_lineups(
     })
 }
 
-/// Bucket the available rowers into "placed in a lineup", "can
-/// fall back to sculling", and "benched" given a set of
-/// ProposedLineups. The returned `UnplacedRowers` preserves the
+/// Bucket the available rowers into "placed in a lineup" and
+/// "benched" given a set of ProposedLineups. The returned
+/// `UnplacedRowers` preserves the
 /// iteration order of `available` so repeated runs produce
 /// identical output (important for the baseline regression
 /// test).
@@ -1471,11 +1461,7 @@ fn compute_unplaced(
         if placed.contains(&rower.id) {
             continue;
         }
-        if rower.sweep_bias.as_int() <= 0 {
-            out.to_sculling.push(rower.id);
-        } else {
-            out.benched.push(rower.id);
-        }
+        out.benched.push(rower.id);
     }
     out
 }

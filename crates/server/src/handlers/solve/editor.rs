@@ -80,8 +80,8 @@ pub(crate) async fn editor_handler(
         let parts: Vec<&str> = transfer.splitn(2, ':').collect();
         if parts.len() == 2 {
             if let (Ok(src_id), Ok(dst_id)) = (parts[0].parse::<BoatId>(), parts[1].parse::<BoatId>()) {
-                let src_boat = snapshot.sweep_boats.iter().find(|b| b.id == src_id);
-                let dst_boat = snapshot.sweep_boats.iter().find(|b| b.id == dst_id);
+                let src_boat = snapshot.boats.iter().find(|b| b.id == src_id);
+                let dst_boat = snapshot.boats.iter().find(|b| b.id == dst_id);
                 if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
                     let src_seats = placements.remove(&src_id).unwrap_or_default();
                     let dst_seats = placements.remove(&dst_id).unwrap_or_default();

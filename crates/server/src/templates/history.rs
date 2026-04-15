@@ -230,7 +230,7 @@ fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
 
 fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool, stale_rowers: &HashSet<RowerId>, is_coach: bool) -> Markup {
     let boat = snapshot
-        .sweep_boats
+        .boats
         .iter()
         .find(|b| b.id == committed.lineup.boat_id);
     let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown boat>");
@@ -366,45 +366,27 @@ fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Mar
         .flat_map(|c| c.seats.iter().map(|s| s.rower_id))
         .collect();
 
-    let mut to_sculling: Vec<&Rower> = Vec::new();
     let mut benched: Vec<&Rower> = Vec::new();
 
     for r in snapshot.available_rowers() {
         if placed.contains(&r.id) {
             continue;
         }
-        if r.sweep_bias.as_int() <= 0 {
-            to_sculling.push(r);
-        } else {
-            benched.push(r);
-        }
+        benched.push(r);
     }
 
-    if to_sculling.is_empty() && benched.is_empty() {
+    if benched.is_empty() {
         return html! {};
     }
 
     html! {
         div class="bg-white rounded-lg shadow p-4 text-sm space-y-2" {
-            @if !to_sculling.is_empty() {
-                div {
-                    strong class="text-slate-700" { "To sculling: " }
-                    span class="text-slate-600" {
-                        @for (i, r) in to_sculling.iter().enumerate() {
-                            @if i > 0 { ", " }
-                            (r.name)
-                        }
-                    }
-                }
-            }
-            @if !benched.is_empty() {
-                div {
-                    strong class="text-slate-700" { "Benched: " }
-                    span class="text-slate-600" {
-                        @for (i, r) in benched.iter().enumerate() {
-                            @if i > 0 { ", " }
-                            (r.name)
-                        }
+            div {
+                strong class="text-slate-700" { "Benched: " }
+                span class="text-slate-600" {
+                    @for (i, r) in benched.iter().enumerate() {
+                        @if i > 0 { ", " }
+                        (r.name)
                     }
                 }
             }

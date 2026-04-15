@@ -158,16 +158,6 @@ fn format_result(result: &SolveResult, snapshot: &DbSnapshot) -> String {
     // when a bucket is empty — so the baseline file has a stable
     // shape regardless of solve outcome. Sort each bucket by
     // name so the output is deterministic across runs.
-    let mut to_sculling_names: Vec<String> = result
-        .primary
-        .unplaced
-        .to_sculling
-        .iter()
-        .map(|id| name_of(*id))
-        .collect();
-    to_sculling_names.sort();
-    writeln!(out, "to sculling: {}", to_sculling_names.join(", ")).unwrap();
-
     let mut benched_names: Vec<String> = result
         .primary
         .unplaced

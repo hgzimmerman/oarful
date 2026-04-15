@@ -114,6 +114,17 @@ impl<'a> ModelBuilder<'a> {
                     if !rower_eligible_for_seat(rower, boat, seat) {
                         continue;
                     }
+                    // Sweep-bias hard gate: SWEEP_HARD rowers cannot
+                    // go in scull boats; SCULL_HARD rowers cannot go
+                    // in sweep boats. Soft preferences (±1) are
+                    // handled by the sweep_bias_penalty soft constraint.
+                    use lineup_db::rower::types::SweepBias;
+                    if boat.is_scull() && rower.sweep_bias == SweepBias::SWEEP_HARD {
+                        continue;
+                    }
+                    if boat.is_sweep() && rower.sweep_bias == SweepBias::SCULL_HARD {
+                        continue;
+                    }
                     let var = self.solver.new_bounded_integer(0, 1);
                     self.x.insert((r_idx, b_idx, seat), var);
 

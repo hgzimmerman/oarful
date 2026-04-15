@@ -210,8 +210,8 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
     println!("  novelty factor: {novelty}");
     println!("  commit mode: {}", if commit { "yes" } else { "dry-run" });
     println!("  alternatives requested: {top_n}");
-    println!("  candidate fleet: {} boat(s)", snapshot.sweep_boats.len());
-    for b in &snapshot.sweep_boats {
+    println!("  candidate fleet: {} boat(s)", snapshot.boats.len());
+    for b in &snapshot.boats {
         println!(
             "    #{} {} (seats={} cox={})",
             b.id,
@@ -370,15 +370,6 @@ fn print_unplaced(snapshot: &DbSnapshot, unplaced: &lineup_solver::UnplacedRower
             .map(|r| r.name.clone())
             .unwrap_or_else(|| format!("<unknown rower #{id}>"))
     };
-    if !unplaced.to_sculling.is_empty() {
-        println!(
-            "\nTo sculling ({}):",
-            unplaced.to_sculling.len()
-        );
-        for id in &unplaced.to_sculling {
-            println!("  {}", name_of(id));
-        }
-    }
     if !unplaced.benched.is_empty() {
         println!("\nBenched ({}):", unplaced.benched.len());
         for id in &unplaced.benched {
@@ -477,7 +468,7 @@ async fn cmd_history(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
     println!("=== Committed lineups for {date} ({}) ===", committed.len());
     for c in &committed {
         let boat = snapshot
-            .sweep_boats
+            .boats
             .iter()
             .find(|b| b.id == c.lineup.boat_id);
         let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown>");

@@ -1,8 +1,7 @@
 status: Satisfied
 fielded: 1/1
 skipped: 
-to sculling: 
-benched: Grace, Ivan
+benched: Grace, Ivan, Nico
 
 boat 1: Persephone
   cox  Lena

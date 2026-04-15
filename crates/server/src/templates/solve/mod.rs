@@ -137,7 +137,7 @@ pub(super) fn cox_first(snapshot: &DbSnapshot, boat_id: BoatId, force_cox_stern:
         return true;
     }
     snapshot
-        .sweep_boats
+        .boats
         .iter()
         .find(|b| b.id == boat_id)
         .map(|b| b.cox_position.cox_first())
@@ -218,7 +218,7 @@ pub(crate) fn landing_content(
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
         "{available_count} members available · {boats} candidate shells",
-        boats = snapshot.sweep_boats.len(),
+        boats = snapshot.boats.len(),
     );
 
     // Roster members not currently available (candidates for walk-on).
@@ -279,7 +279,7 @@ pub(crate) fn view_content(
     let available = snapshot.available_rowers().count();
     let subtitle = format!(
         "{available} members available · {boats} candidate shells",
-        boats = snapshot.sweep_boats.len(),
+        boats = snapshot.boats.len(),
     );
 
     let editor = if result.status == SolveStatus::Satisfied {

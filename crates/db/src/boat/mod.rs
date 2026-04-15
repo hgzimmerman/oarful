@@ -69,15 +69,23 @@ impl Boat {
         self.relinquished_at.is_none()
     }
 
-    /// Which side of the boat a given seat sits on. Returns `None` for the
-    /// cox seat (position 0) — cox has no side.
+    pub fn is_scull(&self) -> bool {
+        self.oars_per_seat == 2
+    }
+
+    /// Which side of the boat a given seat sits on. Returns `None` for:
+    /// - the cox seat (position 0)
+    /// - all seats in scull boats (rowers use two oars, no side distinction)
     ///
-    /// Standard alternating rig: the stroke seat (position `seat_count`)
-    /// sits on `stroke_side`; every seat one closer to the bow flips sides.
-    /// Equivalently, two seats with the same parity as `seat_count` share
-    /// `stroke_side`; the opposite parity sits on the other side.
+    /// Standard alternating rig (sweep only): the stroke seat (position
+    /// `seat_count`) sits on `stroke_side`; every seat one closer to the
+    /// bow flips sides.
     pub fn seat_side(&self, seat: i32) -> Option<Side> {
         if seat <= 0 || seat > self.seat_count {
+            return None;
+        }
+        // Scull boats have no side distinction.
+        if self.is_scull() {
             return None;
         }
         let opposite = match self.stroke_side {

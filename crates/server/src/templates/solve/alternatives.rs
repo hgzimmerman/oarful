@@ -161,7 +161,7 @@ fn boat_card(
     flags: &DisplayFlags,
 ) -> Markup {
     let boat = snapshot
-        .sweep_boats
+        .boats
         .iter()
         .find(|b| b.id == lineup.boat_id);
     let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
@@ -240,25 +240,15 @@ fn seat_row(
 }
 
 fn unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Markup {
-    if unplaced.to_sculling.is_empty() && unplaced.benched.is_empty() {
+    if unplaced.benched.is_empty() {
         return html! {};
     }
     html! {
         div class="mt-4 pt-4 border-t border-slate-200 text-sm space-y-2" {
-            @if !unplaced.to_sculling.is_empty() {
-                div {
-                    strong class="text-slate-700" { "To sculling: " }
-                    span class="text-slate-600" {
-                        (name_list(snapshot, &unplaced.to_sculling))
-                    }
-                }
-            }
-            @if !unplaced.benched.is_empty() {
-                div {
-                    strong class="text-slate-700" { "Benched: " }
-                    span class="text-slate-600" {
-                        (name_list(snapshot, &unplaced.benched))
-                    }
+            div {
+                strong class="text-slate-700" { "Benched: " }
+                span class="text-slate-600" {
+                    (name_list(snapshot, &unplaced.benched))
                 }
             }
         }

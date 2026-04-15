@@ -1,6 +1,7 @@
 //! Fleet-level soft constraints: S4 wrong-side aggregation, S6 cox
-//! cooldown, S8 placement reward, S13 non-scull retention, and
-//! reference-lineup similarity (unified novelty / baseline).
+//! cooldown, S8 placement reward, S13 retention, sweep-bias
+//! alignment penalty, and reference-lineup similarity (unified
+//! novelty / baseline).
 //!
 //! "Fleet-level" here means "operates at the boat / rower level
 //! rather than per-seat or per-partition". The seat-level softs
@@ -251,41 +252,24 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S13 — sweep-bias retention. Rewards placing rowers who
-    /// prefer sweep (positive `sweep_bias`), so the solver
-    /// prefers benching sculling-leaning rowers over sweep-biased
-    /// ones when it has to bench somebody.
+    /// S13 — retention. Rewards placing rowers, scaled by how
+    /// strongly they prefer a particular boat type. Hard-locked
+    /// rowers (`sweep_bias` ±2) get the strongest retention;
+    /// ambivalent rowers (`sweep_bias` 0) get the weakest. This
+    /// way the solver preferentially benches rowers who are
+    /// flexible over those who have nowhere else to go.
     ///
-    /// Without this term, the S8 placement reward treats every
-    /// rower the same — rewarding "seat filled" without caring
-    /// who's in it. Two equivalent assignments, one benching a
-    /// sculling-leaning rower and one benching a sweep-biased
-    /// rower, look identical to the objective; the solver picks
-    /// arbitrarily. That's wrong from the coach's perspective:
-    /// the sculling-leaning rower has a sensible fallback (go row
-    /// singles today), whereas the sweep-biased rower sits on
-    /// the dock.
+    /// Scale: `abs(sweep_bias) + 1`, so 0→1, ±1→2, ±2→3.
     ///
     /// Encoding mirrors S4 / S6's per-rower aggregation — one
-    /// `rower_used[r] ∈ {0, 1}` aux var per sweep-biased
-    /// available rower, linked to `Σ_{b, s} x[r, b, s]` by an
-    /// equality. By H2 the sum is at most 1, so the `[0, 1]`
-    /// domain is tight. Push exactly one obj term per
-    /// penalised rower, scaled by `(sweep_bias + 1)`:
+    /// `rower_used[r] ∈ {0, 1}` aux var per available rower,
+    /// linked to `Σ_{b, s} x[r, b, s]` by an equality. By H2
+    /// the sum is at most 1, so the `[0, 1]` domain is tight.
+    /// Push exactly one obj term per rower:
     ///
-    ///   `obj_terms.push(rower_used[r].scaled(-retention_weight * (sweep_bias + 1)))`
+    ///   `obj_terms.push(rower_used[r].scaled(-retention_weight * scale))`
     ///
-    /// Total contribution is O(sweep-biased rowers) obj terms. When
-    /// rower r is placed anywhere, `rower_used[r] = 1` and the
-    /// objective drops by `retention_weight * (sweep_bias + 1)`.
-    /// When r is benched, `rower_used[r] = 0` and no reward accrues.
-    ///
-    /// Rowers with `sweep_bias <= -1` are deliberately skipped —
-    /// they prefer sculling and have a natural fallback to the
-    /// scullers team. The baseline S8 reward already covers the
-    /// "please place them if convenient" case, and adding the
-    /// retention bonus uniformly would just shift the constant
-    /// and not break any ties.
+    /// Total contribution is O(available rowers) obj terms.
     pub(crate) fn post_s13_non_scull_retention(&mut self) -> Result<()> {
         if self.cfg.non_scull_retention_weight == 0 {
             return Ok(());
@@ -299,11 +283,7 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
         for (r_idx, rower) in available.iter().enumerate() {
-            if rower.sweep_bias.as_int() <= -1 {
-                // Sculling-leaning rowers fall back to the
-                // scullers team if benched — no retention pressure.
-                continue;
-            }
+            let scale = rower.sweep_bias.as_int().unsigned_abs() as i32 + 1;
             // Collect every x variable for this rower. H2 bounds
             // the sum at 1, so the aggregated aux var's [0, 1]
             // domain is tight without any explicit upper.
@@ -329,9 +309,55 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S13 rower-use link: {e:?}"))?;
 
-            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight * (rower.sweep_bias.as_int() + 1)));
+            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight * scale));
         }
         Ok(())
+    }
+
+    /// Sweep-bias alignment penalty. Penalises placing a rower in
+    /// a boat type that conflicts with their `sweep_bias`:
+    ///
+    /// - Rower with `sweep_bias > 0` in a scull boat: penalty =
+    ///   `sweep_bias * non_scull_retention_weight`
+    /// - Rower with `sweep_bias < 0` in a sweep boat: penalty =
+    ///   `-sweep_bias * non_scull_retention_weight`
+    ///
+    /// Hard-locked rowers (±2) are already filtered out of
+    /// wrong-type boats by the eligibility gate in
+    /// `create_variables`, so only ±1 values generate penalty
+    /// terms here. Pushes one scaled term per mismatched x
+    /// variable — no aux vars needed.
+    pub(crate) fn post_sweep_bias_penalty(&mut self) {
+        if self.cfg.non_scull_retention_weight == 0 {
+            return;
+        }
+        for (b_idx, boat) in self.boats.iter().enumerate() {
+            let boat_is_scull = boat.is_scull();
+            let boat_is_sweep = boat.is_sweep();
+            if !boat_is_scull && !boat_is_sweep {
+                continue; // shouldn't happen, but guard
+            }
+            for (r_idx, rower) in self.available.iter().enumerate() {
+                let bias = rower.sweep_bias.as_int();
+                let penalty = if boat_is_scull && bias > 0 {
+                    bias * self.cfg.non_scull_retention_weight
+                } else if boat_is_sweep && bias < 0 {
+                    -bias * self.cfg.non_scull_retention_weight
+                } else {
+                    0
+                };
+                if penalty == 0 {
+                    continue;
+                }
+                // Find all x vars for this (rower, boat) and push
+                // penalty terms. Most rowers will have 0 or a few.
+                for s in 0..=(boat.seat_count) {
+                    if let Some(&var) = self.x.get(&(r_idx, b_idx, s)) {
+                        self.obj_terms.push(var.scaled(penalty));
+                    }
+                }
+            }
+        }
     }
 
     /// S14 — bow-loader cox fit penalty. Penalises tall and heavy

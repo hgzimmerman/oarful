@@ -147,7 +147,7 @@ fn snapshot(rowers: Vec<Rower>, boats: Vec<Boat>) -> DbSnapshot {
         date: test_date(),
         rowers,
         availability,
-        sweep_boats: boats,
+        boats,
         last_coxed: HashMap::new(),
         last_benched: HashMap::new(),
         seat_affinities: Vec::new(),
@@ -773,8 +773,7 @@ fn s13_non_scull_retention_prefers_benching_sculler() {
     let lineup = single_used(&result.primary.lineups);
 
     // Both sweep-biased Port rowers (PortA, PortB) should be
-    // seated; the sculling-leaning rower should be in the unplaced
-    // `to_sculling` bucket.
+    // seated; the sculling-leaning rower should be unplaced (benched).
     let placed_ids: std::collections::HashSet<RowerId> = lineup
         .seats
         .iter()
@@ -796,16 +795,11 @@ fn s13_non_scull_retention_prefers_benching_sculler() {
         lineup.seats
     );
 
-    // And the unplaced breakdown should confirm the classification.
+    // The unplaced rower should be in the benched list.
     assert_eq!(
-        result.primary.unplaced.to_sculling,
+        result.primary.unplaced.benched,
         vec![RowerId::new(5)],
-        "the sculling-leaning rower should land in to_sculling",
-    );
-    assert!(
-        result.primary.unplaced.benched.is_empty(),
-        "no sweep-biased rower should be benched, got {:?}",
-        result.primary.unplaced.benched
+        "the sculling-leaning rower should be benched",
     );
 }
 

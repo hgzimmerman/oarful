@@ -24,11 +24,9 @@ pub struct DbSnapshot {
     /// Availability status for each rower that explicitly responded. Rowers
     /// not in this map are treated as "unset" (effectively `No` by default).
     pub availability: HashMap<RowerId, AvailabilityStatus>,
-    /// In-service sweep boats — the only candidates for lineup assignment in
-    /// this project. Sculling boats belong to the scullers team and are
-    /// deliberately excluded. Fleet is shared across teams (not filtered
-    /// by team_id).
-    pub sweep_boats: Vec<Boat>,
+    /// All in-service boats (sweep + scull). The solver uses `sweep_bias`
+    /// on each rower to determine eligibility for sweep vs scull boats.
+    pub boats: Vec<Boat>,
     /// Derived from `lineup_seat` history.
     pub last_coxed: HashMap<RowerId, NaiveDate>,
     /// Most recent committed practice where each rower was available
@@ -72,7 +70,7 @@ impl DbSnapshot {
         Ok(Self {
             date: practice.date,
             availability: Availability::map_for_practice(conn, practice.id)?,
-            sweep_boats: Boat::list_sweep(conn)?,
+            boats: Boat::list_in_service(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
             last_benched: Rower::last_benched_dates(conn)?,
             seat_affinities: SeatAffinity::list_all(conn)?,
@@ -82,12 +80,10 @@ impl DbSnapshot {
         })
     }
 
+    /// Rowers who responded "Yes" to this practice. The solver uses
+    /// `sweep_bias` to determine which boats each rower is eligible for.
     pub fn available_rowers(&self) -> impl Iterator<Item = &Rower> {
         self.rowers.iter().filter(|r| {
-            // Hard scullers are never candidates for sweep seating.
-            if r.sweep_bias.is_hard_sculler() {
-                return false;
-            }
             self.availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
@@ -100,8 +96,8 @@ impl std::fmt::Display for DbSnapshot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "=== Lineup snapshot for {} ===", self.date)?;
 
-        writeln!(f, "\nSweep boats ({})", self.sweep_boats.len())?;
-        for b in &self.sweep_boats {
+        writeln!(f, "\nBoats ({})", self.boats.len())?;
+        for b in &self.boats {
             writeln!(
                 f,
                 "  #{:<3} {:<24} {:<7} seats={} cox={}",

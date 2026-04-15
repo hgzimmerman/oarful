@@ -75,7 +75,7 @@ impl<'a> EditorData<'a> {
     /// only those boats start active; otherwise all boats are active.
     pub(crate) fn empty(snapshot: &'a DbSnapshot, default_boats: &HashSet<BoatId>) -> Self {
         let use_defaults = !default_boats.is_empty();
-        let boats = snapshot.sweep_boats.iter().map(|b| {
+        let boats = snapshot.boats.iter().map(|b| {
             let has_cox = b.has_cox.as_bool();
             let mut seats = Vec::new();
             if has_cox { seats.push((0, None)); }
@@ -103,7 +103,7 @@ impl<'a> EditorData<'a> {
             })
             .collect();
 
-        let boats = snapshot.sweep_boats.iter().map(|b| {
+        let boats = snapshot.boats.iter().map(|b| {
             let lineup = primary.lineups.iter().find(|l| l.boat_id == b.id);
             let active = lineup.map(|l| l.used).unwrap_or(false);
             let seat_map = filled_map.get(&b.id);
@@ -122,11 +122,8 @@ impl<'a> EditorData<'a> {
             .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
             .collect();
         Self::sort_pool(&mut pool);
-        let sculling: Vec<&Rower> = primary.unplaced.to_sculling.iter()
-            .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
-            .collect();
 
-        Self { boats, pool, sculling }
+        Self { boats, pool, sculling: vec![] }
     }
 
     /// Build from explicit placements — used by the editor endpoint
@@ -137,7 +134,7 @@ impl<'a> EditorData<'a> {
         placements: &HashMap<BoatId, HashMap<i32, RowerId>>,
         active_boats: &HashSet<BoatId>,
     ) -> Self {
-        let boats = snapshot.sweep_boats.iter().map(|b| {
+        let boats = snapshot.boats.iter().map(|b| {
             let active = active_boats.contains(&b.id);
             let seat_map = placements.get(&b.id);
             let has_cox = b.has_cox.as_bool();
