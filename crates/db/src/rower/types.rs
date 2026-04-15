@@ -318,6 +318,73 @@ impl std::fmt::Display for SideStrength {
     }
 }
 
+/// How strongly a rower prefers sweep vs sculling. Stored as an
+/// integer in [-2, 2]:
+///
+/// | Value | Meaning                    |
+/// |-------|----------------------------|
+/// | -2    | Hard sculler (never sweep) |
+/// | -1    | Prefers sculling           |
+/// |  0    | No preference              |
+/// |  1    | Prefers sweeping           |
+/// |  2    | Sweep only (never scull)   |
+///
+/// Replaces the old boolean `can_scull` flag. The solver uses this
+/// to scale the S13 retention reward and to filter hard scullers
+/// out of the sweep candidate pool entirely.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct SweepBias(i32);
+
+impl SweepBias {
+    pub const SWEEP_HARD: Self = Self(2);
+    pub const SCULL_HARD: Self = Self(-2);
+
+    pub fn new(n: i32) -> Self {
+        Self(n.clamp(-2, 2))
+    }
+
+    pub fn as_int(self) -> i32 {
+        self.0
+    }
+
+    /// True if the rower is a hard sculler and should never be
+    /// considered for sweep seating.
+    pub fn is_hard_sculler(self) -> bool {
+        self.0 == -2
+    }
+}
+
+impl Default for SweepBias {
+    fn default() -> Self {
+        Self(0)
+    }
+}
+
+impl std::fmt::Display for SweepBias {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            -2 => f.write_str("Scull only"),
+            -1 => f.write_str("Prefers scull"),
+            0 => f.write_str("No preference"),
+            1 => f.write_str("Prefers sweep"),
+            2 => f.write_str("Sweep only"),
+            n => write!(f, "{n}"),
+        }
+    }
+}
+
 /// Which side of the boat a rower rows on (in sweep).
 #[derive(
     Clone,

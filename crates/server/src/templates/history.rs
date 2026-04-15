@@ -373,7 +373,7 @@ fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Mar
         if placed.contains(&r.id) {
             continue;
         }
-        if r.can_scull.as_bool() {
+        if r.sweep_bias.as_int() <= 0 {
             to_sculling.push(r);
         } else {
             benched.push(r);

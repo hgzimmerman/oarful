@@ -37,7 +37,7 @@ impl DetailPermissions {
         match self.self_edit_level {
             None => field != "active", // Coach+ can edit everything except active
             Some(level) => match field {
-                "side" | "side_strength" | "can_scull" | "can_cox" | "is_designated_cox" => true,
+                "side" | "side_strength" | "sweep_bias" | "can_cox" | "is_designated_cox" => true,
                 "height" => level.can_edit_height(),
                 "weight_class" => level.can_edit_weight_class(),
                 "skill" => level.can_edit_skill(),
@@ -77,7 +77,7 @@ pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
                                 th class="px-4 py-2" { "Strength" }
                                 th class="px-4 py-2" { "Side" }
                                 th class="px-4 py-2" { "Cox" }
-                                th class="px-4 py-2" { "Scull" }
+                                th class="px-4 py-2" { "Sweep bias" }
                             }
                         }
                         tbody {
@@ -145,7 +145,7 @@ fn static_row(r: &Rower) -> Markup {
                 @else { "—" }
             }
             td class="px-4 py-2" {
-                @if r.can_scull.as_bool() { "yes" } @else { "—" }
+                (r.sweep_bias)
             }
         }
     }
@@ -220,7 +220,7 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, _perms: &DetailP
                 (kv("Side", &side_display_label(r)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
-                (kv("Can scull", if r.can_scull.as_bool() { "yes" } else { "—" }))
+                (kv("Sweep bias", &r.sweep_bias.to_string()))
                 (kv("Active", if r.active.as_bool() { "yes" } else { "no" }))
             }
         }
@@ -348,8 +348,25 @@ pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>, perms: &Det
                     (checkbox("is_designated_cox", "designated", r.is_designated_cox.as_bool()))
                 }
                 div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Scull" }
-                    (checkbox("can_scull", "can scull", r.can_scull.as_bool()))
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Sweep bias" }
+                    select name="sweep_bias"
+                           class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
+                        @for val in [-2, -1, 0, 1, 2].iter() {
+                            @let label_text = match val {
+                                -2 => "Scull only (-2)",
+                                -1 => "Prefers scull (-1)",
+                                0 => "No preference (0)",
+                                1 => "Prefers sweep (1)",
+                                2 => "Sweep only (2)",
+                                _ => "",
+                            };
+                            @if *val == r.sweep_bias.as_int() {
+                                option value=(val) selected { (label_text) }
+                            } @else {
+                                option value=(val) { (label_text) }
+                            }
+                        }
+                    }
                 }
             }
         }

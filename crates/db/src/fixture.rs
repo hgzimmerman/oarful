@@ -17,6 +17,7 @@ use crate::rower::types::{Height, RowerWeightClass, Side, Skill, Strength};
 use crate::rower::{NewRower, Rower};
 use crate::seat_affinity::{NewSeatAffinity, SeatAffinity, SeatZone};
 use crate::team::{NewTeam, Team, TeamMembership};
+use crate::rower::types::SweepBias;
 use crate::types::{AffinityWeight, IntBool};
 use chrono::{Datelike, NaiveDate, Weekday};
 use diesel::prelude::*;
@@ -113,10 +114,10 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
         AvailabilityStatus::Yes,         // Hana
         AvailabilityStatus::Yes,         // Ivan
         AvailabilityStatus::No,          // Juno
-        AvailabilityStatus::Maybe,       // Kai
+        AvailabilityStatus::No,          // Kai
         AvailabilityStatus::Yes,         // Lena (designated cox)
         AvailabilityStatus::Yes,         // Mika (non-designated cox)
-        AvailabilityStatus::ScullingOnly, // Nico → scullers team today
+        AvailabilityStatus::Yes,         // Nico (sweep_bias handles scull distinction)
     ];
     for (rower_id, status) in rower_ids.iter().copied().zip(statuses) {
         Availability::upsert(
@@ -254,7 +255,7 @@ fn toy_rowers() -> Vec<NewRower> {
         {
             let mut r =
                 NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, H::Tall, Either);
-            r.can_scull = IntBool::TRUE;
+            r.sweep_bias = SweepBias::SCULL_HARD;
             r
         },
     ]
@@ -325,7 +326,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
     //  8  Juno     Intermediate/Intermediate/Either/Medium/Medium
     //  9  Kai      Master/Strong/Port/Medium/Light
     // 10  Mika     Master/Strong/Starboard/Medium/Medium
-    // 11  Nico     Intermediate/Strong/Either/Tall/Medium (can scull)
+    // 11  Nico     Intermediate/Strong/Either/Tall/Medium (ambivalent sweep_bias)
     // 12  Oscar    Expert/VeryStrong/Port/Tall/Heavy
     // 13  Priya    Master/Strong/Starboard/Medium/Medium
     // 14  Quinn    Intermediate/Strong/Port/Medium/Light
@@ -393,7 +394,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
         })?;
     }
 
-    // Friday: 22 available (rowers 5=Finn, 8=Juno say No, 11=Nico sculling only)
+    // Friday: 22 available (rowers 5=Finn, 8=Juno say No)
     for (i, rid) in rower_ids.iter().enumerate() {
         let status = match i {
             5 | 8 => AvailabilityStatus::No,
@@ -547,7 +548,7 @@ fn demo_rowers() -> Vec<NewRower> {
         NewRower::sweep("Mika",   Medium, Sk::Master,        St::Strong,       H::Medium,   Starboard),  // 10
         {                                                                                                 // 11
             let mut r = NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, H::Tall, Either);
-            r.can_scull = IntBool::TRUE;
+            r.sweep_bias = SweepBias::new(0); // ambivalent
             r
         },
         NewRower::sweep("Oscar",  Heavy,  Sk::Expert,        St::VeryStrong,   H::Tall,     Port),       // 12

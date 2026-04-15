@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength};
+use types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias};
 
 use crate::types::IntBool;
 
@@ -32,9 +32,9 @@ pub struct Rower {
     /// Side preference strength. `SideStrength::HARD` (= 0) means the
     /// rower is side-locked; 1..=5 are soft scales for the S4 penalty.
     pub side_strength: SideStrength,
-    /// Eligible to be "pushed" to the scullers team as overflow. Does NOT
-    /// affect sweep seating — this solver only assigns sweep seats.
-    pub can_scull: IntBool,
+    /// How strongly this rower prefers sweep vs scull. -2 = hard sculler
+    /// (excluded from sweep solve), 2 = sweep only (never pushed to scull).
+    pub sweep_bias: SweepBias,
     pub can_cox: IntBool,
     /// If true, this rower is a designated coxswain and is exempt from the
     /// cox-cooldown soft constraint.
@@ -54,7 +54,7 @@ pub struct NewRower {
     pub height: Height,
     pub side: Side,
     pub side_strength: SideStrength,
-    pub can_scull: IntBool,
+    pub sweep_bias: SweepBias,
     pub can_cox: IntBool,
     pub is_designated_cox: IntBool,
     pub active: IntBool,
@@ -88,7 +88,7 @@ impl NewRower {
             height,
             side,
             side_strength: SideStrength::default(),
-            can_scull: IntBool::FALSE,
+            sweep_bias: SweepBias::SWEEP_HARD,
             can_cox: IntBool::TRUE,
             is_designated_cox: IntBool::FALSE,
             active: IntBool::TRUE,
@@ -104,7 +104,7 @@ impl NewRower {
     pub fn from_sheet(
         name: impl Into<String>,
         side: Side,
-        can_scull: bool,
+        sweep_bias: SweepBias,
         can_cox: bool,
         is_designated_cox: bool,
     ) -> Self {
@@ -117,7 +117,7 @@ impl NewRower {
             height: Height::Medium,
             side,
             side_strength: SideStrength::default(),
-            can_scull: IntBool::new(can_scull),
+            sweep_bias,
             can_cox: IntBool::new(can_cox),
             is_designated_cox: IntBool::new(is_designated_cox),
             active: IntBool::TRUE,

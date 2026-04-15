@@ -13,7 +13,7 @@ use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::boat::{types::WeightClass as BoatWeightClass, Boat};
 use lineup_db::boat::types::BoatId;
 use lineup_db::rower::{
-    types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
+    types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias},
     Rower,
 };
 use lineup_db::snapshot::DbSnapshot;
@@ -370,7 +370,7 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
             height: height_cycle[(i as usize - 1) % height_cycle.len()],
             side: side_cycle[(i as usize - 1) % side_cycle.len()],
             side_strength: SideStrength::default(),
-            can_scull: IntBool::FALSE,
+            sweep_bias: SweepBias::SWEEP_HARD,
             can_cox: IntBool::new(i <= 5), // first 5 can cox
             is_designated_cox: IntBool::new(i <= 2), // first 2 are designated
             active: IntBool::TRUE,

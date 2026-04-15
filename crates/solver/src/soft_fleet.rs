@@ -251,40 +251,41 @@ impl<'a> ModelBuilder<'a> {
         Ok(())
     }
 
-    /// S13 — non-scull retention. Rewards placing rowers who
-    /// *can't* fall back to the scullers team, so the solver
-    /// prefers benching sculling-eligible rowers over sweep-only
+    /// S13 — sweep-bias retention. Rewards placing rowers who
+    /// prefer sweep (positive `sweep_bias`), so the solver
+    /// prefers benching sculling-leaning rowers over sweep-biased
     /// ones when it has to bench somebody.
     ///
     /// Without this term, the S8 placement reward treats every
     /// rower the same — rewarding "seat filled" without caring
     /// who's in it. Two equivalent assignments, one benching a
-    /// `can_scull = true` rower and one benching a `can_scull =
-    /// false` rower, look identical to the objective; the
-    /// solver picks arbitrarily. That's wrong from the coach's
-    /// perspective: the can_scull rower has a sensible fallback
-    /// (go row singles today), whereas the sweep-only rower
-    /// sits on the dock.
+    /// sculling-leaning rower and one benching a sweep-biased
+    /// rower, look identical to the objective; the solver picks
+    /// arbitrarily. That's wrong from the coach's perspective:
+    /// the sculling-leaning rower has a sensible fallback (go row
+    /// singles today), whereas the sweep-biased rower sits on
+    /// the dock.
     ///
     /// Encoding mirrors S4 / S6's per-rower aggregation — one
-    /// `rower_used[r] ∈ {0, 1}` aux var per *non-scull*
+    /// `rower_used[r] ∈ {0, 1}` aux var per sweep-biased
     /// available rower, linked to `Σ_{b, s} x[r, b, s]` by an
     /// equality. By H2 the sum is at most 1, so the `[0, 1]`
     /// domain is tight. Push exactly one obj term per
-    /// penalised rower:
+    /// penalised rower, scaled by `(sweep_bias + 1)`:
     ///
-    ///   `obj_terms.push(rower_used[r].scaled(-retention_weight))`
+    ///   `obj_terms.push(rower_used[r].scaled(-retention_weight * (sweep_bias + 1)))`
     ///
-    /// Total contribution is O(non-scull rowers) obj terms. When
+    /// Total contribution is O(sweep-biased rowers) obj terms. When
     /// rower r is placed anywhere, `rower_used[r] = 1` and the
-    /// objective drops by `retention_weight`. When r is
-    /// benched, `rower_used[r] = 0` and no reward accrues.
+    /// objective drops by `retention_weight * (sweep_bias + 1)`.
+    /// When r is benched, `rower_used[r] = 0` and no reward accrues.
     ///
-    /// Rowers with `can_scull = true` are deliberately skipped —
-    /// the baseline S8 reward already covers the "please place
-    /// them if convenient" case, and adding the retention
-    /// bonus uniformly would just shift the constant and not
-    /// break any ties.
+    /// Rowers with `sweep_bias <= -1` are deliberately skipped —
+    /// they prefer sculling and have a natural fallback to the
+    /// scullers team. The baseline S8 reward already covers the
+    /// "please place them if convenient" case, and adding the
+    /// retention bonus uniformly would just shift the constant
+    /// and not break any ties.
     pub(crate) fn post_s13_non_scull_retention(&mut self) -> Result<()> {
         if self.cfg.non_scull_retention_weight == 0 {
             return Ok(());
@@ -298,8 +299,8 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
         for (r_idx, rower) in available.iter().enumerate() {
-            if rower.can_scull.as_bool() {
-                // Sculling-eligible rowers fall back to the
+            if rower.sweep_bias.as_int() <= -1 {
+                // Sculling-leaning rowers fall back to the
                 // scullers team if benched — no retention pressure.
                 continue;
             }
@@ -328,7 +329,7 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S13 rower-use link: {e:?}"))?;
 
-            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight));
+            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight * (rower.sweep_bias.as_int() + 1)));
         }
         Ok(())
     }

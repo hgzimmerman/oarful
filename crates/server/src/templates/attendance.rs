@@ -145,11 +145,8 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
 
 fn status_cell(status: Option<&AvailabilityStatus>) -> Markup {
     let (bg, title) = match status {
-        Some(AvailabilityStatus::Yes) | Some(AvailabilityStatus::ScullingOnly) => {
-            ("bg-emerald-400", "Present")
-        }
+        Some(AvailabilityStatus::Yes) => ("bg-emerald-400", "Present"),
         Some(AvailabilityStatus::No) => ("bg-red-400", "Absent"),
-        Some(AvailabilityStatus::Maybe) => ("bg-emerald-400/50", "Maybe"),
         None => ("", "No response"),
     };
     html! {

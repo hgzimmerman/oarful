@@ -26,6 +26,7 @@ use lineup_db::rower::{
 };
 use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::state::Db;
+use lineup_db::rower::types::SweepBias;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
@@ -230,7 +231,7 @@ pub(crate) struct RowerEditInput {
     #[serde(default)]
     pub(crate) can_cox: Option<String>,
     #[serde(default)]
-    pub(crate) can_scull: Option<String>,
+    pub(crate) sweep_bias: i32,
     #[serde(default)]
     pub(crate) is_designated_cox: Option<String>,
 }
@@ -266,7 +267,7 @@ pub(crate) async fn update_handler(
     if perms.can_edit("side") { rower.side = typed.side; }
     if perms.can_edit("side_strength") { rower.side_strength = typed.side_strength; }
     if perms.can_edit("can_cox") { rower.can_cox = IntBool::new(typed.can_cox); }
-    if perms.can_edit("can_scull") { rower.can_scull = IntBool::new(typed.can_scull); }
+    if perms.can_edit("sweep_bias") { rower.sweep_bias = SweepBias::new(typed.sweep_bias); }
     if perms.can_edit("is_designated_cox") { rower.is_designated_cox = IntBool::new(typed.is_designated_cox); }
 
     let saved = tenant
@@ -298,7 +299,7 @@ struct ParsedEdit {
     side: Side,
     side_strength: SideStrength,
     can_cox: bool,
-    can_scull: bool,
+    sweep_bias: i32,
     is_designated_cox: bool,
 }
 
@@ -354,7 +355,7 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
         side,
         side_strength,
         can_cox: input.can_cox.is_some(),
-        can_scull: input.can_scull.is_some(),
+        sweep_bias: input.sweep_bias,
         is_designated_cox: input.is_designated_cox.is_some(),
     })
 }

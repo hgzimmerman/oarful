@@ -84,6 +84,10 @@ impl DbSnapshot {
 
     pub fn available_rowers(&self) -> impl Iterator<Item = &Rower> {
         self.rowers.iter().filter(|r| {
+            // Hard scullers are never candidates for sweep seating.
+            if r.sweep_bias.is_hard_sculler() {
+                return false;
+            }
             self.availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
@@ -123,10 +127,10 @@ impl std::fmt::Display for DbSnapshot {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "unset".to_string());
             let flags = format!(
-                "{}{}{}",
+                "{}{}b={}",
                 if r.can_cox.as_bool() { "C" } else { "" },
                 if r.is_designated_cox.as_bool() { "*" } else { "" },
-                if r.can_scull.as_bool() { "S" } else { "" },
+                r.sweep_bias.as_int(),
             );
             let last_cox = self
                 .last_coxed

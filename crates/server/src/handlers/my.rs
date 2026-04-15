@@ -15,7 +15,7 @@ use lineup_db::availability::{types::AvailabilityStatus, Availability, NewAvaila
 use lineup_db::lineup::Lineup;
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
-use lineup_db::types::IntBool;
+use lineup_db::rower::types::SweepBias;
 use serde::Deserialize;
 
 use lineup_db::team::{SelfEditLevel, Team};
@@ -96,7 +96,7 @@ pub(crate) async fn profile_update_handler(
     if perms.can_edit("strength") { rower.strength = parsed.strength; }
     if perms.can_edit("side") { rower.side = parsed.side; }
     if perms.can_edit("side_strength") { rower.side_strength = parsed.side_strength; }
-    if perms.can_edit("can_scull") { rower.can_scull = IntBool::new(parsed.can_scull); }
+    if perms.can_edit("sweep_bias") { rower.sweep_bias = SweepBias::new(parsed.sweep_bias); }
 
     let saved = tenant
         .db
@@ -128,7 +128,7 @@ pub(crate) struct ProfileInput {
     pub(crate) side: String,
     pub(crate) side_strength: i32,
     #[serde(default)]
-    pub(crate) can_scull: Option<String>,
+    pub(crate) sweep_bias: i32,
 }
 
 struct ParsedProfile {
@@ -137,7 +137,7 @@ struct ParsedProfile {
     strength: lineup_db::rower::types::Strength,
     side: lineup_db::rower::types::Side,
     side_strength: lineup_db::rower::types::SideStrength,
-    can_scull: bool,
+    sweep_bias: i32,
 }
 
 fn parse_profile(input: &ProfileInput) -> Result<ParsedProfile, String> {
@@ -177,7 +177,7 @@ fn parse_profile(input: &ProfileInput) -> Result<ParsedProfile, String> {
         strength,
         side,
         side_strength: SideStrength::new(input.side_strength),
-        can_scull: input.can_scull.is_some(),
+        sweep_bias: input.sweep_bias,
     })
 }
 
@@ -277,8 +277,6 @@ pub(crate) async fn availability_update_handler(
     let status = match input.status.as_str() {
         "Yes" => AvailabilityStatus::Yes,
         "No" => AvailabilityStatus::No,
-        "Maybe" => AvailabilityStatus::Maybe,
-        "ScullingOnly" => AvailabilityStatus::ScullingOnly,
         other => {
             tracing::warn!(?other, "invalid availability status");
             return Err(StatusCode::BAD_REQUEST);

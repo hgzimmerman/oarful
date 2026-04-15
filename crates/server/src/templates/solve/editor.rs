@@ -612,7 +612,7 @@ fn editor_js() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineup_db::rower::types::{Side, SideStrength, RowerWeightClass, Skill, Strength, Height};
+    use lineup_db::rower::types::{Side, SideStrength, SweepBias, RowerWeightClass, Skill, Strength, Height};
     use lineup_db::types::IntBool;
 
     fn rower_with_side(side: Side, strength: i32) -> Rower {
@@ -625,7 +625,7 @@ mod tests {
             height: Height::Medium,
             side,
             side_strength: SideStrength::new(strength),
-            can_scull: IntBool::new(false),
+            sweep_bias: SweepBias::SWEEP_HARD,
             can_cox: IntBool::new(false),
             is_designated_cox: IntBool::new(false),
             active: IntBool::new(true),

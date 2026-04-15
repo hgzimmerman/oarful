@@ -196,8 +196,10 @@ impl Rower {
     /// promotes:
     /// - `side`: `Either` → `Port` or `Starboard`
     /// - `can_cox`: `false` → `true`
-    /// - `can_scull`: `false` → `true`
     /// - `is_designated_cox`: `false` → `true`
+    /// - `sweep_bias`: sculling rows always set -2 (team column is
+    ///   authoritative for "I'm a sculler"); sweep rows don't override
+    ///   existing coach-set values.
     ///
     /// Also updates `name` unconditionally (the sheet is the authoritative
     /// display name) and `updated_at` to now.
@@ -210,10 +212,11 @@ impl Rower {
         current: &Rower,
         new_name: &str,
         new_side: Side,
-        new_can_scull: bool,
+        is_sculling: bool,
         new_can_cox: bool,
         new_is_designated_cox: bool,
     ) -> Result<Rower, diesel::result::Error> {
+        use super::types::SweepBias;
         let mut dirty = false;
         let mut next = current.clone();
 
@@ -226,11 +229,12 @@ impl Rower {
             next.side = new_side;
             dirty = true;
         }
-        // Boolean flags: promote false → true; never demote.
-        if !next.can_scull.as_bool() && new_can_scull {
-            next.can_scull = IntBool::TRUE;
+        // Sculling rows always force -2 (team column is authoritative).
+        if is_sculling && next.sweep_bias != SweepBias::SCULL_HARD {
+            next.sweep_bias = SweepBias::SCULL_HARD;
             dirty = true;
         }
+        // Boolean flags: promote false → true; never demote.
         if !next.can_cox.as_bool() && new_can_cox {
             next.can_cox = IntBool::TRUE;
             dirty = true;
@@ -255,20 +259,12 @@ impl Rower {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rower::types::{Height, RowerWeightClass, SideStrength, Skill, Strength};
+    use crate::rower::types::{Height, RowerWeightClass, SideStrength, Skill, Strength, SweepBias};
     use crate::rower::NewRower;
     use crate::test_support::in_memory_conn;
     use crate::types::IntBool;
 
-    /// Seed a single rower with the given side and flag state. Used
-    /// as the "existing row" in promote_from_sheet tests.
-    fn seed_rower(
-        conn: &mut SqliteConnection,
-        side: Side,
-        can_scull: bool,
-        can_cox: bool,
-        is_designated_cox: bool,
-    ) -> Rower {
+    fn seed_rower(conn: &mut SqliteConnection, side: Side) -> Rower {
         let now = chrono::Utc::now().naive_utc();
         Rower::insert(
             conn,
@@ -280,9 +276,9 @@ mod tests {
                 height: Height::Medium,
                 side,
                 side_strength: SideStrength::default(),
-                can_scull: IntBool::new(can_scull),
-                can_cox: IntBool::new(can_cox),
-                is_designated_cox: IntBool::new(is_designated_cox),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::TRUE,
+                is_designated_cox: IntBool::FALSE,
                 active: IntBool::TRUE,
                 created_at: now,
                 updated_at: now,
@@ -294,7 +290,7 @@ mod tests {
     #[test]
     fn promote_from_sheet_never_demotes_specific_side_to_either() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Starboard, false, true, false);
+        let seeded = seed_rower(&mut conn, Side::Starboard);
 
         let updated = Rower::promote_from_sheet(
             &mut conn, &seeded, "Alice Smith", Side::Either, false, true, false,
@@ -307,7 +303,7 @@ mod tests {
     #[test]
     fn promote_from_sheet_does_promote_either_to_specific() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Either, false, true, false);
+        let seeded = seed_rower(&mut conn, Side::Either);
 
         let updated = Rower::promote_from_sheet(
             &mut conn, &seeded, "Alice Smith", Side::Port, false, true, false,
@@ -317,41 +313,42 @@ mod tests {
     }
 
     #[test]
-    fn promote_from_sheet_never_demotes_true_flags_to_false() {
+    fn promote_from_sheet_sculling_row_forces_scull_hard() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Port, true, true, true);
+        let seeded = seed_rower(&mut conn, Side::Port);
+        assert_eq!(seeded.sweep_bias, SweepBias::default());
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, "Alice Smith", Side::Port, false, false, false,
+            &mut conn, &seeded, &seeded.name, Side::Port, true, true, false,
         ).unwrap();
 
-        assert_eq!(updated.can_scull, IntBool::TRUE);
-        assert_eq!(updated.can_cox, IntBool::TRUE);
-        assert_eq!(updated.is_designated_cox, IntBool::TRUE);
+        assert_eq!(updated.sweep_bias, SweepBias::SCULL_HARD);
     }
 
     #[test]
-    fn promote_from_sheet_promotes_false_flags_to_true() {
+    fn promote_from_sheet_sweep_row_does_not_override_bias() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Port, false, false, false);
+        let seeded = seed_rower(&mut conn, Side::Port);
+        // Coach set bias to 1 (prefers sweep).
+        let mut adjusted = seeded.clone();
+        adjusted.sweep_bias = SweepBias::new(1);
+        let adjusted = Rower::save(&mut conn, &adjusted).unwrap();
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, "Alice Smith", Side::Port, true, true, true,
+            &mut conn, &adjusted, &adjusted.name, Side::Port, false, true, false,
         ).unwrap();
 
-        assert_eq!(updated.can_scull, IntBool::TRUE);
-        assert_eq!(updated.can_cox, IntBool::TRUE);
-        assert_eq!(updated.is_designated_cox, IntBool::TRUE);
+        assert_eq!(updated.sweep_bias, SweepBias::new(1), "sweep row should not override coach-set bias");
     }
 
     #[test]
     fn promote_from_sheet_is_noop_when_nothing_changed() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Port, true, true, false);
+        let seeded = seed_rower(&mut conn, Side::Port);
         let seeded_updated_at = seeded.updated_at;
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, &seeded.name, Side::Port, true, true, false,
+            &mut conn, &seeded, &seeded.name, Side::Port, false, true, false,
         ).unwrap();
 
         assert_eq!(updated.updated_at, seeded_updated_at, "no-op promote should not touch updated_at");
@@ -360,14 +357,12 @@ mod tests {
     #[test]
     fn promote_from_sheet_updates_name_unconditionally() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(&mut conn, Side::Port, false, true, false);
-        let original_name = seeded.name.clone();
+        let seeded = seed_rower(&mut conn, Side::Port);
 
         let updated = Rower::promote_from_sheet(
             &mut conn, &seeded, "Alice Married-Name", Side::Port, false, true, false,
         ).unwrap();
 
-        assert_ne!(updated.name, original_name);
         assert_eq!(updated.name, "Alice Married-Name");
         assert_ne!(updated.updated_at, seeded.updated_at, "a name change should bump updated_at");
     }

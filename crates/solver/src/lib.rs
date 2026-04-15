@@ -291,20 +291,20 @@ pub struct SolverConfig {
     /// enough not to override S1 / S9 / S11 / S12 structural
     /// preferences that would make the extra placement worse.
     pub partial_fill_bonus: i32,
-    /// S13 non-scull retention reward. Per-rower bonus for
-    /// *keeping a sweep-only rower in a sweep seat*. Applied only
-    /// to rowers with `can_scull = false`: if they don't get a
-    /// sweep seat, there's nowhere else for them to row, so the
-    /// solver should be more reluctant to bench them than it is
-    /// to bench a `can_scull = true` rower (who can fall back to
-    /// the scullers team). Encoded as one `rower_used[r] ∈ {0, 1}`
-    /// aux var per non-scull available rower, linked to
+    /// S13 sweep-bias retention reward. Per-rower bonus for
+    /// *keeping a sweep-biased rower in a sweep seat*, scaled by
+    /// `(sweep_bias + 1)` so higher sweep_bias rowers get stronger
+    /// retention. Rowers with `sweep_bias <= -1` are skipped (they
+    /// prefer sculling and have a natural fallback). Rowers with
+    /// `sweep_bias = 0` get 1x, `1` gets 2x, `2` gets 3x the
+    /// base weight. Encoded as one `rower_used[r] ∈ {0, 1}`
+    /// aux var per eligible rower, linked to
     /// `Σ_{b, s} x[r, b, s]`, with a single scaled obj term so
-    /// the total contribution is O(non-scull rowers). Default
+    /// the total contribution is O(sweep-biased rowers). Default
     /// **2** — breaks the "who gets benched" tie against
-    /// scullers without overriding hard structural preferences
-    /// (side, skill, weight-class) that might make placing a
-    /// specific sweep-only rower uneconomical.
+    /// sculling-leaning rowers without overriding hard structural
+    /// preferences (side, skill, weight-class) that might make
+    /// placing a specific sweep-biased rower uneconomical.
     pub non_scull_retention_weight: i32,
     /// S14 bow-loader cox fit penalty. Penalises tall and heavy
     /// rowers in the cox seat of bow-loader boats, where the
@@ -658,27 +658,27 @@ pub struct ProposedSolution {
     /// candidates the solver rejected.
     pub lineups: Vec<ProposedLineup>,
     /// Available rowers who didn't make it into `lineups`,
-    /// bucketed by `can_scull` so the coach can redirect
-    /// sculling-eligible rowers to that team rather than
+    /// bucketed by `sweep_bias` so the coach can redirect
+    /// sculling-leaning rowers to that team rather than
     /// benching them. See [`UnplacedRowers`].
     pub unplaced: UnplacedRowers,
 }
 
 /// Rowers who were available for sweep seating today but didn't
-/// land in a given lineup set. Split by `can_scull` so the
+/// land in a given lineup set. Split by `sweep_bias` so the
 /// coach can see at a glance who to redirect to the scullers
-/// team (`to_sculling`) versus who stays on the dock
-/// (`benched`). Both buckets preserve the stable iteration order
-/// of `DbSnapshot.available_rowers()`.
+/// team (`to_sculling`, sweep_bias <= 0) versus who stays on
+/// the dock (`benched`, sweep_bias > 0). Both buckets preserve
+/// the stable iteration order of `DbSnapshot.available_rowers()`.
 #[derive(Debug, Clone, Default)]
 pub struct UnplacedRowers {
-    /// Rowers flagged `can_scull = true` who weren't placed.
+    /// Rowers with `sweep_bias <= 0` who weren't placed.
     /// These are overflow candidates for the sculling team — the
     /// coach should funnel them there rather than bench them.
     pub to_sculling: Vec<RowerId>,
-    /// Rowers without `can_scull` who weren't placed. They stay
-    /// on the dock today; the coach has to either shuffle the
-    /// fleet or live with it.
+    /// Rowers with `sweep_bias > 0` who weren't placed. They
+    /// prefer sweep and have no natural sculling fallback; they
+    /// stay on the dock today unless the coach shuffles the fleet.
     pub benched: Vec<RowerId>,
 }
 
@@ -1471,7 +1471,7 @@ fn compute_unplaced(
         if placed.contains(&rower.id) {
             continue;
         }
-        if rower.can_scull.as_bool() {
+        if rower.sweep_bias.as_int() <= 0 {
             out.to_sculling.push(rower.id);
         } else {
             out.benched.push(rower.id);

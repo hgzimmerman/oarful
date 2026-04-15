@@ -29,8 +29,7 @@
 //!   "no response yet" — no availability row is upserted.
 //! - `Sweep/Scull` column distinguishes team membership. Sweep rows
 //!   map attending → `Yes`; sculling rows map attending →
-//!   `ScullingOnly` so the sweep solver still sees them in the
-//!   snapshot but excludes them from seat assignment.
+//!   `Yes` (sweep_bias on the rower handles the scull distinction).
 //! - Rower identity is matched on `Email` — the stable unique key.
 //!   Rowers not yet in the DB are auto-created with middle-ground
 //!   defaults (Medium weight, Intermediate skill + strength) that an
@@ -42,8 +41,9 @@
 //! coach-set values. Specifically:
 //! - Side stays specific: `Port`/`Starboard` in the DB is never
 //!   overwritten with `Either` from the sheet.
-//! - Flags stay true: `can_cox`, `can_scull`, `is_designated_cox`
+//! - Flags stay true: `can_cox`, `is_designated_cox`
 //!   are only promoted from false → true.
+//! - `sweep_bias` is only overridden for sculling rows (set to SCULL_HARD).
 //!
 //! This is enforced by `Rower::promote_from_sheet` in the db crate.
 
@@ -53,7 +53,7 @@ use diesel::SqliteConnection;
 use lineup_db::app_user::{AppUser, NewAppUser, Role};
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::availability::{Availability, NewAvailability};
-use lineup_db::rower::types::Side;
+use lineup_db::rower::types::{Side, SweepBias};
 use lineup_db::rower::{NewRower, Rower};
 
 /// Count summary returned from a sync run, intended for logging /
@@ -192,7 +192,7 @@ fn sync_row(
     let first_name = field(record, 2);
     // field(3) is Pronoun — we don't store it
     let email = field(record, 4);
-    let can_scull_text = field(record, 5);
+    let _scull_col = field(record, 5); // column 5 read for positional alignment; sweep_bias replaces this
     let side_cox_text = field(record, 6);
 
     if first_name.is_empty() && last_name.is_empty() {
@@ -227,9 +227,12 @@ fn sync_row(
     // a designated cox" via the Cox value. Leave the general can_cox
     // flag at its default (true) for new rowers.
     let can_cox = true;
-    let sheet_can_scull = can_scull_text.eq_ignore_ascii_case("yes");
-    // Scullers can obviously scull, regardless of what the column says.
-    let can_scull = is_sculling || sheet_can_scull;
+    // Sculling rows get hard scull bias; sweep rows get hard sweep on creation.
+    let sweep_bias = if is_sculling {
+        SweepBias::SCULL_HARD
+    } else {
+        SweepBias::SWEEP_HARD
+    };
 
     // Upsert the rower row. Identity is keyed on email via app_user.
     let rower = match AppUser::find_by_email(conn, email)? {
@@ -240,7 +243,7 @@ fn sync_row(
                     let existing = Rower::get(conn, rower_id)?
                         .ok_or_else(|| anyhow!("app_user.rower_id points to missing rower {rower_id}"))?;
                     let updated = Rower::promote_from_sheet(
-                        conn, &existing, &display_name, side, can_scull, can_cox, is_designated_cox,
+                        conn, &existing, &display_name, side, is_sculling, can_cox, is_designated_cox,
                     )?;
                     if updated.updated_at != existing.updated_at {
                         summary.rowers_updated += 1;
@@ -249,7 +252,7 @@ fn sync_row(
                 }
                 None => {
                     // User exists but has no rower — create one and link.
-                    let new = NewRower::from_sheet(&display_name, side, can_scull, can_cox, is_designated_cox);
+                    let new = NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
                     let created = Rower::insert(conn, new)?;
                     AppUser::set_rower_id(conn, user.id, Some(created.id))?;
                     summary.rowers_created += 1;
@@ -259,7 +262,7 @@ fn sync_row(
         }
         None => {
             // No user with this email — create rower + passwordless active user.
-            let new = NewRower::from_sheet(&display_name, side, can_scull, can_cox, is_designated_cox);
+            let new = NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
             let created = Rower::insert(conn, new)?;
             let now = chrono::Utc::now().naive_utc();
             let user = AppUser::create(conn, NewAppUser {
@@ -287,13 +290,7 @@ fn sync_row(
             continue;
         }
         let status = match cell {
-            "Attending" => {
-                if is_sculling {
-                    AvailabilityStatus::ScullingOnly
-                } else {
-                    AvailabilityStatus::Yes
-                }
-            }
+            "Attending" => AvailabilityStatus::Yes,
             "Not Attending" => AvailabilityStatus::No,
             other => {
                 summary.warnings.push(format!(
@@ -396,7 +393,7 @@ mod tests {
     use lineup_db::app_user::{AppUser, NewAppUser};
     use lineup_db::availability::types::AvailabilityStatus;
     use lineup_db::availability::Availability;
-    use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength};
+    use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias};
     use lineup_db::rower::{NewRower, Rower};
     use lineup_db::schema::availability as availability_schema;
     use lineup_db::team::{NewTeam, Team, TeamId};
@@ -462,8 +459,10 @@ mod tests {
         assert_eq!(rowers.len(), 2);
         assert_eq!(rowers[0].name, "Alice Smith");
         assert_eq!(rowers[0].side, Side::Port);
+        assert_eq!(rowers[0].sweep_bias, SweepBias::SWEEP_HARD);
         assert_eq!(rowers[1].name, "Bob Jones");
         assert_eq!(rowers[1].side, Side::Starboard);
+        assert_eq!(rowers[1].sweep_bias, SweepBias::SWEEP_HARD);
         // Email now lives on app_user, not rower.
         let alice_user = AppUser::find_by_email(&mut conn, "alice@example.com").unwrap().expect("alice user");
         assert_eq!(alice_user.rower_id, Some(rowers[0].id));
@@ -502,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn sculling_row_maps_attending_to_scullingonly() {
+    fn sculling_row_maps_attending_to_yes_with_scull_bias() {
         let mut conn = in_memory_conn();
         let tid = seed_team(&mut conn);
         let csv = format!(
@@ -520,14 +519,12 @@ mod tests {
 
         let rowers = all_rowers(&mut conn);
         assert_eq!(rowers.len(), 1);
-        // Scullers always get can_scull = true, even when "Can you
-        // Scull?" would have said No — the sheet's team column is
-        // authoritative on this.
-        assert_eq!(rowers[0].can_scull, IntBool::TRUE);
+        // Sculling rows get sweep_bias = SCULL_HARD (-2).
+        assert_eq!(rowers[0].sweep_bias, SweepBias::SCULL_HARD);
 
         let avails = all_availabilities(&mut conn);
         assert_eq!(avails.len(), 1);
-        assert_eq!(avails[0].status, AvailabilityStatus::ScullingOnly);
+        assert_eq!(avails[0].status, AvailabilityStatus::Yes);
     }
 
     #[test]
@@ -611,7 +608,7 @@ mod tests {
                 height: lineup_db::rower::types::Height::Tall,
                 side: Side::Starboard,
                 side_strength: SideStrength::default(),
-                can_scull: IntBool::FALSE,
+                sweep_bias: SweepBias::default(),
                 can_cox: IntBool::TRUE,
                 is_designated_cox: IntBool::FALSE,
                 active: IntBool::TRUE,

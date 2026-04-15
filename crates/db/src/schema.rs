@@ -13,7 +13,7 @@ diesel::table! {
         height -> HeightMapping,
         side -> SideMapping,
         side_strength -> Integer,
-        can_scull -> Integer,
+        sweep_bias -> Integer,
         can_cox -> Integer,
         is_designated_cox -> Integer,
         active -> Integer,
