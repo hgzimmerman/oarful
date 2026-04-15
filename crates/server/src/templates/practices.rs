@@ -70,8 +70,10 @@ pub(crate) fn planning_content(
     today: chrono::NaiveDate,
     default_time: Option<chrono::NaiveTime>,
     default_duration: Option<i32>,
+    suggested_date: Option<chrono::NaiveDate>,
 ) -> Markup {
     let min_date = today.format("%Y-%m-%d").to_string();
+    let date_value = suggested_date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
     let time_value = default_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
     let end_time_value = match (default_time, default_duration) {
         (Some(t), Some(dur)) => {
@@ -97,6 +99,7 @@ pub(crate) fn planning_content(
                     }
                     input id="date" name="date" type="date"
                           min=(min_date)
+                          value=(date_value)
                           class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                 }
                 div {

@@ -110,6 +110,7 @@ diesel::table! {
         default_practice_time -> Nullable<Time>,
         default_practice_duration_minutes -> Nullable<Integer>,
         archived -> Integer,
+        default_practice_days -> Nullable<Integer>,
     }
 }
 

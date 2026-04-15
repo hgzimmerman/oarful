@@ -81,12 +81,13 @@ async fn planning_tab_content(
         .unwrap_or(Role::Member)
         .at_least(Role::Coach);
 
-    let (rows, default_time, default_duration) = tenant
+    let (rows, default_time, default_duration, suggested_date) = tenant
         .db
         .with_conn(move |conn| {
             let team = lineup_db::team::Team::get(conn, team_id)?;
             let default_time = team.as_ref().and_then(|t| t.default_practice_time);
             let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
+            let practice_days = team.as_ref().and_then(|t| t.default_practice_days);
             // Upcoming practices (non-cancelled) — already ascending by date.
             let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
 
@@ -95,6 +96,12 @@ async fn planning_tab_content(
                 Practice::committed_ids(conn, team_id, &upcoming_ids)?
                     .into_iter()
                     .collect();
+
+            // Compute next suggested date from practice-day defaults.
+            let existing_dates: HashSet<chrono::NaiveDate> =
+                upcoming_practices.iter().map(|p| p.date).collect();
+            let suggested_date = practice_days
+                .and_then(|pd| pd.next_unfilled(today, &existing_dates));
 
             // Rowers with user accounts (for non-respondent count).
             let all_rowers = Rower::list_active(conn)?;
@@ -132,12 +139,12 @@ async fn planning_tab_content(
                     already_sent_today: already_sent,
                 });
             }
-            Ok((rows, default_time, default_duration))
+            Ok((rows, default_time, default_duration, suggested_date))
         })
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::planning_content(&rows, is_coach, today, default_time, default_duration))
+    Ok(templates::practices::planning_content(&rows, is_coach, today, default_time, default_duration, suggested_date))
 }
 
 // =====================================================================

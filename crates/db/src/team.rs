@@ -6,10 +6,83 @@ use crate::boat::types::BoatId;
 use crate::rower::types::RowerId;
 use crate::schema::{team, team_boat_default, team_membership};
 use crate::types::IntBool;
-use chrono::{NaiveDateTime, NaiveTime};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
+
+// =====================================================================
+// PracticeDays bitmask newtype
+// =====================================================================
+
+/// Bitmask of weekdays a team typically practices on.
+/// Bit 0 = Monday, bit 1 = Tuesday, ..., bit 6 = Sunday.
+/// Stored as a nullable integer column; `None` means "not configured".
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct PracticeDays(i32);
+
+impl PracticeDays {
+    pub const EMPTY: Self = Self(0);
+
+    pub fn from_weekdays(days: &[Weekday]) -> Self {
+        let mut bits = 0i32;
+        for d in days {
+            bits |= 1 << d.num_days_from_monday();
+        }
+        Self(bits)
+    }
+
+    pub fn contains(self, day: Weekday) -> bool {
+        self.0 & (1 << day.num_days_from_monday()) != 0
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Iterate over the weekdays that are set, Monday first.
+    pub fn weekdays(self) -> impl Iterator<Item = Weekday> {
+        const ALL: [Weekday; 7] = [
+            Weekday::Mon,
+            Weekday::Tue,
+            Weekday::Wed,
+            Weekday::Thu,
+            Weekday::Fri,
+            Weekday::Sat,
+            Weekday::Sun,
+        ];
+        let bits = self.0;
+        ALL.into_iter()
+            .filter(move |d| bits & (1 << d.num_days_from_monday()) != 0)
+    }
+
+    /// Find the next date on or after `from` that matches one of the
+    /// configured weekdays and is NOT in `existing`. Returns `None` if
+    /// no days are configured or nothing is found within 60 days.
+    pub fn next_unfilled(self, from: NaiveDate, existing: &std::collections::HashSet<NaiveDate>) -> Option<NaiveDate> {
+        if self.is_empty() {
+            return None;
+        }
+        let mut candidate = from;
+        for _ in 0..60 {
+            if self.contains(candidate.weekday()) && !existing.contains(&candidate) {
+                return Some(candidate);
+            }
+            candidate = candidate.succ_opt()?;
+        }
+        None
+    }
+}
 
 /// Newtyped identifier for a `team` row.
 #[derive(
@@ -75,6 +148,8 @@ pub struct Team {
     /// Soft-delete flag. Archived teams are hidden from operational
     /// views but preserved for historical lineups.
     pub archived: IntBool,
+    /// Bitmask of default practice weekdays (Mon=bit0 … Sun=bit6).
+    pub default_practice_days: Option<PracticeDays>,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.

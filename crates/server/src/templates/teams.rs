@@ -6,7 +6,7 @@ use lineup_db::boat::Boat;
 use lineup_db::boat::types::BoatId;
 use lineup_db::rower::Rower;
 use lineup_db::rower::types::RowerId;
-use lineup_db::team::{Team, TeamId};
+use lineup_db::team::{PracticeDays, Team, TeamId};
 use maud::{html, Markup};
 
 use super::layout::page_header;
@@ -182,6 +182,33 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                         p class="text-xs text-slate-500 mt-1" {
                             "Used for cross-team overlap detection."
                         }
+                    }
+                }
+                div {
+                    label class="block text-sm font-semibold text-slate-700 mb-2" {
+                        "Default practice days"
+                    }
+                    @let days = team.default_practice_days.unwrap_or(PracticeDays::EMPTY);
+                    div class="flex flex-wrap gap-3" {
+                        @for (abbr, name, weekday) in &[
+                            ("Mon", "day_mon", chrono::Weekday::Mon),
+                            ("Tue", "day_tue", chrono::Weekday::Tue),
+                            ("Wed", "day_wed", chrono::Weekday::Wed),
+                            ("Thu", "day_thu", chrono::Weekday::Thu),
+                            ("Fri", "day_fri", chrono::Weekday::Fri),
+                            ("Sat", "day_sat", chrono::Weekday::Sat),
+                            ("Sun", "day_sun", chrono::Weekday::Sun),
+                        ] {
+                            label class="flex items-center gap-1.5 text-sm cursor-pointer" {
+                                input type="checkbox" name=(name) value="1"
+                                      checked[days.contains(*weekday)]
+                                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                                (abbr)
+                            }
+                        }
+                    }
+                    p class="text-xs text-slate-500 mt-1" {
+                        "Pre-fills the next practice date on the Planning page."
                     }
                 }
                 button type="submit"

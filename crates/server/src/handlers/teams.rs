@@ -146,6 +146,20 @@ pub(crate) struct TeamUpdateInput {
     default_practice_time: Option<String>,
     #[serde(default)]
     default_practice_duration_minutes: Option<String>,
+    #[serde(default)]
+    day_mon: Option<String>,
+    #[serde(default)]
+    day_tue: Option<String>,
+    #[serde(default)]
+    day_wed: Option<String>,
+    #[serde(default)]
+    day_thu: Option<String>,
+    #[serde(default)]
+    day_fri: Option<String>,
+    #[serde(default)]
+    day_sat: Option<String>,
+    #[serde(default)]
+    day_sun: Option<String>,
 }
 
 /// `POST /teams/{id}` — update team config (PD only).
@@ -173,6 +187,19 @@ pub(crate) async fn update_handler(
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse().ok())
         .filter(|&m: &i32| m > 0);
+    let mut days: Vec<chrono::Weekday> = Vec::new();
+    if input.day_mon.is_some() { days.push(chrono::Weekday::Mon); }
+    if input.day_tue.is_some() { days.push(chrono::Weekday::Tue); }
+    if input.day_wed.is_some() { days.push(chrono::Weekday::Wed); }
+    if input.day_thu.is_some() { days.push(chrono::Weekday::Thu); }
+    if input.day_fri.is_some() { days.push(chrono::Weekday::Fri); }
+    if input.day_sat.is_some() { days.push(chrono::Weekday::Sat); }
+    if input.day_sun.is_some() { days.push(chrono::Weekday::Sun); }
+    let practice_days = if days.is_empty() {
+        None
+    } else {
+        Some(lineup_db::team::PracticeDays::from_weekdays(&days))
+    };
     tenant
         .db
         .with_conn(move |conn| {
@@ -184,6 +211,7 @@ pub(crate) async fn update_handler(
                     team::self_edit_level.eq(&level),
                     team::default_practice_time.eq(practice_time),
                     team::default_practice_duration_minutes.eq(practice_duration),
+                    team::default_practice_days.eq(practice_days),
                 ))
                 .execute(conn)
         })
