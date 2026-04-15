@@ -211,6 +211,17 @@ pub(crate) async fn export_handler(
         .ok_or(StatusCode::NOT_FOUND)?;
     let db_path = tenant_row.db_path;
 
+    // Checkpoint the WAL so the base file contains all recent writes.
+    tenant
+        .db
+        .with_conn(|conn| {
+            use diesel::prelude::*;
+            diesel::sql_query("PRAGMA wal_checkpoint(TRUNCATE)").execute(conn)?;
+            Ok(())
+        })
+        .await
+        .map_err(internal_error)?;
+
     let bytes = tokio::fs::read(&db_path).await.map_err(internal_error)?;
     let filename = format!(
         "lineup_{}_{}.db",
@@ -292,19 +303,21 @@ pub(crate) async fn restore_handler(
     // Open the uploaded DB read-only and check for the current user.
     let check_temp = temp_path.clone();
     let check_email = current_email.clone();
-    let check_result: Result<Option<AppUser>, String> =
+    let check_result: Result<Option<BackupUser>, String> =
         tokio::task::spawn_blocking(move || {
             use diesel::prelude::*;
-            let mut conn = diesel::SqliteConnection::establish(&format!("file:{check_temp}?mode=ro"))
+            let mut conn = diesel::SqliteConnection::establish(&check_temp)
                 .map_err(|e| format!("Invalid SQLite file: {e}"))?;
-            // Verify the app_user table exists and find the user.
-            let found = lineup_db::schema::app_user::table
-                .filter(lineup_db::schema::app_user::email.eq(&check_email))
-                .select(AppUser::as_select())
-                .first(&mut conn)
-                .optional()
-                .map_err(|e| format!("Error reading backup: {e}"))?;
-            Ok(found)
+            // Use raw SQL to avoid schema mismatch issues with older backups.
+            // Use direct string formatting — email is from our own DB, not user input.
+            let query = format!(
+                "SELECT email, password_hash FROM app_user WHERE email = '{}' LIMIT 1",
+                check_email.replace('\'', "''")
+            );
+            diesel::sql_query(&query)
+            .get_result::<BackupUser>(&mut conn)
+            .optional()
+            .map_err(|e| format!("Error reading backup: {e}"))
         })
         .await
         .map_err(internal_error)?;
@@ -317,11 +330,10 @@ pub(crate) async fn restore_handler(
         }
         Ok(None) => {
             let _ = tokio::fs::remove_file(&temp_path).await;
-            let content = restore_form_markup(
-                Some("Your account does not exist in this backup. Restore aborted."),
-                None,
+            let msg = format!(
+                "Your account ({current_email}) does not exist in this backup. Restore aborted."
             );
-            return Ok(Html(content.into_string()));
+            return Ok(Html(restore_form_markup(Some(&msg), None).into_string()));
         }
         Ok(Some(backup_user)) => {
             let password_differs = backup_user.password_hash != current_hash;
@@ -362,6 +374,16 @@ pub(crate) async fn restore_confirm_handler(
 #[derive(serde::Deserialize)]
 pub(crate) struct RestoreConfirmInput {
     temp_path: String,
+}
+
+/// Minimal user info extracted from a backup DB via raw SQL.
+#[derive(Debug, diesel::QueryableByName)]
+struct BackupUser {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[allow(dead_code)]
+    email: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    password_hash: Option<String>,
 }
 
 async fn do_restore(
