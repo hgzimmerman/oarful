@@ -314,7 +314,7 @@ pub(crate) async fn fleet_matrix_content(
     let (boats, teams, defaults) = tenant
         .db
         .with_conn(|conn| {
-            let boats = Boat::list_sweep(conn)?;
+            let boats = Boat::list_in_service(conn)?;
             let teams = Team::list_all(conn)?;
             let defaults = TeamBoatDefault::all(conn)?;
             Ok((boats, teams, defaults))
@@ -383,7 +383,7 @@ pub(crate) async fn fleet_matrix_save_handler(
     let (boats, teams, defaults) = tenant
         .db
         .with_conn(|conn| {
-            let boats = Boat::list_sweep(conn)?;
+            let boats = Boat::list_in_service(conn)?;
             let teams = Team::list_all(conn)?;
             let defaults = TeamBoatDefault::all(conn)?;
             Ok((boats, teams, defaults))
