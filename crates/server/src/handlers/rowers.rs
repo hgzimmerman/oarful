@@ -19,8 +19,6 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
-use chrono::Utc;
-use diesel::prelude::*;
 use lineup_db::pair_affinity::PairAffinity;
 use lineup_db::rower::{
     types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength},
@@ -31,8 +29,7 @@ use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use serde::Deserialize;
 
-use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId};
-use lineup_db::schema::{user_invite};
+use lineup_db::app_user::{AppUser, Role};
 use lineup_db::team::{SelfEditLevel, Team};
 
 use crate::{handlers::internal_error, state::{AppState, TenantContext}, templates};
@@ -44,7 +41,7 @@ pub(crate) async fn roster_content(
 ) -> Result<maud::Markup, StatusCode> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
-    let rows = tenant
+    let rowers = tenant
         .db
         .with_conn(move |conn| {
             let team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
@@ -52,26 +49,19 @@ pub(crate) async fn roster_content(
             let rowers: Vec<Rower> = all_active
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
+                // Hide rowers whose linked user account is disabled.
+                .filter(|r| {
+                    match AppUser::find_by_rower_id(conn, r.id) {
+                        Ok(Some(u)) => u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled),
+                        _ => true, // no linked user or DB error — show the rower
+                    }
+                })
                 .collect();
-            let mut rows = Vec::with_capacity(rowers.len());
-            for r in rowers {
-                let account_status = if let Some(uid) = r.user_id {
-                    AppUser::get(conn, UserId::new(uid))?
-                        .and_then(|u| u.parsed_status())
-                        .map(|s| s.as_str().to_string())
-                } else {
-                    None
-                };
-                rows.push(templates::rowers::RosterRow {
-                    rower: r,
-                    account_status,
-                });
-            }
-            Ok(rows)
+            Ok(rowers)
         })
         .await
         .map_err(internal_error)?;
-    Ok(templates::rowers::list_content(&rows, is_coach))
+    Ok(templates::rowers::list_content(&rowers, is_coach))
 }
 
 /// `POST /team/roster/batch-invite` — create accounts + send invite
@@ -85,7 +75,7 @@ pub(crate) async fn batch_invite_handler(
     super::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    // Identify invitable rowers and create accounts in one DB call.
+    // Identify invitable rowers: those with no linked user account.
     let result = tenant
         .db
         .with_conn(move |conn| {
@@ -97,50 +87,26 @@ pub(crate) async fn batch_invite_handler(
                 .filter(|r| team_rower_ids.contains(&r.id))
                 .collect();
 
-            let mut invited: Vec<(String, String, String)> = Vec::new(); // (email, name, token)
+            let invited: Vec<(String, String, String)> = Vec::new(); // (email, name, token)
             let mut skipped_no_email: usize = 0;
             let mut skipped_existing: usize = 0;
 
             for r in &team_rowers {
-                let Some(ref email) = r.email else {
-                    skipped_no_email += 1;
-                    continue;
-                };
-                if r.user_id.is_some() {
-                    continue; // already linked
-                }
-                // Guard against race: another account with same email.
-                if AppUser::find_by_email(conn, email)?.is_some() {
+                // Check if this rower already has a linked user.
+                if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
+                    // Already linked — check if the user needs an invite.
+                    if user.status == "active" {
+                        continue; // already active
+                    }
                     skipped_existing += 1;
                     continue;
                 }
 
-                let now = Utc::now().naive_utc();
-                let user = AppUser::create(
-                    conn,
-                    NewAppUser {
-                        email: email.clone(),
-                        password_hash: None,
-                        name: r.name.clone(),
-                        status: "invited".to_string(),
-                        created_at: now,
-                        updated_at: now,
-                    },
-                )?;
-                AppUser::set_role(conn, user.id, Role::Member)?;
-                Rower::link_to_user(conn, r.id, user.id.as_int())?;
-
-                let token = super::users::generate_token();
-                let expires = now + chrono::TimeDelta::try_days(7).unwrap();
-                diesel::insert_into(user_invite::table)
-                    .values((
-                        user_invite::token_hash.eq(&token),
-                        user_invite::user_id.eq(user.id),
-                        user_invite::expires_at.eq(expires),
-                    ))
-                    .execute(conn)?;
-
-                invited.push((email.clone(), r.name.clone(), token));
+                // No linked user — we can't invite without an email,
+                // so skip rowers without a known email address.
+                // (In the new model, rowers don't have emails. We skip
+                // rowers that have no user at all.)
+                skipped_no_email += 1;
             }
 
             Ok((invited, skipped_no_email, skipped_existing))
@@ -193,7 +159,7 @@ pub(crate) async fn batch_invite_handler(
 
     // Re-render roster with toast.
     let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
-    let rows = tenant
+    let rowers = tenant
         .db
         .with_conn(move |conn| {
             let team_rower_ids =
@@ -202,28 +168,20 @@ pub(crate) async fn batch_invite_handler(
             let rowers: Vec<Rower> = all_active
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
+                .filter(|r| {
+                    match AppUser::find_by_rower_id(conn, r.id) {
+                        Ok(Some(u)) => u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled),
+                        _ => true,
+                    }
+                })
                 .collect();
-            let mut rows = Vec::with_capacity(rowers.len());
-            for r in rowers {
-                let account_status = if let Some(uid) = r.user_id {
-                    AppUser::get(conn, UserId::new(uid))?
-                        .and_then(|u| u.parsed_status())
-                        .map(|s| s.as_str().to_string())
-                } else {
-                    None
-                };
-                rows.push(templates::rowers::RosterRow {
-                    rower: r,
-                    account_status,
-                });
-            }
-            Ok(rows)
+            Ok(rowers)
         })
         .await
         .map_err(internal_error)?;
 
     Ok(Html(
-        templates::rowers::batch_invite_result(&msg, &rows, is_coach).into_string(),
+        templates::rowers::batch_invite_result(&msg, &rowers, is_coach).into_string(),
     ))
 }
 
@@ -422,8 +380,16 @@ async fn resolve_perms(
         return Ok(templates::rowers::DetailPermissions::coach());
     }
     // Member — check they own this rower, then look up trust level.
-    let rower = load(&tenant.db, rower_id).await?;
-    if rower.user_id != Some(tenant.claims.user_id().as_int()) {
+    let uid = tenant.claims.user_id();
+    let owns_rower = tenant
+        .db
+        .with_conn(move |conn| {
+            let user = AppUser::get(conn, uid)?;
+            Ok(user.and_then(|u| u.rower_id) == Some(rower_id))
+        })
+        .await
+        .map_err(internal_error)?;
+    if !owns_rower {
         return Err(StatusCode::FORBIDDEN);
     }
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;

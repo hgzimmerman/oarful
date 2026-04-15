@@ -1,7 +1,8 @@
 //! Auth identity for the tenant. Separate from `rower` so non-rowing
-//! users (Program Directors) can have accounts. Linked to rower via
-//! `rower.user_id` FK.
+//! users (Program Directors) can have accounts. `app_user.rower_id`
+//! optionally links to a rower profile.
 
+use crate::rower::types::RowerId;
 use crate::schema::{app_user, user_role};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -116,6 +117,7 @@ pub struct AppUser {
     pub updated_at: NaiveDateTime,
     pub opt_in_reminders: i32,
     pub opt_in_lineups: i32,
+    pub rower_id: Option<RowerId>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -226,6 +228,35 @@ impl AppUser {
     /// Whether this user has opted in to lineup notification emails.
     pub fn wants_lineups(&self) -> bool {
         self.opt_in_lineups != 0
+    }
+
+    /// Link this user to a rower profile.
+    pub fn set_rower_id(
+        conn: &mut SqliteConnection,
+        user_id: UserId,
+        rower_id: Option<RowerId>,
+    ) -> Result<(), diesel::result::Error> {
+        let now = chrono::Utc::now().naive_utc();
+        diesel::update(app_user::table.find(user_id))
+            .set((
+                app_user::rower_id.eq(rower_id),
+                app_user::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+        Ok(())
+    }
+
+    /// Find the user linked to a rower. Returns None if no user is
+    /// linked to this rower.
+    pub fn find_by_rower_id(
+        conn: &mut SqliteConnection,
+        rower_id: RowerId,
+    ) -> Result<Option<AppUser>, diesel::result::Error> {
+        app_user::table
+            .filter(app_user::rower_id.eq(rower_id))
+            .select(AppUser::as_select())
+            .first(conn)
+            .optional()
     }
 
     /// Update email opt-in preferences.

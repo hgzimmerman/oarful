@@ -257,9 +257,10 @@ pub(crate) async fn reminders_handler(
                     .collect();
 
             let all_rowers = Rower::list_active(conn)?;
+            // Filter to rowers that have a linked user account.
             let rowers_with_user: Vec<_> = all_rowers
                 .iter()
-                .filter(|r| r.user_id.is_some())
+                .filter(|r| AppUser::find_by_rower_id(conn, r.id).ok().flatten().is_some())
                 .collect();
 
             let mut rows = Vec::new();
@@ -334,13 +335,9 @@ pub(crate) async fn send_reminders_handler(
                 (lineup_db::app_user::UserId, String, String),
             > = HashMap::new();
             for r in &all_rowers {
-                if let (Some(uid), Some(email)) = (r.user_id, r.email.as_ref()) {
-                    let user_id = lineup_db::app_user::UserId::new(uid);
-                    // Check opt-in.
-                    if let Some(user) = AppUser::get(conn, user_id)? {
-                        if user.wants_reminders() && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active) {
-                            rower_users.insert(r.id, (user_id, email.clone(), r.name.clone()));
-                        }
+                if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
+                    if user.wants_reminders() && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active) {
+                        rower_users.insert(r.id, (user.id, user.email.clone(), r.name.clone()));
                     }
                 }
             }
@@ -642,9 +639,11 @@ pub(crate) async fn send_lineups_handler(
                     if let Some(practice) = Practice::find_by_date(conn, team_id, *date)? {
                         let responses = Availability::map_for_practice(conn, practice.id)?;
                         for r in &all_rowers {
-                            if r.user_id.is_some() && !recipient_rower_ids.contains(&r.id) {
-                                // Include if no response at all.
-                                if !responses.contains_key(&r.id) {
+                            if !recipient_rower_ids.contains(&r.id) {
+                                // Include if has a user account and no response at all.
+                                if AppUser::find_by_rower_id(conn, r.id)?.is_some()
+                                    && !responses.contains_key(&r.id)
+                                {
                                     recipient_rower_ids.insert(r.id);
                                 }
                             }
@@ -657,15 +656,12 @@ pub(crate) async fn send_lineups_handler(
             let mut recipients: Vec<(lineup_db::app_user::UserId, String, String)> = Vec::new();
             for rid in &recipient_rower_ids {
                 if let Some(r) = rower_map.get(rid) {
-                    if let (Some(uid), Some(email)) = (r.user_id, r.email.as_ref()) {
-                        let user_id = lineup_db::app_user::UserId::new(uid);
-                        if let Some(user) = AppUser::get(conn, user_id)? {
-                            if user.wants_lineups()
-                                && user.parsed_status()
-                                    == Some(lineup_db::app_user::UserStatus::Active)
-                            {
-                                recipients.push((user_id, email.clone(), r.name.clone()));
-                            }
+                    if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
+                        if user.wants_lineups()
+                            && user.parsed_status()
+                                == Some(lineup_db::app_user::UserStatus::Active)
+                        {
+                            recipients.push((user.id, user.email.clone(), r.name.clone()));
                         }
                     }
                 }

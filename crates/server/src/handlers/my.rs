@@ -469,10 +469,16 @@ pub(crate) async fn email_prefs_update_handler(
 /// Try to load the rower linked to the authenticated user. Returns
 /// None if the user has no linked rower record.
 async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, StatusCode> {
-    let user_id = tenant.claims.user_id().as_int();
+    let user_id = tenant.claims.user_id();
     tenant
         .db
-        .with_conn(move |conn| Rower::find_by_user_id(conn, user_id))
+        .with_conn(move |conn| {
+            let user = lineup_db::app_user::AppUser::get(conn, user_id)?;
+            match user.and_then(|u| u.rower_id) {
+                Some(rid) => Rower::get(conn, rid),
+                None => Ok(None),
+            }
+        })
         .await
         .map_err(internal_error)
 }
@@ -480,11 +486,5 @@ async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, Stat
 /// Load the rower linked to the authenticated user. Returns 404 if
 /// the user doesn't have a linked rower record.
 async fn load_my_rower(tenant: &TenantContext) -> Result<Rower, StatusCode> {
-    let user_id = tenant.claims.user_id().as_int();
-    let maybe = tenant
-        .db
-        .with_conn(move |conn| Rower::find_by_user_id(conn, user_id))
-        .await
-        .map_err(internal_error)?;
-    maybe.ok_or(StatusCode::NOT_FOUND)
+    try_load_my_rower(tenant).await?.ok_or(StatusCode::NOT_FOUND)
 }

@@ -1376,12 +1376,12 @@ name = "lineup_e2e"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "fantoccini",
  "libc",
  "lineup_server",
  "serde_json",
  "tokio",
- "tracing-subscriber",
 ]
 
 [[package]]

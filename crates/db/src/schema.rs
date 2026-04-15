@@ -7,7 +7,6 @@ diesel::table! {
     rower (id) {
         id -> Integer,
         name -> Text,
-        email -> Nullable<Text>,
         weight_class -> RowerWeightClassMapping,
         skill -> SkillMapping,
         strength -> StrengthMapping,
@@ -20,7 +19,6 @@ diesel::table! {
         active -> Integer,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        user_id -> Nullable<Integer>,
     }
 }
 
@@ -35,6 +33,7 @@ diesel::table! {
         updated_at -> Timestamp,
         opt_in_reminders -> Integer,
         opt_in_lineups -> Integer,
+        rower_id -> Nullable<Integer>,
     }
 }
 
@@ -251,7 +250,7 @@ diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(sync_source -> team (team_id));
 diesel::joinable!(solver_profile -> team (team_id));
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
-diesel::joinable!(rower -> app_user (user_id));
+diesel::joinable!(app_user -> rower (rower_id));
 diesel::joinable!(user_role -> app_user (user_id));
 diesel::joinable!(user_invite -> app_user (user_id));
 diesel::joinable!(magic_link -> app_user (user_id));

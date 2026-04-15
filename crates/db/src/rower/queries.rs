@@ -65,33 +65,6 @@ impl Rower {
             .get_result(conn)
     }
 
-    /// Find the rower linked to a user account. Returns None if the
-    /// user doesn't have a linked rower (e.g. a PD who doesn't row).
-    #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn find_by_user_id(
-        conn: &mut SqliteConnection,
-        uid: i32,
-    ) -> Result<Option<Rower>, diesel::result::Error> {
-        rower::table
-            .filter(rower::user_id.eq(uid))
-            .select(Rower::as_select())
-            .first(conn)
-            .optional()
-    }
-
-    /// Link a rower to a user account.
-    #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn link_to_user(
-        conn: &mut SqliteConnection,
-        rower_id: RowerId,
-        uid: i32,
-    ) -> Result<(), diesel::result::Error> {
-        diesel::update(rower::table.filter(rower::id.eq(rower_id)))
-            .set(rower::user_id.eq(uid))
-            .execute(conn)?;
-        Ok(())
-    }
-
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn count(conn: &mut SqliteConnection) -> Result<i64, diesel::result::Error> {
         rower::table.count().get_result(conn)
@@ -216,21 +189,6 @@ impl Rower {
         Ok(map)
     }
 
-    /// Look up a rower by email. Used as the matching key during the
-    /// Google Sheets sync. Returns `Ok(None)` if no rower with that
-    /// email exists.
-    #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn find_by_email(
-        conn: &mut SqliteConnection,
-        email: &str,
-    ) -> Result<Option<Rower>, diesel::result::Error> {
-        rower::table
-            .filter(rower::email.eq(email))
-            .select(Rower::as_select())
-            .first(conn)
-            .optional()
-    }
-
     /// Promote-only update of mutable rower attributes from sheet data.
     ///
     /// Rule: the sync path NEVER demotes a coach-set value. Specific
@@ -306,7 +264,6 @@ mod tests {
     /// as the "existing row" in promote_from_sheet tests.
     fn seed_rower(
         conn: &mut SqliteConnection,
-        email: &str,
         side: Side,
         can_scull: bool,
         can_cox: bool,
@@ -317,7 +274,6 @@ mod tests {
             conn,
             NewRower {
                 name: "Seed Rower".into(),
-                email: Some(email.into()),
                 weight_class: RowerWeightClass::Medium,
                 skill: Skill::Intermediate,
                 strength: Strength::Intermediate,
@@ -336,112 +292,38 @@ mod tests {
     }
 
     #[test]
-    fn find_by_email_returns_none_for_unknown() {
-        let mut conn = in_memory_conn();
-        assert!(Rower::find_by_email(&mut conn, "nobody@example.com")
-            .unwrap()
-            .is_none());
-    }
-
-    #[test]
-    fn find_by_email_returns_existing_rower() {
-        let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Port,
-            false,
-            true,
-            false,
-        );
-        let found = Rower::find_by_email(&mut conn, "alice@example.com")
-            .unwrap()
-            .expect("should find seeded rower");
-        assert_eq!(found.id, seeded.id);
-        assert_eq!(found.side, Side::Port);
-    }
-
-    #[test]
     fn promote_from_sheet_never_demotes_specific_side_to_either() {
-        // Core load-bearing rule: a coach's specific side assignment
-        // (Port / Starboard) must survive a sync that carries Side::Either.
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Starboard,
-            false,
-            true,
-            false,
-        );
+        let seeded = seed_rower(&mut conn, Side::Starboard, false, true, false);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            "Alice Smith",
-            Side::Either, // sheet says Both / unknown
-            false,
-            true,
-            false,
-        )
-        .unwrap();
+            &mut conn, &seeded, "Alice Smith", Side::Either, false, true, false,
+        ).unwrap();
 
         assert_eq!(updated.side, Side::Starboard);
-        // Name still updates — that's unconditional per the function's
-        // documented contract, distinct from the side rule.
         assert_eq!(updated.name, "Alice Smith");
     }
 
     #[test]
     fn promote_from_sheet_does_promote_either_to_specific() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Either,
-            false,
-            true,
-            false,
-        );
+        let seeded = seed_rower(&mut conn, Side::Either, false, true, false);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            "Alice Smith",
-            Side::Port,
-            false,
-            true,
-            false,
-        )
-        .unwrap();
+            &mut conn, &seeded, "Alice Smith", Side::Port, false, true, false,
+        ).unwrap();
 
         assert_eq!(updated.side, Side::Port);
     }
 
     #[test]
     fn promote_from_sheet_never_demotes_true_flags_to_false() {
-        // can_scull / can_cox / is_designated_cox should only ever go
-        // false → true, never the reverse.
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Port,
-            true,  // can_scull
-            true,  // can_cox
-            true,  // is_designated_cox
-        );
+        let seeded = seed_rower(&mut conn, Side::Port, true, true, true);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            "Alice Smith",
-            Side::Port,
-            false, // sheet says she can't scull — ignored
-            false, // sheet says she can't cox — ignored
-            false, // sheet says she's not a designated cox — ignored
-        )
-        .unwrap();
+            &mut conn, &seeded, "Alice Smith", Side::Port, false, false, false,
+        ).unwrap();
 
         assert_eq!(updated.can_scull, IntBool::TRUE);
         assert_eq!(updated.can_cox, IntBool::TRUE);
@@ -451,25 +333,11 @@ mod tests {
     #[test]
     fn promote_from_sheet_promotes_false_flags_to_true() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Port,
-            false,
-            false,
-            false,
-        );
+        let seeded = seed_rower(&mut conn, Side::Port, false, false, false);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            "Alice Smith",
-            Side::Port,
-            true,
-            true,
-            true,
-        )
-        .unwrap();
+            &mut conn, &seeded, "Alice Smith", Side::Port, true, true, true,
+        ).unwrap();
 
         assert_eq!(updated.can_scull, IntBool::TRUE);
         assert_eq!(updated.can_cox, IntBool::TRUE);
@@ -478,67 +346,29 @@ mod tests {
 
     #[test]
     fn promote_from_sheet_is_noop_when_nothing_changed() {
-        // Name matches, side matches, flags match → no UPDATE should
-        // fire and updated_at should be unchanged.
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Port,
-            true,
-            true,
-            false,
-        );
-        // Rename the seed so the `name` check inside promote_from_sheet
-        // gets a matching string to compare against.
+        let seeded = seed_rower(&mut conn, Side::Port, true, true, false);
         let seeded_updated_at = seeded.updated_at;
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            &seeded.name,
-            Side::Port,
-            true,
-            true,
-            false,
-        )
-        .unwrap();
+            &mut conn, &seeded, &seeded.name, Side::Port, true, true, false,
+        ).unwrap();
 
-        assert_eq!(
-            updated.updated_at, seeded_updated_at,
-            "no-op promote should not touch updated_at"
-        );
+        assert_eq!(updated.updated_at, seeded_updated_at, "no-op promote should not touch updated_at");
     }
 
     #[test]
     fn promote_from_sheet_updates_name_unconditionally() {
         let mut conn = in_memory_conn();
-        let seeded = seed_rower(
-            &mut conn,
-            "alice@example.com",
-            Side::Port,
-            false,
-            true,
-            false,
-        );
+        let seeded = seed_rower(&mut conn, Side::Port, false, true, false);
         let original_name = seeded.name.clone();
 
         let updated = Rower::promote_from_sheet(
-            &mut conn,
-            &seeded,
-            "Alice Married-Name",
-            Side::Port,
-            false,
-            true,
-            false,
-        )
-        .unwrap();
+            &mut conn, &seeded, "Alice Married-Name", Side::Port, false, true, false,
+        ).unwrap();
 
         assert_ne!(updated.name, original_name);
         assert_eq!(updated.name, "Alice Married-Name");
-        assert_ne!(
-            updated.updated_at, seeded.updated_at,
-            "a name change should bump updated_at"
-        );
+        assert_ne!(updated.updated_at, seeded.updated_at, "a name change should bump updated_at");
     }
 }

@@ -66,7 +66,6 @@ fn rower(
     Rower {
         id: RowerId::new(id),
         name: name.into(),
-        email: None,
         weight_class: wc,
         skill,
         strength,
@@ -79,7 +78,6 @@ fn rower(
         active: IntBool::TRUE,
         created_at: now,
         updated_at: now,
-        user_id: None,
     }
 }
 

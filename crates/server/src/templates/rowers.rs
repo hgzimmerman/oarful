@@ -52,41 +52,18 @@ use maud::{html, Markup};
 use super::layout::{empty_state, page_header};
 use crate::handlers::rowers::RowerDetail;
 
-/// A roster row with the rower data + their account status.
-pub(crate) struct RosterRow {
-    pub(crate) rower: Rower,
-    /// None = no user account, Some("active"), Some("invited"), etc.
-    pub(crate) account_status: Option<String>,
-}
-
-pub(crate) fn list_content(rows: &[RosterRow], is_coach: bool) -> Markup {
+pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
     let subtitle = format!("{} active members", rows.len());
-    let invitable_count = rows
-        .iter()
-        .filter(|r| r.rower.email.is_some() && r.account_status.is_none())
-        .count();
     html! {
         (page_header("Roster", Some(&subtitle)))
         div class="px-4 sm:px-8 py-6" {
-            @if is_coach && invitable_count > 0 {
-                form method="post" action="/team/roster/batch-invite"
-                     hx-post="/team/roster/batch-invite"
-                     hx-target="#team-tab-content"
-                     hx-confirm={(format!("Send invites to {invitable_count} rower(s) with email addresses?"))}
-                     class="flex justify-end mb-4" {
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                        "Send invites (" (invitable_count) ")"
-                    }
-                }
-            }
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 // Mobile: compact card list
                 div class="md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for row in rows {
-                        (mobile_row(row))
+                    @for r in rows {
+                        (mobile_row(r))
                     }
                 }
                 // Desktop: full table
@@ -101,12 +78,11 @@ pub(crate) fn list_content(rows: &[RosterRow], is_coach: bool) -> Markup {
                                 th class="px-4 py-2" { "Side" }
                                 th class="px-4 py-2" { "Cox" }
                                 th class="px-4 py-2" { "Scull" }
-                                th class="px-4 py-2" { "Account" }
                             }
                         }
                         tbody {
-                            @for row in rows {
-                                (static_row(row))
+                            @for r in rows {
+                                (static_row(r))
                             }
                         }
                     }
@@ -117,7 +93,7 @@ pub(crate) fn list_content(rows: &[RosterRow], is_coach: bool) -> Markup {
 }
 
 /// Toast banner + refreshed roster after a batch invite.
-pub(crate) fn batch_invite_result(message: &str, rows: &[RosterRow], is_coach: bool) -> Markup {
+pub(crate) fn batch_invite_result(message: &str, rows: &[Rower], is_coach: bool) -> Markup {
     html! {
         div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
             (message)
@@ -126,9 +102,8 @@ pub(crate) fn batch_invite_result(message: &str, rows: &[RosterRow], is_coach: b
     }
 }
 
-/// Mobile card for one rower — name, side, account status.
-fn mobile_row(row: &RosterRow) -> Markup {
-    let r = &row.rower;
+/// Mobile card for one rower — name and side.
+fn mobile_row(r: &Rower) -> Markup {
     html! {
         a href={"/rowers/" (r.id)}
           hx-get={"/rowers/" (r.id)}
@@ -140,18 +115,6 @@ fn mobile_row(row: &RosterRow) -> Markup {
                 div class="text-xs text-slate-500" { (side_display_label(r)) }
             }
             div class="flex items-center gap-2" {
-                @match row.account_status.as_deref() {
-                    Some("active") => {
-                        span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" { "Active" }
-                    }
-                    Some("invited") => {
-                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" { "Invited" }
-                    }
-                    None => {
-                        span class="text-xs text-slate-400" { "No account" }
-                    }
-                    Some(_) => {}
-                }
                 span class="text-slate-400" { "→" }
             }
         }
@@ -160,8 +123,7 @@ fn mobile_row(row: &RosterRow) -> Markup {
 
 /// Read-only `<tr>` for one rower with a Details link to the full
 /// detail/edit page.
-fn static_row(row: &RosterRow) -> Markup {
-    let r = &row.rower;
+fn static_row(r: &Rower) -> Markup {
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
             td class="px-4 py-2 font-medium" {
@@ -184,25 +146,6 @@ fn static_row(row: &RosterRow) -> Markup {
             }
             td class="px-4 py-2" {
                 @if r.can_scull.as_bool() { "yes" } @else { "—" }
-            }
-            td class="px-4 py-2" {
-                @match row.account_status.as_deref() {
-                    Some("active") => {
-                        span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" { "Active" }
-                    }
-                    Some("invited") => {
-                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" { "Invited" }
-                    }
-                    Some("disabled") => {
-                        span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full" { "Disabled" }
-                    }
-                    Some(other) => {
-                        span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full" { (other) }
-                    }
-                    None => {
-                        span class="text-xs text-slate-400" { "No account" }
-                    }
-                }
             }
         }
     }

@@ -329,7 +329,6 @@ mod tests {
         Rower {
             id: RowerId::new(1),
             name: "Test".into(),
-            email: None,
             weight_class: RowerWeightClass::Medium,
             skill: Skill::Intermediate,
             strength: Strength::Intermediate,
@@ -342,7 +341,6 @@ mod tests {
             active: IntBool::new(true),
             created_at: chrono::NaiveDateTime::default(),
             updated_at: chrono::NaiveDateTime::default(),
-            user_id: None,
         }
     }
 

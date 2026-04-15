@@ -364,7 +364,6 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
         .map(|i| Rower {
             id: RowerId::new(i),
             name: format!("R{i:02}"),
-            email: None,
             weight_class: weight_cycle[(i as usize - 1) % weight_cycle.len()],
             skill: skill_cycle[(i as usize - 1) % skill_cycle.len()],
             strength: strength_cycle[(i as usize - 1) % strength_cycle.len()],
@@ -377,7 +376,6 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
             active: IntBool::TRUE,
             created_at: now,
             updated_at: now,
-            user_id: None,
         })
         .collect()
 }

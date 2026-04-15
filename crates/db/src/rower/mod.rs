@@ -22,11 +22,6 @@ use crate::types::IntBool;
 pub struct Rower {
     pub id: RowerId,
     pub name: String,
-    /// Unique contact identifier. Populated by the Google Sheets sync
-    /// and used as the matching key when re-importing. Nullable
-    /// because not every rower has one on file (fixture rowers, legacy
-    /// manual entries).
-    pub email: Option<String>,
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
@@ -47,15 +42,12 @@ pub struct Rower {
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
-    /// FK to `app_user.id`. NULL until the rower claims their account.
-    pub user_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
 #[diesel(table_name = crate::schema::rower)]
 pub struct NewRower {
     pub name: String,
-    pub email: Option<String>,
     pub weight_class: RowerWeightClass,
     pub skill: Skill,
     pub strength: Strength,
@@ -78,8 +70,7 @@ impl NewRower {
     /// `IntBool::FALSE` for rowers who genuinely can't cox (e.g.,
     /// brand-new learn-to-row members). `is_designated_cox` stays
     /// `false` — designated coxes are the rare case and the admin
-    /// sets it explicitly. Email is None by default; set it when
-    /// creating rowers from a sync that has one.
+    /// sets it explicitly.
     pub fn sweep(
         name: impl Into<String>,
         weight_class: RowerWeightClass,
@@ -91,7 +82,6 @@ impl NewRower {
         let now = chrono::Utc::now().naive_utc();
         Self {
             name: name.into(),
-            email: None,
             weight_class,
             skill,
             strength,
@@ -113,7 +103,6 @@ impl NewRower {
     /// sheet-provided values for everything it does know.
     pub fn from_sheet(
         name: impl Into<String>,
-        email: String,
         side: Side,
         can_scull: bool,
         can_cox: bool,
@@ -122,7 +111,6 @@ impl NewRower {
         let now = chrono::Utc::now().naive_utc();
         Self {
             name: name.into(),
-            email: Some(email),
             weight_class: RowerWeightClass::Medium,
             skill: Skill::Intermediate,
             strength: Strength::Intermediate,

@@ -50,6 +50,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc};
 use diesel::SqliteConnection;
+use lineup_db::app_user::{AppUser, NewAppUser, Role};
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::availability::{Availability, NewAvailability};
 use lineup_db::rower::types::Side;
@@ -230,35 +231,49 @@ fn sync_row(
     // Scullers can obviously scull, regardless of what the column says.
     let can_scull = is_sculling || sheet_can_scull;
 
-    // Upsert the rower row (create if new, promote-update if existing).
-    let rower = match Rower::find_by_email(conn, email)? {
+    // Upsert the rower row. Identity is keyed on email via app_user.
+    let rower = match AppUser::find_by_email(conn, email)? {
+        Some(user) => {
+            // User exists — load or create linked rower.
+            match user.rower_id {
+                Some(rower_id) => {
+                    let existing = Rower::get(conn, rower_id)?
+                        .ok_or_else(|| anyhow!("app_user.rower_id points to missing rower {rower_id}"))?;
+                    let updated = Rower::promote_from_sheet(
+                        conn, &existing, &display_name, side, can_scull, can_cox, is_designated_cox,
+                    )?;
+                    if updated.updated_at != existing.updated_at {
+                        summary.rowers_updated += 1;
+                    }
+                    updated
+                }
+                None => {
+                    // User exists but has no rower — create one and link.
+                    let new = NewRower::from_sheet(&display_name, side, can_scull, can_cox, is_designated_cox);
+                    let created = Rower::insert(conn, new)?;
+                    AppUser::set_rower_id(conn, user.id, Some(created.id))?;
+                    summary.rowers_created += 1;
+                    created
+                }
+            }
+        }
         None => {
-            let new = NewRower::from_sheet(
-                &display_name,
-                email.to_string(),
-                side,
-                can_scull,
-                can_cox,
-                is_designated_cox,
-            );
+            // No user with this email — create rower + passwordless active user.
+            let new = NewRower::from_sheet(&display_name, side, can_scull, can_cox, is_designated_cox);
             let created = Rower::insert(conn, new)?;
+            let now = chrono::Utc::now().naive_utc();
+            let user = AppUser::create(conn, NewAppUser {
+                email: email.to_string(),
+                password_hash: None,
+                name: display_name.clone(),
+                status: "active".to_string(),
+                created_at: now,
+                updated_at: now,
+            })?;
+            AppUser::set_role(conn, user.id, Role::Member)?;
+            AppUser::set_rower_id(conn, user.id, Some(created.id))?;
             summary.rowers_created += 1;
             created
-        }
-        Some(existing) => {
-            let updated = Rower::promote_from_sheet(
-                conn,
-                &existing,
-                &display_name,
-                side,
-                can_scull,
-                can_cox,
-                is_designated_cox,
-            )?;
-            if updated.updated_at != existing.updated_at {
-                summary.rowers_updated += 1;
-            }
-            updated
         }
     };
 
@@ -378,6 +393,7 @@ fn field<'a>(record: &'a csv::StringRecord, idx: usize) -> &'a str {
 mod tests {
     use super::*;
     use diesel::prelude::*;
+    use lineup_db::app_user::{AppUser, NewAppUser};
     use lineup_db::availability::types::AvailabilityStatus;
     use lineup_db::availability::Availability;
     use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength};
@@ -445,10 +461,12 @@ mod tests {
         let rowers = all_rowers(&mut conn);
         assert_eq!(rowers.len(), 2);
         assert_eq!(rowers[0].name, "Alice Smith");
-        assert_eq!(rowers[0].email.as_deref(), Some("alice@example.com"));
         assert_eq!(rowers[0].side, Side::Port);
         assert_eq!(rowers[1].name, "Bob Jones");
         assert_eq!(rowers[1].side, Side::Starboard);
+        // Email now lives on app_user, not rower.
+        let alice_user = AppUser::find_by_email(&mut conn, "alice@example.com").unwrap().expect("alice user");
+        assert_eq!(alice_user.rower_id, Some(rowers[0].id));
 
         let avails = all_availabilities(&mut conn);
         assert_eq!(avails.len(), 4);
@@ -587,7 +605,6 @@ mod tests {
             &mut conn,
             NewRower {
                 name: "Alice Smith".into(),
-                email: Some("alice@example.com".into()),
                 weight_class: RowerWeightClass::Medium,
                 skill: Skill::Expert,
                 strength: Strength::Strong,
@@ -604,6 +621,18 @@ mod tests {
         )
         .unwrap();
         assert_eq!(seeded.side, Side::Starboard);
+
+        // Create an app_user linked to this rower (email is the identity key).
+        let now = chrono::Utc::now().naive_utc();
+        let user = AppUser::create(&mut conn, NewAppUser {
+            email: "alice@example.com".into(),
+            password_hash: None,
+            name: "Alice Smith".into(),
+            status: "active".into(),
+            created_at: now,
+            updated_at: now,
+        }).unwrap();
+        AppUser::set_rower_id(&mut conn, user.id, Some(seeded.id)).unwrap();
 
         // Now re-import from a sheet that says "Both" for this rower.
         let csv = format!(

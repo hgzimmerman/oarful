@@ -17,7 +17,6 @@ use diesel::prelude::*;
 use std::collections::HashMap;
 
 use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow};
-use lineup_db::rower::Rower;
 use lineup_db::schema::{app_user, user_invite, user_role};
 use serde::Deserialize;
 
@@ -31,10 +30,10 @@ use crate::{state::{AppState, TenantContext}, templates};
 pub(crate) async fn users_content(
     tenant: &TenantContext,
 ) -> Result<maud::Markup, StatusCode> {
-    let (users, roles, unlinked_rowers, user_rower_map) = tenant
+    let (users, roles, user_rower_map) = tenant
         .db
         .with_conn(|conn| {
-            let users = app_user::table
+            let users: Vec<AppUser> = app_user::table
                 .select(AppUser::as_select())
                 .order(app_user::name.asc())
                 .get_results(conn)?;
@@ -45,21 +44,15 @@ pub(crate) async fn users_content(
                 .into_iter()
                 .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
                 .collect();
-            let all_rowers = Rower::list_active(conn)?;
-            let unlinked: Vec<Rower> = all_rowers
+            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = users
                 .iter()
-                .filter(|r| r.user_id.is_none() && r.email.is_some())
-                .cloned()
+                .filter_map(|u| u.rower_id.map(|rid| (u.id, rid)))
                 .collect();
-            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = all_rowers
-                .iter()
-                .filter_map(|r| r.user_id.map(|uid| (UserId::new(uid), r.id)))
-                .collect();
-            Ok((users, roles, unlinked, user_rower))
+            Ok((users, roles, user_rower))
         })
         .await
         .map_err(super::internal_error)?;
-    Ok(templates::users::list_content(&users, &roles, &unlinked_rowers, &user_rower_map))
+    Ok(templates::users::list_content(&users, &roles, &user_rower_map))
 }
 
 
@@ -117,13 +110,6 @@ pub(crate) async fn invite_handler(
                 },
             )?;
             AppUser::set_role(conn, user.id, role)?;
-
-            // Auto-link rower → user if a rower with the same email
-            // exists. This lets the rower access self-service pages
-            // after accepting the invite.
-            if let Some(rower) = Rower::find_by_email(conn, &user.email)? {
-                Rower::link_to_user(conn, rower.id, user.id.as_int())?;
-            }
 
             // Store invite token.
             let expires = now + chrono::TimeDelta::try_days(7).unwrap();
@@ -249,8 +235,10 @@ pub(crate) async fn resend_invite_handler(
                 role_map.insert(user_id, role);
             }
             let mut rower_map = HashMap::new();
-            if let Some(rower) = Rower::find_by_user_id(conn, user_id.as_int())? {
-                rower_map.insert(user_id, rower.id);
+            if let Some(u) = AppUser::get(conn, user_id)? {
+                if let Some(rid) = u.rower_id {
+                    rower_map.insert(user_id, rid);
+                }
             }
             Ok((role_map, rower_map))
         })

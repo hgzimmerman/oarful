@@ -47,10 +47,10 @@ pub(crate) async fn selector_handler(
                 Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
             } else {
                 // Members see teams their rower is in.
-                use lineup_db::rower::Rower;
-                let rower = Rower::find_by_user_id(conn, user_id)?;
-                if let Some(r) = rower {
-                    let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, r.id)?;
+                use lineup_db::app_user::AppUser;
+                let user = AppUser::get(conn, lineup_db::app_user::UserId::new(user_id))?;
+                if let Some(rid) = user.and_then(|u| u.rower_id) {
+                    let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, rid)?;
                     let all = Team::list_all(conn)?;
                     Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
                 } else {
