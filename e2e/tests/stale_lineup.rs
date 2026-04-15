@@ -9,22 +9,35 @@ async fn availability_change_warns_about_committed_lineup() {
     let (instance, mut mail_rx) = TestInstance::start_with_mail().await;
     let client = instance.connect().await;
 
-    // As PD: invite alice@test.example.com as Member.
-    // The demo fixture gives Alice this email, and she's in the Monday
-    // committed lineup (stroke seat in Athena).
+    // Log out from the demo PD user.
+    client
+        .execute(
+            &format!(
+                r#"await fetch("{}/logout", {{ method: "POST", redirect: "follow" }})"#,
+                instance.base_url()
+            ),
+            vec![],
+        )
+        .await
+        .unwrap();
+    client
+        .goto(&format!("{}/login", instance.base_url()))
+        .await
+        .unwrap();
+
+    // Request a magic link for Alice (her app_user was created by the
+    // demo fixture, linked to her rower).
     client
         .execute(
             &format!(
                 r#"
                 var form = document.createElement('form');
                 form.method = 'POST';
-                form.action = '{}/users/invite';
-                [['email','alice@test.example.com'],['name','Alice'],['role','Member']].forEach(function(pair) {{
-                    var input = document.createElement('input');
-                    input.name = pair[0];
-                    input.value = pair[1];
-                    form.appendChild(input);
-                }});
+                form.action = '{}/login/magic';
+                var input = document.createElement('input');
+                input.name = 'email';
+                input.value = 'alice@test.example.com';
+                form.appendChild(input);
                 document.body.appendChild(form);
                 form.submit();
                 "#,
@@ -36,50 +49,21 @@ async fn availability_change_warns_about_committed_lineup() {
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Capture invite email.
+    // Capture the magic link from the ChannelMailer.
     let msg = tokio::time::timeout(std::time::Duration::from_secs(5), mail_rx.recv())
         .await
-        .expect("should receive invite mail")
+        .expect("should receive magic login mail")
         .expect("channel open");
-    let invite_url = match msg {
-        MailMessage::Invite { invite_url, .. } => invite_url,
-        other => panic!("expected Invite, got {other:?}"),
+    let magic_url = match msg {
+        MailMessage::MagicLogin { clubs, .. } => {
+            assert!(!clubs.is_empty(), "expected at least one club link");
+            clubs[0].1.clone()
+        }
+        other => panic!("expected MagicLogin, got {other:?}"),
     };
 
-    // Accept the invite — set password.
-    client
-        .goto(&format!("{}{}", instance.base_url(), invite_url))
-        .await
-        .unwrap();
-    client
-        .wait()
-        .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::Css("input[name='password']"))
-        .await
-        .expect("expected password form on invite page");
-    lineup_e2e::set_input_value(&client, "input[name='password']", "testpass123!").await;
-    lineup_e2e::set_input_value(&client, "input[name='password_confirm']", "testpass123!").await;
-    lineup_e2e::scroll_and_click(&client, "button[type='submit']").await;
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    // Log in as Alice.
-    let email_input = client
-        .wait()
-        .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::Css("#email"))
-        .await
-        .expect("expected login email input");
-    email_input.send_keys("alice@test.example.com").await.unwrap();
-    lineup_e2e::scroll_and_click(&client, "button[type='submit']").await;
-
-    let password_input = client
-        .wait()
-        .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::Css("#password"))
-        .await
-        .expect("expected password input");
-    password_input.send_keys("testpass123!").await.unwrap();
-    lineup_e2e::scroll_and_click(&client, "button[type='submit']").await;
+    // Navigate to the magic link to log in as Alice.
+    client.goto(&magic_url).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     // Navigate to availability page.

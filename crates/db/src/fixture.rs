@@ -308,6 +308,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
 
     // --- 24 rowers ---
     let rower_specs = demo_rowers();
+    let rower_names: Vec<String> = rower_specs.iter().map(|r| r.name.clone()).collect();
     let mut rower_ids = Vec::new();
     for r in rower_specs {
         let inserted = Rower::insert(conn, r)?;
@@ -432,6 +433,26 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
         CommitSeat { seat_position: 4, rower_id: rower_ids[13], is_cox: false }, // Priya stroke
     ];
     Lineup::commit_for_boat(conn, p_mon.id, artemis_id, &artemis_seats)?;
+
+    // --- app_users for rowers (mirrors sheet-sync behaviour) ---
+    // Create passwordless active accounts linked to rowers so that
+    // invite / magic-link flows work correctly in e2e tests.
+    let rower_emails: &[(usize, &str)] = &[
+        (0,  "alice@test.example.com"),
+        (1,  "bob@test.example.com"),
+    ];
+    for &(idx, email) in rower_emails {
+        let u = AppUser::create(conn, NewAppUser {
+            email: email.to_string(),
+            password_hash: None,
+            name: rower_names[idx].clone(),
+            status: "active".to_string(),
+            created_at: now,
+            updated_at: now,
+        })?;
+        AppUser::set_role(conn, u.id, Role::Member)?;
+        AppUser::set_rower_id(conn, u.id, Some(rower_ids[idx]))?;
+    }
 
     // --- demo user (ProgramDirector, no password) ---
     let user = AppUser::create(conn, NewAppUser {
