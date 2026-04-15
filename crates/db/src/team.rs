@@ -5,6 +5,7 @@
 use crate::boat::types::BoatId;
 use crate::rower::types::RowerId;
 use crate::schema::{team, team_boat_default, team_membership};
+use crate::types::IntBool;
 use chrono::{NaiveDateTime, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -71,6 +72,9 @@ pub struct Team {
     pub default_practice_time: Option<NaiveTime>,
     /// Default practice duration in minutes. None = not set.
     pub default_practice_duration_minutes: Option<i32>,
+    /// Soft-delete flag. Archived teams are hidden from operational
+    /// views but preserved for historical lineups.
+    pub archived: IntBool,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.
@@ -137,6 +141,30 @@ impl Team {
             .select(Team::as_select())
             .order(team::name.asc())
             .get_results(conn)
+    }
+
+    /// Non-archived teams, ordered by name. Used by operational views
+    /// (team switcher, sync, practices). PD admin views use `list_all`.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_active(conn: &mut SqliteConnection) -> Result<Vec<Team>, diesel::result::Error> {
+        team::table
+            .filter(team::archived.eq(0))
+            .select(Team::as_select())
+            .order(team::name.asc())
+            .get_results(conn)
+    }
+
+    /// Toggle the archived flag. PD only.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn set_archived(
+        conn: &mut SqliteConnection,
+        id: TeamId,
+        archived: bool,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(team::table.find(id))
+            .set(team::archived.eq(if archived { 1 } else { 0 }))
+            .execute(conn)?;
+        Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip(conn), err)]

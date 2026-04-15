@@ -275,6 +275,11 @@ fn sync_row(
                 Some(rower_id) => {
                     let existing = Rower::get(conn, rower_id)?
                         .ok_or_else(|| anyhow!("app_user.rower_id points to missing rower {rower_id}"))?;
+                    // Reactivate if previously soft-deleted.
+                    if !existing.active.as_bool() {
+                        Rower::set_active(conn, rower_id, true)?;
+                        summary.rowers_updated += 1;
+                    }
                     let updated = Rower::promote_from_sheet(
                         conn, &existing, &display_name, side, is_sculling, can_cox, is_designated_cox,
                     )?;

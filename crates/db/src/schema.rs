@@ -109,6 +109,7 @@ diesel::table! {
         self_edit_level -> Text,
         default_practice_time -> Nullable<Time>,
         default_practice_duration_minutes -> Nullable<Integer>,
+        archived -> Integer,
     }
 }
 

@@ -38,24 +38,24 @@ pub(crate) async fn selector_handler(
         .db
         .with_conn(move |conn| {
             if is_pd {
-                // PDs see all teams.
+                // PDs see all teams (including archived, so they can manage them).
                 Team::list_all(conn)
             } else if is_coach {
-                // Coaches see teams they're assigned to.
+                // Coaches see active teams they're assigned to.
                 let team_ids = lineup_db::team::TeamMembership::team_ids_for_coach(conn, user_id)?;
-                let all = Team::list_all(conn)?;
-                Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+                let active = Team::list_active(conn)?;
+                Ok(active.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
             } else {
-                // Members see teams their rower is in.
+                // Members see active teams their rower is in.
                 use lineup_db::app_user::AppUser;
                 let user = AppUser::get(conn, lineup_db::app_user::UserId::new(user_id))?;
                 if let Some(rid) = user.and_then(|u| u.rower_id) {
                     let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, rid)?;
-                    let all = Team::list_all(conn)?;
-                    Ok(all.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+                    let active = Team::list_active(conn)?;
+                    Ok(active.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
                 } else {
-                    // No linked rower — fall back to all (shouldn't normally happen).
-                    Team::list_all(conn)
+                    // No linked rower — fall back to active (shouldn't normally happen).
+                    Team::list_active(conn)
                 }
             }
         })
@@ -401,4 +401,51 @@ pub(crate) async fn fleet_matrix_save_handler(
         templates::teams::fleet_matrix_with_toast(&msg, &boats, &teams, &default_set)
             .into_string(),
     ))
+}
+
+// =====================================================================
+// Archive / unarchive a team (PD only)
+// =====================================================================
+
+/// `POST /teams/{id}/toggle-archive` — archive or unarchive a team.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn toggle_archive_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<TeamId>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let team = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let new_archived = !team.archived.as_bool();
+    tenant
+        .db
+        .with_conn(move |conn| Team::set_archived(conn, id, new_archived))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        if new_archived { "team.archive" } else { "team.unarchive" },
+        "team",
+        &id.to_string(),
+        None,
+    );
+
+    // Re-load and re-render the detail page.
+    let team = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let content = templates::teams::detail_content(&team);
+    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }

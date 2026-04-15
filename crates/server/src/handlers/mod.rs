@@ -111,6 +111,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/rowers/{id}/attributes", get(rowers::attributes_handler))
         .route("/rowers/{id}/edit-attributes", get(rowers::edit_attributes_handler))
+        .route("/rowers/{id}/toggle-active", post(rowers::toggle_active_handler))
         .route(
             "/rowers/{id}/seat-affinity",
             post(rowers::seat_affinity_upsert_handler),
@@ -133,6 +134,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(users::resend_invite_handler),
         )
         .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
+        .route("/teams/{id}/toggle-archive", post(teams::toggle_archive_handler))
         .route("/teams/selector", get(teams::selector_handler))
         // My pages
         .route(

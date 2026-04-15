@@ -665,6 +665,43 @@ async fn pair_section_with_error(
     ))
 }
 
+// =====================================================================
+// Soft-delete / reactivate a rower (PD only)
+// =====================================================================
+
+/// `POST /rowers/{id}/toggle-active` — soft-delete or reactivate a rower.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn toggle_active_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<RowerId>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let rower = load(&tenant.db, id).await?;
+    let new_active = !rower.active.as_bool();
+    let rid = rower.id;
+
+    tenant
+        .db
+        .with_conn(move |conn| Rower::set_active(conn, rid, new_active))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        if new_active { "rower.reactivate" } else { "rower.deactivate" },
+        "rower",
+        &id.to_string(),
+        None,
+    );
+
+    // Return an HTMX trigger to reload the roster.
+    Ok(Html(
+        r##"<div hx-get="/team/roster" hx-target="#team-tab-content" hx-trigger="load" hx-swap="innerHTML"></div>"##.to_string(),
+    ))
+}
+
 /// Validate a coach-supplied affinity weight against the documented
 /// `[-5, 5] \ {0}` range. Returns the typed [`AffinityWeight`] on
 /// success or a friendly error message on rejection.

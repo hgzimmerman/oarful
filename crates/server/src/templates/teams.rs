@@ -92,7 +92,12 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                           hx-push-url="true"
                           class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition cursor-pointer" {
                             div {
-                                div class="font-semibold text-slate-800" { (t.name) }
+                                div class="font-semibold text-slate-800" {
+                                    (t.name)
+                                    @if t.archived.as_bool() {
+                                        span class="ml-2 text-xs font-normal text-red-500" { "(archived)" }
+                                    }
+                                }
                                 div class="text-sm text-slate-500" {
                                     "Self-edit: " (t.self_edit_level)
                                 }
@@ -166,6 +171,33 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                 button type="submit"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                     "Save"
+                }
+            }
+
+            // Archive / unarchive section
+            section class="border-t border-red-200 pt-4" {
+                @if team.archived.as_bool() {
+                    div class="flex items-center gap-3" {
+                        span class="text-sm text-red-600 font-medium" { "This team is archived." }
+                        form method="post" action={"/teams/" (team.id) "/toggle-archive"}
+                             hx-post={"/teams/" (team.id) "/toggle-archive"}
+                             hx-target="#content" {
+                            button type="submit"
+                                   class="text-sm text-emerald-600 hover:text-emerald-800 font-medium py-2" {
+                                "Unarchive"
+                            }
+                        }
+                    }
+                } @else {
+                    form method="post" action={"/teams/" (team.id) "/toggle-archive"}
+                         hx-post={"/teams/" (team.id) "/toggle-archive"}
+                         hx-target="#content"
+                         hx-confirm="Archive this team? It will be hidden from the team switcher for non-PD users." {
+                        button type="submit"
+                               class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                            "Archive team"
+                        }
+                    }
                 }
             }
         }

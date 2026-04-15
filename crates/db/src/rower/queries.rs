@@ -65,6 +65,29 @@ impl Rower {
             .get_result(conn)
     }
 
+    /// Toggle the active (soft-delete) flag. PD only.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn set_active(
+        conn: &mut SqliteConnection,
+        id: RowerId,
+        active: bool,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(rower::table.filter(rower::id.eq(id)))
+            .set(rower::active.eq(if active { 1 } else { 0 }))
+            .execute(conn)?;
+        Ok(())
+    }
+
+    /// List ALL rowers (including inactive). Used for lookups that
+    /// need to find deactivated rowers (e.g. sync reactivation).
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_all(conn: &mut SqliteConnection) -> Result<Vec<Rower>, diesel::result::Error> {
+        rower::table
+            .select(Rower::as_select())
+            .order(rower::name.asc())
+            .get_results(conn)
+    }
+
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn count(conn: &mut SqliteConnection) -> Result<i64, diesel::result::Error> {
         rower::table.count().get_result(conn)
