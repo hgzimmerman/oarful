@@ -288,13 +288,14 @@ pub(crate) fn form_content(
                         (type_option("Single", "Single (1x, scull)", &data.boat_type))
                     }
                     p class="text-xs text-slate-500 mt-1" {
-                        "Determines seat count, cox presence, and sweep vs scull. "
-                        "Only sweep boats are used by the lineup solver."
+                        "Determines seat count, cox presence, and sweep vs scull."
                     }
                 }
 
                 // Weight class + stroke side (side-by-side)
-                div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                     x-data={"{ isSweep: !['Quad','QuadPlus','Double','Single'].includes(document.getElementById('boat_type')?.value || '" (&data.boat_type) "') }"}
+                     x-init={"$watch('isSweep', () => {}); document.getElementById('boat_type')?.addEventListener('change', (e) => { isSweep = !['Quad','QuadPlus','Double','Single'].includes(e.target.value) })"} {
                     div {
                         label for="weight_class" class="block text-sm font-semibold text-slate-700 mb-1" {
                             "Weight class"
@@ -307,7 +308,7 @@ pub(crate) fn form_content(
                             (sel_opt("Tubby", &data.weight_class))
                         }
                     }
-                    div {
+                    div x-show="isSweep" x-cloak {
                         label for="stroke_side" class="block text-sm font-semibold text-slate-700 mb-1" {
                             "Stroke side (rig)"
                         }
