@@ -1,17 +1,20 @@
 //! `/admin` — PD+ hub with tabs: Users, Teams, Audit.
 
 use axum::{
+    extract::{Multipart, State},
     http::{HeaderMap, StatusCode},
-    response::Html,
-    Extension,
+    response::{Html, IntoResponse},
+    Extension, Form,
 };
 use axum_htmx::HxRequest;
-use lineup_db::app_user::Role;
+use lineup_db::app_user::{AppUser, Role};
+use maud::html;
 
-use crate::state::TenantContext;
+use crate::state::{AppState, TenantContext};
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 use crate::handlers;
 use crate::handlers::audit::AuditQuery;
+use crate::handlers::internal_error;
 
 const TABS: &[TabDef] = &[
     TabDef { label: "Users", url: "/admin/users", id: "users" },
@@ -187,4 +190,297 @@ fn is_tab_swap(headers: &HeaderMap) -> bool {
         .get("HX-Target")
         .and_then(|v| v.to_str().ok())
         == Some(TARGET)
+}
+
+// ── Export / Restore ────────────────────────────────────────────
+
+/// `GET /admin/export` — download the tenant's SQLite database file.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn export_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<impl IntoResponse, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let tenant_id = tenant.tenant_id;
+    let tenant_row = state
+        .master_db
+        .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let db_path = tenant_row.db_path;
+
+    let bytes = tokio::fs::read(&db_path).await.map_err(internal_error)?;
+    let filename = format!(
+        "lineup_{}_{}.db",
+        tenant.config.tenant_slug,
+        chrono::Utc::now().format("%Y-%m-%d")
+    );
+    let headers = [
+        (
+            axum::http::header::CONTENT_TYPE,
+            "application/x-sqlite3".to_string(),
+        ),
+        (
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{filename}\""),
+        ),
+    ];
+    Ok((headers, bytes))
+}
+
+/// `GET /admin/restore` — show the restore form.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn restore_form_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let content = restore_form_markup(None, None);
+    Ok(handlers::maybe_page_authed("Restore Backup", content, hx, &tenant))
+}
+
+/// `POST /admin/restore` — receive the uploaded DB, validate, and restore.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn restore_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    mut multipart: Multipart,
+) -> Result<Html<String>, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    // Read the uploaded file from multipart.
+    let mut file_bytes: Option<Vec<u8>> = None;
+    while let Some(field) = multipart.next_field().await.map_err(internal_error)? {
+        if field.name() == Some("backup") {
+            file_bytes = Some(field.bytes().await.map_err(internal_error)?.to_vec());
+            break;
+        }
+    }
+    let file_bytes = match file_bytes {
+        Some(b) if !b.is_empty() => b,
+        _ => {
+            return Ok(Html(restore_form_markup(Some("No file uploaded."), None).into_string()));
+        }
+    };
+
+    // Save to a temp file so diesel can open it.
+    let temp_path = format!(
+        "/tmp/lineup_restore_{}_{}.db",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
+    tokio::fs::write(&temp_path, &file_bytes)
+        .await
+        .map_err(internal_error)?;
+
+    // Look up current user's email.
+    let user_id = tenant.claims.user_id();
+    let current_user = tenant
+        .db
+        .with_conn(move |conn| AppUser::get(conn, user_id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let current_email = current_user.email.clone();
+    let current_hash = current_user.password_hash.clone();
+
+    // Open the uploaded DB read-only and check for the current user.
+    let check_temp = temp_path.clone();
+    let check_email = current_email.clone();
+    let check_result: Result<Option<AppUser>, String> =
+        tokio::task::spawn_blocking(move || {
+            use diesel::prelude::*;
+            let mut conn = diesel::SqliteConnection::establish(&format!("file:{check_temp}?mode=ro"))
+                .map_err(|e| format!("Invalid SQLite file: {e}"))?;
+            // Verify the app_user table exists and find the user.
+            let found = lineup_db::schema::app_user::table
+                .filter(lineup_db::schema::app_user::email.eq(&check_email))
+                .select(AppUser::as_select())
+                .first(&mut conn)
+                .optional()
+                .map_err(|e| format!("Error reading backup: {e}"))?;
+            Ok(found)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    match check_result {
+        Err(msg) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            let content = restore_form_markup(Some(&msg), None);
+            return Ok(Html(content.into_string()));
+        }
+        Ok(None) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            let content = restore_form_markup(
+                Some("Your account does not exist in this backup. Restore aborted."),
+                None,
+            );
+            return Ok(Html(content.into_string()));
+        }
+        Ok(Some(backup_user)) => {
+            let password_differs = backup_user.password_hash != current_hash;
+            if password_differs {
+                // Keep the temp file — the confirm form will reference it.
+                return Ok(Html(restore_form_markup(
+                    Some("Warning: your account exists in this backup but has different credentials. After restore you will need to use the password from the backup."),
+                    Some(&temp_path),
+                ).into_string()));
+            }
+        }
+    }
+
+    // No credential issues — proceed with restore directly.
+    do_restore(&state, &tenant, &temp_path).await
+}
+
+/// `POST /admin/restore/confirm` — proceed with restore after credential warning.
+#[tracing::instrument(level = "info", skip_all, err)]
+pub(crate) async fn restore_confirm_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    Form(input): Form<RestoreConfirmInput>,
+) -> Result<Html<String>, StatusCode> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let temp_path = input.temp_path;
+    if !std::path::Path::new(&temp_path).exists() {
+        return Ok(Html(restore_form_markup(
+            Some("Temp file expired. Please upload the backup again."),
+            None,
+        ).into_string()));
+    }
+
+    do_restore(&state, &tenant, &temp_path).await
+}
+
+#[derive(serde::Deserialize)]
+pub(crate) struct RestoreConfirmInput {
+    temp_path: String,
+}
+
+async fn do_restore(
+    state: &AppState,
+    tenant: &TenantContext,
+    temp_path: &str,
+) -> Result<Html<String>, StatusCode> {
+    let tenant_id = tenant.tenant_id;
+    let tenant_row = state
+        .master_db
+        .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
+        .await
+        .map_err(internal_error)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let db_path = tenant_row.db_path;
+
+    // Evict the tenant from the connection cache before overwriting.
+    state.evict_tenant(tenant.tenant_id);
+
+    tokio::fs::copy(temp_path, &db_path)
+        .await
+        .map_err(internal_error)?;
+    let _ = tokio::fs::remove_file(temp_path).await;
+
+    // Re-connect the tenant (runs migrations on the restored DB).
+    state
+        .tenant_db(tenant.tenant_id)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Html(restore_success_markup().into_string()))
+}
+
+fn restore_form_markup(
+    error: Option<&str>,
+    confirm_temp_path: Option<&str>,
+) -> maud::Markup {
+    html! {
+        div class="max-w-lg mx-auto mt-8" {
+            h2 class="text-xl font-bold mb-4" { "Restore Database Backup" }
+
+            @if let Some(err) = error {
+                @let is_warning = err.starts_with("Warning:");
+                @let (bg, border, text) = if is_warning {
+                    ("bg-amber-50", "border-amber-400", "text-amber-800")
+                } else {
+                    ("bg-red-50", "border-red-400", "text-red-800")
+                };
+                div class={(bg) " border " (border) " " (text) " px-4 py-3 rounded mb-4"} {
+                    (err)
+                }
+            }
+
+            @if let Some(temp_path) = confirm_temp_path {
+                // Credential mismatch — show confirm form with temp path.
+                form method="post" action="/admin/restore/confirm"
+                     hx-post="/admin/restore/confirm"
+                     hx-target="#content" {
+                    input type="hidden" name="temp_path" value=(temp_path);
+                    div class="flex gap-3" {
+                        button type="submit"
+                               class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded" {
+                            "Restore anyway"
+                        }
+                        a href="/admin/restore"
+                          class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold py-2 px-4 rounded" {
+                            "Cancel"
+                        }
+                    }
+                }
+            } @else if error.is_none() {
+                p class="text-slate-600 mb-4" {
+                    "Upload a previously exported .db file to restore your data. "
+                    "This will overwrite all current data in this tenant."
+                }
+
+                form method="post" action="/admin/restore" enctype="multipart/form-data"
+                     hx-confirm="This will overwrite ALL current data with the backup. Are you sure?" {
+                    div class="mb-4" {
+                        label class="block text-sm font-semibold text-slate-700 mb-1" for="backup" {
+                            "Backup file (.db)"
+                        }
+                        input type="file" name="backup" id="backup" accept=".db"
+                              class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                              required;
+                    }
+                    button type="submit"
+                           class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded shadow transition" {
+                        "Restore backup"
+                    }
+                }
+            }
+
+            div class="mt-6" {
+                a href="/admin"
+                  hx-get="/admin"
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="text-emerald-700 hover:text-emerald-900 font-semibold text-sm" {
+                    "Back to admin"
+                }
+            }
+        }
+    }
+}
+
+fn restore_success_markup() -> maud::Markup {
+    html! {
+        div class="max-w-lg mx-auto mt-8" {
+            h2 class="text-xl font-bold mb-4" { "Restore Database Backup" }
+            div class="bg-emerald-50 border border-emerald-400 text-emerald-800 px-4 py-3 rounded mb-4" {
+                "Database restored successfully. You may need to log in again."
+            }
+            div class="mt-6" {
+                a href="/admin"
+                  class="text-emerald-700 hover:text-emerald-900 font-semibold text-sm" {
+                    "Back to admin"
+                }
+            }
+        }
+    }
 }

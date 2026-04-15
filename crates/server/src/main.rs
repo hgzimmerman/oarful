@@ -27,6 +27,7 @@ async fn main() -> Result<()> {
         Some("reset-tenant") => return cmd_reset_tenant(&args[1..]),
         Some("reset-all") => return cmd_reset_all(),
         Some("seed") => return cmd_seed().await,
+        Some("import") => return cmd_import(&args[1..]).await,
         _ => {}
     }
 
@@ -121,6 +122,71 @@ fn cmd_reset_all() -> Result<()> {
         println!("Master DB {master_db} does not exist — nothing to reset.");
     }
 
+    Ok(())
+}
+
+/// `cargo run -p lineup_server -- import <path.db>`
+/// Imports an exported SQLite database as the default tenant. Copies
+/// the file into the data directory and registers (or reuses) the
+/// "default" tenant in the master DB. Runs migrations on the imported
+/// DB to bring it up to date.
+async fn cmd_import(args: &[String]) -> Result<()> {
+    let path = args.first().ok_or_else(|| {
+        anyhow::anyhow!("Usage: lineup_server import <path.db>")
+    })?;
+    if !std::path::Path::new(path).exists() {
+        anyhow::bail!("File not found: {path}");
+    }
+
+    let master_db = std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+
+    // Ensure data directories exist.
+    std::fs::create_dir_all(format!("{data_dir}/demos"))?;
+
+    // Ensure master DB exists (MasterDb::connect runs migrations).
+    let master = lineup_master_db::state::MasterDb::connect(&master_db)?;
+
+    // Copy the file to data/default.db.
+    let dest = format!("{data_dir}/default.db");
+    std::fs::copy(path, &dest)?;
+    println!("Copied {path} -> {dest}");
+
+    // Register in master DB if not already present.
+    let dest_for_closure = dest.clone();
+    master
+        .with_conn(move |conn| {
+            if lineup_master_db::tenant::Tenant::find_by_slug(conn, "default")?.is_none() {
+                let now = chrono::Utc::now().naive_utc();
+                lineup_master_db::tenant::Tenant::create(
+                    conn,
+                    lineup_master_db::tenant::NewTenant {
+                        name: "Default Club".to_string(),
+                        slug: "default".to_string(),
+                        db_path: dest_for_closure,
+                        created_at: now,
+                    },
+                )?;
+                println!("Registered 'default' tenant in master DB.");
+            } else {
+                println!("'default' tenant already exists in master DB.");
+            }
+            Ok(())
+        })
+        .await?;
+
+    // Connect to tenant DB — this runs migrations to bring it up to date.
+    let db = lineup_db::state::Db::connect(&dest)?;
+    // Verify it opens successfully by running a trivial query.
+    db.with_conn(|conn| {
+        use diesel::prelude::*;
+        diesel::sql_query("SELECT 1").execute(conn)?;
+        Ok(())
+    })
+    .await?;
+
+    println!("Imported {path} as default tenant at {dest}");
+    println!("Migrations applied (if any). Ready to start the server.");
     Ok(())
 }
 
