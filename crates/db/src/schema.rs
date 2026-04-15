@@ -108,6 +108,7 @@ diesel::table! {
         created_at -> Timestamp,
         self_edit_level -> Text,
         default_practice_time -> Nullable<Time>,
+        default_practice_duration_minutes -> Nullable<Integer>,
     }
 }
 
@@ -140,6 +141,7 @@ diesel::table! {
         time -> Nullable<Time>,
         notes -> Nullable<Text>,
         cancelled -> Integer,
+        duration_minutes -> Nullable<Integer>,
     }
 }
 

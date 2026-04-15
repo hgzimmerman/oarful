@@ -69,6 +69,8 @@ pub struct Team {
     pub self_edit_level: String,
     /// Default time of day for new practices. None = not set.
     pub default_practice_time: Option<NaiveTime>,
+    /// Default practice duration in minutes. None = not set.
+    pub default_practice_duration_minutes: Option<i32>,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.

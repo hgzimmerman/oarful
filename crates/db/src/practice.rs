@@ -65,6 +65,9 @@ pub struct Practice {
     pub time: Option<NaiveTime>,
     pub notes: Option<String>,
     pub cancelled: IntBool,
+    /// Per-practice duration override. If None, falls back to the
+    /// team's `default_practice_duration_minutes`.
+    pub duration_minutes: Option<i32>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -240,6 +243,67 @@ impl Practice {
             Some(t) => format!("{} · {}", self.date.format("%b %-d"), t.format("%-I:%M %p")),
             None => self.date.format("%b %-d").to_string(),
         }
+    }
+
+    /// Effective duration in minutes: per-practice override, then
+    /// team default, then None (unknown).
+    pub fn effective_duration(&self, team_default: Option<i32>) -> Option<i32> {
+        self.duration_minutes.or(team_default)
+    }
+
+    /// Compute the [start, end) time window for this practice.
+    /// Returns None if either time or duration is unknown.
+    pub fn time_window(&self, team_default_duration: Option<i32>) -> Option<(NaiveTime, NaiveTime)> {
+        let start = self.time?;
+        let dur = self.effective_duration(team_default_duration)?;
+        let end = start + chrono::TimeDelta::minutes(dur as i64);
+        Some((start, end))
+    }
+
+    /// Find non-cancelled practices on *other* teams that overlap this
+    /// practice's time window on the same date. Returns an empty vec if
+    /// this practice has no time or duration set.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn find_overlapping(
+        conn: &mut SqliteConnection,
+        this: &Practice,
+        this_team_default_duration: Option<i32>,
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
+        let Some((my_start, my_end)) = this.time_window(this_team_default_duration) else {
+            return Ok(Vec::new());
+        };
+        // Candidate practices: same date, different team, not cancelled, has a time.
+        let candidates: Vec<Practice> = practice::table
+            .filter(practice::date.eq(this.date))
+            .filter(practice::team_id.ne(this.team_id))
+            .filter(practice::cancelled.eq(0))
+            .filter(practice::time.is_not_null())
+            .select(Practice::as_select())
+            .get_results(conn)?;
+
+        // Filter to those with overlapping time windows. We need each
+        // candidate's team default duration — load lazily per team.
+        use std::collections::HashMap;
+        let mut team_defaults: HashMap<TeamId, Option<i32>> = HashMap::new();
+        let mut overlapping = Vec::new();
+        for p in candidates {
+            let team_dur = match team_defaults.get(&p.team_id) {
+                Some(d) => *d,
+                None => {
+                    let t = crate::team::Team::get(conn, p.team_id)?;
+                    let d = t.and_then(|t| t.default_practice_duration_minutes);
+                    team_defaults.insert(p.team_id, d);
+                    d
+                }
+            };
+            if let Some((their_start, their_end)) = p.time_window(team_dur) {
+                // Overlap: my_start < their_end AND their_start < my_end
+                if my_start < their_end && their_start < my_end {
+                    overlapping.push(p);
+                }
+            }
+        }
+        Ok(overlapping)
     }
 
     /// Full label including year.
