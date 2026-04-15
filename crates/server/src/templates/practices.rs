@@ -1,13 +1,12 @@
-//! Practices dashboard template — tabbed view: Schedule, Reminders, Lineups.
+//! Practices dashboard template — tabbed view: Planning, Committed.
 
 use chrono::NaiveDate;
 use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
-use crate::handlers::practices::{LineupRow, ReminderRow};
 
-/// Per-row summary for the schedule tab.
+/// Per-row summary used by both the Planning and Committed tabs.
 pub(crate) struct PracticeRow {
     pub(crate) practice_id: PracticeId,
     pub(crate) date: NaiveDate,
@@ -15,29 +14,26 @@ pub(crate) struct PracticeRow {
     pub(crate) duration_minutes: Option<i32>,
     pub(crate) yes_count: usize,
     pub(crate) total_responses: usize,
-    pub(crate) has_committed: bool,
-    pub(crate) is_upcoming: bool,
     pub(crate) cancelled: bool,
+    pub(crate) non_respondent_count: usize,
+    pub(crate) boat_count: usize,
+    pub(crate) already_sent_today: bool,
 }
 
-/// Full tabbed page wrapper. `active_tab` is "schedule", "reminders",
-/// or "lineups". `tab_content` is the pre-rendered content for the
-/// active tab.
+/// Full tabbed page wrapper. `active_tab` is "planning" or "committed".
+/// `tab_content` is the pre-rendered content for the active tab.
 pub(crate) fn tabbed_page(
     active_tab: &str,
     tab_content: Markup,
-    is_coach: bool,
+    _is_coach: bool,
 ) -> Markup {
     html! {
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            // Tab bar
+            // Tab bar — both tabs visible to all roles
             div class="flex gap-1 border-b border-slate-200 mb-4" {
-                (tab_button("Schedule", "/practices/schedule", "schedule", active_tab))
-                @if is_coach {
-                    (tab_button("Reminders", "/practices/reminders", "reminders", active_tab))
-                    (tab_button("Lineups", "/practices/lineups", "lineups", active_tab))
-                }
+                (tab_button("Planning", "/practices/planning", "planning", active_tab))
+                (tab_button("Committed", "/practices/committed", "committed", active_tab))
             }
             // Tab content
             div id="practices-tab-content" {
@@ -65,18 +61,16 @@ fn tab_button(label: &str, url: &str, tab_id: &str, active: &str) -> Markup {
 }
 
 // =====================================================================
-// Schedule tab
+// Planning tab
 // =====================================================================
 
-pub(crate) fn schedule_content(
+pub(crate) fn planning_content(
     rows: &[PracticeRow],
     is_coach: bool,
     today: chrono::NaiveDate,
     default_time: Option<chrono::NaiveTime>,
     default_duration: Option<i32>,
 ) -> Markup {
-    let upcoming: Vec<&PracticeRow> = rows.iter().filter(|r| r.is_upcoming).collect();
-    let past: Vec<&PracticeRow> = rows.iter().filter(|r| !r.is_upcoming).collect();
     let min_date = today.format("%Y-%m-%d").to_string();
     let time_value = default_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
     let end_time_value = match (default_time, default_duration) {
@@ -86,6 +80,8 @@ pub(crate) fn schedule_content(
         }
         _ => String::new(),
     };
+
+    let total_non_respondents: usize = rows.iter().map(|r| r.non_respondent_count).sum();
 
     html! {
         // Add practice form (Coach+ only)
@@ -126,29 +122,25 @@ pub(crate) fn schedule_content(
             }
         }
 
-        // Upcoming
-        @if upcoming.is_empty() && past.is_empty() {
-            (empty_state("No practices scheduled. Sync the spreadsheet or add a practice date above."))
-        }
-
-        @if !upcoming.is_empty() {
-            div {
-                h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Upcoming" }
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for row in &upcoming {
-                        (row_card(row, is_coach))
-                    }
+        @if rows.is_empty() {
+            (empty_state("No practices awaiting lineups. Create a practice above or check the Committed tab."))
+        } @else {
+            div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                @for row in rows {
+                    (planning_row_card(row, is_coach))
                 }
             }
-        }
 
-        // Past (committed only)
-        @if !past.is_empty() {
-            div {
-                h2 class="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2" { "Past" }
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for row in &past {
-                        (row_card(row, is_coach))
+            // Send reminders button (Coach+ only)
+            @if is_coach && total_non_respondents > 0 {
+                form method="post" action="/practices/send-reminders"
+                     hx-post="/practices/send-reminders"
+                     hx-target="#practices-tab-content"
+                     hx-confirm={"Send availability reminders to " (total_non_respondents) " rower(s)?"}
+                     class="flex justify-end mt-4" {
+                    button type="submit"
+                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                        "Send reminders"
                     }
                 }
             }
@@ -156,23 +148,20 @@ pub(crate) fn schedule_content(
     }
 }
 
-fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
+fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     let weekday = row.date.format("%A").to_string();
-    let href = if row.has_committed {
-        format!("/history/{}", row.practice_id)
-    } else if is_coach {
+    let href = if is_coach {
         format!("/solve/{}", row.practice_id)
     } else {
         String::new()
     };
     let clickable = !href.is_empty();
+    let cancel_action = format!("/practices/{}/cancel", row.practice_id);
 
     let base_class = if row.cancelled {
         "flex items-center justify-between px-6 py-3 opacity-40"
-    } else if row.is_upcoming {
-        "flex items-center justify-between px-6 py-4"
     } else {
-        "flex items-center justify-between px-6 py-3 opacity-60"
+        "flex items-center justify-between px-6 py-4"
     };
 
     html! {
@@ -182,18 +171,17 @@ fn row_card(row: &PracticeRow, is_coach: bool) -> Markup {
               hx-get=(href)
               hx-target="#content"
               hx-push-url="true" {
-                (row_inner(row, &weekday, is_coach))
+                (planning_row_inner(row, &weekday, is_coach, &cancel_action))
             }
         } @else {
             div class=(base_class) {
-                (row_inner(row, &weekday, is_coach))
+                (planning_row_inner(row, &weekday, is_coach, &cancel_action))
             }
         }
     }
 }
 
-fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
-    let cancel_action = format!("/practices/{}/cancel", row.practice_id);
+fn planning_row_inner(row: &PracticeRow, weekday: &str, is_coach: bool, cancel_action: &str) -> Markup {
     html! {
         div {
             div class="flex items-center gap-2" {
@@ -205,25 +193,25 @@ fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
                 } @else {
                     span class="font-semibold text-slate-800" { (row.date) }
                 }
-                @if row.has_committed {
-                    span class="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full" {
-                        "Committed"
+                @if row.already_sent_today {
+                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                        "Reminded today"
                     }
                 }
             }
             div class="text-sm text-slate-500" {
                 (weekday)
                 @if let Some(t) = row.time {
-                    " · " (t.format("%-I:%M %p"))
+                    " \u{00b7} " (t.format("%-I:%M %p"))
                     @if let Some(dur) = row.duration_minutes {
                         @let end = t + chrono::TimeDelta::minutes(dur as i64);
-                        "–" (end.format("%-I:%M %p"))
+                        "\u{2013}" (end.format("%-I:%M %p"))
                     }
                 }
             }
         }
         div class="flex items-center gap-3" {
-            @if row.is_upcoming && !row.cancelled {
+            @if !row.cancelled {
                 div class="text-right" {
                     div class="text-lg font-bold text-emerald-700" {
                         (row.yes_count) " available"
@@ -231,6 +219,11 @@ fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
                     @if row.total_responses > 0 {
                         div class="text-xs text-slate-500" {
                             (row.total_responses) " responses"
+                        }
+                    }
+                    @if row.non_respondent_count > 0 {
+                        div class="text-xs text-amber-700" {
+                            (row.non_respondent_count) " pending"
                         }
                     }
                 }
@@ -251,54 +244,53 @@ fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
 }
 
 // =====================================================================
-// Reminders tab
+// Committed tab
 // =====================================================================
 
-pub(crate) fn reminders_content(rows: &[ReminderRow]) -> Markup {
+pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
     if rows.is_empty() {
         return html! {
-            (empty_state("No upcoming uncommitted practices to send reminders for."))
+            (empty_state("No committed lineups yet. Solve and commit a lineup from the Planning tab."))
         };
     }
 
-    let total_non_respondents: usize = rows.iter().map(|r| r.non_respondent_count).sum();
-
     html! {
         div class="space-y-4" {
-            div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                @for row in rows {
-                    div class="flex items-center justify-between px-6 py-3" {
-                        div {
-                            span class="font-semibold text-slate-800" { (row.date) }
-                            span class="text-sm text-slate-500 ml-2" { (row.date.format("%A")) }
+            @if is_coach {
+                form method="post" action="/practices/send-lineups"
+                     hx-post="/practices/send-lineups"
+                     hx-target="#practices-tab-content" {
+
+                    div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                        @for row in rows {
+                            (committed_row(row, true))
                         }
-                        div class="flex items-center gap-3" {
-                            @if row.non_respondent_count > 0 {
-                                span class="text-sm font-medium text-amber-700" {
-                                    (row.non_respondent_count) " pending"
-                                }
-                            } @else {
-                                span class="text-sm text-emerald-600" { "All responded" }
+                    }
+
+                    div class="flex items-center justify-between mt-4" {
+                        // Recipient scope toggle
+                        div class="flex items-center gap-4" {
+                            label class="flex items-center gap-2 text-sm" {
+                                input type="radio" name="scope" value="placed" checked
+                                      class="text-slate-800 focus:ring-slate-500";
+                                "Placed + bench"
                             }
-                            @if row.already_sent_today {
-                                span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
-                                    "Sent today"
-                                }
+                            label class="flex items-center gap-2 text-sm" {
+                                input type="radio" name="scope" value="all"
+                                      class="text-slate-800 focus:ring-slate-500";
+                                "All (incl. non-respondents)"
                             }
+                        }
+                        button type="submit"
+                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Send lineups"
                         }
                     }
                 }
-            }
-
-            @if total_non_respondents > 0 {
-                form method="post" action="/practices/send-reminders"
-                     hx-post="/practices/send-reminders"
-                     hx-target="#practices-tab-content"
-                     hx-confirm={"Send availability reminders to " (total_non_respondents) " rower(s)?"}
-                     class="flex justify-end" {
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                        "Send reminders"
+            } @else {
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in rows {
+                        (committed_row(row, false))
                     }
                 }
             }
@@ -306,65 +298,44 @@ pub(crate) fn reminders_content(rows: &[ReminderRow]) -> Markup {
     }
 }
 
-// =====================================================================
-// Lineups tab
-// =====================================================================
-
-pub(crate) fn lineups_content(rows: &[LineupRow]) -> Markup {
-    if rows.is_empty() {
-        return html! {
-            (empty_state("No upcoming committed lineups to notify about."))
-        };
-    }
+fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
+    let weekday = row.date.format("%A").to_string();
+    let href = format!("/history/{}", row.practice_id);
 
     html! {
-        div class="space-y-4" {
-            form method="post" action="/practices/send-lineups"
-                 hx-post="/practices/send-lineups"
-                 hx-target="#practices-tab-content" {
-
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for row in rows {
-                        div class="flex items-center justify-between px-6 py-3" {
-                            div class="flex items-center gap-3" {
-                                input type="checkbox" name="dates" value=(row.date)
-                                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
-                                div {
-                                    span class="font-semibold text-slate-800" { (row.date) }
-                                    span class="text-sm text-slate-500 ml-2" { (row.date.format("%A")) }
-                                }
-                            }
-                            div class="flex items-center gap-3" {
-                                span class="text-sm text-slate-600" {
-                                    (row.boat_count) " boat(s)"
-                                }
-                                @if row.already_sent_today {
-                                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
-                                        "Sent today"
-                                    }
+        div class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition" {
+            div class="flex items-center gap-3" {
+                @if show_checkbox {
+                    input type="checkbox" name="dates" value=(row.date)
+                          class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                }
+                a href=(href)
+                  hx-get=(href)
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="cursor-pointer" {
+                    div {
+                        span class="font-semibold text-slate-800" { (row.date) }
+                        span class="text-sm text-slate-500 ml-2" { (weekday) }
+                        @if let Some(t) = row.time {
+                            span class="text-sm text-slate-500 ml-2" {
+                                (t.format("%-I:%M %p"))
+                                @if let Some(dur) = row.duration_minutes {
+                                    @let end = t + chrono::TimeDelta::minutes(dur as i64);
+                                    "\u{2013}" (end.format("%-I:%M %p"))
                                 }
                             }
                         }
                     }
                 }
-
-                div class="flex items-center justify-between mt-4" {
-                    // Recipient scope toggle
-                    div class="flex items-center gap-4" {
-                        label class="flex items-center gap-2 text-sm" {
-                            input type="radio" name="scope" value="placed" checked
-                                  class="text-slate-800 focus:ring-slate-500";
-                            "Placed + bench"
-                        }
-                        label class="flex items-center gap-2 text-sm" {
-                            input type="radio" name="scope" value="all"
-                                  class="text-slate-800 focus:ring-slate-500";
-                            "All (incl. non-respondents)"
-                        }
-                    }
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                        "Send lineups"
+            }
+            div class="flex items-center gap-3" {
+                span class="text-sm text-slate-600" {
+                    (row.boat_count) " boat(s)"
+                }
+                @if row.already_sent_today {
+                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                        "Sent today"
                     }
                 }
             }
