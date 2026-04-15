@@ -38,6 +38,15 @@ use lineup_db::app_user::Role;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
 
+fn parse_row_filter(s: &str) -> Option<lineup_sheets::RowFilter> {
+    match s {
+        "All" => Some(lineup_sheets::RowFilter::All),
+        "Sweep" => Some(lineup_sheets::RowFilter::Sweep),
+        "Sculling" => Some(lineup_sheets::RowFilter::Sculling),
+        _ => None,
+    }
+}
+
 /// Google Sheet sync config, serialized as JSON in sync_source.config.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct GoogleSheetConfig {
@@ -55,8 +64,9 @@ pub(crate) struct SyncFormInput {
     #[serde(default)]
     pub(crate) gid: u32,
     /// Which rows to import: "All", "Sweep", or "Sculling".
+    /// Empty string when unselected — the handler rejects the submission.
     #[serde(default)]
-    pub(crate) row_filter: lineup_sheets::RowFilter,
+    pub(crate) row_filter: String,
     /// Optional auto-sync interval in minutes. `None` or `Some(0)`
     /// disables polling; any positive value enables it.
     #[serde(default, deserialize_with = "empty_string_as_none")]
@@ -81,7 +91,11 @@ pub(crate) async fn sync_content(
         serde_json::from_str::<GoogleSheetConfig>(&s.config).ok().map(|cfg| SyncFormInput {
             spreadsheet_id: cfg.sheet_id,
             gid: cfg.gid,
-            row_filter: cfg.row_filter,
+            row_filter: match cfg.row_filter {
+                lineup_sheets::RowFilter::All => "All",
+                lineup_sheets::RowFilter::Sweep => "Sweep",
+                lineup_sheets::RowFilter::Sculling => "Sculling",
+            }.to_string(),
             poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
         })
     });
@@ -105,6 +119,15 @@ pub(crate) async fn sync_handler(
         );
         return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
     }
+    let row_filter = match parse_row_filter(&input.row_filter) {
+        Some(f) => f,
+        None => {
+            let content = templates::sync::form_content(
+                Some(&input), None, Some("Row filter is required."), None,
+            );
+            return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
+        }
+    };
 
     // Step 1 — fetch the CSV from Google in async land. Render any
     // HTTP failure as a form error rather than a 500 so the operator
@@ -129,7 +152,6 @@ pub(crate) async fn sync_handler(
     // anyhow into an Ok(Result<...>) and unwrapping outside.
     let year = Utc::now().year();
     let csv_for_sync = csv_text.clone();
-    let row_filter = input.row_filter;
     let sync_outcome: anyhow::Result<SyncSummary> = tenant
         .db
         .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, row_filter, conn)))
