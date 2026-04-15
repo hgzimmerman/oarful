@@ -186,14 +186,22 @@ rigging-aware pair swap, size mismatch → bench overflow.
 Live→live bidirectional swap keeps both boats active.
 Boat pills toggle on/off or serve as transfer targets.
 
-#### Proactive stale lineup notification
+#### Stale lineup notification — coach-facing
 
-When a rower changes availability for a date that has a committed
-lineup, proactively surface a warning — e.g. a badge on the
-history nav item, a toast on next page load, or a reminder email
-to the coach. Lower priority than the detection/display (which
-shipped), but would close the feedback loop so the coach doesn't
-have to manually check the history page.
+Rower-side detection shipped (warning on the availability page when
+a change affects a committed lineup). What's missing is the coach
+side: the coach should know without checking the history page.
+
+- **Nav badge:** a small dot or count on the history/practices nav
+  item when any committed lineup has become stale since the coach
+  last viewed it. Requires tracking "last seen" per coach or a
+  simple `stale_since` timestamp on the lineup.
+- **Toast on next page load:** when the coach loads any page, check
+  for stale lineups and show a dismissable banner ("1 committed
+  lineup has availability changes").
+- **Email to coach:** optional — send an email when a rower changes
+  availability for a committed lineup. Gated by an opt-in flag on
+  the coach's account (avoid spam for frequent changes).
 
 #### ~~Batch invite from roster~~ (shipped)
 
