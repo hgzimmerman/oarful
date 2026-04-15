@@ -156,16 +156,32 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                         "Controls which attributes members can edit on their own profile. Coach+ always has full access."
                     }
                 }
-                div {
-                    label for="default_practice_time" class="block text-sm font-semibold text-slate-700 mb-1" {
-                        "Default practice time"
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
+                    div {
+                        label for="default_practice_time" class="block text-sm font-semibold text-slate-700 mb-1" {
+                            "Default practice time"
+                        }
+                        @let time_value = team.default_practice_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+                        input id="default_practice_time" name="default_practice_time" type="time"
+                              value=(time_value)
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        p class="text-xs text-slate-500 mt-1" {
+                            "Pre-fills the time when creating new practices."
+                        }
                     }
-                    @let time_value = team.default_practice_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
-                    input id="default_practice_time" name="default_practice_time" type="time"
-                          value=(time_value)
-                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
-                    p class="text-xs text-slate-500 mt-1" {
-                        "Pre-fills the time when creating new practices. Leave blank if not applicable."
+                    div {
+                        label for="default_practice_duration" class="block text-sm font-semibold text-slate-700 mb-1" {
+                            "Default duration (minutes)"
+                        }
+                        @let dur_value = team.default_practice_duration_minutes.map(|m| m.to_string()).unwrap_or_default();
+                        input id="default_practice_duration" name="default_practice_duration_minutes" type="number"
+                              min="1" step="1"
+                              value=(dur_value)
+                              placeholder="e.g. 90"
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        p class="text-xs text-slate-500 mt-1" {
+                            "Used for cross-team overlap detection."
+                        }
                     }
                 }
                 button type="submit"

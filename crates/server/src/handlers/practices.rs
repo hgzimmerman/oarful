@@ -82,11 +82,12 @@ async fn schedule_tab_content(
         .unwrap_or(Role::Member)
         .at_least(Role::Coach);
 
-    let (rows, default_time) = tenant
+    let (rows, default_time, default_duration) = tenant
         .db
         .with_conn(move |conn| {
-            let default_time = lineup_db::team::Team::get(conn, team_id)?
-                .and_then(|t| t.default_practice_time);
+            let team = lineup_db::team::Team::get(conn, team_id)?;
+            let default_time = team.as_ref().and_then(|t| t.default_practice_time);
+            let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
             // Upcoming practices (non-cancelled).
             let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
             // Past committed practices.
@@ -126,6 +127,8 @@ async fn schedule_tab_content(
                 rows.push(templates::practices::PracticeRow {
                     practice_id: practice.id,
                     date: practice.date,
+                    time: practice.time,
+                    duration_minutes: practice.effective_duration(default_duration),
                     yes_count,
                     total_responses,
                     has_committed: committed_ids.contains(&practice.id),
@@ -133,12 +136,12 @@ async fn schedule_tab_content(
                     cancelled: practice.cancelled.as_bool(),
                 });
             }
-            Ok((rows, default_time))
+            Ok((rows, default_time, default_duration))
         })
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::schedule_content(&rows, is_coach, today, default_time))
+    Ok(templates::practices::schedule_content(&rows, is_coach, today, default_time, default_duration))
 }
 
 // =====================================================================
@@ -150,6 +153,8 @@ pub(crate) struct CreatePracticeInput {
     date: String,
     #[serde(default)]
     time: Option<String>,
+    #[serde(default)]
+    end_time: Option<String>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -168,10 +173,32 @@ pub(crate) async fn create_handler(
         .filter(|s| !s.trim().is_empty())
         .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| StatusCode::BAD_REQUEST))
         .transpose()?;
+    let end_time: Option<NaiveTime> = input.end_time
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| StatusCode::BAD_REQUEST))
+        .transpose()?;
+    // Compute duration from start + end times.
+    let duration_minutes: Option<i32> = match (time, end_time) {
+        (Some(start), Some(end)) => {
+            let dur = end.signed_duration_since(start).num_minutes();
+            if dur > 0 { Some(dur as i32) } else { None }
+        }
+        _ => None,
+    };
 
     tenant
         .db
-        .with_conn(move |conn| Practice::upsert(conn, team_id, date, time, None))
+        .with_conn(move |conn| {
+            let p = Practice::upsert(conn, team_id, date, time, None)?;
+            if let Some(dur) = duration_minutes {
+                use diesel::prelude::*;
+                diesel::update(lineup_db::schema::practice::table.find(p.id))
+                    .set(lineup_db::schema::practice::duration_minutes.eq(Some(dur)))
+                    .execute(conn)?;
+            }
+            Practice::get(conn, p.id)?.ok_or(diesel::result::Error::NotFound)
+        })
         .await
         .map_err(internal_error)?;
 

@@ -144,6 +144,8 @@ pub(crate) struct TeamUpdateInput {
     self_edit_level: String,
     #[serde(default)]
     default_practice_time: Option<String>,
+    #[serde(default)]
+    default_practice_duration_minutes: Option<String>,
 }
 
 /// `POST /teams/{id}` — update team config (PD only).
@@ -165,6 +167,12 @@ pub(crate) async fn update_handler(
         .as_deref()
         .filter(|s| !s.is_empty())
         .and_then(|s| chrono::NaiveTime::parse_from_str(s, "%H:%M").ok());
+    let practice_duration: Option<i32> = input
+        .default_practice_duration_minutes
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse().ok())
+        .filter(|&m: &i32| m > 0);
     tenant
         .db
         .with_conn(move |conn| {
@@ -175,6 +183,7 @@ pub(crate) async fn update_handler(
                     team::name.eq(&name),
                     team::self_edit_level.eq(&level),
                     team::default_practice_time.eq(practice_time),
+                    team::default_practice_duration_minutes.eq(practice_duration),
                 ))
                 .execute(conn)
         })

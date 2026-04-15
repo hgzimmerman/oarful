@@ -11,6 +11,8 @@ use crate::handlers::practices::{LineupRow, ReminderRow};
 pub(crate) struct PracticeRow {
     pub(crate) practice_id: PracticeId,
     pub(crate) date: NaiveDate,
+    pub(crate) time: Option<chrono::NaiveTime>,
+    pub(crate) duration_minutes: Option<i32>,
     pub(crate) yes_count: usize,
     pub(crate) total_responses: usize,
     pub(crate) has_committed: bool,
@@ -71,11 +73,19 @@ pub(crate) fn schedule_content(
     is_coach: bool,
     today: chrono::NaiveDate,
     default_time: Option<chrono::NaiveTime>,
+    default_duration: Option<i32>,
 ) -> Markup {
     let upcoming: Vec<&PracticeRow> = rows.iter().filter(|r| r.is_upcoming).collect();
     let past: Vec<&PracticeRow> = rows.iter().filter(|r| !r.is_upcoming).collect();
     let min_date = today.format("%Y-%m-%d").to_string();
     let time_value = default_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+    let end_time_value = match (default_time, default_duration) {
+        (Some(t), Some(dur)) => {
+            let end = t + chrono::TimeDelta::minutes(dur as i64);
+            end.format("%H:%M").to_string()
+        }
+        _ => String::new(),
+    };
 
     html! {
         // Add practice form (Coach+ only)
@@ -84,7 +94,7 @@ pub(crate) fn schedule_content(
                  hx-post="/practices"
                  hx-target="#content"
                  hx-push-url="true"
-                 class="flex items-end gap-3 mb-6" {
+                 class="flex items-end gap-3 flex-wrap mb-6" {
                 div {
                     label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
                         "Add practice"
@@ -95,10 +105,18 @@ pub(crate) fn schedule_content(
                 }
                 div {
                     label for="time" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
-                        "Time"
+                        "Start"
                     }
                     input id="time" name="time" type="time"
                           value=(time_value)
+                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                div {
+                    label for="end_time" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        "End"
+                    }
+                    input id="end_time" name="end_time" type="time"
+                          value=(end_time_value)
                           class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                 }
                 button type="submit"
@@ -193,7 +211,16 @@ fn row_inner(row: &PracticeRow, weekday: &str, is_coach: bool) -> Markup {
                     }
                 }
             }
-            div class="text-sm text-slate-500" { (weekday) }
+            div class="text-sm text-slate-500" {
+                (weekday)
+                @if let Some(t) = row.time {
+                    " · " (t.format("%-I:%M %p"))
+                    @if let Some(dur) = row.duration_minutes {
+                        @let end = t + chrono::TimeDelta::minutes(dur as i64);
+                        "–" (end.format("%-I:%M %p"))
+                    }
+                }
+            }
         }
         div class="flex items-center gap-3" {
             @if row.is_upcoming && !row.cancelled {
