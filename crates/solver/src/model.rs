@@ -108,10 +108,18 @@ impl<'a> ModelBuilder<'a> {
     ///
     /// This must run before any constraint block that reads `self.x`.
     pub(crate) fn create_variables(&mut self) {
+        let mut total_considered: usize = 0;
+        let mut rejected_eligibility: usize = 0;
+        let mut rejected_sweep_bias: usize = 0;
+        let mut created: usize = 0;
+        let mut wrong_side_count: usize = 0;
+
         for (b_idx, boat) in self.boats.iter().enumerate() {
             for seat in seat_positions(boat) {
                 for (r_idx, rower) in self.available.iter().enumerate() {
+                    total_considered += 1;
                     if !rower_eligible_for_seat(rower, boat, seat) {
+                        rejected_eligibility += 1;
                         continue;
                     }
                     // Sweep-bias hard gate: SWEEP_HARD rowers cannot
@@ -120,13 +128,16 @@ impl<'a> ModelBuilder<'a> {
                     // handled by the sweep_bias_penalty soft constraint.
                     use lineup_db::rower::types::SweepBias;
                     if boat.is_scull() && rower.sweep_bias == SweepBias::SWEEP_HARD {
+                        rejected_sweep_bias += 1;
                         continue;
                     }
                     if boat.is_sweep() && rower.sweep_bias == SweepBias::SCULL_HARD {
+                        rejected_sweep_bias += 1;
                         continue;
                     }
                     let var = self.solver.new_bounded_integer(0, 1);
                     self.x.insert((r_idx, b_idx, seat), var);
+                    created += 1;
 
                     // S4: collect wrong-side placements for per-rower
                     // aggregation rather than pushing a term per variable.
@@ -135,10 +146,20 @@ impl<'a> ModelBuilder<'a> {
                             .entry(r_idx)
                             .or_default()
                             .push(var);
+                        wrong_side_count += 1;
                     }
                 }
             }
         }
+
+        tracing::debug!(
+            total_considered,
+            created,
+            rejected_eligibility,
+            rejected_sweep_bias,
+            wrong_side = wrong_side_count,
+            "eligibility: x variables created"
+        );
     }
 
     /// H1 — seat fill conditional on `use[b]`, plus the optional

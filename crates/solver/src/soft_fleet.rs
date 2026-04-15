@@ -38,6 +38,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.placement_reward_weight == 0 {
             return;
         }
+        let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
             let seats_total =
                 boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
@@ -49,8 +50,10 @@ impl<'a> ModelBuilder<'a> {
             let coef = -seats_total * effective_weight;
             if coef != 0 {
                 self.obj_terms.push(self.use_b[b_idx].scaled(coef));
+                count += 1;
             }
         }
+        tracing::debug!(terms = count, "S8 placement reward");
     }
 
     /// S4 — aggregate wrong-side placements per rower into a single
@@ -69,6 +72,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.side_preference_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             available,
@@ -98,7 +102,9 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
 
             obj_terms.push(wrong_count.scaled(coef));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S4 wrong-side aggregation");
         Ok(())
     }
 
@@ -136,6 +142,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.cox_cooldown_penalty == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -200,7 +207,9 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
 
             obj_terms.push(cox_use.scaled(effective));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S6 cox cooldown");
         Ok(())
     }
 
@@ -274,6 +283,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.non_scull_retention_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             available,
@@ -310,7 +320,9 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("S13 rower-use link: {e:?}"))?;
 
             obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight * scale));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S13 non-scull retention");
         Ok(())
     }
 
@@ -331,6 +343,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.non_scull_retention_weight == 0 {
             return;
         }
+        let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
             let boat_is_scull = boat.is_scull();
             let boat_is_sweep = boat.is_sweep();
@@ -354,10 +367,12 @@ impl<'a> ModelBuilder<'a> {
                 for s in 0..=(boat.seat_count) {
                     if let Some(&var) = self.x.get(&(r_idx, b_idx, s)) {
                         self.obj_terms.push(var.scaled(penalty));
+                        count += 1;
                     }
                 }
             }
         }
+        tracing::debug!(terms = count, "sweep-bias penalty");
     }
 
     /// S14 — bow-loader cox fit penalty. Penalises tall and heavy
@@ -377,6 +392,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.bow_cox_fit_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let w = self.cfg.bow_cox_fit_weight;
 
         for (b_idx, boat) in self.boats.iter().enumerate() {
@@ -406,8 +422,10 @@ impl<'a> ModelBuilder<'a> {
                     continue;
                 }
                 self.obj_terms.push(var.scaled(scaled));
+                count += 1;
             }
         }
+        tracing::debug!(terms = count, "S14 bow-cox fit");
         Ok(())
     }
 
@@ -417,6 +435,7 @@ impl<'a> ModelBuilder<'a> {
     /// effectively a hard preference. The weight is intentionally
     /// high so it takes priority over most other soft constraints.
     pub(crate) fn post_s15_designated_cox_retention(&mut self) -> Result<()> {
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             available,
@@ -454,7 +473,9 @@ impl<'a> ModelBuilder<'a> {
             // 10 is higher than most other soft constraints to ensure
             // designated coxes are placed before anything else.
             obj_terms.push(cox_used.scaled(-10));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S15 designated-cox retention");
         Ok(())
     }
 
@@ -472,6 +493,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.pair_eligibility_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -500,6 +522,7 @@ impl<'a> ModelBuilder<'a> {
                         };
                         if penalty > 0 {
                             obj_terms.push(var.scaled(w * penalty));
+                            count += 1;
                         }
                     }
                 }
@@ -537,8 +560,10 @@ impl<'a> ModelBuilder<'a> {
                     .map_err(|e| anyhow!("S17 pair strength diff (b): {e:?}"))?;
 
                 obj_terms.push(diff.scaled(w));
+                count += 1;
             }
         }
+        tracing::debug!(terms = count, "S17 pair eligibility");
         Ok(())
     }
 
@@ -550,6 +575,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.minimize_bench_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             available,
@@ -583,7 +609,9 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("S18 rower-use link: {e:?}"))?;
 
             obj_terms.push(rower_used.scaled(-cfg.minimize_bench_weight));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S18 minimize bench");
         Ok(())
     }
 
@@ -606,6 +634,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.bench_cooldown_penalty == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             available,
@@ -658,7 +687,9 @@ impl<'a> ModelBuilder<'a> {
 
             // Reward placing = penalise benching again.
             obj_terms.push(rower_used.scaled(-effective));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S20 bench cooldown");
         Ok(())
     }
 
@@ -675,6 +706,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.stroke_spread_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -766,9 +798,11 @@ impl<'a> ModelBuilder<'a> {
                         .map_err(|e| anyhow!("S21 stroke-spread together: {e:?}"))?;
 
                     obj_terms.push(together.scaled(cfg.stroke_spread_weight));
+                    count += 1;
                 }
             }
         }
+        tracing::debug!(terms = count, "S21 stroke spread");
         Ok(())
     }
 }

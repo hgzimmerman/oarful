@@ -956,10 +956,25 @@ fn greedy_fleet_select<'a>(
 
         if remaining >= min_seats {
             selected.push(*boat);
+            tracing::debug!(
+                boat = %boat.name,
+                seats_total,
+                min_seats,
+                remaining_before = remaining,
+                "greedy: selected boat"
+            );
             // Reserve only min_seats worth of rowers so subsequent
             // boats can still qualify. The solver decides the actual
             // fill level via use[b] + partial-fill constraints.
             remaining -= min_seats;
+        } else {
+            tracing::debug!(
+                boat = %boat.name,
+                seats_total,
+                min_seats,
+                remaining,
+                "greedy: skipped boat (insufficient rowers)"
+            );
         }
     }
 
@@ -1427,6 +1442,10 @@ fn search_lineups(
     }
 
     let primary_unplaced = compute_unplaced(&builder.available, &primary_lineups);
+    tracing::debug!(
+        benched = primary_unplaced.benched.len(),
+        "unplaced rowers"
+    );
     Ok(SolveResult {
         status: primary_status,
         primary: ProposedSolution {

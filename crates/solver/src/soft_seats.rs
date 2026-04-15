@@ -97,6 +97,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.skill_variance_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -160,7 +161,9 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("spread link: {e:?}"))?;
 
             obj_terms.push(spread.scaled(cfg.skill_variance_weight));
+            count += 1;
         }
+        tracing::debug!(terms = count, "S1 skill variance");
         Ok(())
     }
 
@@ -195,6 +198,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.pair_affinity_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -294,11 +298,13 @@ impl<'a> ModelBuilder<'a> {
                     obj_terms.push(
                         together.scaled(-aff.weight.as_int() * cfg.pair_affinity_weight),
                     );
+                    count += 1;
 
                     s_lo += 2;
                 }
             }
         }
+        tracing::debug!(terms = count, "S2 pair affinities");
         Ok(())
     }
 
@@ -315,6 +321,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.seat_affinity_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             boats,
             available,
@@ -353,8 +360,10 @@ impl<'a> ModelBuilder<'a> {
         for ((r_idx, b_idx, seat), weight) in &best {
             if let Some(&var) = x.get(&(*r_idx, *b_idx, *seat)) {
                 obj_terms.push(var.scaled(-weight * cfg.seat_affinity_weight));
+                count += 1;
             }
         }
+        tracing::debug!(terms = count, "S3 seat affinities");
         Ok(())
     }
 
@@ -380,6 +389,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.pair_strength_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -448,17 +458,20 @@ impl<'a> ModelBuilder<'a> {
                     .map_err(|e| anyhow!("pair strength diff: {e:?}"))?;
 
                 obj_terms.push(diff.scaled(cfg.pair_strength_weight));
+                count += 1;
 
                 // S9b: the bow pair (seats 1, 2) has outsized influence on
                 // set and steering, so we layer an extra diff term on top
                 // of the regular S9 contribution for that partition only.
                 if s_lo == 1 && cfg.bow_pair_strength_weight != 0 {
                     obj_terms.push(diff.scaled(cfg.bow_pair_strength_weight));
+                    count += 1;
                 }
 
                 s_lo += 2;
             }
         }
+        tracing::debug!(terms = count, "S9 pair strength");
         Ok(())
     }
 
@@ -472,6 +485,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.height_balance_weight == 0 {
             return Ok(());
         }
+        let mut count = 0usize;
         let ModelBuilder {
             solver,
             boats,
@@ -535,10 +549,12 @@ impl<'a> ModelBuilder<'a> {
                     .map_err(|e| anyhow!("pair height diff: {e:?}"))?;
 
                 obj_terms.push(diff.scaled(cfg.height_balance_weight));
+                count += 1;
 
                 s_lo += 2;
             }
         }
+        tracing::debug!(terms = count, "S10 pair height");
         Ok(())
     }
 
@@ -570,6 +586,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.end_pair_skill_weight == 0 {
             return;
         }
+        let mut count = 0usize;
         let w = self.cfg.end_pair_skill_weight;
         for (b_idx, boat) in self.boats.iter().enumerate() {
             let n = boat.seat_count;
@@ -587,9 +604,11 @@ impl<'a> ModelBuilder<'a> {
                 };
                 if let Some(&s_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
                     self.obj_terms.push(s_var.scaled(-coef));
+                    count += 1;
                 }
             }
         }
+        tracing::debug!(terms = count, "S11 end-pair skill");
     }
 
     /// S12 — engine-room strength reward. Rewards placing the
@@ -601,15 +620,18 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.engine_room_strength_weight == 0 {
             return;
         }
+        let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
             for seat in SeatZone::EngineRoom.seats_for(boat.seat_count) {
                 if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat))
                 {
                     self.obj_terms
                         .push(s_var.scaled(-self.cfg.engine_room_strength_weight));
+                    count += 1;
                 }
             }
         }
+        tracing::debug!(terms = count, "S12 engine-room strength");
     }
 
     /// S16 — top-boat stacking bonus. Gives the first boat (b_idx=0)
@@ -650,6 +672,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.top_boat_stacking_weight == 0 || self.boats.len() < 2 {
             return;
         }
+        let mut count = 0usize;
         let w = self.cfg.top_boat_stacking_weight;
         let aw = w.unsigned_abs() as i64;
 
@@ -677,6 +700,7 @@ impl<'a> ModelBuilder<'a> {
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
+                                count += 1;
                             }
                         }
                     }
@@ -698,12 +722,14 @@ impl<'a> ModelBuilder<'a> {
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
+                                count += 1;
                             }
                         }
                     }
                 }
             }
         }
+        tracing::debug!(terms = count, "S16 top-boat stacking");
     }
 
     /// S19 — boat-size stacking. Quality reward inversely scaled by
@@ -722,6 +748,7 @@ impl<'a> ModelBuilder<'a> {
         if self.cfg.boat_size_stacking_weight == 0 {
             return;
         }
+        let mut count = 0usize;
         let w = self.cfg.boat_size_stacking_weight;
 
         for (b_idx, boat) in self.boats.iter().enumerate() {
@@ -733,10 +760,12 @@ impl<'a> ModelBuilder<'a> {
                         let coef = -w * quality * size_factor;
                         if coef != 0 {
                             self.obj_terms.push(var.scaled(coef));
+                            count += 1;
                         }
                     }
                 }
             }
         }
+        tracing::debug!(terms = count, "S19 boat-size stacking");
     }
 }
