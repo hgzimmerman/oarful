@@ -432,35 +432,10 @@ the repo publicly.
 The deployment manifests (k3s/k8s YAML, infrastructure-as-code)
 live in a separate private repo.
 
-### Demo mode
+### ~~Demo mode~~ (shipped)
 
-Self-service demo for prospective users — try the app without
-signing up for a real account. The "Try demo" button lives on the
-landing/marketing page (from the onboarding TODO above) so
-prospects can kick the tires before committing to a paid plan.
-
-**Ephemeral tenants.** Clicking "Try demo" creates a new tenant
-with a pre-seeded fixture (toy rowers, boats, a few practices
-with availability). The tenant gets a random slug and an
-auto-logged-in session (skip invite/registration flow).
-
-**Lifecycle.** Ephemeral tenants are tagged with a `demo_expires_at`
-timestamp (e.g. 1 week from creation). A background cleanup job
-(or startup sweep) deletes expired demo tenants and their SQLite
-files.
-
-**Constraints:**
-- Demo tenants always use `LogMailer` — no real emails sent.
-- Rate-limit demo creation (e.g. by IP or a simple cooldown) to
-  prevent abuse.
-- Demo tenants are read-write (coaches can solve, commit, edit)
-  but isolated — no cross-tenant visibility.
-
-**Schema.** Add `demo_expires_at` nullable timestamp to the
-`tenant` table. Non-null means ephemeral; null means permanent.
-
-Don't start until most features are stable — the demo should
-showcase a polished product.
+Ephemeral tenants with pre-seeded fixture, auto-login, 7-day
+expiry, cookie-based resume, background cleanup of expired demos.
 
 ### Regatta lineup generator (long-term)
 
