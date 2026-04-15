@@ -31,6 +31,9 @@ pub(crate) struct DisplayFlags {
     pub(crate) pinned_boats: HashSet<BoatId>,
     pub(crate) was_pinned_boats: HashSet<BoatId>,
     pub(crate) locked_boats: HashSet<BoatId>,
+    /// Boats currently in use by another team's committed lineup.
+    /// Maps boat_id → team name for display.
+    pub(crate) boats_in_use_by: HashMap<BoatId, String>,
 }
 
 /// A boat in the unified lineup editor, with optional seat assignments.
@@ -165,6 +168,12 @@ impl<'a> EditorData<'a> {
 /// Unified lineup editor — renders boat selector, boat cards with
 /// seats (filled or empty), and the rower pool. Used for both the
 /// pre-generate landing and the post-generate result.
+/// A rower from another team available during this practice window.
+pub(crate) struct OtherTeamRower {
+    pub(crate) rower: Rower,
+    pub(crate) team_name: String,
+}
+
 pub(crate) fn lineup_editor(
     snapshot: &DbSnapshot,
     practice_id: PracticeId,
@@ -172,6 +181,7 @@ pub(crate) fn lineup_editor(
     flags: &DisplayFlags,
     unavailable: &[&Rower],
     walkon_ids: &[String],
+    other_team_rowers: &[OtherTeamRower],
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{practice_id}");
     let editor_url = format!("/solve/{practice_id}/editor");
@@ -228,6 +238,7 @@ pub(crate) fn lineup_editor(
                         "px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
                     };
                     @let pill_target_class = "px-4 py-2 rounded-full text-sm font-medium bg-blue-600 text-white cursor-pointer ring-2 ring-blue-400";
+                    @let in_use_team = flags.boats_in_use_by.get(&eb.boat.id);
                     button type="button"
                            class=(active_class)
                            data-boat-id=(bid)
@@ -238,6 +249,11 @@ pub(crate) fn lineup_editor(
                         (eb.boat.seat_count)
                         @if eb.boat.has_cox.as_bool() { "+" }
                         ")"
+                        @if let Some(_team) = in_use_team {
+                            span class="ml-1 inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 text-amber-800 rounded-full leading-none" {
+                                "In use"
+                            }
+                        }
                     }
                 }
                 @if editor.boats.len() > 2 {
@@ -380,6 +396,37 @@ pub(crate) fn lineup_editor(
                         }
                     }
                 }
+
+                // Available from other teams — informational only.
+                @if !other_team_rowers.is_empty() {
+                    div class="mt-3" {
+                        strong class="text-amber-700" { "Available from other teams " }
+                        span class="text-xs text-slate-500" { "(use walk-on to pull in)" }
+                    }
+                    div class="flex flex-wrap gap-2 mt-1" {
+                        @for otr in other_team_rowers {
+                            @let r = &otr.rower;
+                            @let side_border = if r.is_designated_cox.as_bool() {
+                                "border-r-2 border-r-indigo-400"
+                            } else {
+                                match r.side {
+                                    lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
+                                    lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
+                                    lineup_db::rower::types::Side::Either => "",
+                                }
+                            };
+                            span class={"inline-block px-3 py-2 rounded border border-amber-200 bg-amber-50 " (side_border)} {
+                                div class="font-medium text-amber-900 text-sm" {
+                                    (r.name)
+                                    span class="ml-1 text-[10px] font-normal text-amber-600" { "(" (&otr.team_name) ")" }
+                                }
+                                div class="text-xs text-amber-700" {
+                                    (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -450,6 +497,12 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
             };
             @let boat_icon_active = boat_pin_state == "locked" || boat_pin_state == "dirty";
             @let boat_icon_bg = if boat_icon_active { "bg-blue-100 rounded-full w-6 h-6 inline-flex items-center justify-center" } else { "" };
+            @let in_use_team = flags.boats_in_use_by.get(&boat.id);
+            @if let Some(team) = in_use_team {
+                div class="bg-amber-50 border-b border-amber-200 px-4 py-1 text-xs font-medium text-amber-700" {
+                    "In use by " (team)
+                }
+            }
             div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center" {
                 strong class="text-slate-800" { (boat.name) }
                 span class="text-xs text-slate-500 ml-2" {

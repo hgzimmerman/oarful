@@ -43,6 +43,60 @@ pub(crate) async fn editor_handler(
 
     let _date = practice.date;
 
+    // Load overlapping practices from other teams.
+    let practice_for_overlap = practice.clone();
+    let team_id_for_overlap = _team_id;
+    let (other_team_rowers, boats_in_use) = tenant
+        .db
+        .with_conn(move |conn| {
+            let team = lineup_db::team::Team::get(conn, team_id_for_overlap)?;
+            let team_dur = team.and_then(|t| t.default_practice_duration_minutes);
+            let overlapping = Practice::find_overlapping(conn, &practice_for_overlap, team_dur)?;
+
+            let mut other_rowers: Vec<(lineup_db::rower::Rower, String)> = Vec::new();
+            let mut boats_in_use: std::collections::HashMap<BoatId, String> = std::collections::HashMap::new();
+
+            for op in &overlapping {
+                let other_team = lineup_db::team::Team::get(conn, op.team_id)?;
+                let team_name = other_team.map(|t| t.name.clone()).unwrap_or_default();
+
+                // Find committed lineups for this overlapping practice — boats in use.
+                let committed = lineup_db::lineup::Lineup::for_practice(conn, op.id)?;
+                for cl in &committed {
+                    boats_in_use.entry(cl.lineup.boat_id).or_insert_with(|| team_name.clone());
+                }
+
+                // Find available rowers from this other practice.
+                let other_team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, op.team_id)?;
+                let other_avail = lineup_db::availability::Availability::map_for_practice(conn, op.id)?;
+                let placed_rower_ids: std::collections::HashSet<lineup_db::rower::types::RowerId> = committed
+                    .iter()
+                    .flat_map(|cl| cl.seats.iter().map(|s| s.rower_id))
+                    .collect();
+
+                // Get rowers who are available but not placed in any lineup.
+                for rid in &other_team_rower_ids {
+                    if placed_rower_ids.contains(rid) { continue; }
+                    if other_avail.get(rid).map(|s| s.is_available_for_sweep()).unwrap_or(false) {
+                        if let Some(rower) = lineup_db::rower::Rower::get(conn, *rid)? {
+                            if rower.active.as_bool() {
+                                other_rowers.push((rower, team_name.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok((other_rowers, boats_in_use))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let other_team_rower_display: Vec<templates::solve::OtherTeamRower> = other_team_rowers
+        .into_iter()
+        .map(|(rower, team_name)| templates::solve::OtherTeamRower { rower, team_name })
+        .collect();
+
     // Apply walk-on overrides.
     for id_str in &params.walkon {
         if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
@@ -133,6 +187,7 @@ pub(crate) async fn editor_handler(
         pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_pin),
         was_pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_was_pin),
         locked_boats: SolveKnobs::parse_boat_ids(&params.boat_lock),
+        boats_in_use_by: boats_in_use,
     };
 
     // Unavailable rowers for the walk-on dropdown.
@@ -148,6 +203,6 @@ pub(crate) async fn editor_handler(
         .collect();
 
     Ok(Html(
-        templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags, &unavailable, &walkon_ids).into_string(),
+        templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags, &unavailable, &walkon_ids, &other_team_rower_display).into_string(),
     ))
 }

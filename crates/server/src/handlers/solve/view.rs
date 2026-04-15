@@ -125,6 +125,7 @@ pub(crate) async fn view_handler(
             pinned_boats,
             was_pinned_boats,
             locked_boats,
+            boats_in_use_by: std::collections::HashMap::new(),
         };
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
         let content = templates::solve::view_content(
@@ -172,6 +173,7 @@ pub(crate) async fn view_handler(
         pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_pin),
         was_pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_was_pin),
         locked_boats: SolveKnobs::parse_boat_ids(&knobs.boat_lock),
+        boats_in_use_by: std::collections::HashMap::new(),
     };
     let content = templates::solve::landing_content(
         &snapshot, practice_id, date, &knobs, &committed_practices, has_committed,

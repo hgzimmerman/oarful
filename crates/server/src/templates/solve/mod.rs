@@ -8,7 +8,7 @@ mod knobs;
 pub(crate) mod profile_modal;
 
 use alternatives::alternatives_panel;
-pub(crate) use editor::{DisplayFlags, EditorData, lineup_editor};
+pub(crate) use editor::{DisplayFlags, EditorData, OtherTeamRower, lineup_editor};
 use knobs::knobs_form;
 pub(crate) use knobs::preset_bar;
 
@@ -261,7 +261,7 @@ pub(crate) fn landing_content(
             div class="no-print" {
                 (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
             }
-            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon))
+            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
         }
     }
 }
@@ -309,7 +309,7 @@ pub(crate) fn view_content(
             @if result.status != SolveStatus::Satisfied {
                 (knobs::status_banner(date, result))
             }
-            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon))
+            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
 
             @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
                 (alternatives_panel(snapshot, practice_id, &result.primary, &result.alternatives, flags))
