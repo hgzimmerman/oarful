@@ -188,9 +188,14 @@ pub fn sync_csv(
 
     let mut summary = SyncSummary::default();
 
+    // Load team defaults so sync-created practices get the configured time.
+    let team = lineup_db::team::Team::get(conn, team_id)?;
+    let default_time = team.as_ref().and_then(|t| t.default_practice_time);
+    let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
+
     for record in &all_records[header_idx + 1..] {
         summary.rows_read += 1;
-        match sync_row(record, &date_columns, team_id, row_filter, conn, &mut summary) {
+        match sync_row(record, &date_columns, team_id, row_filter, default_time, default_duration, conn, &mut summary) {
             Ok(()) => {}
             Err(e) => summary.warnings.push(format!(
                 "row {}: {e}",
@@ -207,6 +212,8 @@ fn sync_row(
     date_columns: &[(usize, NaiveDate)],
     team_id: lineup_db::team::TeamId,
     row_filter: RowFilter,
+    default_time: Option<chrono::NaiveTime>,
+    default_duration: Option<i32>,
     conn: &mut SqliteConnection,
     summary: &mut SyncSummary,
 ) -> Result<()> {
@@ -338,7 +345,22 @@ fn sync_row(
             }
         };
         // Ensure practice exists for this date so we can key availability on it.
-        let practice = lineup_db::practice::Practice::upsert(conn, team_id, *date, None, None)?;
+        // Prefer an existing practice for the date (any time); only create with
+        // team defaults when none exists yet.
+        let practice = match lineup_db::practice::Practice::find_by_date(conn, team_id, *date)? {
+            Some(p) => p,
+            None => {
+                let p = lineup_db::practice::Practice::upsert(conn, team_id, *date, default_time, None)?;
+                // Apply team default duration on newly created practices.
+                if p.duration_minutes.is_none() && default_duration.is_some() {
+                    use diesel::prelude::*;
+                    diesel::update(lineup_db::schema::practice::table.find(p.id))
+                        .set(lineup_db::schema::practice::duration_minutes.eq(default_duration))
+                        .execute(conn)?;
+                }
+                p
+            }
+        };
         Availability::upsert(
             conn,
             NewAvailability {
