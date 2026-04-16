@@ -303,7 +303,8 @@ pub(crate) fn streaming_skeleton(
 
                 // Primary result placeholder — replaced by the primary event.
                 div sse-swap="primary"
-                    hx-swap="innerHTML" {
+                    hx-swap="innerHTML"
+                    hx-disinherit="hx-ext" {
                     div class="flex items-center justify-center py-12 text-slate-500" {
                         div class="text-center space-y-2" {
                             div class="inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" {}
@@ -317,8 +318,11 @@ pub(crate) fn streaming_skeleton(
                     hx-swap="innerHTML" {}
 
                 // Alternatives container — each alternative is appended.
+                // hx-disinherit prevents the SSE extension from
+                // interfering with hx-get links inside alternatives.
                 div sse-swap="alternative"
                     hx-swap="beforeend"
+                    hx-disinherit="hx-ext"
                     class="space-y-4" {}
             }
         }
