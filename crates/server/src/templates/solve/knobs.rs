@@ -69,7 +69,7 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                  hx-target="#solve-results"
                  hx-push-url="true"
                  hx-indicator="#solve-spinner"
-                 "@htmx:before-request"="open = false" {
+                 "@htmx:before-request"="if ($event.detail.elt === $el) open = false" {
 
                 // Based-on checkbox list + similarity weight
                 @if !practices.is_empty() {
