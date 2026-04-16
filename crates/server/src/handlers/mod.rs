@@ -211,6 +211,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(users::resend_invite_handler),
         )
         .route(
+            "/users/{id}/toggle-status",
+            post(users::toggle_status_handler),
+        )
+        .route(
             "/teams/{id}",
             get(teams::detail_handler).post(teams::update_handler),
         )

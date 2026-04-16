@@ -216,6 +216,18 @@ impl AppUser {
         Ok(())
     }
 
+    pub fn set_status(
+        conn: &mut SqliteConnection,
+        user_id: UserId,
+        status: UserStatus,
+    ) -> Result<(), diesel::result::Error> {
+        use crate::schema::app_user;
+        diesel::update(app_user::table.find(user_id))
+            .set(app_user::status.eq(status.as_str()))
+            .execute(conn)?;
+        Ok(())
+    }
+
     pub fn parsed_status(&self) -> Option<UserStatus> {
         UserStatus::from_str(&self.status)
     }

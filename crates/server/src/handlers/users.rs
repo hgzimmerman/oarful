@@ -418,6 +418,59 @@ pub(crate) fn require_at_least_role(
     }
 }
 
+/// `POST /users/{id}/toggle-status` — toggle active ↔ disabled.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn toggle_status_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(user_id): Path<UserId>,
+) -> Result<Html<String>, ErrorResponse> {
+    require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let (user, roles, user_rower_map) = tenant
+        .db
+        .with_conn(move |conn| {
+            let user = AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound)?;
+            let new_status = match user.parsed_status() {
+                Some(lineup_db::app_user::UserStatus::Active) => {
+                    lineup_db::app_user::UserStatus::Disabled
+                }
+                Some(lineup_db::app_user::UserStatus::Disabled) => {
+                    lineup_db::app_user::UserStatus::Active
+                }
+                _ => return Ok((user, HashMap::new(), HashMap::new())),
+            };
+            AppUser::set_status(conn, user_id, new_status)?;
+            let user = AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound)?;
+            let role_rows: Vec<UserRoleRow> = user_role::table
+                .select(UserRoleRow::as_select())
+                .get_results(conn)?;
+            let roles: HashMap<UserId, Role> = role_rows
+                .into_iter()
+                .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
+                .collect();
+            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = vec![user.clone()]
+                .iter()
+                .filter_map(|u| u.rower_id.map(|rid| (u.id, rid)))
+                .collect();
+            Ok((user, roles, user_rower))
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "user.toggle_status",
+        "user",
+        &user_id.to_string(),
+        Some(serde_json::json!({"new_status": user.status}).to_string()),
+    );
+
+    Ok(Html(
+        templates::users::user_row(&user, &roles, &user_rower_map).into_string(),
+    ))
+}
+
 /// Generate a random 32-hex-char invite token.
 pub(crate) fn generate_token() -> String {
     use std::collections::hash_map::RandomState;

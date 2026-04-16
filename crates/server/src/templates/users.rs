@@ -116,16 +116,43 @@ pub(crate) fn user_row(
                     (u.status)
                 }
             }
-            td class="px-4 py-2 text-right" {
+            td class="px-4 py-2 text-right space-x-2" {
                 @if u.status == "invited" {
                     form method="post"
                          action={"/users/" (u.id) "/resend-invite"}
                          hx-post={"/users/" (u.id) "/resend-invite"}
                          hx-target={"#user-" (u.id)}
-                         hx-swap="outerHTML" {
+                         hx-swap="outerHTML"
+                         class="inline" {
                         button type="submit"
                                class="text-xs text-blue-600 hover:text-blue-800 font-medium" {
                             "Resend invite"
+                        }
+                    }
+                }
+                @if u.status == "active" {
+                    form method="post"
+                         action={"/users/" (u.id) "/toggle-status"}
+                         hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-target={"#user-" (u.id)}
+                         hx-swap="outerHTML"
+                         class="inline" {
+                        button type="submit"
+                               class="text-xs text-slate-400 hover:text-red-600 font-medium" {
+                            "Disable"
+                        }
+                    }
+                }
+                @if u.status == "disabled" {
+                    form method="post"
+                         action={"/users/" (u.id) "/toggle-status"}
+                         hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-target={"#user-" (u.id)}
+                         hx-swap="outerHTML"
+                         class="inline" {
+                        button type="submit"
+                               class="text-xs text-emerald-600 hover:text-emerald-800 font-medium" {
+                            "Enable"
                         }
                     }
                 }
