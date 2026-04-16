@@ -84,6 +84,14 @@ impl SeatZone {
         }
     }
 
+    /// Whether this zone targets exactly one seat in any applicable
+    /// boat. Single-seat zones (Stroke, Bow) get a solver weight
+    /// boost because they have no placement flexibility — the rower
+    /// must land in that exact seat to satisfy the affinity.
+    pub fn is_single_seat(self) -> bool {
+        matches!(self, SeatZone::Stroke | SeatZone::Bow)
+    }
+
     /// Return the concrete seat numbers this zone maps to for a boat
     /// with `n` seats. Returns an empty vec when the zone doesn't
     /// apply (e.g. Engine room in a pair, any zone in a single).

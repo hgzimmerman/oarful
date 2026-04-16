@@ -331,11 +331,16 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
 
-        // Build (rower_idx, boat_idx, seat) → max weight across all
-        // matching zones. This deduplicates overlapping zones so a
+        // Build (rower_idx, boat_idx, seat) → effective weight across
+        // all matching zones. This deduplicates overlapping zones so a
         // rower with Stroke(+5) and SternPair(+3) on seat 8 gets +5,
         // not +8. BTreeMap keeps iteration order deterministic so the
         // solver sees terms in a stable order.
+        //
+        // Single-seat zones (Stroke, Bow) get a 2× boost because the
+        // rower must land in one exact seat — multi-seat zones spread
+        // the reward across several seats, giving the solver natural
+        // flexibility that single-seat zones lack.
         let mut best: std::collections::BTreeMap<(usize, usize, i32), i32> =
             std::collections::BTreeMap::new();
 
@@ -343,6 +348,11 @@ impl<'a> ModelBuilder<'a> {
             if aff.weight.as_int() == 0 {
                 continue;
             }
+            let effective = if aff.zone.is_single_seat() {
+                aff.weight.as_int() * 2
+            } else {
+                aff.weight.as_int()
+            };
             let r_idx = match available.iter().position(|r| r.id == aff.rower_id) {
                 Some(i) => i,
                 None => continue,
@@ -351,8 +361,8 @@ impl<'a> ModelBuilder<'a> {
                 for seat in aff.zone.seats_for(boat.seat_count) {
                     let key = (r_idx, b_idx, seat);
                     best.entry(key)
-                        .and_modify(|w| *w = (*w).max(aff.weight.as_int()))
-                        .or_insert(aff.weight.as_int());
+                        .and_modify(|w| *w = (*w).max(effective))
+                        .or_insert(effective);
                 }
             }
         }
