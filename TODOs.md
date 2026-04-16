@@ -367,6 +367,16 @@ approach: assign rowers to races first, then schedule boats).
 Very large scope — park until practice lineups are mature and
 there's real demand from clubs doing regattas.
 
+### HTMX 4.0 SSE migration
+
+When HTMX 4.0 stabilizes (expected mid-2026), migrate the streaming
+alternatives from `htmx-ext-sse` to native fetch streaming. HTMX 4.0
+uses `fetch()` + `ReadableStream` natively — no extension needed.
+The SSE endpoint stays the same; the frontend drops `hx-ext="sse"`
+and `sse-connect`/`sse-swap` in favor of native HTMX streaming
+attributes. Also enables POST-based SSE (currently requires GET).
+This would let us remove `htmx-ext-sse.js` from the public assets.
+
 ### Discord integration (long-term)
 
 Low priority — don't start until most other work is done.
