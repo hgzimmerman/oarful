@@ -58,12 +58,12 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                          ":class"="open ? 'rotate-45' : 'rotate-[-45deg]'" {}
                 }
                 div x-show="open"
-                    x-transition:enter="transition-all ease-out duration-300"
-                    x-transition:enter-start="opacity-0 max-h-0"
-                    x-transition:enter-end="opacity-100 max-h-[2000px]"
-                    x-transition:leave="transition-all ease-in duration-300"
-                    x-transition:leave-start="opacity-100 max-h-[2000px]"
-                    x-transition:leave-end="opacity-0 max-h-0"
+                    "x-transition:enter"="transition-all ease-out duration-300"
+                    "x-transition:enter-start"="opacity-0 max-h-0"
+                    "x-transition:enter-end"="opacity-100 max-h-[2000px]"
+                    "x-transition:leave"="transition-all ease-in duration-300"
+                    "x-transition:leave-start"="opacity-100 max-h-[2000px]"
+                    "x-transition:leave-end"="opacity-0 max-h-0"
                     class="overflow-hidden" {
                 div class="px-6 pb-6 border-t border-slate-100 pt-4" {
             form method="get" action=(action)
