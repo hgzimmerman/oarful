@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Regenerate Tailwind CSS before each commit so the built CSS
+# stays in sync with template changes.
+tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify 2>/dev/null
+git add crates/server/public/tailwind.css
