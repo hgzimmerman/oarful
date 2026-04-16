@@ -104,7 +104,7 @@ async fn member_sees_restricted_nav() {
         url.path()
     );
 
-    // Verify member-level nav: should see Practices, Profile, Availability
+    // Verify member-level nav: should see Practices, My
     // but NOT Team or Admin.
     let source = client.source().await.unwrap();
     assert!(
@@ -112,8 +112,8 @@ async fn member_sees_restricted_nav() {
         "member should see Practices nav link"
     );
     assert!(
-        source.contains("data-nav=\"/my/availability\""),
-        "member should see Availability nav link"
+        source.contains("data-nav=\"/my\""),
+        "member should see My nav link"
     );
     assert!(
         !source.contains("data-nav=\"/team\""),

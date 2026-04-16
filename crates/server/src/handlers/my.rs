@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use axum::{response::Html, Extension, Form};
+use axum::{http::HeaderMap, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
@@ -29,40 +29,65 @@ use crate::{
     templates,
 };
 
-// =====================================================================
-// Profile
-// =====================================================================
+const TAB_TARGET: &str = "my-tab-content";
+
+fn is_tab_swap(headers: &HeaderMap) -> bool {
+    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TAB_TARGET)
+}
+
+/// `GET /my` — default to Profile tab.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn index_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+) -> Result<Html<String>, ErrorResponse> {
+    let tab_content = profile_content(&jar, &tenant).await?;
+    let page = templates::my::tabbed_page("profile", tab_content);
+    Ok(super::maybe_page_authed("My", page, hx, &tenant))
+}
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
-    let rower = match try_load_my_rower(&tenant).await? {
+    let tab_content = profile_content(&jar, &tenant).await?;
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            templates::my::tab_content_swap("profile", tab_content).into_string(),
+        ));
+    }
+    let page = templates::my::tabbed_page("profile", tab_content);
+    Ok(super::maybe_page_authed("My", page, hx, &tenant))
+}
+
+async fn profile_content(
+    jar: &CookieJar,
+    tenant: &TenantContext,
+) -> Result<maud::Markup, ErrorResponse> {
+    let rower = match try_load_my_rower(tenant).await? {
         Some(r) => r,
         None => {
-            let content = templates::my::no_rower_content(
-                "My profile",
+            return Ok(templates::my::no_rower_content(
                 "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
-            );
-            return Ok(super::maybe_page_authed("My profile", content, hx, &tenant));
+            ));
         }
     };
-    // Reuse the rower detail page with member-level permissions.
     let rower_id = rower.id;
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let detail = load_detail(&tenant.db, rower_id).await?;
     let level = tenant
         .db
-        .with_conn(move |conn| lineup_db::team::Team::get(conn, team_id))
+        .with_conn(move |conn| Team::get(conn, team_id))
         .await
         .map_err(internal_error)?
-        .map(|t| lineup_db::team::SelfEditLevel::from_str(&t.self_edit_level))
-        .unwrap_or(lineup_db::team::SelfEditLevel::Low);
+        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .unwrap_or(SelfEditLevel::Low);
     let perms = templates::rowers::DetailPermissions::member(level);
-    let content = templates::rowers::detail_content(&detail, perms, true);
-    Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
+    Ok(templates::rowers::detail_content(&detail, perms, true))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -210,20 +235,28 @@ pub(crate) async fn availability_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let rower = match try_load_my_rower(&tenant).await? {
+    let tab_content = availability_content(&jar, &tenant).await?;
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            templates::my::tab_content_swap("availability", tab_content).into_string(),
+        ));
+    }
+    let page = templates::my::tabbed_page("availability", tab_content);
+    Ok(super::maybe_page_authed("My", page, hx, &tenant))
+}
+
+async fn availability_content(
+    jar: &CookieJar,
+    tenant: &TenantContext,
+) -> Result<maud::Markup, ErrorResponse> {
+    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
+    let rower = match try_load_my_rower(tenant).await? {
         Some(r) => r,
         None => {
-            let content = templates::my::no_rower_content(
-                "My availability",
+            return Ok(templates::my::no_rower_content(
                 "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
-            );
-            return Ok(super::maybe_page_authed(
-                "My availability",
-                content,
-                hx,
-                &tenant,
             ));
         }
     };
@@ -280,13 +313,7 @@ pub(crate) async fn availability_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::my::availability_content(&rower, &rows, None);
-    Ok(super::maybe_page_authed(
-        "My availability",
-        content,
-        hx,
-        &tenant,
-    ))
+    Ok(templates::my::availability_content(&rower, &rows, None))
 }
 
 #[derive(Debug, Deserialize)]
@@ -431,20 +458,26 @@ pub(crate) async fn availability_update_handler(
 pub(crate) async fn email_prefs_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
+    headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
+    let tab_content = email_prefs_content(&tenant).await?;
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            templates::my::tab_content_swap("email", tab_content).into_string(),
+        ));
+    }
+    let page = templates::my::tabbed_page("email", tab_content);
+    Ok(super::maybe_page_authed("My", page, hx, &tenant))
+}
+
+async fn email_prefs_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let user_id = tenant.claims.user_id();
     let user = tenant
         .db
         .with_conn(move |conn| AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound))
         .await
         .map_err(internal_error)?;
-    let content = templates::my::email_prefs_content(&user);
-    Ok(super::maybe_page_authed(
-        "Email preferences",
-        content,
-        hx,
-        &tenant,
-    ))
+    Ok(templates::my::email_prefs_content(&user))
 }
 
 #[derive(Debug, Deserialize)]

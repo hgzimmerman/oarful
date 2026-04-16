@@ -7,15 +7,46 @@ use lineup_db::practice::PracticeId;
 use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
-use super::layout::{empty_state, page_header};
+use super::layout::{empty_state, page_header, tab_swap, tabbed_section, TabDef};
+
+const MY_TABS: &[TabDef] = &[
+    TabDef {
+        label: "Profile",
+        url: "/my/profile",
+        id: "profile",
+    },
+    TabDef {
+        label: "Availability",
+        url: "/my/availability",
+        id: "availability",
+    },
+    TabDef {
+        label: "Email",
+        url: "/my/email-preferences",
+        id: "email",
+    },
+];
+const MY_TARGET: &str = "my-tab-content";
+
+/// Full tabbed page wrapper for `/my`.
+pub(crate) fn tabbed_page(active_tab: &str, tab_content: Markup) -> Markup {
+    html! {
+        (page_header("My", None))
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+            (tabbed_section(MY_TABS, active_tab, MY_TARGET, tab_content))
+        }
+    }
+}
+
+/// HTMX partial: tab content + OOB tab bar swap.
+pub(crate) fn tab_content_swap(active_tab: &str, content: Markup) -> Markup {
+    tab_swap(MY_TABS, active_tab, MY_TARGET, content)
+}
 
 /// Shown when the authenticated user has no linked rower record.
-pub(crate) fn no_rower_content(title: &str, message: &str) -> Markup {
+pub(crate) fn no_rower_content(message: &str) -> Markup {
     html! {
-        (page_header(title, None))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto" {
-            (empty_state(message))
-        }
+        (empty_state(message))
     }
 }
 
@@ -39,8 +70,7 @@ pub(crate) fn availability_content(
     stale_warning: Option<(PracticeId, NaiveDate)>,
 ) -> Markup {
     html! {
-        (page_header("My availability", Some(&rower.name)))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+        div class="space-y-6" {
             @if let Some((pid, date)) = stale_warning {
                 div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
                     strong { "Heads up: " }
@@ -124,8 +154,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
 
 pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
     html! {
-        (page_header("Email preferences", Some(&user.name)))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+        div class="space-y-6" {
             div class="bg-white rounded-lg shadow p-6" {
                 form method="post" action="/my/email-preferences"
                      hx-post="/my/email-preferences"

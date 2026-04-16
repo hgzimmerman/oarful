@@ -224,6 +224,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/teams/selector", get(teams::selector_handler))
         // My pages
+        .route("/my", get(my::index_handler))
         .route(
             "/my/profile",
             get(my::profile_handler).post(my::profile_update_handler),
