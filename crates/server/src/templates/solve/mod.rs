@@ -335,6 +335,18 @@ pub(crate) fn streaming_skeleton(
                 hx-swap="beforeend"
                 hx-disinherit="hx-ext"
                 class="space-y-4" {}
+
+            // Progress indicator — visible while alternatives are computing.
+            // Hidden when the "done" event replaces its content.
+            div sse-swap="done"
+                hx-swap="innerHTML" {
+                @if knobs.alts > 0 {
+                    div class="flex items-center gap-2 py-4 text-slate-400 text-sm" {
+                        div class="inline-block w-4 h-4 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
+                        "Computing alternatives..."
+                    }
+                }
+            }
         }
     }
 }
