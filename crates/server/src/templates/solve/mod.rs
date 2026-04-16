@@ -314,17 +314,10 @@ pub(crate) fn streaming_skeleton(
             "sse-connect"=(sse_url)
             "sse-close"="done" {
 
-            // Primary result placeholder — replaced by the primary event.
+            // Primary result — replaced by the primary event.
             div "sse-swap"="primary"
                 hx-swap="innerHTML"
-                hx-disinherit="hx-ext" {
-                div class="flex items-center justify-center py-12 text-slate-500" {
-                    div class="text-center space-y-2" {
-                        div class="inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" {}
-                        div class="text-sm" { "Generating lineup..." }
-                    }
-                }
-            }
+                hx-disinherit="hx-ext" {}
 
             // Error placeholder — shown if primary fails.
             div "sse-swap"="error"
@@ -336,15 +329,13 @@ pub(crate) fn streaming_skeleton(
                 hx-disinherit="hx-ext"
                 class="space-y-4" {}
 
-            // Progress indicator — visible while alternatives are computing.
-            // Hidden when the "done" event replaces its content.
+            // Single spinner at the bottom — pushed down as results
+            // stream in above it. Replaced by elapsed time on "done".
             div "sse-swap"="done"
                 hx-swap="innerHTML" {
-                @if knobs.alts > 0 {
-                    div class="flex items-center gap-2 py-4 text-slate-400 text-sm" {
-                        div class="inline-block w-4 h-4 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
-                        "Computing alternatives..."
-                    }
+                div class="flex items-center gap-2 py-4 text-slate-400 text-sm" {
+                    div class="inline-block w-4 h-4 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
+                    "Generating..."
                 }
             }
         }
