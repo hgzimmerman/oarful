@@ -409,7 +409,7 @@ impl SolverConfig {
             pair_affinity_weight: 4,
             seat_affinity_weight: 5,
             side_preference_weight: 2,
-            weight_class_slack_weight: 1,
+            weight_class_slack_weight: 3,
             cox_cooldown_penalty: 5,
             placement_reward_weight: 4,
             pair_strength_weight: 1,
