@@ -179,14 +179,22 @@ pub(crate) async fn save_profile_handler(
         None,
     );
 
-    // Redirect back to the referring page (the solve page).
+    // Tell HTMX to do a full page redirect back to the referring page.
+    // HX-Redirect causes a real navigation (not a swap), which also
+    // clears the modal backdrop.
     let referer = headers
         .get(axum::http::header::REFERER)
         .and_then(|v| v.to_str().ok())
         .and_then(|s| url::Url::parse(s).ok())
         .map(|u| u.path().to_string())
         .unwrap_or_else(|| "/practices".to_string());
-    Ok(Redirect::to(&referer))
+    Ok((
+        [(
+            axum::http::header::HeaderName::from_static("hx-redirect"),
+            axum::http::header::HeaderValue::from_str(&referer).unwrap(),
+        )],
+        StatusCode::OK,
+    ))
 }
 
 /// `GET /solver-profile/edit` — return the profile editor modal as an
