@@ -29,6 +29,9 @@ pub(crate) struct Claims {
     exp: u64,
     /// Issued at (Unix timestamp).
     iat: u64,
+    /// True for global admin tokens (no tenant context).
+    #[serde(default)]
+    is_superuser: bool,
 }
 
 impl Claims {
@@ -49,6 +52,7 @@ impl Claims {
             active_team_id: active_team_id.as_int(),
             exp: now + TOKEN_LIFETIME_SECS,
             iat: now,
+            is_superuser: false,
         }
     }
 
@@ -66,6 +70,26 @@ impl Claims {
 
     pub(crate) fn role(&self) -> Option<Role> {
         Role::from_str(&self.role)
+    }
+
+    pub(crate) fn is_superuser(&self) -> bool {
+        self.is_superuser
+    }
+
+    fn new_superuser(lifetime_secs: u64) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self {
+            sub: 0,
+            tenant_id: 0,
+            role: "Superuser".to_string(),
+            active_team_id: 0,
+            exp: now + lifetime_secs,
+            iat: now,
+            is_superuser: true,
+        }
     }
 }
 
@@ -109,6 +133,32 @@ impl JwtKeys {
     ) -> Result<String, jsonwebtoken::errors::Error> {
         let mut claims = Claims::new(user_id, tenant_id, role, active_team_id);
         claims.exp = exp;
+        jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
+    }
+
+    /// Issue a 24h superuser session token.
+    pub(crate) fn issue_superuser(&self) -> Result<String, jsonwebtoken::errors::Error> {
+        let claims = Claims::new_superuser(TOKEN_LIFETIME_SECS);
+        jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
+    }
+
+    /// Issue a short-lived (10 min) superuser token for magic link URLs.
+    pub(crate) fn issue_superuser_magic_token(
+        &self,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let claims = Claims::new_superuser(600);
+        jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
+    }
+
+    /// Issue a superuser impersonation token for a specific tenant.
+    pub(crate) fn issue_superuser_impersonation(
+        &self,
+        user_id: UserId,
+        tenant_id: TenantId,
+        active_team_id: TeamId,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        let mut claims = Claims::new(user_id, tenant_id, Role::ProgramDirector, active_team_id);
+        claims.is_superuser = true;
         jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
     }
 

@@ -18,6 +18,7 @@ pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;
 pub(crate) mod solve;
+pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod teams;
 pub(crate) mod users;

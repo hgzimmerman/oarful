@@ -10,7 +10,7 @@ use maud::{html, Markup, DOCTYPE};
 
 use lineup_db::app_user::Role;
 
-pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
+pub(crate) fn page(title: &str, content: Markup, role: Option<Role>, is_superuser: bool) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -50,6 +50,17 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 "# }
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
+                @if is_superuser {
+                    div class="bg-amber-500 text-white text-center text-sm py-1.5 px-4 no-print" {
+                        "Impersonating this tenant "
+                        form method="post" action="/su/exit" class="inline" {
+                            button type="submit"
+                                   class="underline font-semibold hover:text-amber-100 transition" {
+                                "Exit"
+                            }
+                        }
+                    }
+                }
                 (navbar(role))
                 main #content class="flex-grow" {
                     (content)

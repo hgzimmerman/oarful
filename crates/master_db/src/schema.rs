@@ -13,12 +13,3 @@ diesel::table! {
         trial_expires_at -> Nullable<Timestamp>,
     }
 }
-
-diesel::table! {
-    superuser (id) {
-        id -> Integer,
-        email -> Text,
-        password_hash -> Text,
-        created_at -> Timestamp,
-    }
-}

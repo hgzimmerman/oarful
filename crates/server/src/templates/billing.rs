@@ -57,5 +57,6 @@ pub(crate) fn suspended_page(tenant_name: &str, config: &TenantConfig) -> Markup
             }
         },
         None, // no role → minimal navbar
+        false,
     )
 }

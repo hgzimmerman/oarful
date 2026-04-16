@@ -29,6 +29,7 @@ pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;
 pub(crate) mod solve;
+pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod team_hub;
 pub(crate) mod teams;
@@ -54,11 +55,24 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(users::accept_page).post(users::accept_handler),
         )
         .route("/auth/magic/{slug}/{token}", get(auth::magic_link_handler))
+        .route("/auth/su/{token}", get(auth::superuser_magic_link_handler))
         .route("/demo", post(demo::create_demo_handler))
         .route(
             "/demo/resume",
             get(demo::resume_demo_handler).post(demo::resume_demo_handler),
         )
+        .with_state(state.clone());
+
+    // Superuser routes — require superuser JWT (no tenant context).
+    let su_routes = Router::new()
+        .route("/su", get(superuser::index_handler))
+        .route("/su/billing/{id}", post(superuser::billing_handler))
+        .route("/su/impersonate/{id}", post(superuser::impersonate_handler))
+        .route("/su/exit", post(superuser::exit_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            superuser::require_superuser,
+        ))
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.
@@ -251,7 +265,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         ))
         .with_state(state);
 
-    public.merge(protected)
+    public.merge(su_routes).merge(protected)
 }
 
 /// `GET /` — landing page for unauthenticated users, redirect for
@@ -278,7 +292,15 @@ pub(crate) fn maybe_page_authed(
     if is_htmx {
         Html(content.into_string())
     } else {
-        Html(templates::layout::page(title, content, tenant.claims.role()).into_string())
+        Html(
+            templates::layout::page(
+                title,
+                content,
+                tenant.claims.role(),
+                tenant.claims.is_superuser(),
+            )
+            .into_string(),
+        )
     }
 }
 

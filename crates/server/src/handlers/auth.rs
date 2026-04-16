@@ -60,19 +60,40 @@ pub(crate) struct EmailStepInput {
 /// `POST /login/email` — validate the email was provided, render the
 /// password page. Always renders step 2 regardless of whether the
 /// email exists (to avoid leaking account existence).
+///
+/// If the email matches `SUPERUSER_EMAIL`, skip the password step
+/// and send a magic link directly.
 pub(crate) async fn email_step_handler(
+    State(state): State<AppState>,
     jar: CookieJar,
     Form(input): Form<EmailStepInput>,
-) -> Html<String> {
+) -> axum::response::Response {
     let email = input.email.trim().to_lowercase();
     if email.is_empty() {
         return Html(
             templates::auth::login_email_step(Some("Email is required."), None, false)
                 .into_string(),
-        );
+        )
+        .into_response();
     }
+
+    // Superuser: magic link only, no password step.
+    if state.is_superuser_email(&email) {
+        let token = state
+            .jwt_keys
+            .issue_superuser_magic_token()
+            .unwrap_or_default();
+        let url = state.full_url(&format!("/auth/su/{token}"));
+        let clubs = vec![("Oarful Admin".to_string(), url)];
+        if let Err(e) = state.mailer.send_magic_login(&email, "Admin", &clubs).await {
+            tracing::warn!(?e, "failed to send superuser magic link");
+        }
+        return Html(templates::auth::login_magic_sent(&email).into_string()).into_response();
+    }
+
     let show_magic = jar.get(KNOWN_USER_COOKIE).is_some();
     Html(templates::auth::login_password_step(&email, None, show_magic).into_string())
+        .into_response()
 }
 
 // =====================================================================
@@ -542,6 +563,39 @@ pub(crate) async fn magic_link_handler(
 
     let jar = jar.add(jwt_cookie).add(known_cookie);
     Ok((jar, Redirect::to(&redirect_path)).into_response())
+}
+
+// =====================================================================
+// Superuser magic link landing
+// =====================================================================
+
+/// `GET /auth/su/{token}` — verify the short-lived superuser JWT
+/// embedded in the magic link, issue a full session JWT, redirect
+/// to the admin panel.
+#[tracing::instrument(level = "info", skip_all)]
+pub(crate) async fn superuser_magic_link_handler(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(token): Path<String>,
+) -> impl IntoResponse {
+    let claims = match state.jwt_keys.verify(&token) {
+        Ok(c) if c.is_superuser() => c,
+        _ => return (jar, Redirect::to("/login")).into_response(),
+    };
+    drop(claims);
+
+    // Issue a full 24h superuser session token.
+    let jwt = match state.jwt_keys.issue_superuser() {
+        Ok(t) => t,
+        Err(_) => return (jar, Redirect::to("/login")).into_response(),
+    };
+
+    let jwt_cookie = axum_extra::extract::cookie::Cookie::build((TOKEN_COOKIE, jwt))
+        .path("/")
+        .http_only(true)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
+    let jar = jar.add(jwt_cookie);
+    (jar, Redirect::to("/su")).into_response()
 }
 
 // =====================================================================

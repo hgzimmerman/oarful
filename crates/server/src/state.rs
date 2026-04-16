@@ -38,6 +38,8 @@ pub(crate) struct AppState {
     /// Base directory for tenant SQLite files. Default tenant lives at
     /// `{data_dir}/default.db`, demos at `{data_dir}/demos/{slug}.db`.
     pub(crate) data_dir: String,
+    /// Email address of the global superuser (from `SUPERUSER_EMAIL`).
+    pub(crate) superuser_email: Option<String>,
 }
 
 // ── Sub-states extractable via FromRef ──────────────────────────
@@ -260,6 +262,14 @@ impl AppState {
             tracing::info!("ORIGIN not set — invite URLs will be relative paths");
         }
 
+        let superuser_email = std::env::var("SUPERUSER_EMAIL")
+            .ok()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty());
+        if let Some(ref email) = superuser_email {
+            tracing::info!(%email, "superuser configured");
+        }
+
         Ok(Self {
             master_db,
             tenant_cache,
@@ -270,6 +280,7 @@ impl AppState {
             mailer,
             origin,
             data_dir: data_dir.to_string(),
+            superuser_email,
         })
     }
 
@@ -306,6 +317,10 @@ impl AppState {
 
     pub(crate) fn full_url(&self, path: &str) -> String {
         MailerCtx::from_ref(self).full_url(path)
+    }
+
+    pub(crate) fn is_superuser_email(&self, email: &str) -> bool {
+        self.superuser_email.as_ref().is_some_and(|su| su == email)
     }
 }
 
