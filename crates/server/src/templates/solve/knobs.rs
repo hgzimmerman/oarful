@@ -56,7 +56,7 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                 div class="px-6 pb-6 border-t border-slate-100 pt-4" {
             form method="get" action=(action)
                  hx-get=(action)
-                 hx-target="#content"
+                 hx-target="#solve-results"
                  hx-push-url="true"
                  hx-indicator="#solve-spinner" {
 

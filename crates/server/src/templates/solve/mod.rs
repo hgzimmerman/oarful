@@ -262,14 +262,16 @@ pub(crate) fn landing_content(
             div class="no-print" {
                 (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
             }
-            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
+            div #solve-results {
+                (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
+            }
         }
     }
 }
 
-/// Streaming skeleton: returned when generate=1. Contains the knobs
-/// form (collapsed) and SSE connection divs that stream solver results.
-pub(crate) fn streaming_skeleton(
+/// Full page with streaming skeleton — used for direct browser navigation
+/// to `/solve/{id}?generate=1`.
+pub(crate) fn streaming_page(
     snapshot: &DbSnapshot,
     practice_id: PracticeId,
     date: NaiveDate,
@@ -283,48 +285,56 @@ pub(crate) fn streaming_skeleton(
         boats = snapshot.boats.len(),
     );
 
-    // Build the SSE URL with the same knobs query params.
-    let sse_url = format!(
-        "/solve/{practice_id}/stream?{}",
-        serde_html_form::to_string(knobs).unwrap_or_default()
-    );
-
     html! {
         (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
             div class="no-print" {
                 (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
             }
+            div #solve-results {
+                (streaming_skeleton(practice_id, knobs))
+            }
+        }
+    }
+}
 
-            // SSE connection: streams primary result + alternatives.
-            div hx-ext="sse"
-                sse-connect=(sse_url)
-                sse-close="done" {
+/// Streaming skeleton: swapped into `#solve-results` when generate=1.
+/// Contains the SSE connection that streams solver results.
+pub(crate) fn streaming_skeleton(
+    practice_id: PracticeId,
+    knobs: &SolveKnobs,
+) -> Markup {
+    let sse_url = format!(
+        "/solve/{practice_id}/stream?{}",
+        serde_html_form::to_string(knobs).unwrap_or_default()
+    );
 
-                // Primary result placeholder — replaced by the primary event.
-                div sse-swap="primary"
-                    hx-swap="innerHTML"
-                    hx-disinherit="hx-ext" {
-                    div class="flex items-center justify-center py-12 text-slate-500" {
-                        div class="text-center space-y-2" {
-                            div class="inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" {}
-                            div class="text-sm" { "Generating lineup..." }
-                        }
+    html! {
+        div hx-ext="sse"
+            sse-connect=(sse_url)
+            sse-close="done" {
+
+            // Primary result placeholder — replaced by the primary event.
+            div sse-swap="primary"
+                hx-swap="innerHTML"
+                hx-disinherit="hx-ext" {
+                div class="flex items-center justify-center py-12 text-slate-500" {
+                    div class="text-center space-y-2" {
+                        div class="inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" {}
+                        div class="text-sm" { "Generating lineup..." }
                     }
                 }
-
-                // Error placeholder — shown if primary fails.
-                div sse-swap="error"
-                    hx-swap="innerHTML" {}
-
-                // Alternatives container — each alternative is appended.
-                // hx-disinherit prevents the SSE extension from
-                // interfering with hx-get links inside alternatives.
-                div sse-swap="alternative"
-                    hx-swap="beforeend"
-                    hx-disinherit="hx-ext"
-                    class="space-y-4" {}
             }
+
+            // Error placeholder — shown if primary fails.
+            div sse-swap="error"
+                hx-swap="innerHTML" {}
+
+            // Alternatives container — each alternative is appended.
+            div sse-swap="alternative"
+                hx-swap="beforeend"
+                hx-disinherit="hx-ext"
+                class="space-y-4" {}
         }
     }
 }

@@ -64,12 +64,17 @@ pub(crate) async fn view_handler(
     // both the editor pool and the solver.
     apply_no_shows(&mut snapshot, &knobs);
 
-    // When generate=1, return a streaming skeleton that opens an SSE
-    // connection to /solve/{id}/stream. The solver runs asynchronously
-    // and pushes results as SSE events.
+    // When generate=1, return the streaming skeleton. For HTMX
+    // requests (form submit), swap just #solve-results. For direct
+    // navigation (browser URL), wrap in the full page with knobs.
     if knobs.generate > 0 {
-        let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
-        let content = templates::solve::streaming_skeleton(
+        let skeleton = templates::solve::streaming_skeleton(practice_id, &knobs);
+        if hx.0 {
+            return Ok(Html(skeleton.into_string()));
+        }
+        let profile_names: Vec<(String, Option<String>)> = custom_profiles
+            .iter().map(|p| (p.name.clone(), p.description.clone())).collect();
+        let content = templates::solve::streaming_page(
             &snapshot, practice_id, date, &knobs, &committed_practices, &profile_names,
         );
         return Ok(crate::handlers::maybe_page_authed(
