@@ -6,7 +6,7 @@ use maud::{html, Markup};
 
 use maud::PreEscaped;
 
-use super::layout::{empty_state, page_header};
+use super::layout::{empty_state, page_header, TabDef, tab_swap, tabbed_section};
 
 /// Recipient info for the reminder preview modal.
 pub(crate) struct ReminderRecipientPreview {
@@ -28,6 +28,12 @@ pub(crate) struct PracticeRow {
     pub(crate) already_sent_today: bool,
 }
 
+const PRACTICES_TABS: &[TabDef] = &[
+    TabDef { label: "Planning", url: "/practices/planning", id: "planning" },
+    TabDef { label: "Committed", url: "/practices/committed", id: "committed" },
+];
+const PRACTICES_TARGET: &str = "practices-tab-content";
+
 /// Full tabbed page wrapper. `active_tab` is "planning" or "committed".
 /// `tab_content` is the pre-rendered content for the active tab.
 pub(crate) fn tabbed_page(
@@ -38,34 +44,14 @@ pub(crate) fn tabbed_page(
     html! {
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            // Tab bar — both tabs visible to all roles
-            div class="flex gap-1 border-b border-slate-200 mb-4" {
-                (tab_button("Planning", "/practices/planning", "planning", active_tab))
-                (tab_button("Committed", "/practices/committed", "committed", active_tab))
-            }
-            // Tab content
-            div id="practices-tab-content" {
-                (tab_content)
-            }
+            (tabbed_section(PRACTICES_TABS, active_tab, PRACTICES_TARGET, tab_content))
         }
     }
 }
 
-fn tab_button(label: &str, url: &str, tab_id: &str, active: &str) -> Markup {
-    let is_active = tab_id == active;
-    let base = "px-4 py-2 text-sm font-medium border-b-2 transition cursor-pointer";
-    let classes = if is_active {
-        format!("{base} border-slate-800 text-slate-800")
-    } else {
-        format!("{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")
-    };
-    html! {
-        button hx-get=(url)
-               hx-target="#practices-tab-content"
-               class=(classes) {
-            (label)
-        }
-    }
+/// HTMX partial: tab content + OOB tab bar swap.
+pub(crate) fn tab_content_swap(active_tab: &str, content: Markup) -> Markup {
+    tab_swap(PRACTICES_TABS, active_tab, PRACTICES_TARGET, content)
 }
 
 // =====================================================================

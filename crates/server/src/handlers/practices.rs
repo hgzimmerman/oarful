@@ -67,7 +67,9 @@ pub(crate) async fn planning_handler(
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, StatusCode> {
     let content = planning_tab_content(&jar, &tenant).await?;
-    Ok(Html(content.into_string()))
+    Ok(Html(
+        templates::practices::tab_content_swap("planning", content).into_string(),
+    ))
 }
 
 async fn planning_tab_content(
@@ -261,7 +263,9 @@ pub(crate) async fn committed_handler(
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, StatusCode> {
     let content = committed_tab_content(&jar, &tenant).await?;
-    Ok(Html(content.into_string()))
+    Ok(Html(
+        templates::practices::tab_content_swap("committed", content).into_string(),
+    ))
 }
 
 async fn committed_tab_content(
