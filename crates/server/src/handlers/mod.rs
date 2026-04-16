@@ -88,6 +88,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/admin/fleet/boats", get(admin::fleet_boats_handler))
         .route("/admin/fleet/defaults", get(admin::fleet_defaults_handler).post(teams::fleet_matrix_save_handler))
         .route("/admin/audit", get(admin::audit_handler))
+        .route("/admin/settings", get(admin::settings_handler).post(admin::settings_update_handler))
         .route("/admin/export", get(admin::export_handler))
         .route("/admin/restore", get(admin::restore_form_handler).post(admin::restore_handler))
         .route("/admin/restore/confirm", post(admin::restore_confirm_handler))

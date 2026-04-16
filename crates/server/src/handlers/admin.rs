@@ -22,6 +22,7 @@ const TABS: &[TabDef] = &[
     TabDef { label: "Roster", url: "/admin/roster", id: "roster" },
     TabDef { label: "Fleet", url: "/admin/fleet", id: "fleet" },
     TabDef { label: "Audit", url: "/admin/audit", id: "audit" },
+    TabDef { label: "Settings", url: "/admin/settings", id: "settings" },
 ];
 const TARGET: &str = "admin-tab-content";
 
@@ -183,6 +184,158 @@ pub(crate) async fn audit_handler(
     }
     let page = tabbed_section(TABS, "audit", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+/// `GET /admin/settings` — tenant-level configuration.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn settings_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
+) -> Result<Html<String>, ErrorResponse> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let tab_content = settings_content(&state, &tenant).await?;
+
+    if is_tab_swap(&headers) {
+        return Ok(Html(tab_swap(TABS, "settings", TARGET, tab_content).into_string()));
+    }
+    let page = tabbed_section(TABS, "settings", TARGET, tab_content);
+    Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+async fn settings_content(
+    state: &AppState,
+    tenant: &TenantContext,
+) -> Result<maud::Markup, ErrorResponse> {
+    let tenant_id = tenant.tenant_id;
+    let t = state
+        .master_db
+        .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
+        .await
+        .map_err(internal_error)?
+        .ok_or_else(|| not_found("Tenant not found."))?;
+
+    Ok(html! {
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
+            h2 class="text-lg font-bold text-slate-800 mb-4" { "Tenant settings" }
+            form method="post" action="/admin/settings"
+                 hx-post="/admin/settings"
+                 hx-target={"#" (TARGET)}
+                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                div {
+                    label class="flex items-center gap-3 cursor-pointer" {
+                        input type="checkbox" name="attributes_public" value="1"
+                              checked[t.are_attributes_public()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        div {
+                            div class="text-sm font-medium text-slate-800" {
+                                "Public rower attributes"
+                            }
+                            p class="text-xs text-slate-500" {
+                                "Show weight class, form, and strength to all members. When off, only Coach+ can see them."
+                            }
+                        }
+                    }
+                }
+                div {
+                    label class="flex items-center gap-3 cursor-pointer" {
+                        input type="checkbox" name="emails_visible" value="1"
+                              checked[t.are_emails_visible()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        div {
+                            div class="text-sm font-medium text-slate-800" {
+                                "Visible email addresses"
+                            }
+                            p class="text-xs text-slate-500" {
+                                "Show rower emails on the roster and detail pages. When off, only Coach+ can see them."
+                            }
+                        }
+                    }
+                }
+                div {
+                    label class="flex items-center gap-3 cursor-pointer" {
+                        input type="checkbox" name="force_cox_stern" value="1"
+                              checked[t.force_cox_stern()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        div {
+                            div class="text-sm font-medium text-slate-800" {
+                                "Force cox at stern"
+                            }
+                            p class="text-xs text-slate-500" {
+                                "Always display the coxswain at the top of lineup cards, regardless of per-boat bow/stern setting."
+                            }
+                        }
+                    }
+                }
+                button type="submit"
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                    "Save"
+                }
+            }
+        }
+    })
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct SettingsInput {
+    #[serde(default)]
+    attributes_public: Option<String>,
+    #[serde(default)]
+    emails_visible: Option<String>,
+    #[serde(default)]
+    force_cox_stern: Option<String>,
+}
+
+/// `POST /admin/settings` — update tenant-level flags.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn settings_update_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+    Form(input): Form<SettingsInput>,
+) -> Result<Html<String>, ErrorResponse> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let tenant_id = tenant.tenant_id;
+    let attrs = if input.attributes_public.is_some() { 1 } else { 0 };
+    let emails = if input.emails_visible.is_some() { 1 } else { 0 };
+    let cox = if input.force_cox_stern.is_some() { 1 } else { 0 };
+
+    state
+        .master_db
+        .with_conn(move |conn| {
+            use diesel::prelude::*;
+            use lineup_master_db::schema::tenant as t;
+            diesel::update(t::table.find(tenant_id))
+                .set((
+                    t::attributes_public.eq(attrs),
+                    t::emails_visible.eq(emails),
+                    t::force_cox_stern.eq(cox),
+                ))
+                .execute(conn)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Bust the cached config so changes take effect immediately.
+    state.evict_tenant(tenant.tenant_id);
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "tenant.settings.update",
+        "tenant",
+        &tenant_id.to_string(),
+        Some(serde_json::json!({
+            "attributes_public": attrs,
+            "emails_visible": emails,
+            "force_cox_stern": cox,
+        }).to_string()),
+    );
+
+    // Re-load and re-render with fresh config.
+    let tab_content = settings_content(&state, &tenant).await?;
+    Ok(Html(tab_swap(TABS, "settings", TARGET, tab_content).into_string()))
 }
 
 fn is_tab_swap(headers: &HeaderMap) -> bool {
