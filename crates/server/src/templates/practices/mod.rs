@@ -1,23 +1,20 @@
-//! Practices dashboard template — tabbed view: Planning, Committed.
+//! Practices dashboard templates: Planning tab, Committed tab, shared types.
+//!
+//! Email preview modals live in submodules:
+//! - [`reminder_modal`] — reminder preview + confirm
+//! - [`lineup_modal`] — lineup preview + confirm
+
+mod lineup_modal;
+mod reminder_modal;
+
+pub(crate) use lineup_modal::{lineup_preview_modal, LineupRecipientPreview};
+pub(crate) use reminder_modal::{reminder_preview_modal, ReminderRecipientPreview};
 
 use chrono::NaiveDate;
 use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
-use maud::PreEscaped;
-
 use super::layout::{empty_state, page_header, TabDef, tab_swap, tabbed_section};
-
-/// Recipient info for the reminder preview modal.
-pub(crate) struct ReminderRecipientPreview {
-    pub(crate) name: String,
-    pub(crate) dates: Vec<NaiveDate>,
-}
-
-/// Recipient info for the lineup preview modal.
-pub(crate) struct LineupRecipientPreview {
-    pub(crate) name: String,
-}
 
 /// Per-row summary used by both the Planning and Committed tabs.
 pub(crate) struct PracticeRow {
@@ -39,8 +36,7 @@ const PRACTICES_TABS: &[TabDef] = &[
 ];
 const PRACTICES_TARGET: &str = "practices-tab-content";
 
-/// Full tabbed page wrapper. `active_tab` is "planning" or "committed".
-/// `tab_content` is the pre-rendered content for the active tab.
+/// Full tabbed page wrapper.
 pub(crate) fn tabbed_page(
     active_tab: &str,
     tab_content: Markup,
@@ -59,9 +55,23 @@ pub(crate) fn tab_content_swap(active_tab: &str, content: Markup) -> Markup {
     tab_swap(PRACTICES_TABS, active_tab, PRACTICES_TARGET, content)
 }
 
-// =====================================================================
-// Planning tab
-// =====================================================================
+/// Result message after sending emails.
+pub(crate) fn send_result(message: &str) -> Markup {
+    html! {
+        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm" {
+            (message)
+        }
+    }
+}
+
+/// Warning/error message (amber instead of green).
+pub(crate) fn send_warning(message: &str) -> Markup {
+    html! {
+        div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-6 py-4 text-sm" {
+            (message)
+        }
+    }
+}
 
 pub(crate) fn planning_content(
     rows: &[PracticeRow],
@@ -85,7 +95,6 @@ pub(crate) fn planning_content(
     let total_non_respondents: usize = rows.iter().map(|r| r.non_respondent_count).sum();
 
     html! {
-        // Add practice form (Coach+ only)
         @if is_coach {
             form method="post" action="/practices"
                  hx-post="/practices"
@@ -168,12 +177,10 @@ fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
         String::new()
     };
     let cancel_action = format!("/practices/{}/cancel", row.practice_id);
-
     let opacity = if row.cancelled { " opacity-40" } else { "" };
 
     html! {
         div class={"flex items-center px-6 py-3 hover:bg-slate-50 transition" (opacity)} {
-            // Checkbox for reminder selection (Coach+ only, non-cancelled with pending)
             @if is_coach && !row.cancelled && row.non_respondent_count > 0 {
                 input type="checkbox" name="practice_ids"
                       value=(row.practice_id)
@@ -181,10 +188,8 @@ fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
                       "@change"="checked += $el.checked ? 1 : -1"
                       class="rounded border-slate-300 text-slate-800 focus:ring-slate-500 mr-3 shrink-0";
             } @else if is_coach {
-                // Spacer to keep alignment when some rows have checkboxes
                 div class="w-4 mr-3 shrink-0" {}
             }
-            // Clickable row content
             @if !href.is_empty() {
                 a href=(href)
                   class="flex items-center justify-between flex-1 cursor-pointer"
@@ -264,10 +269,6 @@ fn planning_row_inner(row: &PracticeRow, weekday: &str, is_coach: bool, cancel_a
     }
 }
 
-// =====================================================================
-// Committed tab
-// =====================================================================
-
 pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
     if rows.is_empty() {
         return html! {
@@ -340,211 +341,6 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
                     }
                 }
             }
-        }
-    }
-}
-
-// =====================================================================
-// Reminder preview modal
-// =====================================================================
-
-const CLOSE_MODAL_JS: &str = "document.getElementById('reminder-modal').remove(); document.getElementById('reminder-modal-backdrop').remove()";
-
-pub(crate) fn reminder_preview_modal(
-    recipients: &[ReminderRecipientPreview],
-    practice_ids: &[i32],
-) -> Markup {
-    let unique_count = recipients.len();
-    let practice_count: usize = {
-        let mut dates: Vec<&NaiveDate> = recipients.iter().flat_map(|r| r.dates.iter()).collect();
-        dates.sort();
-        dates.dedup();
-        dates.len()
-    };
-
-    html! {
-        // Backdrop
-        div id="reminder-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
-            onclick=(CLOSE_MODAL_JS) {}
-        // Modal
-        div id="reminder-modal"
-            class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
-                // Header
-                div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between" {
-                    h2 class="text-lg font-bold text-slate-800" { "Send reminders" }
-                    button type="button"
-                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
-                           onclick=(CLOSE_MODAL_JS) {
-                        "\u{00d7}"
-                    }
-                }
-                // Body
-                div class="px-6 py-4" {
-                    @if recipients.is_empty() {
-                        p class="text-sm text-slate-500 italic" {
-                            "No reminders to send — everyone has responded or reminders were already sent today."
-                        }
-                    } @else {
-                        p class="text-sm text-slate-600 mb-3" {
-                            "Will email " strong { (unique_count) }
-                            " rower(s) about "
-                            strong { (practice_count) }
-                            " practice(s):"
-                        }
-                        div class="space-y-1 mb-4 max-h-60 overflow-y-auto" {
-                            @for r in recipients {
-                                div class="flex items-center justify-between text-sm py-1" {
-                                    span class="text-slate-800" { (r.name) }
-                                    span class="text-xs text-slate-400" {
-                                        @for (i, d) in r.dates.iter().enumerate() {
-                                            @if i > 0 { ", " }
-                                            (d.format("%b %-d"))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // Footer
-                @if !recipients.is_empty() {
-                    div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-end" {
-                        form method="post" action="/practices/send-reminders"
-                             hx-post="/practices/send-reminders"
-                             hx-target="#practices-tab-content"
-                             onclick=(PreEscaped(CLOSE_MODAL_JS)) {
-                            @for id in practice_ids {
-                                input type="hidden" name="practice_ids" value=(id);
-                            }
-                            button type="submit"
-                                   class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                                "Send " (unique_count) " reminder(s)"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// =====================================================================
-// Lineup preview modal
-// =====================================================================
-
-const CLOSE_LINEUP_MODAL_JS: &str = "document.getElementById('lineup-modal').remove(); document.getElementById('lineup-modal-backdrop').remove()";
-
-pub(crate) fn lineup_preview_modal(
-    recipients: &[LineupRecipientPreview],
-    date_strs: &[String],
-    scope: &str,
-) -> Markup {
-    let unique_count = recipients.len();
-    let date_count = date_strs.len();
-
-    html! {
-        // Backdrop
-        div id="lineup-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
-            onclick=(CLOSE_LINEUP_MODAL_JS) {}
-        // Modal
-        div id="lineup-modal"
-            class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
-                // Header
-                div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between" {
-                    h2 class="text-lg font-bold text-slate-800" { "Send lineups" }
-                    button type="button"
-                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
-                           onclick=(CLOSE_LINEUP_MODAL_JS) {
-                        "\u{00d7}"
-                    }
-                }
-                // Body
-                div class="px-6 py-4" {
-                    @if date_strs.is_empty() {
-                        p class="text-sm text-slate-500 italic" {
-                            "No practices selected — check at least one to send lineups."
-                        }
-                    } @else if recipients.is_empty() {
-                        p class="text-sm text-slate-500 italic" {
-                            "No recipients — lineups may have already been sent today, or no rowers have accounts with lineup notifications enabled."
-                        }
-                    } @else {
-                        p class="text-sm text-slate-600 mb-3" {
-                            "Will email " strong { (unique_count) }
-                            " rower(s) about "
-                            strong { (date_count) }
-                            " lineup(s):"
-                        }
-                        div class="space-y-1 mb-4 max-h-60 overflow-y-auto" {
-                            @for r in recipients {
-                                div class="text-sm py-1 text-slate-800" { (r.name) }
-                            }
-                        }
-                    }
-                }
-                // Footer with scope + confirm
-                @if !date_strs.is_empty() && !recipients.is_empty() {
-                    div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4" {
-                        form method="post" action="/practices/send-lineups"
-                             hx-post="/practices/send-lineups"
-                             hx-target="#practices-tab-content"
-                             onclick=(PreEscaped(CLOSE_LINEUP_MODAL_JS)) {
-                            @for d in date_strs {
-                                input type="hidden" name="dates" value=(d);
-                            }
-
-                            // Scope radios
-                            div class="flex items-center gap-4 mb-3" {
-                                label class="flex items-center gap-2 text-sm cursor-pointer" {
-                                    input type="radio" name="scope" value="placed"
-                                          checked[scope == "placed"]
-                                          class="text-slate-800 focus:ring-slate-500";
-                                    "Placed + bench"
-                                }
-                                label class="flex items-center gap-2 text-sm cursor-pointer" {
-                                    input type="radio" name="scope" value="all"
-                                          checked[scope == "all"]
-                                          class="text-slate-800 focus:ring-slate-500";
-                                    "All (incl. non-respondents)"
-                                }
-                            }
-
-                            div class="flex justify-end" {
-                                button type="submit"
-                                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                                    "Send " (unique_count) " lineup(s)"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// =====================================================================
-// Shared
-// =====================================================================
-
-/// Result message after sending emails.
-pub(crate) fn send_result(message: &str) -> Markup {
-    html! {
-        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm" {
-            (message)
-        }
-    }
-}
-
-/// Warning/error message (amber instead of green).
-pub(crate) fn send_warning(message: &str) -> Markup {
-    html! {
-        div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-6 py-4 text-sm" {
-            (message)
         }
     }
 }
