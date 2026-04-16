@@ -1,6 +1,6 @@
 # lineup_generator — open TODOs
 
-A snapshot of the work backlog as of 2026-04-15. Captures the design
+A snapshot of the work backlog as of 2026-04-16. Captures the design
 intent behind each pending task so the next session (human or agent)
 can resume without re-deriving context.
 
@@ -30,6 +30,8 @@ can resume without re-deriving context.
 - **#62** Manual rower swap on solve view (Alpine.js click-to-swap,
   direct commit endpoint `POST /commit-lineup/{date}`, bench/sculling
   swap targets)
+- **#63** Solver-side seat locks — `SeatLock` struct on `SolveRequest`,
+  UI lock/unlock icons, violet highlight, locks carried as query params.
 - **#64** Boat CRUD: list / add / edit / relinquish
 - **Role gating** completed per permission matrix (boats PD+, sync
   Coach+, rower edits Coach+, notes Coach+). Renamed `require_role`
@@ -60,131 +62,96 @@ can resume without re-deriving context.
   `cox_position` enum (Bow/Stern) + tenant-level `force_cox_stern`
   flag. Seats render stern→bow; bow-loaders show cox at the bottom.
 - **Show benched/sculling rowers on history detail** — re-derived from
-  snapshot by subtracting placed rowers from available. Displayed as
-  name lists below the committed lineup cards.
+  snapshot by subtracting placed rowers from available.
 - **Fix bench ↔ boat swaps + pull-to-bench** — rewrote Alpine doSwap
-  to use data attributes instead of innerHTML swap (fixes cross-DOM
-  corruption). Added "move to bench" action for pulling rowers out
-  of seats. Empty seats render as clickable placeholders.
+  to use data attributes instead of innerHTML swap.
 - **Practice scheduling UI** — date picker + "Create" button on
-  `/practices`. Coach+ role-gated. Created practices appear in the
-  list even before availability is synced.
+  `/practices`. Coach+ role-gated.
 - **Solver presets + custom profiles** — segmented control with four
-  built-in presets (Balanced, Even speed, Tiered, Random) plus
-  team-specific custom profiles stored in `solver_profile` table.
-  "Save as preset" endpoint persists the current config. Custom
-  profiles appear alongside built-ins in the selector (violet).
+  built-in presets plus team-specific custom profiles.
 - **Manual lineup builder** — boat selector + empty boat cards + rower
-  pool on the landing page. Coach can place rowers by hand, commit
-  directly, or click Generate to let the solver fill the rest
-  (placements become seat locks automatically).
+  pool on the landing page.
 - **Walk-on rower addition** — "+ Add walk-on" dropdown on the solve
-  landing page listing unavailable roster members. Selecting one adds
-  a transient availability override (no DB write). Walk-ons appear in
-  the available pool for both manual builder and solver. Carried as
-  `walkon` query params across re-solves.
+  landing page.
 - **Stale lineup detection** — history detail cross-references committed
-  seats against current availability. Warning banner + amber highlight
-  with "unavailable" badge on rowers whose status changed.
-- **#63 Solver-side seat locks** — `SeatLock` struct on `SolveRequest`,
-  posts `x[r,b,s]=1` + `use[b]=1` per lock. Invalid locks surfaced
-  as `Diagnostic::InvalidLock` and skipped. UI: lock/unlock icons per
-  seat row, violet highlight on locked seats, locks carried as query
-  params and hidden form inputs across re-solves.
+  seats against current availability. Warning banner + amber highlight.
 - **Bow-loader cox fit penalty (S14)** — penalises tall/heavy rowers
-  in bow-loader cox seats. Height: Tall +3, VeryTall +5. Weight:
-  Heavy +1. Stern-loaders unaffected. Configurable via
-  `bow_cox_fit_weight` in SolverConfig.
+  in bow-loader cox seats.
 - **Disambiguate rower attribute labels** — "Skill" renamed to "Form"
-  in UI labels. Weight class shows Lightweight/Middleweight/Heavyweight.
-  Compact stats line uses abbreviated labels (Lt/Md/Hv · Nov/Int/Mst/Exp
-  · Wk/Int/Str/V.Str · Side). DB enum values unchanged.
-- **Practice-driven availability** — `/my/availability` now shows
-  upcoming scheduled practices with inline status dropdowns.
-  Rowers see all practices and can respond per-date without needing
-  the free-form date picker (kept as fallback for ad-hoc dates).
-- **Coach email blast — all 4 phases shipped.** Magic links (SHA-256
-  hashed, tenant-scoped URLs `/auth/magic/{slug}/{token}`, optional
-  `team_id` for team context, dynamic JWT expiry). Email opt-out
-  (`opt_in_reminders`/`opt_in_lineups` on `app_user`, toggles at
-  `/my/email-preferences`). Maud HTML email templates for reminders
-  and lineup notifications. Practices page tabs (Schedule /
-  Reminders / Lineups sub-routes) with send handlers, `email_log`
-  rate limiting, confirmation, and recipient scope toggle.
-- **Club picker (multi-tenant login)** — two-step login (email →
-  password). When email matches multiple tenants, password is
-  verified first, then a club picker page shows tenant name + role.
-  `POST /login/pick` re-verifies and completes login.
-- **Magic-link sign-in** — "Email me a sign-in link" button on the
-  password step, shown only for returning users (long-lived
-  `known_user` cookie, 1-year). Multi-tenant: one email with a
-  "Sign in to [Club]" button per matching tenant. Always shows
-  "link sent" regardless of email existence (no enumeration leak).
+  in UI labels.
+- **Practice-driven availability** — `/my/availability` shows upcoming
+  scheduled practices with inline status dropdowns.
+- **Coach email blast** — all 4 phases shipped. Magic links, email
+  opt-out, HTML email templates, practices page tabs with send UI.
+- **Club picker (multi-tenant login)** — two-step login with club
+  picker for multi-tenant users.
+- **Magic-link sign-in** — "Email me a sign-in link" for returning
+  users.
 - **Zone-based seat affinities** — replaced absolute seat positions
-  with zone-based system (SeatZone). S11/S12 constraints generalized
-  to all boat sizes. Tiered preset weights tuned.
+  with zone-based system (SeatZone).
 - **Audit log** — `audit_log` table with fire-and-forget writes,
   90-day retention cleanup, PD-only filterable viewer at `/audit`.
-  Instrumented across handlers: availability, lineups, rower edits,
-  role changes, invites, boat CRUD, practices, notes.
-- **Batch invite from roster** — "Send invites" button on roster
-  page (Coach+ gated) bulk-creates Member accounts + sends invite
-  emails for all rowers with email but no linked user. Toast feedback
-  with invited/skipped counts. Invite status badges on roster rows.
+- **Batch invite from roster** — Coach+ bulk-creates Member accounts
+  + sends invite emails.
 - **Email→app_user refactor** — moved email ownership from `rower` to
-  `app_user`, reversed FK direction (`app_user.rower_id` replaces
-  `rower.user_id`). Sheet sync now creates passwordless active users
-  alongside new rowers. Roster no longer shows Account status column
-  (redundant — every synced rower has an account). Disabled users
-  filtered from roster.
+  `app_user`, reversed FK direction.
 - **Sweep bias** — replaced boolean `can_scull` with `sweep_bias`
-  integer (-2..2) on rower. Simplified `AvailabilityStatus` to Yes/No
-  (removed Maybe, ScullingOnly). S13 retention reward scales linearly
-  with `abs(sweep_bias)+1`. New sweep-bias alignment penalty steers
-  rowers toward preferred boat type.
-- **Scull boat support in solver** — solver now places rowers in both
-  sweep and scull boats in a single pass. `Boat::seat_side()` returns
-  None for scull boats (no side distinction). Eligibility gate: hard
-  sweepers blocked from scull boats and vice versa. S11/S12 (skill on
-  ends, strength in middle) apply to scull boats automatically.
+  integer (-2..2) on rower.
+- **Scull boat support in solver** — solver places rowers in both
+  sweep and scull boats in a single pass.
 - **Sync row filter** — `RowFilter` enum (All/Sweep/Sculling) on sync
-  source config. Two teams can share the same spreadsheet with
-  different filters. Row filter dropdown on sync form, mandatory with
-  no default (prevents accidental full imports).
+  source config.
 - **Practice duration + cross-team overlap detection** —
-  `default_practice_duration_minutes` on team,
-  `duration_minutes` on practice (per-practice override).
-  `Practice::find_overlapping()` finds concurrent practices across
-  teams using time-window intersection. Practice create form shows
-  start/end time inputs. Schedule list shows time windows.
+  `default_practice_duration_minutes` on team, `duration_minutes` on
+  practice, `Practice::find_overlapping()`.
 - **Cross-team coordination in editor** — "Available from other teams"
-  section shows benched rowers from overlapping practices. Boat pills
-  and cards show "In use by {Team}" warnings when another team has
-  committed a lineup with that boat for a concurrent practice.
-- **Soft-delete rowers + archive teams** — rower `active` flag
-  togglable via PD-only endpoint. Deactivate/reactivate button on
-  rower detail page. Inactive rowers hidden from operational views,
-  preserved in history. Team `archived` flag with PD-only toggle.
-  Archived teams hidden from Coach/Member team switcher. Sheet sync
-  reactivates inactive rowers when they reappear.
-- **CLI commands** — `reset-tenant <slug>` (delete tenant DB + master
-  entry), `reset-all` (wipe everything), `seed` (create default
-  tenant with fleet-only fixture).
-- **Boat form UX** — stroke side (rig) input hidden for scull boat
-  types, cox position input hidden for coxless boat types. Fleet
-  defaults matrix shows all in-service boats (not just sweep).
+  section + boat-in-use warnings.
+- **Soft-delete rowers + archive teams** — rower `active` flag, team
+  `archived` flag, PD-only toggles.
+- **CLI commands** — `reset-tenant`, `reset-all`, `seed`.
+- **Boat form UX** — stroke side hidden for scull boats, cox position
+  hidden for coxless boats.
+- **Smart boat pill interactions** — boat-to-boat transfer with
+  rigging-aware seat mapping + bench overflow.
+- **Self-edit trust levels** — low/medium/high on team, PD toggle on
+  team detail page.
+- **Team management** — Team CRUD, roster view, admin roster matrix.
+- **Mobile-responsive pass** — grid collapses, touch targets, hamburger.
+- **#54** Print-friendly stylesheet.
+- **#55** Production static-asset path resolution.
+- **Practice datetime migration** — `time` + `duration_minutes` columns.
+- **Periodic sync polling** — background re-sync on schedule.
+- **Boat usage tracking** — usage stats from committed lineups, boat
+  detail page, fleet CSV export.
+- **Data export + backup/import** — PD-accessible SQLite download +
+  CLI import command + restore flow with credential checking.
+- **Demo mode** — ephemeral tenants, auto-login, 7-day expiry.
+- **Sync-created practices inherit team defaults** — time + duration
+  applied from team config when sync creates new practices.
+- **Default practice days** — `PracticeDays` bitmask on team, date
+  picker auto-suggests the next unfilled day.
+- **Styled confirmation modals** — replaced all native `confirm()`
+  with HTMX-driven styled modals (archive team, deactivate rower,
+  delete preset, restore backup).
+- **Reminder preview modal** — per-practice checkboxes on Planning
+  tab, preview modal lists recipients by name before sending.
+- **Lineup preview modal** — preview modal with recipient list and
+  scope selection (placed+bench / all) before sending lineup emails.
+- **Email visibility tenant config** — `emails_visible` on tenant,
+  roster Email column + detail page email, admin Settings tab.
+- **Admin Settings tab** — tenant-level toggles for attributes_public,
+  emails_visible, force_cox_stern.
+- **Global error toasts** — `ErrorResponse` struct with plain-text
+  messages, `htmx:beforeSwap` listener shows toasts for all non-2xx.
+- **Practices tab fixes** — shared `tab_swap` pattern for active state
+  + URL, full-page rendering on direct navigation.
+- **History page layout** — Edit/Cancel buttons in header bar.
+- **Single-seat zone affinity boost** — Stroke/Bow zones get 2×
+  weight to prevent soft constraint outbidding.
 
 ## Open work
 
 ### Coach features
-
-#### ~~Smart boat pill interactions~~ (shipped)
-
-Boat-to-boat transfer via "Transfer" button in boat card header.
-Server-side seat mapping: stroke→stroke, bow→bow, cox→cox,
-rigging-aware pair swap, size mismatch → bench overflow.
-Live→live bidirectional swap keeps both boats active.
-Boat pills toggle on/off or serve as transfer targets.
 
 #### Stale lineup notification — coach-facing
 
@@ -203,151 +170,12 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### ~~Batch invite from roster~~ (shipped)
-
-"Send invites (N)" button on roster page, Coach+ gated. Creates
-Member accounts + sends invite emails for all rowers with email
-but no linked user. Toast with invited/skipped counts. Button
-hidden when no invitable rowers exist.
-
-#### ~~Self-edit trust levels — UI for team config~~ (shipped)
-
-Self-edit trust levels are implemented (low/medium/high on the
-team table). PDs can change the setting on the team detail page
-(`/teams/{id}`) via a dropdown + Save button.
-
-#### Email visibility tenant config
-
-Some teams want email addresses visible on the roster list and
-detail pages; others consider them private. Add a tenant-level
-boolean `emails_visible` (default false). When true, the roster
-list shows an Email column and the detail page shows the email.
-When false, emails are hidden from the UI for regular members
-but still visible to Coach+ and PD roles (they need them for
-invites and communication). Always used internally for invites
-and sync matching regardless of visibility setting.
-
-Follows the same pattern as `attributes_public` — cached in
-TenantConfig, threaded through TenantContext. The visibility
-check combines the tenant flag with the user's role.
-
-#### ~~Coach email blast — reminders + lineup notifications~~ (shipped)
-
-All 4 phases shipped. Magic links, email opt-out, HTML email
-templates, practices page tabs with send UI. See "Already shipped"
-for details.
-
-#### ~~Magic-link sign-in~~ (shipped)
-
-Two-step login (email → password) with "Email me a sign-in link"
-for returning users. Multi-tenant: per-club links in the email.
-
-#### ~~Team management — roster management~~ (shipped)
-
-Team CRUD (`/teams` list, create, `/teams/{id}` detail). Roster
-view at `/team/roster` (Coach+ hub tab) with account status and
-batch invite. Admin roster matrix at `/admin/roster` for cross-team
-rower assignment (PD-gated).
-
-### Polish
-
-#### ~~Mobile-responsive pass~~ (shipped)
-
-Grid collapses (`grid-cols-1` → `sm:`/`md:` step-up), touch
-targets bumped to `py-2` (44px), affinity forms stack on mobile,
-hamburger at `lg` breakpoint for PD nav overflow.
-
-#### Styled confirmation modals
-
-Replace native `confirm()` dialogs (used by `hx-confirm`) with
-Alpine.js-powered modals styled with Tailwind. Currently the batch
-invite button on the roster page uses a plain browser confirm box.
-Any future destructive/bulk actions would benefit from the same
-pattern.
-
-#### ~~#54 — Print-friendly stylesheet~~ (shipped)
-
-`@media print` rules hide navbar, knobs, interactive controls.
-`print-break` avoids page-break inside boat cards. Colored badges
-preserved via `print-color-adjust`.
-
-### Observability
-
-
 ### Productionization
-
-#### ~~#55 — Production static-asset path resolution~~ (shipped)
-
-Multi-path fallback: `PUBLIC_DIR` env → `exe_dir/public` → workspace default.
 
 #### #56 — Custom Tailwind build pipeline
 
 Replace CDN with local `tailwind.config.js` scanning
 `crates/server/src/**/*.rs` → `crates/server/public/tailwind.css`.
-
-### Infrastructure
-
-#### ~~Practice datetime migration~~ (shipped)
-
-Practice `time` + `duration_minutes` columns shipped. Availability
-re-keyed to `(rower_id, practice_id)`. URLs use practice IDs. Practice
-creation form shows start/end time. Cross-team overlap detection uses
-time windows. Default practice time + duration on team config.
-
-#### ~~Periodic sync polling~~ (shipped)
-
-Background task re-syncs on a schedule when a sync config exists.
-Uses `tokio::time::interval`, logs results, surfaces last-sync
-timestamp and errors on the sync page.
-
-#### ~~Audit log~~ (shipped)
-
-`audit_log` table with fire-and-forget writes, 90-day retention
-cleanup, PD-only filterable viewer at `/audit` with pagination.
-Instrumented across handlers: availability, lineups, rower edits,
-role changes, invites, boat CRUD, practices, notes.
-
-#### ~~Boat usage tracking from committed lineups~~ (shipped)
-
-Usage stats derived from committed lineups (lineup → practice join,
-past dates only). Boat detail page at `/boats/{id}` shows total
-outings, last used date, and clickable recent-outing list. Fleet
-CSV export at `/boats/export.csv` (PD-only, serde `csv` crate,
-matches `boat_tracking` format).
-
-#### Data export + backup/import
-
-Customers must be able to export their full data at any time — both
-for transparency and to support migration to self-hosting.
-
-**Export.** A PD-accessible endpoint (e.g. `GET /export`) that
-streams the tenant's SQLite database file as a download. The tenant
-DB already contains all rowers, boats, teams, practices, lineups,
-availability, affinities, and user accounts — a single file captures
-everything. Content-Disposition header with a timestamped filename
-(e.g. `lineup_club-name_2026-04-12.db`).
-
-**Import.** A CLI command (e.g. `cargo run -p lineup_cli -- import
-<path>`) that registers a new tenant in the master DB and copies the
-provided SQLite file into the tenant data directory. This lets a
-customer who exported from the hosted service spin up a self-hosted
-instance with their full history.
-
-**Considerations:**
-- The export is a raw SQLite file — schema migrations must be
-  compatible between hosted and self-hosted versions. Document the
-  schema version or embed it in the DB (diesel already tracks this
-  via `__diesel_schema_migrations`).
-- Passwords are bcrypt-hashed so they survive export/import without
-  leaking credentials.
-- The master DB (tenant registry) is NOT exported — it's
-  infrastructure, not customer data. The import command creates the
-  tenant registry entry.
-- Rate-limit or auth-gate the export endpoint to prevent abuse.
-- The import path doubles as test fixture injection: a pre-built
-  SQLite file with known rowers/boats/practices can be imported to
-  bootstrap a repeatable dev/test/demo environment without running
-  the seeder or sync flow.
 
 ### Parked
 
@@ -359,19 +187,8 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Follow-ups not yet tracked as tasks
 
-- ~~**CLI `create-tenant` command**~~ (shipped as `seed` CLI command)
 - **Invite URL with tenant slug**
 - **Rower self-service guard rails** (field locking)
-- ~~**Pair boat constraints**~~ (shipped as H7 + S17)
-- ~~**Minimize benched rowers**~~ (shipped as S18)
-- ~~**Equal speed profile: boat-size weighting**~~ (shipped as S19)
-- ~~**Bench cooldown**~~ (shipped as S20 — linear-decay penalty for
-  consecutive benching, configurable via `bench_cooldown_penalty`)
-- ~~**Seed built-in presets on tenant creation**~~ (not needed —
-  built-ins are hardcoded in `SolverConfig` and always available;
-  custom profiles branch off the active config at save time)
-- ~~**Boat-type biases**~~ (shipped as S8 class biases with
-  `eight_bias`, `four_bias`, `pair_bias`, etc. on `SolverConfig`)
 
 ### Per-team roles
 
@@ -430,11 +247,6 @@ the repo publicly.
 **Licensing.** AGPL-3.0 LICENSE file and copyright notice shipped.
 The deployment manifests (k3s/k8s YAML, infrastructure-as-code)
 live in a separate private repo.
-
-### ~~Demo mode~~ (shipped)
-
-Ephemeral tenants with pre-seeded fixture, auto-login, 7-day
-expiry, cookie-based resume, background cleanup of expired demos.
 
 ### Regatta lineup generator (long-term)
 
@@ -573,9 +385,6 @@ Start with push-only; bidirectional can follow if there's demand.
 
 ## Suggested next moves
 
-1. **Email visibility tenant config** — `emails_visible` boolean.
+1. **Stale lineup notification (coach-side)** — nav badge or toast.
 2. **#56** Custom Tailwind build pipeline — replace CDN.
-3. **Data export + backup/import** — PD-accessible SQLite download +
-   CLI import command.
-4. **Styled confirmation modals** — replace native `confirm()` with
-   Alpine.js modals.
+3. **Per-team roles** — design + migration.
