@@ -67,14 +67,16 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
-                // Mobile: compact card list
-                div class="md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" {
+                // Mobile: compact card list (wider breakpoint when emails shown)
+                @let mobile_class = if show_emails { "lg:hidden bg-white rounded-lg shadow divide-y divide-slate-200" } else { "md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" };
+                @let desktop_class = if show_emails { "hidden lg:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" };
+                div class=(mobile_class) {
                     @for row in rows {
                         (mobile_row(&row.rower, row.email.as_deref(), show_emails))
                     }
                 }
                 // Desktop: full table
-                div class="hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" {
+                div class=(desktop_class) {
                     table class="w-full text-sm" {
                         thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
                             tr {
