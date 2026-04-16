@@ -176,19 +176,23 @@ side: the coach should know without checking the history page.
 
 Add optional raw numeric fields to rower:
 - `weight_lbs: Option<WeightLbs>` — body weight in pounds (newtype over `i32`)
+- `height_in: Option<HeightInches>` — height in inches (newtype over `i32`, displayed as `X'Y"`)
 - `erg_2k_cs: Option<Erg2kTime>` — 2k erg time in centiseconds (newtype over `i32`, displayed as `M:SS.dd`)
 
 Teams define their own threshold mappings from raw values to the
 existing categorical buckets (Lightweight/Middleweight/Heavyweight,
-Novice/Intermediate/Master/Expert, Weak/Intermediate/Strong/VeryStrong).
-Stored as team-level config — e.g. "lightweight < 150 lbs,
-middleweight 150–185, heavyweight > 185". Raw values are editable
-by rowers (subject to self-edit trust level); bucket boundaries are
-Coach+ only.
+Short/Medium/Tall/VeryTall, Novice/Intermediate/Master/Expert,
+Weak/Intermediate/Strong/VeryStrong). Stored as team-level config —
+e.g. "lightweight < 150 lbs, middleweight 150–185, heavyweight > 185",
+"short < 66in, medium 66–71, tall 71–75, very tall > 75".
+Raw values are editable by rowers (subject to self-edit trust level);
+bucket boundaries are Coach+ only.
 
 **Newtypes:** `WeightLbs(i32)` with `Display` rendering as pounds,
-`Erg2kTime(i32)` with `Display` rendering centiseconds as `M:SS.dd`
-(e.g. 42350 → `7:03.50`). Both get `DieselNewType` for column mapping.
+`HeightInches(i32)` with `Display` rendering as feet/inches
+(e.g. 71 → `5'11"`), `Erg2kTime(i32)` with `Display` rendering
+centiseconds as `M:SS.dd` (e.g. 42350 → `7:03.50`). All get
+`DieselNewType` for column mapping.
 
 **UI:** Raw values shown on rower detail page alongside the derived
 bucket. Team settings page gets threshold config per metric. Auto-
