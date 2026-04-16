@@ -148,6 +148,17 @@ can resume without re-deriving context.
 - **History page layout** — Edit/Cancel buttons in header bar.
 - **Single-seat zone affinity boost** — Stroke/Bow zones get 2×
   weight to prevent soft constraint outbidding.
+- **#56** Custom Tailwind build pipeline — pre-built CSS replaces CDN,
+  pre-commit hook regenerates on commit, `tailwindcss` in flake.
+- **Streaming alternatives via SSE** — primary lineup streams
+  immediately, alternatives append as they complete. `solve_streaming`
+  in solver crate, SSE handler, HTMX SSE extension.
+- **User account status toggle** — active ↔ disabled on admin Users tab.
+- **Solver tuning** — bumped pair_affinity_weight (3→4),
+  seat_affinity_weight (3→5), weight_class_slack_weight (1→3),
+  default budget (3s→5s) for better real-world results.
+- **Handler/template refactoring** — split practices, rowers, fixture
+  into submodules. Removed all section separator comments.
 
 ## Open work
 
@@ -355,41 +366,6 @@ approach: assign rowers to races first, then schedule boats).
 
 Very large scope — park until practice lineups are mature and
 there's real demand from clubs doing regattas.
-
-### Streaming alternatives (stretch goal)
-
-Return the primary lineup immediately and stream alternatives
-as they complete, rather than blocking until all are done.
-
-**HTMX 2.0 (current):** Feasible via the SSE extension
-(`htmx-ext-sse`). Requires a separate SSE connection — the
-initial request returns the primary lineup + an SSE connect
-div. A background solver task feeds alternatives through a
-channel; the SSE endpoint streams them as HTML fragments.
-
-**HTMX 4.0 (early-mid 2026):** Native streaming via
-`fetch() + ReadableStream`. Any `text/event-stream` response
-works without an extension. Also enables POST-based SSE.
-Migration from 2.0 SSE extension would be a simplification
-(drop extension, keep same SSE endpoint).
-
-**Chunked transfer:** Not viable on HTMX 2.0 (XHR buffers
-the whole response). HTMX 4.0's fetch migration fixes this.
-
-**Backend.** The solver already produces alternatives
-sequentially (tabu re-solve loop). Wrap in an async channel:
-send primary immediately, then each alternative as it
-completes. The handler becomes an SSE endpoint that yields
-events from the channel.
-
-**UI.** The alternatives panel renders a "Computing
-alternatives..." placeholder, then each alternative card
-appears as it arrives via SSE swap.
-
-**Recommendation:** Implement on HTMX 2.0 SSE extension now.
-Migrate to HTMX 4.0 native streaming when it stabilizes.
-Low priority — only matters when alternatives > 0 and the
-per-alternative budget is long enough to notice the delay.
 
 ### Discord integration (long-term)
 
