@@ -214,6 +214,26 @@ bucket. Team settings page gets threshold config per metric. Auto-
 derive buckets on save when raw values are present and thresholds
 are configured.
 
+### Refactor: extract AppState sub-states via FromRef
+
+`State<AppState>` is used by ~20 handlers but each only needs a
+subset. Extract logical groupings with `FromRef<AppState>` impls
+so handlers declare exactly what they need:
+
+- **`MailerCtx`** (`mailer` + `origin`) — sending emails with full
+  URLs. Includes `full_url()`. Used by reminders, lineups, invites,
+  magic link, auth.
+- **`SolverCtx`** (`solver_pool` + `solve_semaphore`) — dispatching
+  solver work. Used by stream handler.
+- **`TenantDb`** (`master_db` + `tenant_cache` + `data_dir`) — tenant
+  resolution, cache eviction, export/restore. Methods: `tenant_db()`,
+  `evict_tenant()`, `tenant_db_by_slug()`.
+- **`JwtKeys`** — already a standalone struct, just needs `FromRef`.
+
+`AppState` stays for construction and the auth middleware (which
+touches multiple sub-states). Handlers change from
+`State(state): State<AppState>` to e.g. `State(mailer): State<MailerCtx>`.
+
 ### Parked
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
