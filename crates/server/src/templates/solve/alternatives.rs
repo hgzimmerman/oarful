@@ -12,11 +12,11 @@ use lineup_db::{
 use lineup_solver::{ProposedLineup, ProposedSolution, UnplacedRowers};
 use maud::{html, Markup};
 
+use super::editor::DisplayFlags;
 use super::{
     cox_first, find_rower, rig_label, rower_stats_line, seat_badge, seat_label,
     sort_seats_for_display,
 };
-use super::editor::DisplayFlags;
 
 pub(super) fn alternatives_panel(
     snapshot: &DbSnapshot,
@@ -58,7 +58,10 @@ pub(crate) fn alternative_block(
     flags: &DisplayFlags,
 ) -> Markup {
     let diff = build_diff(primary, alt);
-    let changed_count = diff.values().filter(|d| !matches!(d, SeatDiff::Same)).count();
+    let changed_count = diff
+        .values()
+        .filter(|d| !matches!(d, SeatDiff::Same))
+        .count();
     let used: Vec<&ProposedLineup> = alt.lineups.iter().filter(|l| l.used).collect();
 
     // Build a promote URL that loads this alternative into the editor.
@@ -157,10 +160,7 @@ fn boat_card(
     diff: Option<&DiffMap>,
     flags: &DisplayFlags,
 ) -> Markup {
-    let boat = snapshot
-        .boats
-        .iter()
-        .find(|b| b.id == lineup.boat_id);
+    let boat = snapshot.boats.iter().find(|b| b.id == lineup.boat_id);
     let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
     let mut seats = lineup.seats.clone();
     let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);

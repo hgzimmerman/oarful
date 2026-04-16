@@ -47,7 +47,10 @@ impl NewPairAffinity {
     /// the SQL `CHECK` constraint. Panics on self-pairs since those are
     /// meaningless.
     pub fn canonical(a: RowerId, b: RowerId, weight: AffinityWeight) -> Self {
-        assert!(a != b, "pair affinity cannot reference the same rower twice");
+        assert!(
+            a != b,
+            "pair affinity cannot reference the same rower twice"
+        );
         let (rower_a_id, rower_b_id) = if a.as_int() < b.as_int() {
             (a, b)
         } else {

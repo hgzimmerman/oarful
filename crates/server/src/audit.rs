@@ -24,7 +24,10 @@ pub(crate) fn record(
         detail,
     };
     tokio::spawn(async move {
-        if let Err(e) = db.with_conn(move |conn| AuditLog::record(conn, entry)).await {
+        if let Err(e) = db
+            .with_conn(move |conn| AuditLog::record(conn, entry))
+            .await
+        {
             tracing::warn!(?e, "audit log write failed");
         }
     });

@@ -7,11 +7,11 @@ use axum::{
     Extension,
 };
 use axum_extra::extract::{CookieJar, Query};
+use lineup_db::app_user::Role;
 use lineup_db::practice::PracticeId;
 use lineup_solver::SolverConfig;
-use lineup_db::app_user::Role;
 
-use crate::handlers::{internal_error, ErrorResponse, bad_request};
+use crate::handlers::{bad_request, internal_error, ErrorResponse};
 use crate::templates;
 
 use super::*;
@@ -95,27 +95,65 @@ pub(crate) async fn save_profile_handler(
         team_id,
         name,
         description,
-        skill_variance_weight: input.skill_variance_weight.unwrap_or(basis.skill_variance_weight),
-        pair_affinity_weight: input.pair_affinity_weight.unwrap_or(basis.pair_affinity_weight),
-        seat_affinity_weight: input.seat_affinity_weight.unwrap_or(basis.seat_affinity_weight),
-        side_preference_weight: input.side_preference_weight.unwrap_or(basis.side_preference_weight),
-        weight_class_slack_weight: input.weight_class_slack_weight.unwrap_or(basis.weight_class_slack_weight),
-        cox_cooldown_penalty: input.cox_cooldown_penalty.unwrap_or(basis.cox_cooldown_penalty),
-        placement_reward_weight: input.placement_reward_weight.unwrap_or(basis.placement_reward_weight),
-        pair_strength_weight: input.pair_strength_weight.unwrap_or(basis.pair_strength_weight),
-        bow_pair_strength_weight: input.bow_pair_strength_weight.unwrap_or(basis.bow_pair_strength_weight),
-        height_balance_weight: input.height_balance_weight.unwrap_or(basis.height_balance_weight),
-        end_pair_skill_weight: input.end_pair_skill_weight.unwrap_or(basis.end_pair_skill_weight),
-        engine_room_strength_weight: input.engine_room_strength_weight.unwrap_or(basis.engine_room_strength_weight),
+        skill_variance_weight: input
+            .skill_variance_weight
+            .unwrap_or(basis.skill_variance_weight),
+        pair_affinity_weight: input
+            .pair_affinity_weight
+            .unwrap_or(basis.pair_affinity_weight),
+        seat_affinity_weight: input
+            .seat_affinity_weight
+            .unwrap_or(basis.seat_affinity_weight),
+        side_preference_weight: input
+            .side_preference_weight
+            .unwrap_or(basis.side_preference_weight),
+        weight_class_slack_weight: input
+            .weight_class_slack_weight
+            .unwrap_or(basis.weight_class_slack_weight),
+        cox_cooldown_penalty: input
+            .cox_cooldown_penalty
+            .unwrap_or(basis.cox_cooldown_penalty),
+        placement_reward_weight: input
+            .placement_reward_weight
+            .unwrap_or(basis.placement_reward_weight),
+        pair_strength_weight: input
+            .pair_strength_weight
+            .unwrap_or(basis.pair_strength_weight),
+        bow_pair_strength_weight: input
+            .bow_pair_strength_weight
+            .unwrap_or(basis.bow_pair_strength_weight),
+        height_balance_weight: input
+            .height_balance_weight
+            .unwrap_or(basis.height_balance_weight),
+        end_pair_skill_weight: input
+            .end_pair_skill_weight
+            .unwrap_or(basis.end_pair_skill_weight),
+        engine_room_strength_weight: input
+            .engine_room_strength_weight
+            .unwrap_or(basis.engine_room_strength_weight),
         partial_fill_bonus: input.partial_fill_bonus.unwrap_or(basis.partial_fill_bonus),
-        non_scull_retention_weight: input.non_scull_retention_weight.unwrap_or(basis.non_scull_retention_weight),
+        non_scull_retention_weight: input
+            .non_scull_retention_weight
+            .unwrap_or(basis.non_scull_retention_weight),
         bow_cox_fit_weight: input.bow_cox_fit_weight.unwrap_or(basis.bow_cox_fit_weight),
-        top_boat_stacking_weight: input.top_boat_stacking_weight.unwrap_or(basis.top_boat_stacking_weight),
-        pair_eligibility_weight: input.pair_eligibility_weight.unwrap_or(basis.pair_eligibility_weight),
-        minimize_bench_weight: input.minimize_bench_weight.unwrap_or(basis.minimize_bench_weight),
-        boat_size_stacking_weight: input.boat_size_stacking_weight.unwrap_or(basis.boat_size_stacking_weight),
-        bench_cooldown_penalty: input.bench_cooldown_penalty.unwrap_or(basis.bench_cooldown_penalty),
-        stroke_spread_weight: input.stroke_spread_weight.unwrap_or(basis.stroke_spread_weight),
+        top_boat_stacking_weight: input
+            .top_boat_stacking_weight
+            .unwrap_or(basis.top_boat_stacking_weight),
+        pair_eligibility_weight: input
+            .pair_eligibility_weight
+            .unwrap_or(basis.pair_eligibility_weight),
+        minimize_bench_weight: input
+            .minimize_bench_weight
+            .unwrap_or(basis.minimize_bench_weight),
+        boat_size_stacking_weight: input
+            .boat_size_stacking_weight
+            .unwrap_or(basis.boat_size_stacking_weight),
+        bench_cooldown_penalty: input
+            .bench_cooldown_penalty
+            .unwrap_or(basis.bench_cooldown_penalty),
+        stroke_spread_weight: input
+            .stroke_spread_weight
+            .unwrap_or(basis.stroke_spread_weight),
         eight_bias: input.eight_bias.unwrap_or(basis.eight_bias),
         coxed_four_bias: input.coxed_four_bias.unwrap_or(basis.coxed_four_bias),
         four_bias: input.four_bias.unwrap_or(basis.four_bias),
@@ -127,9 +165,7 @@ pub(crate) async fn save_profile_handler(
 
     tenant
         .db
-        .with_conn(move |conn| {
-            lineup_db::solver_profile::SolverProfile::upsert(conn, new_profile)
-        })
+        .with_conn(move |conn| lineup_db::solver_profile::SolverProfile::upsert(conn, new_profile))
         .await
         .map_err(internal_error)?;
 
@@ -157,7 +193,9 @@ pub(crate) struct EditProfileQuery {
     #[serde(default = "default_basis")]
     basis: String,
 }
-fn default_basis() -> String { "balanced".to_string() }
+fn default_basis() -> String {
+    "balanced".to_string()
+}
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn edit_profile_handler(
@@ -170,7 +208,8 @@ pub(crate) async fn edit_profile_handler(
 
     let name = query.name.trim().to_string();
     let basis = query.basis.trim().to_string();
-    let is_builtin = SolverConfig::is_builtin(&name) || (!name.is_empty() && SolverConfig::from_preset(&name).is_some());
+    let is_builtin = SolverConfig::is_builtin(&name)
+        || (!name.is_empty() && SolverConfig::from_preset(&name).is_some());
 
     // Resolve the config to display.
     let (config, description, display_name, basis_name) = if is_builtin {

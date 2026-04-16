@@ -15,12 +15,13 @@ mod view;
 
 pub(crate) use commit::{commit_handler, commit_lineup_handler};
 pub(crate) use editor::editor_handler;
-pub(crate) use profiles::{delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler};
+pub(crate) use profiles::{
+    delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler,
+};
 pub(crate) use stream::stream_handler;
 pub(crate) use view::view_handler;
 
 use std::time::Duration;
-
 
 use chrono::NaiveDate;
 use lineup_db::{
@@ -29,14 +30,14 @@ use lineup_db::{
     practice::{Practice, PracticeId},
     snapshot::DbSnapshot,
 };
-use lineup_solver::{
-    solve, PartialFillPolicy, SolveRequest, SolveResult,
-    SolverConfig,
-};
+use lineup_solver::{solve, PartialFillPolicy, SolveRequest, SolveResult, SolverConfig};
 use serde::Deserialize;
 use tokio::sync::OwnedSemaphorePermit;
 
-use crate::{handlers::{internal_error, ErrorResponse}, state::AppState};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    state::AppState,
+};
 
 /// Default per-alternative solve budget, in seconds. Total wall time
 /// for one request is roughly `DEFAULT_BUDGET_SECS × DEFAULT_ALTS`
@@ -196,8 +197,8 @@ impl SolveKnobs {
         snapshot: &DbSnapshot,
         baselines: Vec<lineup_solver::ReferenceLineup>,
     ) -> SolveRequest {
-        use std::collections::BTreeMap;
         use lineup_solver::{ReferenceLineup, ReferencePlacement};
+        use std::collections::BTreeMap;
 
         let novelty_weight = self.novelty.max(0);
         let mut reference_lineups = Vec::new();
@@ -233,7 +234,9 @@ impl SolveKnobs {
         reference_lineups.extend(baselines);
 
         // Active boats + any boats referenced by seat locks/pins + boat pins/locks.
-        let mut boat_set: std::collections::HashSet<BoatId> = self.boat.iter()
+        let mut boat_set: std::collections::HashSet<BoatId> = self
+            .boat
+            .iter()
             .filter_map(|s| s.parse::<BoatId>().ok())
             .collect();
         for entries in [&self.lock, &self.pin] {
@@ -255,7 +258,9 @@ impl SolveKnobs {
         }
         let boats: Vec<BoatId> = boat_set.into_iter().collect();
         // Required boats: dirty-pinned + locked boats must be fielded.
-        let mut required_boats: Vec<BoatId> = self.boat_pin.iter()
+        let mut required_boats: Vec<BoatId> = self
+            .boat_pin
+            .iter()
             .chain(self.boat_lock.iter())
             .filter_map(|s| s.parse::<BoatId>().ok())
             .collect();
@@ -293,12 +298,23 @@ impl SolveKnobs {
         entries.iter().filter_map(|s| s.parse().ok()).collect()
     }
 
-    pub(super) fn parse_triples(entries: &[String]) -> std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> {
-        entries.iter().filter_map(|entry| {
-            let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() != 3 { return None; }
-            Some((parts[0].parse().ok()?, parts[1].parse().ok()?, parts[2].parse().ok()?))
-        }).collect()
+    pub(super) fn parse_triples(
+        entries: &[String],
+    ) -> std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> {
+        entries
+            .iter()
+            .filter_map(|entry| {
+                let parts: Vec<&str> = entry.splitn(3, ':').collect();
+                if parts.len() != 3 {
+                    return None;
+                }
+                Some((
+                    parts[0].parse().ok()?,
+                    parts[1].parse().ok()?,
+                    parts[2].parse().ok()?,
+                ))
+            })
+            .collect()
     }
 
     pub(super) fn parse_locks(&self) -> Vec<lineup_solver::SeatLock> {
@@ -467,19 +483,29 @@ pub(super) fn map_transfer_seats(
         // Stroke first (most important positional mapping)
         order.push(src_count);
         // Bow
-        if src_count > 1 { order.push(1); }
+        if src_count > 1 {
+            order.push(1);
+        }
         // Below stroke
-        if src_count > 2 { order.push(src_count - 1); }
+        if src_count > 2 {
+            order.push(src_count - 1);
+        }
         // Above bow
-        if src_count > 2 && !order.contains(&2) { order.push(2); }
+        if src_count > 2 && !order.contains(&2) {
+            order.push(2);
+        }
         // Remaining middle seats
         for s in 1..=src_count {
-            if !order.contains(&s) { order.push(s); }
+            if !order.contains(&s) {
+                order.push(s);
+            }
         }
         order
     };
     for src_pos in priority_order {
-        let Some(&rower) = src_seats.get(&src_pos) else { continue };
+        let Some(&rower) = src_seats.get(&src_pos) else {
+            continue;
+        };
         let dst_pos = if src_pos == src_count {
             dst_count // stroke → stroke
         } else if src_pos == 1 {
@@ -505,8 +531,12 @@ pub(super) fn map_transfer_seats(
         while pos >= 2 {
             let high = swapped.remove(&pos);
             let low = swapped.remove(&(pos - 1));
-            if let Some(r) = high { swapped.insert(pos - 1, r); }
-            if let Some(r) = low { swapped.insert(pos, r); }
+            if let Some(r) = high {
+                swapped.insert(pos - 1, r);
+            }
+            if let Some(r) = low {
+                swapped.insert(pos, r);
+            }
             pos -= 2;
         }
         result = swapped;
@@ -679,8 +709,8 @@ pub(crate) struct SaveProfileInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineup_db::boat::{types::BoatId, Boat};
     use lineup_db::boat::types::{CoxPosition, WeightClass};
+    use lineup_db::boat::{types::BoatId, Boat};
     use lineup_db::rower::types::{RowerId, Side};
     use lineup_db::types::IntBool;
     use std::collections::HashMap;
@@ -735,7 +765,10 @@ mod tests {
 
     #[test]
     fn parse_locks_valid() {
-        let knobs = SolveKnobs { lock: vec!["10:20:3".into()], ..Default::default() };
+        let knobs = SolveKnobs {
+            lock: vec!["10:20:3".into()],
+            ..Default::default()
+        };
         let locks = knobs.parse_locks();
         assert_eq!(locks.len(), 1);
         assert_eq!(locks[0].rower_id, RowerId::new(10));
@@ -786,8 +819,15 @@ mod tests {
         let src = boat(1, 8, true, Side::Port);
         let dst = boat(2, 4, true, Side::Port);
         let src_seats = seats(&[
-            (0, 100), (1, 101), (2, 102), (3, 103), (4, 104),
-            (5, 105), (6, 106), (7, 107), (8, 108),
+            (0, 100),
+            (1, 101),
+            (2, 102),
+            (3, 103),
+            (4, 104),
+            (5, 105),
+            (6, 106),
+            (7, 107),
+            (8, 108),
         ]);
         let result = map_transfer_seats(&src_seats, &src, &dst);
         assert_eq!(result[&0], RowerId::new(100)); // cox

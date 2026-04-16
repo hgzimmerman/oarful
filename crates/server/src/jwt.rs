@@ -114,11 +114,7 @@ impl JwtKeys {
 
     /// Decode and validate a token. Returns the claims on success.
     pub(crate) fn verify(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-        let data = jsonwebtoken::decode::<Claims>(
-            token,
-            &self.decoding,
-            &Validation::default(),
-        )?;
+        let data = jsonwebtoken::decode::<Claims>(token, &self.decoding, &Validation::default())?;
         Ok(data.claims)
     }
 }

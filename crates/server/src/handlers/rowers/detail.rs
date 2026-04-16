@@ -1,12 +1,7 @@
 //! Per-rower detail page: attributes, seat affinities, pair affinities,
 //! soft-delete/reactivate.
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::Html,
-    Extension, Form,
-};
+use axum::{extract::Path, http::StatusCode, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::pair_affinity::PairAffinity;
@@ -22,7 +17,11 @@ use serde::Deserialize;
 use lineup_db::app_user::{AppUser, Role};
 use lineup_db::team::{SelfEditLevel, Team};
 
-use crate::{handlers::{internal_error, ErrorResponse, not_found}, state::TenantContext, templates};
+use crate::{
+    handlers::{internal_error, not_found, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 /// `GET /rowers/{id}/attributes` — read-only attribute section partial.
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -88,15 +87,33 @@ pub(crate) async fn update_handler(
         }
     };
 
-    if perms.can_edit("weight_class") { rower.weight_class = typed.weight_class; }
-    if perms.can_edit("skill") { rower.skill = typed.skill; }
-    if perms.can_edit("strength") { rower.strength = typed.strength; }
-    if perms.can_edit("height") { rower.height = typed.height; }
-    if perms.can_edit("side") { rower.side = typed.side; }
-    if perms.can_edit("side_strength") { rower.side_strength = typed.side_strength; }
-    if perms.can_edit("can_cox") { rower.can_cox = IntBool::new(typed.can_cox); }
-    if perms.can_edit("sweep_bias") { rower.sweep_bias = SweepBias::new(typed.sweep_bias); }
-    if perms.can_edit("is_designated_cox") { rower.is_designated_cox = IntBool::new(typed.is_designated_cox); }
+    if perms.can_edit("weight_class") {
+        rower.weight_class = typed.weight_class;
+    }
+    if perms.can_edit("skill") {
+        rower.skill = typed.skill;
+    }
+    if perms.can_edit("strength") {
+        rower.strength = typed.strength;
+    }
+    if perms.can_edit("height") {
+        rower.height = typed.height;
+    }
+    if perms.can_edit("side") {
+        rower.side = typed.side;
+    }
+    if perms.can_edit("side_strength") {
+        rower.side_strength = typed.side_strength;
+    }
+    if perms.can_edit("can_cox") {
+        rower.can_cox = IntBool::new(typed.can_cox);
+    }
+    if perms.can_edit("sweep_bias") {
+        rower.sweep_bias = SweepBias::new(typed.sweep_bias);
+    }
+    if perms.can_edit("is_designated_cox") {
+        rower.is_designated_cox = IntBool::new(typed.is_designated_cox);
+    }
 
     let saved = tenant
         .db
@@ -198,7 +215,11 @@ async fn resolve_perms(
     jar: &CookieJar,
     rower_id: RowerId,
 ) -> Result<templates::rowers::DetailPermissions, ErrorResponse> {
-    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
     if is_coach {
         return Ok(templates::rowers::DetailPermissions::coach());
     }
@@ -212,7 +233,10 @@ async fn resolve_perms(
         .await
         .map_err(internal_error)?;
     if !owns_rower {
-        return Err(crate::handlers::ErrorResponse(StatusCode::FORBIDDEN, "You don't have permission to perform this action.".into()));
+        return Err(crate::handlers::ErrorResponse(
+            StatusCode::FORBIDDEN,
+            "You don't have permission to perform this action.".into(),
+        ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let level = tenant
@@ -259,8 +283,7 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
             let Some(rower) = Rower::get(conn, id)? else {
                 return Ok(None);
             };
-            let email = AppUser::find_by_rower_id(conn, rower.id)?
-                .map(|u| u.email);
+            let email = AppUser::find_by_rower_id(conn, rower.id)?.map(|u| u.email);
             let seat_affinities = SeatAffinity::list_for_rower(conn, id)?;
             let pair_affinities = PairAffinity::list_for_rower(conn, id)?;
             let mut other_rowers: Vec<Rower> = Rower::list_active(conn)?
@@ -308,7 +331,12 @@ pub(crate) async fn seat_affinity_upsert_handler(
     let zone = match SeatZone::from_str_opt(&input.zone) {
         Some(z) => z,
         None => {
-            return seat_section_with_error(&tenant.db, id, &format!("invalid zone: {}", input.zone)).await
+            return seat_section_with_error(
+                &tenant.db,
+                id,
+                &format!("invalid zone: {}", input.zone),
+            )
+            .await
         }
     };
     tenant
@@ -356,12 +384,20 @@ pub(crate) async fn seat_affinity_delete_handler(
 
 async fn seat_section_response(db: &Db, id: RowerId) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
-    Ok(Html(templates::rowers::seat_affinities_section(&detail, None, true).into_string()))
+    Ok(Html(
+        templates::rowers::seat_affinities_section(&detail, None, true).into_string(),
+    ))
 }
 
-async fn seat_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, ErrorResponse> {
+async fn seat_section_with_error(
+    db: &Db,
+    id: RowerId,
+    msg: &str,
+) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
-    Ok(Html(templates::rowers::seat_affinities_section(&detail, Some(msg), true).into_string()))
+    Ok(Html(
+        templates::rowers::seat_affinities_section(&detail, Some(msg), true).into_string(),
+    ))
 }
 
 // ---- Pair affinities ------------------------------------------------
@@ -385,7 +421,8 @@ pub(crate) async fn pair_affinity_upsert_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if input.partner_id == id {
-        return pair_section_with_error(&tenant.db, id, "cannot pair a rower with themselves").await;
+        return pair_section_with_error(&tenant.db, id, "cannot pair a rower with themselves")
+            .await;
     }
     let weight = match validate_weight(input.weight) {
         Ok(w) => w,
@@ -403,7 +440,10 @@ pub(crate) async fn pair_affinity_upsert_handler(
         "rower.pair_affinity.update",
         "rower",
         &id.to_string(),
-        Some(serde_json::json!({"partner_id": partner.to_string(), "weight": input.weight}).to_string()),
+        Some(
+            serde_json::json!({"partner_id": partner.to_string(), "weight": input.weight})
+                .to_string(),
+        ),
     );
     pair_section_response(&tenant.db, id).await
 }
@@ -434,12 +474,20 @@ pub(crate) async fn pair_affinity_delete_handler(
 
 async fn pair_section_response(db: &Db, id: RowerId) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
-    Ok(Html(templates::rowers::pair_affinities_section(&detail, None, true).into_string()))
+    Ok(Html(
+        templates::rowers::pair_affinities_section(&detail, None, true).into_string(),
+    ))
 }
 
-async fn pair_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, ErrorResponse> {
+async fn pair_section_with_error(
+    db: &Db,
+    id: RowerId,
+    msg: &str,
+) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
-    Ok(Html(templates::rowers::pair_affinities_section(&detail, Some(msg), true).into_string()))
+    Ok(Html(
+        templates::rowers::pair_affinities_section(&detail, Some(msg), true).into_string(),
+    ))
 }
 
 // ---- Soft-delete / reactivate ---------------------------------------
@@ -464,7 +512,11 @@ pub(crate) async fn toggle_active_handler(
     crate::audit::record(
         &tenant.db,
         Some(tenant.claims.user_id().as_int()),
-        if new_active { "rower.reactivate" } else { "rower.deactivate" },
+        if new_active {
+            "rower.reactivate"
+        } else {
+            "rower.deactivate"
+        },
         "rower",
         &id.to_string(),
         None,
@@ -484,6 +536,5 @@ fn validate_weight(weight: i32) -> Result<AffinityWeight, String> {
             "weight must be between {AFFINITY_WEIGHT_MIN} and {AFFINITY_WEIGHT_MAX} (excluding zero), got {weight}"
         ));
     }
-    AffinityWeight::try_new(weight)
-        .ok_or_else(|| format!("invalid weight: {weight}"))
+    AffinityWeight::try_new(weight).ok_or_else(|| format!("invalid weight: {weight}"))
 }

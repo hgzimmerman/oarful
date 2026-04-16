@@ -14,10 +14,13 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
 use crate::extract::HtmlForm;
-use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
 use crate::magic_link::create_magic_link;
+use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
 use crate::state::{AppState, TenantContext};
-use crate::{handlers::{internal_error, ErrorResponse}, templates};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    templates,
+};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SendLineupsInput {
@@ -55,7 +58,10 @@ pub(crate) async fn lineup_preview_handler(
         .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
         .collect();
 
-    let date_strs: Vec<String> = dates.iter().map(|d| d.format("%Y-%m-%d").to_string()).collect();
+    let date_strs: Vec<String> = dates
+        .iter()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .collect();
 
     if dates.is_empty() {
         return Ok(Html(
@@ -66,17 +72,17 @@ pub(crate) async fn lineup_preview_handler(
     let scope = query.scope.clone();
     let recipients = tenant
         .db
-        .with_conn(move |conn| {
-            gather_lineup_recipients(conn, team_id, &dates, scope_all)
-        })
+        .with_conn(move |conn| gather_lineup_recipients(conn, team_id, &dates, scope_all))
         .await
         .map_err(internal_error)?;
 
     let preview: Vec<templates::practices::LineupRecipientPreview> = recipients
         .iter()
-        .map(|(_uid, _email, name)| templates::practices::LineupRecipientPreview {
-            name: name.clone(),
-        })
+        .map(
+            |(_uid, _email, name)| templates::practices::LineupRecipientPreview {
+                name: name.clone(),
+            },
+        )
         .collect();
 
     Ok(Html(
@@ -185,7 +191,10 @@ pub(crate) async fn send_lineups_handler(
         .collect();
     if dates.is_empty() {
         return Ok(Html(
-            templates::practices::send_warning("No practices selected — check at least one to send lineups.").into_string(),
+            templates::practices::send_warning(
+                "No practices selected — check at least one to send lineups.",
+            )
+            .into_string(),
         ));
     }
 
@@ -223,7 +232,9 @@ pub(crate) async fn send_lineups_handler(
                 let mut date_placed: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
                 for cl in &committed {
                     let boat = Boat::get(conn, cl.lineup.boat_id)?;
-                    let boat_name = boat.map(|b| b.name.clone()).unwrap_or_else(|| "Unknown".to_string());
+                    let boat_name = boat
+                        .map(|b| b.name.clone())
+                        .unwrap_or_else(|| "Unknown".to_string());
 
                     let mut seats = Vec::new();
                     for seat_row in &cl.seats {
@@ -295,8 +306,7 @@ pub(crate) async fn send_lineups_handler(
                 if let Some(r) = rower_map.get(rid) {
                     if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
                         if user.wants_lineups()
-                            && user.parsed_status()
-                                == Some(lineup_db::app_user::UserStatus::Active)
+                            && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
                         {
                             recipients.push((user.id, user.email.clone(), r.name.clone()));
                         }
@@ -347,7 +357,10 @@ pub(crate) async fn send_lineups_handler(
                 .await
                 .map_err(internal_error)?;
 
-            let magic_url = state.full_url(&format!("/auth/magic/{}/{raw_token}", tenant.config.tenant_slug));
+            let magic_url = state.full_url(&format!(
+                "/auth/magic/{}/{raw_token}",
+                tenant.config.tenant_slug
+            ));
             if let Err(err) = state
                 .mailer
                 .send_lineup(&email, &name, &team_name, &summaries, &magic_url)
@@ -376,10 +389,7 @@ pub(crate) async fn send_lineups_handler(
     let msg = if sent_count > 0 {
         format!("Lineups sent to: {}", sent_names.join(", "))
     } else {
-        "No lineup notifications to send — lineups may have already been sent today."
-            .to_string()
+        "No lineup notifications to send — lineups may have already been sent today.".to_string()
     };
-    Ok(Html(
-        templates::practices::send_result(&msg).into_string(),
-    ))
+    Ok(Html(templates::practices::send_result(&msg).into_string()))
 }

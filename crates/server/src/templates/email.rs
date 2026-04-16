@@ -59,35 +59,38 @@ pub(crate) fn magic_login_email(
     clubs: &[(String, String)], // (club_name, magic_url)
 ) -> Markup {
     let subject = "Sign in to Lineup Generator".to_string();
-    email_wrapper(&subject, html! {
-        div class="card" {
-            div class="header" { "Sign in" }
-            p style="font-size: 14px; margin-bottom: 16px;" {
-                "Hi " (to_name) ", click below to sign in:"
-            }
-            @if clubs.len() == 1 {
-                div style="text-align: center;" {
-                    a href=(&clubs[0].1) class="btn" {
-                        "Sign in to " (&clubs[0].0)
+    email_wrapper(
+        &subject,
+        html! {
+            div class="card" {
+                div class="header" { "Sign in" }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", click below to sign in:"
+                }
+                @if clubs.len() == 1 {
+                    div style="text-align: center;" {
+                        a href=(&clubs[0].1) class="btn" {
+                            "Sign in to " (&clubs[0].0)
+                        }
                     }
-                }
-            } @else {
-                p style="font-size: 13px; color: #64748b; margin-bottom: 12px;" {
-                    "Your email is associated with multiple clubs. Choose one:"
-                }
-                @for (name, url) in clubs {
-                    div style="margin-bottom: 8px;" {
-                        a href=(url) class="btn" style="display: block; text-align: center;" {
-                            "Sign in to " (name)
+                } @else {
+                    p style="font-size: 13px; color: #64748b; margin-bottom: 12px;" {
+                        "Your email is associated with multiple clubs. Choose one:"
+                    }
+                    @for (name, url) in clubs {
+                        div style="margin-bottom: 8px;" {
+                            a href=(url) class="btn" style="display: block; text-align: center;" {
+                                "Sign in to " (name)
+                            }
                         }
                     }
                 }
+                p style="font-size: 12px; color: #94a3b8; margin-top: 16px;" {
+                    "This link expires in 24 hours."
+                }
             }
-            p style="font-size: 12px; color: #94a3b8; margin-top: 16px;" {
-                "This link expires in 24 hours."
-            }
-        }
-    })
+        },
+    )
 }
 
 /// Availability reminder email: lists practice dates without a response
@@ -99,28 +102,31 @@ pub(crate) fn reminder_email(
     magic_url: &str,
 ) -> Markup {
     let subject = format!("{team_name} — availability needed");
-    email_wrapper(&subject, html! {
-        div class="card" {
-            div class="header" { (subject) }
-            p style="font-size: 14px; margin-bottom: 16px;" {
-                "Hi " (to_name) ", your coach needs your availability for the following dates:"
-            }
-            div {
-                @for date in dates {
-                    div class="date-item" {
-                        strong { (date.format("%A")) }
-                        " — "
-                        (date)
+    email_wrapper(
+        &subject,
+        html! {
+            div class="card" {
+                div class="header" { (subject) }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", your coach needs your availability for the following dates:"
+                }
+                div {
+                    @for date in dates {
+                        div class="date-item" {
+                            strong { (date.format("%A")) }
+                            " — "
+                            (date)
+                        }
+                    }
+                }
+                div style="margin-top: 20px; text-align: center;" {
+                    a href=(magic_url) class="btn" {
+                        "Update availability"
                     }
                 }
             }
-            div style="margin-top: 20px; text-align: center;" {
-                a href=(magic_url) class="btn" {
-                    "Update availability"
-                }
-            }
-        }
-    })
+        },
+    )
 }
 
 /// Lineup notification email: shows full seat assignments per boat
@@ -133,40 +139,43 @@ pub(crate) fn lineup_email(
 ) -> Markup {
     let dates: Vec<String> = lineups.iter().map(|l| l.date.to_string()).collect();
     let subject = format!("{team_name} — lineups posted for {}", dates.join(", "));
-    email_wrapper(&subject, html! {
-        div class="card" {
-            div class="header" { (team_name) " — lineups posted" }
-            p style="font-size: 14px; margin-bottom: 16px;" {
-                "Hi " (to_name) ", lineups have been posted:"
-            }
-            @for summary in lineups {
-                div style="margin-bottom: 20px;" {
-                    div class="subheader" {
-                        (summary.date.format("%A")) " — " (summary.date)
-                    }
-                    @for boat in &summary.boats {
-                        div class="boat-card" {
-                            div class="boat-name" { (boat.boat_name) }
-                            @for seat in &boat.seats {
-                                div class="seat-row" {
-                                    span class="seat-label" { (seat.label) }
-                                    span class="rower-name" { (seat.rower_name) }
+    email_wrapper(
+        &subject,
+        html! {
+            div class="card" {
+                div class="header" { (team_name) " — lineups posted" }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", lineups have been posted:"
+                }
+                @for summary in lineups {
+                    div style="margin-bottom: 20px;" {
+                        div class="subheader" {
+                            (summary.date.format("%A")) " — " (summary.date)
+                        }
+                        @for boat in &summary.boats {
+                            div class="boat-card" {
+                                div class="boat-name" { (boat.boat_name) }
+                                @for seat in &boat.seats {
+                                    div class="seat-row" {
+                                        span class="seat-label" { (seat.label) }
+                                        span class="rower-name" { (seat.rower_name) }
+                                    }
                                 }
                             }
                         }
-                    }
-                    @if !summary.benched.is_empty() {
-                        div class="benched" {
-                            "Bench: " (summary.benched.join(", "))
+                        @if !summary.benched.is_empty() {
+                            div class="benched" {
+                                "Bench: " (summary.benched.join(", "))
+                            }
                         }
                     }
                 }
-            }
-            div style="margin-top: 20px; text-align: center;" {
-                a href=(magic_url) class="btn" {
-                    "View lineups"
+                div style="margin-top: 20px; text-align: center;" {
+                    a href=(magic_url) class="btn" {
+                        "View lineups"
+                    }
                 }
             }
-        }
-    })
+        },
+    )
 }

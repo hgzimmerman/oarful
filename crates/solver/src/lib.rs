@@ -444,9 +444,9 @@ impl SolverConfig {
     pub fn even_speed() -> Self {
         Self {
             skill_variance_weight: 3,
-            pair_affinity_weight: 1,     // speed parity > being with friends
-            seat_affinity_weight: 2,     // nice-to-have, not priority
-            side_preference_weight: 2,   // respect side but allow overrides
+            pair_affinity_weight: 1,   // speed parity > being with friends
+            seat_affinity_weight: 2,   // nice-to-have, not priority
+            side_preference_weight: 2, // respect side but allow overrides
             pair_strength_weight: 3,
             bow_pair_strength_weight: 3,
             height_balance_weight: 2,
@@ -469,14 +469,14 @@ impl SolverConfig {
     pub fn tiered() -> Self {
         Self {
             skill_variance_weight: 0,
-            seat_affinity_weight: 2,     // yield to stacking, not ignored
+            seat_affinity_weight: 2, // yield to stacking, not ignored
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
             pair_strength_weight: 0,
             bow_pair_strength_weight: 1,
             top_boat_stacking_weight: 4,
-            minimize_bench_weight: 2,    // strategic benching OK, not aggressive
-            bench_cooldown_penalty: 1,   // rotate who gets benched, don't repeat
+            minimize_bench_weight: 2, // strategic benching OK, not aggressive
+            bench_cooldown_penalty: 1, // rotate who gets benched, don't repeat
             ..Self::balanced()
         }
     }
@@ -490,21 +490,21 @@ impl SolverConfig {
             skill_variance_weight: 0,
             pair_affinity_weight: 0,
             seat_affinity_weight: 0,
-            side_preference_weight: 2,       // wrong-side is hard to row
-            weight_class_slack_weight: 1,    // sensible boat sizes
+            side_preference_weight: 2,    // wrong-side is hard to row
+            weight_class_slack_weight: 1, // sensible boat sizes
             cox_cooldown_penalty: 0,
-            placement_reward_weight: 2,      // field boats, don't leave them idle
+            placement_reward_weight: 2, // field boats, don't leave them idle
             pair_strength_weight: 0,
             bow_pair_strength_weight: 0,
             height_balance_weight: 0,
             end_pair_skill_weight: 0,
             engine_room_strength_weight: 0,
-            partial_fill_bonus: 1,           // partial-fill still prefers filling
+            partial_fill_bonus: 1, // partial-fill still prefers filling
             non_scull_retention_weight: 0,
-            bow_cox_fit_weight: 1,           // don't stuff heavyweights in bow cox
+            bow_cox_fit_weight: 1, // don't stuff heavyweights in bow cox
             top_boat_stacking_weight: 0,
-            pair_eligibility_weight: 1,      // floor for pair boat safety
-            minimize_bench_weight: 2,        // everyone rows
+            pair_eligibility_weight: 1, // floor for pair boat safety
+            minimize_bench_weight: 2,   // everyone rows
             boat_size_stacking_weight: 0,
             bench_cooldown_penalty: 0,
             stroke_spread_weight: 0,
@@ -519,9 +519,8 @@ impl SolverConfig {
     }
 
     /// Built-in preset names. Custom profiles must not shadow these.
-    pub const BUILTIN_NAMES: &'static [&'static str] = &[
-        "balanced", "even_speed", "tiered", "random",
-    ];
+    pub const BUILTIN_NAMES: &'static [&'static str] =
+        &["balanced", "even_speed", "tiered", "random"];
 
     /// Whether a name is a reserved built-in preset.
     pub fn is_builtin(name: &str) -> bool {
@@ -699,9 +698,7 @@ pub enum SolveStreamEvent {
         solution: ProposedSolution,
     },
     /// All alternatives done (or none requested).
-    Done {
-        elapsed: std::time::Duration,
-    },
+    Done { elapsed: std::time::Duration },
 }
 
 /// A pre-solve diagnostic explaining why a problem is (or is likely)
@@ -721,10 +718,7 @@ pub enum Diagnostic {
     },
     /// A specific required seat on a boat has zero eligible rowers
     /// (after side + cox + designated-cox filtering).
-    UnfillableSeat {
-        boat_name: String,
-        seat: i32,
-    },
+    UnfillableSeat { boat_name: String, seat: i32 },
     /// Every candidate boat was forced unused because at least one
     /// of its required seats is unfillable — no fleet can be fielded.
     AllBoatsUnfillable,
@@ -860,7 +854,10 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     tracing::info!(
         rss_before_mib = format!("{:.2}", rss_before as f64 / 1024.0),
         rss_after_mib = format!("{:.2}", rss_after as f64 / 1024.0),
-        rss_delta_mib = format!("{:.2}", rss_after.saturating_sub(rss_before) as f64 / 1024.0),
+        rss_delta_mib = format!(
+            "{:.2}",
+            rss_after.saturating_sub(rss_before) as f64 / 1024.0
+        ),
         elapsed_ms = result.elapsed.as_millis() as u64,
         "solve complete"
     );
@@ -905,7 +902,9 @@ pub fn solve_streaming(
             diagnostics: vec![],
             objective: None,
         });
-        let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+        let _ = tx.send(SolveStreamEvent::Done {
+            elapsed: solve_start.elapsed(),
+        });
         return Ok(());
     }
 
@@ -931,25 +930,29 @@ pub fn solve_streaming(
     }
 
     let mut diagnostics = pre_solve_diagnostics(&boats, &available);
-    let (mut builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
+    let (mut builder, objective) =
+        build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     let mut brancher = builder.solver.default_brancher();
     let mut resolver = ResolutionResolver::default();
 
-    let run_one = |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
-        match request.time_budget {
-            None => {
-                let mut termination = Indefinite;
-                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                solver.optimise(brancher, &mut termination, resolver, procedure)
+    let run_one =
+        |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
+            match request.time_budget {
+                None => {
+                    let mut termination = Indefinite;
+                    let procedure =
+                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                    solver.optimise(brancher, &mut termination, resolver, procedure)
+                }
+                Some(budget) => {
+                    let mut termination = TimeBudget::starting_now(budget);
+                    let procedure =
+                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                    solver.optimise(brancher, &mut termination, resolver, procedure)
+                }
             }
-            Some(budget) => {
-                let mut termination = TimeBudget::starting_now(budget);
-                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                solver.optimise(brancher, &mut termination, resolver, procedure)
-            }
-        }
-    };
+        };
 
     // Primary solve
     let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
@@ -958,12 +961,21 @@ pub fn solve_streaming(
         | OptimisationResult::Satisfiable(sol)
         | OptimisationResult::Stopped(sol, _) => {
             let obj_val = sol.get_integer_value(objective);
-            let lineups = decode_solution(&builder.x, &builder.use_b, &builder.boats, &builder.available, |v| sol.get_integer_value(v));
+            let lineups = decode_solution(
+                &builder.x,
+                &builder.use_b,
+                &builder.boats,
+                &builder.available,
+                |v| sol.get_integer_value(v),
+            );
             let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
             let unplaced = compute_unplaced(&builder.available, &lineups);
             let _ = tx.send(SolveStreamEvent::Primary {
                 status: SolveStatus::Satisfied,
-                solution: ProposedSolution { lineups: lineups.clone(), unplaced },
+                solution: ProposedSolution {
+                    lineups: lineups.clone(),
+                    unplaced,
+                },
                 diagnostics: diagnostics.clone(),
                 objective: Some(obj_val),
             });
@@ -974,7 +986,9 @@ pub fn solve_streaming(
                 status: SolveStatus::Unsatisfiable,
                 diagnostics,
             });
-            let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+            let _ = tx.send(SolveStreamEvent::Done {
+                elapsed: solve_start.elapsed(),
+            });
             return Ok(());
         }
         OptimisationResult::Unknown => {
@@ -982,14 +996,20 @@ pub fn solve_streaming(
                 status: SolveStatus::Timeout,
                 diagnostics: vec![],
             });
-            let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+            let _ = tx.send(SolveStreamEvent::Done {
+                elapsed: solve_start.elapsed(),
+            });
             return Ok(());
         }
     };
 
     // Alternatives
     if request.wants_alternatives() {
-        if post_tabu_constraint(&mut builder.solver, &primary_placements, request.tabu_min_diff)? {
+        if post_tabu_constraint(
+            &mut builder.solver,
+            &primary_placements,
+            request.tabu_min_diff,
+        )? {
             let mut alt_index = 0usize;
             for _ in 1..request.top_n {
                 // If the receiver is dropped (client disconnected), stop early.
@@ -1001,21 +1021,37 @@ pub fn solve_streaming(
                     OptimisationResult::Unsatisfiable | OptimisationResult::Unknown => break,
                 };
 
-                let alt_lineups = decode_solution(&builder.x, &builder.use_b, &builder.boats, &builder.available, |v| sol.get_integer_value(v));
+                let alt_lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
                 let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
                 let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
 
-                if tx.send(SolveStreamEvent::Alternative {
-                    index: alt_index,
-                    solution: ProposedSolution { lineups: alt_lineups, unplaced: alt_unplaced },
-                }).is_err() {
+                if tx
+                    .send(SolveStreamEvent::Alternative {
+                        index: alt_index,
+                        solution: ProposedSolution {
+                            lineups: alt_lineups,
+                            unplaced: alt_unplaced,
+                        },
+                    })
+                    .is_err()
+                {
                     // Receiver dropped — client disconnected.
                     return Ok(());
                 }
 
                 alt_index += 1;
                 if alt_index + 1 < request.top_n
-                    && !post_tabu_constraint(&mut builder.solver, &alt_placements, request.tabu_min_diff)?
+                    && !post_tabu_constraint(
+                        &mut builder.solver,
+                        &alt_placements,
+                        request.tabu_min_diff,
+                    )?
                 {
                     break;
                 }
@@ -1023,7 +1059,9 @@ pub fn solve_streaming(
         }
     }
 
-    let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+    let _ = tx.send(SolveStreamEvent::Done {
+        elapsed: solve_start.elapsed(),
+    });
     Ok(())
 }
 
@@ -1039,7 +1077,9 @@ fn rss_kb() -> u64 {
             .unwrap_or(0)
     }
     #[cfg(not(target_os = "linux"))]
-    { 0 }
+    {
+        0
+    }
 }
 
 /// Greedy fleet pre-selection: pick the largest boats first until
@@ -1084,9 +1124,9 @@ fn greedy_fleet_select<'a>(
         })
         .collect();
     rower_quality.sort_by(|a, b| b.0.cmp(&a.0)); // best first
-    // Quality-weighted average: strong rowers' weight class counts
-    // more than weak rowers'. This reflects power-to-weight: a heavy
-    // Expert matters more for boat selection than a heavy Novice.
+                                                 // Quality-weighted average: strong rowers' weight class counts
+                                                 // more than weak rowers'. This reflects power-to-weight: a heavy
+                                                 // Expert matters more for boat selection than a heavy Novice.
     let top_avg_weight: f64 = if rower_quality.is_empty() {
         2.0
     } else {
@@ -1105,7 +1145,8 @@ fn greedy_fleet_select<'a>(
     // are available. If there are enough to justify a heavy boat,
     // put it first. Otherwise fall back to heavier-boat-first as a
     // tiebreaker (it's more forgiving of mixed-weight crews).
-    let heavy_strong_count = rower_quality.iter()
+    let heavy_strong_count = rower_quality
+        .iter()
         .filter(|(q, w)| *w >= 3 && *q >= 6) // Heavy+ and decent quality
         .count();
 
@@ -1223,8 +1264,7 @@ fn pre_solve_diagnostics(boats: &[&Boat], available: &[&Rower]) -> Vec<Diagnosti
     let smallest = boats
         .iter()
         .map(|b| {
-            let total = b.seat_count as usize
-                + if b.has_cox.as_bool() { 1 } else { 0 };
+            let total = b.seat_count as usize + if b.has_cox.as_bool() { 1 } else { 0 };
             (total, &b.name)
         })
         .min_by_key(|(seats, _)| *seats);
@@ -1427,31 +1467,23 @@ fn search_lineups(
     // Helper: run a single optimisation call with the current
     // time-budget policy. Returns the raw Pumpkin result so the
     // caller can decode and decide whether to continue.
-    let run_one = |solver: &mut Solver,
-                   brancher: &mut _,
-                   resolver: &mut _|
-     -> OptimisationResult<()> {
-        match request.time_budget {
-            None => {
-                let mut termination = Indefinite;
-                let procedure = LinearSatUnsat::new(
-                    OptimisationDirection::Minimise,
-                    objective,
-                    NoCallback,
-                );
-                solver.optimise(brancher, &mut termination, resolver, procedure)
+    let run_one =
+        |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
+            match request.time_budget {
+                None => {
+                    let mut termination = Indefinite;
+                    let procedure =
+                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                    solver.optimise(brancher, &mut termination, resolver, procedure)
+                }
+                Some(budget) => {
+                    let mut termination = TimeBudget::starting_now(budget);
+                    let procedure =
+                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                    solver.optimise(brancher, &mut termination, resolver, procedure)
+                }
             }
-            Some(budget) => {
-                let mut termination = TimeBudget::starting_now(budget);
-                let procedure = LinearSatUnsat::new(
-                    OptimisationDirection::Minimise,
-                    objective,
-                    NoCallback,
-                );
-                solver.optimise(brancher, &mut termination, resolver, procedure)
-            }
-        }
-    };
+        };
 
     tracing::info!(
         boats = builder.boats.len(),
@@ -1463,95 +1495,107 @@ fn search_lineups(
 
     // Primary solve — determines the overall result status.
     let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
-    let (primary_status, primary_lineups, primary_placements, primary_objective) =
-        match primary_opt {
-            OptimisationResult::Optimal(sol) => {
-                let obj_val = sol.get_integer_value(objective);
-                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+    let (primary_status, primary_lineups, primary_placements, primary_objective) = match primary_opt
+    {
+        OptimisationResult::Optimal(sol) => {
+            let obj_val = sol.get_integer_value(objective);
+            let boat_usage: Vec<_> = builder
+                .boats
+                .iter()
+                .enumerate()
+                .map(|(i, b)| {
                     let used = sol.get_integer_value(builder.use_b[i]);
                     format!("{}={}", b.name, used)
-                }).collect();
-                tracing::info!(
-                    objective = obj_val,
-                    boats = %boat_usage.join(", "),
-                    "primary solve OPTIMAL"
-                );
-                let lineups = decode_solution(
-                    &builder.x,
-                    &builder.use_b,
-                    &builder.boats,
-                    &builder.available,
-                    |v| sol.get_integer_value(v),
-                );
-                let placements =
-                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-            }
-            OptimisationResult::Satisfiable(sol) => {
-                let obj_val = sol.get_integer_value(objective);
-                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+                })
+                .collect();
+            tracing::info!(
+                objective = obj_val,
+                boats = %boat_usage.join(", "),
+                "primary solve OPTIMAL"
+            );
+            let lineups = decode_solution(
+                &builder.x,
+                &builder.use_b,
+                &builder.boats,
+                &builder.available,
+                |v| sol.get_integer_value(v),
+            );
+            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
+        }
+        OptimisationResult::Satisfiable(sol) => {
+            let obj_val = sol.get_integer_value(objective);
+            let boat_usage: Vec<_> = builder
+                .boats
+                .iter()
+                .enumerate()
+                .map(|(i, b)| {
                     let used = sol.get_integer_value(builder.use_b[i]);
                     format!("{}={}", b.name, used)
-                }).collect();
-                tracing::info!(
-                    objective = obj_val,
-                    boats = %boat_usage.join(", "),
-                    "primary solve SATISFIABLE (not proven optimal)"
-                );
-                let lineups = decode_solution(
-                    &builder.x,
-                    &builder.use_b,
-                    &builder.boats,
-                    &builder.available,
-                    |v| sol.get_integer_value(v),
-                );
-                let placements =
-                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-            }
-            OptimisationResult::Stopped(sol, _) => {
-                let obj_val = sol.get_integer_value(objective);
-                let boat_usage: Vec<_> = builder.boats.iter().enumerate().map(|(i, b)| {
+                })
+                .collect();
+            tracing::info!(
+                objective = obj_val,
+                boats = %boat_usage.join(", "),
+                "primary solve SATISFIABLE (not proven optimal)"
+            );
+            let lineups = decode_solution(
+                &builder.x,
+                &builder.use_b,
+                &builder.boats,
+                &builder.available,
+                |v| sol.get_integer_value(v),
+            );
+            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
+        }
+        OptimisationResult::Stopped(sol, _) => {
+            let obj_val = sol.get_integer_value(objective);
+            let boat_usage: Vec<_> = builder
+                .boats
+                .iter()
+                .enumerate()
+                .map(|(i, b)| {
                     let used = sol.get_integer_value(builder.use_b[i]);
                     format!("{}={}", b.name, used)
-                }).collect();
-                tracing::warn!(
-                    objective = obj_val,
-                    boats = %boat_usage.join(", "),
-                    "primary solve TIMED OUT — returning best-so-far"
-                );
-                let lineups = decode_solution(
-                    &builder.x,
-                    &builder.use_b,
-                    &builder.boats,
-                    &builder.available,
-                    |v| sol.get_integer_value(v),
-                );
-                let placements =
-                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-            }
-            OptimisationResult::Unsatisfiable => {
-                return Ok(SolveResult {
-                    status: SolveStatus::Unsatisfiable,
-                    primary: ProposedSolution::default(),
-                    alternatives: vec![],
-                    diagnostics,
-                    elapsed: std::time::Duration::ZERO,
-                    objective: None,
-                });
-            }
-            OptimisationResult::Unknown => {
-                return Ok(SolveResult {
-                    status: SolveStatus::Timeout,
-                    primary: ProposedSolution::default(),
-                    alternatives: vec![],
-                    diagnostics: vec![],
-                    elapsed: std::time::Duration::ZERO,
-                    objective: None,
-                });
-            }
-        };
+                })
+                .collect();
+            tracing::warn!(
+                objective = obj_val,
+                boats = %boat_usage.join(", "),
+                "primary solve TIMED OUT — returning best-so-far"
+            );
+            let lineups = decode_solution(
+                &builder.x,
+                &builder.use_b,
+                &builder.boats,
+                &builder.available,
+                |v| sol.get_integer_value(v),
+            );
+            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
+        }
+        OptimisationResult::Unsatisfiable => {
+            return Ok(SolveResult {
+                status: SolveStatus::Unsatisfiable,
+                primary: ProposedSolution::default(),
+                alternatives: vec![],
+                diagnostics,
+                elapsed: std::time::Duration::ZERO,
+                objective: None,
+            });
+        }
+        OptimisationResult::Unknown => {
+            return Ok(SolveResult {
+                status: SolveStatus::Timeout,
+                primary: ProposedSolution::default(),
+                alternatives: vec![],
+                diagnostics: vec![],
+                elapsed: std::time::Duration::ZERO,
+                objective: None,
+            });
+        }
+    };
 
     // Tabu re-solve loop for the remaining alternatives. Each
     // entry is a full `ProposedSolution` — lineups *and* its
@@ -1573,8 +1617,7 @@ fn search_lineups(
             request.tabu_min_diff,
         )? {
             for _ in 1..request.top_n {
-                let next =
-                    run_one(&mut builder.solver, &mut brancher, &mut resolver);
+                let next = run_one(&mut builder.solver, &mut brancher, &mut resolver);
                 let sol = match next {
                     OptimisationResult::Optimal(sol)
                     | OptimisationResult::Satisfiable(sol)
@@ -1598,10 +1641,8 @@ fn search_lineups(
                     &builder.available,
                     |v| sol.get_integer_value(v),
                 );
-                let alt_placements =
-                    collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                let alt_unplaced =
-                    compute_unplaced(&builder.available, &alt_lineups);
+                let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
                 alternatives.push(ProposedSolution {
                     lineups: alt_lineups,
                     unplaced: alt_unplaced,
@@ -1627,10 +1668,7 @@ fn search_lineups(
     }
 
     let primary_unplaced = compute_unplaced(&builder.available, &primary_lineups);
-    tracing::debug!(
-        benched = primary_unplaced.benched.len(),
-        "unplaced rowers"
-    );
+    tracing::debug!(benched = primary_unplaced.benched.len(), "unplaced rowers");
     Ok(SolveResult {
         status: primary_status,
         primary: ProposedSolution {
@@ -1650,10 +1688,7 @@ fn search_lineups(
 /// iteration order of `available` so repeated runs produce
 /// identical output (important for the baseline regression
 /// test).
-fn compute_unplaced(
-    available: &[&Rower],
-    lineups: &[ProposedLineup],
-) -> UnplacedRowers {
+fn compute_unplaced(available: &[&Rower], lineups: &[ProposedLineup]) -> UnplacedRowers {
     use std::collections::HashSet;
     let placed: HashSet<RowerId> = lineups
         .iter()
@@ -1678,10 +1713,7 @@ fn collect_placements(
     x: &BTreeMap<(usize, usize, i32), DomainId>,
     mut value_of: impl FnMut(DomainId) -> i32,
 ) -> Vec<DomainId> {
-    x.values()
-        .copied()
-        .filter(|&v| value_of(v) == 1)
-        .collect()
+    x.values().copied().filter(|&v| value_of(v) == 1).collect()
 }
 
 /// Post a tabu constraint forcing any future solution to differ
@@ -1743,4 +1775,3 @@ impl<B: Brancher, R: ConflictResolver> SolutionCallback<B, R> for NoCallback {
         ControlFlow::Continue(())
     }
 }
-

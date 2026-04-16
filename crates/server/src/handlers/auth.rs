@@ -20,7 +20,11 @@ use lineup_db::team::Team;
 use lineup_master_db::tenant::TenantId;
 use serde::Deserialize;
 
-use crate::{magic_link::{create_magic_link, hash_token}, state::AppState, templates};
+use crate::{
+    magic_link::{create_magic_link, hash_token},
+    state::AppState,
+    templates,
+};
 
 /// Cookie name for the JWT token.
 pub(crate) const TOKEN_COOKIE: &str = "token";
@@ -41,9 +45,7 @@ const KNOWN_USER_MAX_AGE: time::Duration = time::Duration::days(365);
 pub(crate) async fn login_page(jar: CookieJar) -> Html<String> {
     let prefill = jar.get(KNOWN_USER_COOKIE).map(|c| c.value().to_string());
     let has_demo = jar.get(super::demo::DEMO_SLUG_COOKIE).is_some();
-    Html(
-        templates::auth::login_email_step(None, prefill.as_deref(), has_demo).into_string(),
-    )
+    Html(templates::auth::login_email_step(None, prefill.as_deref(), has_demo).into_string())
 }
 
 // =====================================================================
@@ -65,13 +67,12 @@ pub(crate) async fn email_step_handler(
     let email = input.email.trim().to_lowercase();
     if email.is_empty() {
         return Html(
-            templates::auth::login_email_step(Some("Email is required."), None, false).into_string(),
+            templates::auth::login_email_step(Some("Email is required."), None, false)
+                .into_string(),
         );
     }
     let show_magic = jar.get(KNOWN_USER_COOKIE).is_some();
-    Html(
-        templates::auth::login_password_step(&email, None, show_magic).into_string(),
-    )
+    Html(templates::auth::login_password_step(&email, None, show_magic).into_string())
 }
 
 // =====================================================================
@@ -395,8 +396,8 @@ pub(crate) async fn magic_login_handler(
     }
 
     if !matches.is_empty() {
-        let expires_at = (chrono::Utc::now() + chrono::TimeDelta::try_hours(24).unwrap())
-            .naive_utc();
+        let expires_at =
+            (chrono::Utc::now() + chrono::TimeDelta::try_hours(24).unwrap()).naive_utc();
 
         // Create one magic link per tenant and collect (club_name, url) pairs.
         let mut clubs: Vec<(String, String)> = Vec::new();
@@ -467,13 +468,10 @@ pub(crate) async fn magic_link_handler(
         .map_err(super::internal_error)?;
 
     let Some(link) = link else {
-        return Ok(
-            Html(
-                templates::auth::login_page(Some("Magic link is invalid or expired."))
-                    .into_string(),
-            )
-            .into_response(),
-        );
+        return Ok(Html(
+            templates::auth::login_page(Some("Magic link is invalid or expired.")).into_string(),
+        )
+        .into_response());
     };
 
     let redirect_path = link.redirect_path.clone();
@@ -502,8 +500,7 @@ pub(crate) async fn magic_link_handler(
 
     let (user, role, default_team) = db
         .with_conn(move |conn| {
-            let user = AppUser::get(conn, magic_user_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let user = AppUser::get(conn, magic_user_id)?.ok_or(diesel::result::Error::NotFound)?;
             let role = AppUser::role(conn, magic_user_id)?;
             let default_team = Team::default_for_user(conn, user.id)?;
             Ok((user, role, default_team))
@@ -512,15 +509,11 @@ pub(crate) async fn magic_link_handler(
         .map_err(super::internal_error)?;
 
     if user.parsed_status() != Some(UserStatus::Active) {
-        return Ok(
-            Html(
-                templates::auth::login_page(Some(
-                    "Account is not active. Check your invite email.",
-                ))
+        return Ok(Html(
+            templates::auth::login_page(Some("Account is not active. Check your invite email."))
                 .into_string(),
-            )
-            .into_response(),
-        );
+        )
+        .into_response());
     }
 
     let role = role.unwrap_or(Role::Member);
@@ -558,9 +551,7 @@ pub(crate) async fn magic_link_handler(
 /// `POST /logout` — clear the JWT cookie (but keep known_user).
 #[tracing::instrument(level = "debug", skip_all)]
 pub(crate) async fn logout_handler(jar: CookieJar) -> impl IntoResponse {
-    let jar = jar.remove(
-        axum_extra::extract::cookie::Cookie::build(TOKEN_COOKIE).path("/"),
-    );
+    let jar = jar.remove(axum_extra::extract::cookie::Cookie::build(TOKEN_COOKIE).path("/"));
     (jar, Redirect::to("/login"))
 }
 

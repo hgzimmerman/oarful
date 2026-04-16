@@ -74,16 +74,7 @@ impl std::fmt::Display for WeightClass {
 /// Physical position of the coxswain seat. Determines display order
 /// of seats in lineup cards: stern→bow means cox appears at the top
 /// for stern-loaders and at the bottom for bow-loaders.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    diesel_derive_enum::DbEnum,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
 #[DbValueStyle = "verbatim"]
 pub enum CoxPosition {
     Bow,

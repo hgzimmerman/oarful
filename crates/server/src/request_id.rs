@@ -2,12 +2,7 @@
 //! ID, opens a tracing span with it, and returns it in the
 //! `x-request-id` response header.
 
-use axum::{
-    extract::Request,
-    http::HeaderValue,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::HeaderValue, middleware::Next, response::Response};
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
 use tracing::Instrument;

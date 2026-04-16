@@ -71,16 +71,25 @@ pub(crate) async fn stream_handler(
     for entry in &knobs.pin {
         let parts: Vec<&str> = entry.splitn(3, ':').collect();
         if parts.len() == 3 {
-            if let (Ok(rid), Ok(bid), Ok(seat)) = (parts[0].parse(), parts[1].parse(), parts[2].parse()) {
-                solver_locks.push(lineup_solver::SeatLock { rower_id: rid, boat_id: bid, seat });
+            if let (Ok(rid), Ok(bid), Ok(seat)) =
+                (parts[0].parse(), parts[1].parse(), parts[2].parse())
+            {
+                solver_locks.push(lineup_solver::SeatLock {
+                    rower_id: rid,
+                    boat_id: bid,
+                    seat,
+                });
             }
         }
     }
     request.locks = solver_locks;
 
     // Display flags for rendering SSE event payloads.
-    let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
-        knobs.pin.iter().filter_map(|e| e.splitn(3, ':').next()?.parse().ok()).collect();
+    let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> = knobs
+        .pin
+        .iter()
+        .filter_map(|e| e.splitn(3, ':').next()?.parse().ok())
+        .collect();
 
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
@@ -116,9 +125,17 @@ pub(crate) async fn stream_handler(
         let _ = fwd_handle.join();
     });
 
-    let unavailable: Vec<lineup_db::rower::types::RowerId> = snapshot.rowers.iter()
+    let unavailable: Vec<lineup_db::rower::types::RowerId> = snapshot
+        .rowers
+        .iter()
         .filter(|r| r.active.as_bool())
-        .filter(|r| !snapshot.availability.get(&r.id).map(|s| s.is_available_for_sweep()).unwrap_or(false))
+        .filter(|r| {
+            !snapshot
+                .availability
+                .get(&r.id)
+                .map(|s| s.is_available_for_sweep())
+                .unwrap_or(false)
+        })
         .map(|r| r.id)
         .collect();
 

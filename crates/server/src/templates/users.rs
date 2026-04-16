@@ -9,7 +9,11 @@ use maud::{html, Markup, DOCTYPE};
 use super::layout::page_header;
 
 /// User list with invite form (PD-only page).
-pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, user_rower_map: &HashMap<UserId, RowerId>) -> Markup {
+pub(crate) fn list_content(
+    users: &[AppUser],
+    roles: &HashMap<UserId, Role>,
+    user_rower_map: &HashMap<UserId, RowerId>,
+) -> Markup {
     let subtitle = format!("{} users", users.len());
     html! {
         (page_header("Users", Some(&subtitle)))
@@ -70,7 +74,11 @@ pub(crate) fn list_content(users: &[AppUser], roles: &HashMap<UserId, Role>, use
     }
 }
 
-pub(crate) fn user_row(u: &AppUser, roles: &HashMap<UserId, Role>, user_rower_map: &HashMap<UserId, RowerId>) -> Markup {
+pub(crate) fn user_row(
+    u: &AppUser,
+    roles: &HashMap<UserId, Role>,
+    user_rower_map: &HashMap<UserId, RowerId>,
+) -> Markup {
     let role_label = roles
         .get(&u.id)
         .map(|r| match r {

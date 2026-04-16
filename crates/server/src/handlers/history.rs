@@ -2,18 +2,24 @@
 //! `GET /history/{id}` — detail view for one committed practice.
 //! `POST /history/{id}/notes` — update practice notes.
 
-use axum::{
-    extract::Path,
-    response::Html,
-    Extension, Form,
-};
+use axum::{extract::Path, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
-use lineup_db::{app_user::Role, availability::Availability, lineup::Lineup, practice::{Practice, PracticeId}, snapshot::DbSnapshot};
-use std::collections::HashSet;
+use lineup_db::{
+    app_user::Role,
+    availability::Availability,
+    lineup::Lineup,
+    practice::{Practice, PracticeId},
+    snapshot::DbSnapshot,
+};
 use serde::Deserialize;
+use std::collections::HashSet;
 
-use crate::{handlers::{internal_error, ErrorResponse}, state::TenantContext, templates};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
@@ -66,8 +72,8 @@ pub(crate) async fn detail_handler(
     let (snapshot, practice, committed) = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::get(conn, practice_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             let lineups = Lineup::for_practice(conn, practice.id)?;
             Ok((snapshot, practice, lineups))
@@ -76,11 +82,18 @@ pub(crate) async fn detail_handler(
         .map_err(internal_error)?;
 
     let date = practice.date;
-    let is_coach = tenant.claims.role()
+    let is_coach = tenant
+        .claims
+        .role()
         .unwrap_or(lineup_db::app_user::Role::Member)
         .at_least(lineup_db::app_user::Role::Coach);
     let content = templates::history::detail_content(
-        &snapshot, practice_id, date, Some(&practice), &committed, tenant.config.force_cox_stern,
+        &snapshot,
+        practice_id,
+        date,
+        Some(&practice),
+        &committed,
+        tenant.config.force_cox_stern,
         is_coach,
     );
     Ok(super::maybe_page_authed(
@@ -113,9 +126,7 @@ pub(crate) async fn notes_handler(
 
     let practice = tenant
         .db
-        .with_conn(move |conn| {
-            Practice::update_notes_by_id(conn, practice_id, notes)
-        })
+        .with_conn(move |conn| Practice::update_notes_by_id(conn, practice_id, notes))
         .await
         .map_err(internal_error)?;
 

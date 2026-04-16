@@ -4,17 +4,17 @@
 //! handler's domain.
 
 pub(crate) mod attendance;
-pub(crate) mod confirm_modal;
 pub(crate) mod audit;
 pub(crate) mod auth;
 pub(crate) mod boats;
-pub(crate) mod my;
+pub(crate) mod confirm_modal;
+pub(crate) mod email;
 pub(crate) mod history;
 pub(crate) mod layout;
+pub(crate) mod my;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod solve;
 pub(crate) mod sync;
 pub(crate) mod teams;
-pub(crate) mod email;
 pub(crate) mod users;

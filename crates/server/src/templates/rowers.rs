@@ -4,12 +4,12 @@
 //! navigates to the detail page where attributes, seat affinities,
 //! and pair affinities are editable via HTMX section swaps.
 
+use crate::handlers::rowers::RosterRow;
 use lineup_db::rower::{
     types::{Height, RowerWeightClass, Skill, Strength},
     Rower,
 };
 use lineup_db::team::SelfEditLevel;
-use crate::handlers::rowers::RosterRow;
 
 /// Controls what the current user can do on this rower's detail page.
 #[derive(Debug, Clone, Copy)]
@@ -24,11 +24,17 @@ pub(crate) struct DetailPermissions {
 impl DetailPermissions {
     /// Coach+ — full access.
     pub(crate) fn coach() -> Self {
-        Self { can_edit_affinities: true, self_edit_level: None }
+        Self {
+            can_edit_affinities: true,
+            self_edit_level: None,
+        }
     }
     /// Member editing own profile.
     pub(crate) fn member(level: SelfEditLevel) -> Self {
-        Self { can_edit_affinities: false, self_edit_level: Some(level) }
+        Self {
+            can_edit_affinities: false,
+            self_edit_level: Some(level),
+        }
     }
     /// Whether a specific field is editable.
     pub(crate) fn can_edit(&self, field: &str) -> bool {
@@ -97,7 +103,12 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
 }
 
 /// Toast banner + refreshed roster after a batch invite.
-pub(crate) fn batch_invite_result(message: &str, rows: &[RosterRow], is_coach: bool, show_emails: bool) -> Markup {
+pub(crate) fn batch_invite_result(
+    message: &str,
+    rows: &[RosterRow],
+    is_coach: bool,
+    show_emails: bool,
+) -> Markup {
     html! {
         div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
             (message)
@@ -179,7 +190,11 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
 /// whether the affinity add/delete forms are shown (Coach+ only).
 /// Attribute editing is always available for the rower's own profile
 /// and for Coach+.
-pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions, show_emails: bool) -> Markup {
+pub(crate) fn detail_content(
+    detail: &RowerDetail,
+    perms: DetailPermissions,
+    show_emails: bool,
+) -> Markup {
     let r = &detail.rower;
     let subtitle = format!(
         "{} · {} · {} · {}",
@@ -241,7 +256,11 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions, sho
 
 /// Read-only attribute display with an Edit button that swaps to an
 /// inline form. The section has id `#attributes` for HTMX `outerHTML`.
-pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, _perms: &DetailPermissions) -> Markup {
+pub(crate) fn attribute_section(
+    r: &Rower,
+    error: Option<&str>,
+    _perms: &DetailPermissions,
+) -> Markup {
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     html! {
         section #attributes class="bg-white rounded-lg shadow p-6" {
@@ -277,7 +296,11 @@ pub(crate) fn attribute_section(r: &Rower, error: Option<&str>, _perms: &DetailP
 
 /// Editable attribute form. Save posts to `/rowers/{id}` and the
 /// handler returns a fresh `attribute_section` for the HTMX swap.
-pub(crate) fn attribute_edit_section(r: &Rower, error: Option<&str>, perms: &DetailPermissions) -> Markup {
+pub(crate) fn attribute_edit_section(
+    r: &Rower,
+    error: Option<&str>,
+    perms: &DetailPermissions,
+) -> Markup {
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
@@ -638,7 +661,11 @@ fn enum_select(name: &str, options: &[(&str, &str, bool)]) -> Markup {
 /// mapped solver value.
 fn weight_slider(id: &str, default: i32) -> Markup {
     // Solver value (-5..+5, no 0) → slider position (1..10).
-    let slider_pos = if default > 0 { default + 5 } else { default + 6 };
+    let slider_pos = if default > 0 {
+        default + 5
+    } else {
+        default + 6
+    };
     let default_label = weight_label(slider_pos);
 
     // JS: map slider position (1..10) → solver value, update label.
@@ -685,11 +712,19 @@ fn side_slider(r: &Rower) -> Markup {
         Side::Either => 0,
         Side::Port => {
             let s = r.side_strength.as_int();
-            if s == 0 { -5 } else { -(6 - s).min(5).max(1) }
+            if s == 0 {
+                -5
+            } else {
+                -(6 - s).min(5).max(1)
+            }
         }
         Side::Starboard => {
             let s = r.side_strength.as_int();
-            if s == 0 { 5 } else { (6 - s).min(5).max(1) }
+            if s == 0 {
+                5
+            } else {
+                (6 - s).min(5).max(1)
+            }
         }
     };
     let default_label = side_slider_label(pos);
@@ -749,11 +784,19 @@ fn side_display_label(r: &Rower) -> String {
         Side::Either => 0,
         Side::Port => {
             let s = r.side_strength.as_int();
-            if s == 0 { -5 } else { -(6 - s).min(5).max(1) }
+            if s == 0 {
+                -5
+            } else {
+                -(6 - s).min(5).max(1)
+            }
         }
         Side::Starboard => {
             let s = r.side_strength.as_int();
-            if s == 0 { 5 } else { (6 - s).min(5).max(1) }
+            if s == 0 {
+                5
+            } else {
+                (6 - s).min(5).max(1)
+            }
         }
     };
     let label = side_slider_label(pos);

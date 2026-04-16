@@ -29,15 +29,15 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 use crate::state::TenantContext;
-use crate::{handlers::{internal_error, ErrorResponse, bad_request}, templates};
+use crate::{
+    handlers::{bad_request, internal_error, ErrorResponse},
+    templates,
+};
 
 const TAB_TARGET: &str = "practices-tab-content";
 
 fn is_tab_swap(headers: &HeaderMap) -> bool {
-    headers
-        .get("HX-Target")
-        .and_then(|v| v.to_str().ok())
-        == Some(TAB_TARGET)
+    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TAB_TARGET)
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -53,11 +53,7 @@ pub(crate) async fn list_handler(
         .at_least(Role::Coach);
 
     let planning_content = planning_tab_content(&jar, &tenant).await?;
-    let content = templates::practices::tabbed_page(
-        "planning",
-        planning_content,
-        is_coach,
-    );
+    let content = templates::practices::tabbed_page("planning", planning_content, is_coach);
     Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
 }
 
@@ -74,7 +70,11 @@ pub(crate) async fn planning_handler(
             templates::practices::tab_content_swap("planning", content).into_string(),
         ));
     }
-    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
     let page = templates::practices::tabbed_page("planning", content, is_coach);
     Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
@@ -96,7 +96,9 @@ async fn planning_tab_content(
         .with_conn(move |conn| {
             let team = lineup_db::team::Team::get(conn, team_id)?;
             let default_time = team.as_ref().and_then(|t| t.default_practice_time);
-            let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
+            let default_duration = team
+                .as_ref()
+                .and_then(|t| t.default_practice_duration_minutes);
             let practice_days = team.as_ref().and_then(|t| t.default_practice_days);
             let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
 
@@ -108,13 +110,18 @@ async fn planning_tab_content(
 
             let existing_dates: HashSet<chrono::NaiveDate> =
                 upcoming_practices.iter().map(|p| p.date).collect();
-            let suggested_date = practice_days
-                .and_then(|pd| pd.next_unfilled(today, &existing_dates));
+            let suggested_date =
+                practice_days.and_then(|pd| pd.next_unfilled(today, &existing_dates));
 
             let all_rowers = Rower::list_active(conn)?;
             let rowers_with_user: Vec<_> = all_rowers
                 .iter()
-                .filter(|r| AppUser::find_by_rower_id(conn, r.id).ok().flatten().is_some())
+                .filter(|r| {
+                    AppUser::find_by_rower_id(conn, r.id)
+                        .ok()
+                        .flatten()
+                        .is_some()
+                })
                 .collect();
 
             let mut rows = Vec::new();
@@ -123,7 +130,10 @@ async fn planning_tab_content(
                     continue;
                 }
                 let avail_map = Availability::map_for_practice(conn, practice.id)?;
-                let yes = avail_map.values().filter(|s| s.is_available_for_sweep()).count();
+                let yes = avail_map
+                    .values()
+                    .filter(|s| s.is_available_for_sweep())
+                    .count();
                 let total = avail_map.len();
                 let non_respondents = rowers_with_user
                     .iter()
@@ -150,7 +160,14 @@ async fn planning_tab_content(
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::planning_content(&rows, is_coach, today, default_time, default_duration, suggested_date))
+    Ok(templates::practices::planning_content(
+        &rows,
+        is_coach,
+        today,
+        default_time,
+        default_duration,
+        suggested_date,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,20 +190,32 @@ pub(crate) async fn create_handler(
 
     let date = NaiveDate::parse_from_str(input.date.trim(), "%Y-%m-%d")
         .map_err(|_| bad_request("Invalid date format."))?;
-    let time: Option<NaiveTime> = input.time
+    let time: Option<NaiveTime> = input
+        .time
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| bad_request("Invalid time format.")))
+        .map(|s| {
+            NaiveTime::parse_from_str(s.trim(), "%H:%M")
+                .map_err(|_| bad_request("Invalid time format."))
+        })
         .transpose()?;
-    let end_time: Option<NaiveTime> = input.end_time
+    let end_time: Option<NaiveTime> = input
+        .end_time
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| bad_request("Invalid time format.")))
+        .map(|s| {
+            NaiveTime::parse_from_str(s.trim(), "%H:%M")
+                .map_err(|_| bad_request("Invalid time format."))
+        })
         .transpose()?;
     let duration_minutes: Option<i32> = match (time, end_time) {
         (Some(start), Some(end)) => {
             let dur = end.signed_duration_since(start).num_minutes();
-            if dur > 0 { Some(dur as i32) } else { None }
+            if dur > 0 {
+                Some(dur as i32)
+            } else {
+                None
+            }
         }
         _ => None,
     };
@@ -230,8 +259,8 @@ pub(crate) async fn cancel_handler(
     let new_cancelled = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::get(conn, practice_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let new_cancelled = !practice.cancelled.as_bool();
             Practice::set_cancelled_by_id(conn, practice_id, new_cancelled)?;
             Ok(new_cancelled)
@@ -264,7 +293,11 @@ pub(crate) async fn committed_handler(
             templates::practices::tab_content_swap("committed", content).into_string(),
         ));
     }
-    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
     let page = templates::practices::tabbed_page("committed", content, is_coach);
     Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
@@ -284,7 +317,9 @@ async fn committed_tab_content(
         .db
         .with_conn(move |conn| {
             let team = lineup_db::team::Team::get(conn, team_id)?;
-            let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
+            let default_duration = team
+                .as_ref()
+                .and_then(|t| t.default_practice_duration_minutes);
             let committed_practices = Practice::list_committed(conn, team_id)?;
 
             let mut rows = Vec::new();

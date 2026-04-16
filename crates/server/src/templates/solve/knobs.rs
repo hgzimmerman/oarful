@@ -12,9 +12,21 @@ use crate::handlers::solve::SolveKnobs;
 /// budget). Submitting hx-gets the same `/solve/{id}` URL with the
 /// new query string, so the result is bookmarkable and the back
 /// button works.
-pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices: &[lineup_db::practice::Practice], has_generated: bool, custom_profiles: &[(String, Option<String>)], snapshot: &DbSnapshot, solve_result: Option<&SolveResult>) -> Markup {
+pub(super) fn knobs_form(
+    practice_id: PracticeId,
+    knobs: &SolveKnobs,
+    practices: &[lineup_db::practice::Practice],
+    has_generated: bool,
+    custom_profiles: &[(String, Option<String>)],
+    snapshot: &DbSnapshot,
+    solve_result: Option<&SolveResult>,
+) -> Markup {
     let has_eight = snapshot.boats.iter().any(|b| b.seat_count >= 8);
-    let button_label = if has_generated { "Re-generate" } else { "Generate" };
+    let button_label = if has_generated {
+        "Re-generate"
+    } else {
+        "Generate"
+    };
     let action = format!("/solve/{practice_id}");
     html! {
         // Segmented button helper: update hidden input + toggle active style.
@@ -384,13 +396,7 @@ fn preset_buttons(
     }
 }
 
-fn knob_input(
-    name: &str,
-    label: &str,
-    value: i64,
-    min: Option<i64>,
-    help: Option<&str>,
-) -> Markup {
+fn knob_input(name: &str, label: &str, value: i64, min: Option<i64>, help: Option<&str>) -> Markup {
     html! {
         div {
             label for=(name) class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
@@ -468,9 +474,7 @@ fn diagnostic_message(d: &Diagnostic) -> String {
             seat,
             reason,
         } => {
-            format!(
-                "Seat lock skipped: {rower_name} in seat {seat} on {boat_name} — {reason}."
-            )
+            format!("Seat lock skipped: {rower_name} in seat {seat} on {boat_name} — {reason}.")
         }
     }
 }

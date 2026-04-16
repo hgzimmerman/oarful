@@ -98,10 +98,18 @@ impl SeatZone {
     pub fn seats_for(self, n: i32) -> Vec<i32> {
         match self {
             SeatZone::Stroke => {
-                if n > 1 { vec![n] } else { vec![] }
+                if n > 1 {
+                    vec![n]
+                } else {
+                    vec![]
+                }
             }
             SeatZone::SternPair => {
-                if n >= 3 { vec![n - 1, n] } else { vec![] }
+                if n >= 3 {
+                    vec![n - 1, n]
+                } else {
+                    vec![]
+                }
             }
             SeatZone::SternHalf => {
                 if n >= 3 {
@@ -133,10 +141,18 @@ impl SeatZone {
                 }
             }
             SeatZone::BowPair => {
-                if n >= 3 { vec![1, 2] } else { vec![] }
+                if n >= 3 {
+                    vec![1, 2]
+                } else {
+                    vec![]
+                }
             }
             SeatZone::Bow => {
-                if n > 1 { vec![1] } else { vec![] }
+                if n > 1 {
+                    vec![1]
+                } else {
+                    vec![]
+                }
             }
         }
     }
@@ -144,7 +160,9 @@ impl SeatZone {
 
 // ---- SeatAffinity model -----------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Queryable, Selectable)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Queryable, Selectable,
+)]
 #[diesel(table_name = crate::schema::rower_seat_affinity)]
 pub struct SeatAffinity {
     pub rower_id: RowerId,
@@ -206,10 +224,7 @@ impl SeatAffinity {
                 zone,
                 weight,
             })
-            .on_conflict((
-                rower_seat_affinity::rower_id,
-                rower_seat_affinity::zone,
-            ))
+            .on_conflict((rower_seat_affinity::rower_id, rower_seat_affinity::zone))
             .do_update()
             .set(rower_seat_affinity::weight.eq(weight))
             .execute(conn)?;

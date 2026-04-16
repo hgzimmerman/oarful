@@ -102,11 +102,7 @@ impl AppState {
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
             .filter(|&n| n > 0)
-            .or_else(|| {
-                std::thread::available_parallelism()
-                    .ok()
-                    .map(|n| n.get())
-            })
+            .or_else(|| std::thread::available_parallelism().ok().map(|n| n.get()))
             .unwrap_or(2);
         tracing::info!(solve_concurrency, "configuring solver pool + semaphore");
 
@@ -121,14 +117,18 @@ impl AppState {
             use std::hash::{BuildHasher, Hasher};
             let s = RandomState::new();
             let h = s.build_hasher().finish();
-            tracing::warn!("JWT_SECRET not set — using random secret (tokens won't survive restart)");
+            tracing::warn!(
+                "JWT_SECRET not set — using random secret (tokens won't survive restart)"
+            );
             format!("dev-{h:x}")
         });
         let jwt_keys = JwtKeys::from_secret(jwt_secret.as_bytes());
 
         let origin = std::env::var("ORIGIN").ok().and_then(|s| {
             let s = s.trim().to_string();
-            if s.is_empty() { return None; }
+            if s.is_empty() {
+                return None;
+            }
             match url::Url::parse(&s) {
                 Ok(u) => {
                     tracing::info!(%u, "using ORIGIN for full URLs");
@@ -207,14 +207,10 @@ fn lookup_tenant(master_conn_str: &str, id: TenantId) -> anyhow::Result<Tenant> 
     use anyhow::Context;
     let mut conn = lineup_master_db::connect_sync(master_conn_str)
         .context("opening master DB for tenant lookup")?;
-    Tenant::get(&mut conn, id)?
-        .ok_or_else(|| anyhow::anyhow!("tenant {id} not found"))
+    Tenant::get(&mut conn, id)?.ok_or_else(|| anyhow::anyhow!("tenant {id} not found"))
 }
 
-fn ensure_default_tenant(
-    master_conn_str: &str,
-    tenant_db_path: &str,
-) -> anyhow::Result<TenantId> {
+fn ensure_default_tenant(master_conn_str: &str, tenant_db_path: &str) -> anyhow::Result<TenantId> {
     use anyhow::Context;
     let mut conn = lineup_master_db::connect_sync(master_conn_str)
         .context("opening master DB for tenant seed")?;

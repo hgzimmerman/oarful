@@ -67,8 +67,7 @@ impl TestInstance {
         // Create a temp directory for this test's databases.
         let temp_dir = std::env::temp_dir().join(format!("lineup_e2e_{app_port}"));
         let _ = std::fs::remove_dir_all(&temp_dir);
-        std::fs::create_dir_all(temp_dir.join("data/demos"))
-            .expect("should create temp data dir");
+        std::fs::create_dir_all(temp_dir.join("data/demos")).expect("should create temp data dir");
 
         let master_db = temp_dir.join("master.db").to_string_lossy().into_owned();
         let data_dir = temp_dir.join("data").to_string_lossy().into_owned();

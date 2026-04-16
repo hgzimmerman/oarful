@@ -63,8 +63,7 @@ async fn swap_two_rowers() {
         .await
         .unwrap();
 
-    let rowers: Vec<serde_json::Value> =
-        serde_json::from_str(rowers.as_str().unwrap()).unwrap();
+    let rowers: Vec<serde_json::Value> = serde_json::from_str(rowers.as_str().unwrap()).unwrap();
     assert!(rowers.len() >= 2, "need at least 2 seated rowers to swap");
 
     let key_a = rowers[0]["key"].as_str().unwrap().to_string();
@@ -75,7 +74,10 @@ async fn swap_two_rowers() {
     // Click first seat to select it.
     client
         .execute(
-            &format!(r#"document.querySelector('[data-key="{}"]').click();"#, key_a),
+            &format!(
+                r#"document.querySelector('[data-key="{}"]').click();"#,
+                key_a
+            ),
             vec![],
         )
         .await
@@ -84,7 +86,10 @@ async fn swap_two_rowers() {
     // Click second seat to trigger swap + HTMX re-render.
     client
         .execute(
-            &format!(r#"document.querySelector('[data-key="{}"]').click();"#, key_b),
+            &format!(
+                r#"document.querySelector('[data-key="{}"]').click();"#,
+                key_b
+            ),
             vec![],
         )
         .await
@@ -166,7 +171,10 @@ async fn transfer_between_boats() {
         .await
         .unwrap();
     let boats: Vec<serde_json::Value> = serde_json::from_str(boats.as_str().unwrap()).unwrap();
-    assert!(boats.len() >= 2, "need at least 2 active boats with rowers for transfer test");
+    assert!(
+        boats.len() >= 2,
+        "need at least 2 active boats with rowers for transfer test"
+    );
 
     let source_id = boats[0]["boatId"].as_str().unwrap().to_string();
     let dest_id = boats[1]["boatId"].as_str().unwrap().to_string();
@@ -182,7 +190,10 @@ async fn transfer_between_boats() {
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
         .collect();
-    assert!(!source_rower_names.is_empty(), "source boat should have rowers");
+    assert!(
+        !source_rower_names.is_empty(),
+        "source boat should have rowers"
+    );
 
     // Trigger the transfer by navigating to the editor endpoint with
     // the transfer param. This is what the JS does under the hood.

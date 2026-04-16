@@ -14,15 +14,20 @@ use chrono::NaiveDate;
 use lineup_db::availability::{types::AvailabilityStatus, Availability, NewAvailability};
 use lineup_db::lineup::Lineup;
 use lineup_db::practice::{Practice, PracticeId};
-use lineup_db::rower::Rower;
 use lineup_db::rower::types::SweepBias;
+use lineup_db::rower::Rower;
 use serde::Deserialize;
 
 use lineup_db::team::{SelfEditLevel, Team};
 
 use lineup_db::app_user::AppUser;
 
-use crate::{handlers::{internal_error, ErrorResponse, bad_request, not_found}, handlers::rowers::load_detail, state::TenantContext, templates};
+use crate::{
+    handlers::rowers::load_detail,
+    handlers::{bad_request, internal_error, not_found, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 // =====================================================================
 // Profile
@@ -91,12 +96,24 @@ pub(crate) async fn profile_update_handler(
     };
 
     // Only apply fields the trust level allows.
-    if perms.can_edit("weight_class") { rower.weight_class = parsed.weight_class; }
-    if perms.can_edit("skill") { rower.skill = parsed.skill; }
-    if perms.can_edit("strength") { rower.strength = parsed.strength; }
-    if perms.can_edit("side") { rower.side = parsed.side; }
-    if perms.can_edit("side_strength") { rower.side_strength = parsed.side_strength; }
-    if perms.can_edit("sweep_bias") { rower.sweep_bias = SweepBias::new(parsed.sweep_bias); }
+    if perms.can_edit("weight_class") {
+        rower.weight_class = parsed.weight_class;
+    }
+    if perms.can_edit("skill") {
+        rower.skill = parsed.skill;
+    }
+    if perms.can_edit("strength") {
+        rower.strength = parsed.strength;
+    }
+    if perms.can_edit("side") {
+        rower.side = parsed.side;
+    }
+    if perms.can_edit("side_strength") {
+        rower.side_strength = parsed.side_strength;
+    }
+    if perms.can_edit("sweep_bias") {
+        rower.sweep_bias = SweepBias::new(parsed.sweep_bias);
+    }
 
     let saved = tenant
         .db
@@ -169,7 +186,10 @@ fn parse_profile(input: &ProfileInput) -> Result<ParsedProfile, String> {
         other => return Err(format!("invalid side: {other}")),
     };
     if !(0..=5).contains(&input.side_strength) {
-        return Err(format!("side strength must be 0-5, got {}", input.side_strength));
+        return Err(format!(
+            "side strength must be 0-5, got {}",
+            input.side_strength
+        ));
     }
     Ok(ParsedProfile {
         weight_class,
@@ -199,7 +219,12 @@ pub(crate) async fn availability_handler(
                 "My availability",
                 "Your account isn't linked to a roster member. Ask your coach to link your account, or sync the spreadsheet with your email address.",
             );
-            return Ok(super::maybe_page_authed("My availability", content, hx, &tenant));
+            return Ok(super::maybe_page_authed(
+                "My availability",
+                content,
+                hx,
+                &tenant,
+            ));
         }
     };
     let rower_id = rower.id;
@@ -211,7 +236,8 @@ pub(crate) async fn availability_handler(
 
             // Gather all relevant practices: upcoming scheduled practices.
             let practices = Practice::list_upcoming(conn, team_id, today)?;
-            let mut all_practices: BTreeMap<PracticeId, (NaiveDate, Option<AvailabilityStatus>)> = BTreeMap::new();
+            let mut all_practices: BTreeMap<PracticeId, (NaiveDate, Option<AvailabilityStatus>)> =
+                BTreeMap::new();
             for p in &practices {
                 all_practices.entry(p.id).or_insert((p.date, None));
             }
@@ -255,7 +281,12 @@ pub(crate) async fn availability_handler(
         .map_err(internal_error)?;
 
     let content = templates::my::availability_content(&rower, &rows, None);
-    Ok(super::maybe_page_authed("My availability", content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        "My availability",
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,7 +337,10 @@ pub(crate) async fn availability_update_handler(
         "availability.update",
         "availability",
         &format!("{rower_id}:{practice_id}"),
-        Some(serde_json::json!({"status": input.status, "practice_id": practice_id.as_int()}).to_string()),
+        Some(
+            serde_json::json!({"status": input.status, "practice_id": practice_id.as_int()})
+                .to_string(),
+        ),
     );
 
     // Check if this change affects a committed lineup.
@@ -401,14 +435,16 @@ pub(crate) async fn email_prefs_handler(
     let user_id = tenant.claims.user_id();
     let user = tenant
         .db
-        .with_conn(move |conn| {
-            AppUser::get(conn, user_id)?
-                .ok_or(diesel::result::Error::NotFound)
-        })
+        .with_conn(move |conn| AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound))
         .await
         .map_err(internal_error)?;
     let content = templates::my::email_prefs_content(&user);
-    Ok(super::maybe_page_authed("Email preferences", content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        "Email preferences",
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -431,9 +467,7 @@ pub(crate) async fn email_prefs_update_handler(
 
     tenant
         .db
-        .with_conn(move |conn| {
-            AppUser::set_email_prefs(conn, user_id, reminders, lineups)
-        })
+        .with_conn(move |conn| AppUser::set_email_prefs(conn, user_id, reminders, lineups))
         .await
         .map_err(internal_error)?;
 
@@ -449,15 +483,17 @@ pub(crate) async fn email_prefs_update_handler(
     // Re-render with updated state.
     let user = tenant
         .db
-        .with_conn(move |conn| {
-            AppUser::get(conn, user_id)?
-                .ok_or(diesel::result::Error::NotFound)
-        })
+        .with_conn(move |conn| AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound))
         .await
         .map_err(internal_error)?;
 
     let content = templates::my::email_prefs_content(&user);
-    Ok(super::maybe_page_authed("Email preferences", content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        "Email preferences",
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 // =====================================================================
@@ -484,5 +520,7 @@ async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, Erro
 /// Load the rower linked to the authenticated user. Returns 404 if
 /// the user doesn't have a linked rower record.
 async fn load_my_rower(tenant: &TenantContext) -> Result<Rower, ErrorResponse> {
-    try_load_my_rower(tenant).await?.ok_or_else(|| not_found("Rower not found."))
+    try_load_my_rower(tenant)
+        .await?
+        .ok_or_else(|| not_found("Rower not found."))
 }

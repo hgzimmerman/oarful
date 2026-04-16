@@ -69,7 +69,11 @@ impl PracticeDays {
     /// Find the next date on or after `from` that matches one of the
     /// configured weekdays and is NOT in `existing`. Returns `None` if
     /// no days are configured or nothing is found within 60 days.
-    pub fn next_unfilled(self, from: NaiveDate, existing: &std::collections::HashSet<NaiveDate>) -> Option<NaiveDate> {
+    pub fn next_unfilled(
+        self,
+        from: NaiveDate,
+        existing: &std::collections::HashSet<NaiveDate>,
+    ) -> Option<NaiveDate> {
         if self.is_empty() {
             return None;
         }
@@ -195,13 +199,7 @@ pub struct NewTeam {
 }
 
 #[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    diesel::Queryable,
-    diesel::Selectable,
-    diesel::Insertable,
+    Debug, Clone, PartialEq, Eq, diesel::Queryable, diesel::Selectable, diesel::Insertable,
 )]
 #[diesel(table_name = crate::schema::team_membership)]
 pub struct TeamMembership {
@@ -287,7 +285,12 @@ impl Team {
             if let Some(rower_id) = user.rower_id {
                 let team_ids = TeamMembership::team_ids_for_rower(conn, rower_id)?;
                 if let Some(tid) = team_ids.first() {
-                    if let Some(t) = team::table.find(*tid).select(Team::as_select()).first(conn).optional()? {
+                    if let Some(t) = team::table
+                        .find(*tid)
+                        .select(Team::as_select())
+                        .first(conn)
+                        .optional()?
+                    {
                         return Ok(Some(t));
                     }
                 }
@@ -364,9 +367,7 @@ impl TeamMembership {
 
     /// All (team_id, rower_id) pairs across the tenant.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn all(
-        conn: &mut SqliteConnection,
-    ) -> Result<Vec<TeamMembership>, diesel::result::Error> {
+    pub fn all(conn: &mut SqliteConnection) -> Result<Vec<TeamMembership>, diesel::result::Error> {
         team_membership::table
             .select(TeamMembership::as_select())
             .get_results(conn)
@@ -378,13 +379,7 @@ impl TeamMembership {
 // =====================================================================
 
 #[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    diesel::Queryable,
-    diesel::Selectable,
-    diesel::Insertable,
+    Debug, Clone, PartialEq, Eq, diesel::Queryable, diesel::Selectable, diesel::Insertable,
 )]
 #[diesel(table_name = crate::schema::team_boat_default)]
 pub struct TeamBoatDefault {
@@ -436,9 +431,7 @@ impl TeamBoatDefault {
 
     /// All (team_id, boat_id) pairs across the tenant.
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn all(
-        conn: &mut SqliteConnection,
-    ) -> Result<Vec<TeamBoatDefault>, diesel::result::Error> {
+    pub fn all(conn: &mut SqliteConnection) -> Result<Vec<TeamBoatDefault>, diesel::result::Error> {
         team_boat_default::table
             .select(TeamBoatDefault::as_select())
             .get_results(conn)

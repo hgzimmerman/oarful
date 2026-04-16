@@ -139,5 +139,4 @@ impl SolverProfile {
     ) -> Result<usize, diesel::result::Error> {
         diesel::delete(solver_profile::table.find(id)).execute(conn)
     }
-
 }

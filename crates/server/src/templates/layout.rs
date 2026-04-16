@@ -230,7 +230,9 @@ fn section_tab(tab: &TabDef, active: &str, target_id: &str) -> Markup {
     let classes = if is_active {
         format!("{base} border-slate-800 text-slate-800")
     } else {
-        format!("{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")
+        format!(
+            "{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+        )
     };
     html! {
         button hx-get=(tab.url)

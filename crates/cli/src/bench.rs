@@ -8,10 +8,9 @@
 
 use anyhow::Result;
 use chrono::{NaiveDate, Utc};
-use std::io::Write;
 use lineup_db::availability::types::AvailabilityStatus;
-use lineup_db::boat::{types::WeightClass as BoatWeightClass, Boat};
 use lineup_db::boat::types::BoatId;
+use lineup_db::boat::{types::WeightClass as BoatWeightClass, Boat};
 use lineup_db::rower::{
     types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias},
     Rower,
@@ -20,6 +19,7 @@ use lineup_db::snapshot::DbSnapshot;
 use lineup_db::types::IntBool;
 use lineup_solver::{solve, PartialFillPolicy, SolveRequest, SolveStatus, SolverConfig};
 use std::collections::HashMap;
+use std::io::Write;
 
 pub fn run() -> Result<()> {
     println!("=== Solver scaling benchmark ===");
@@ -35,7 +35,10 @@ pub fn run() -> Result<()> {
     // Axis A: vary roster size with the fixed small fleet. Shows how
     // the model scales with ROWER count on a simple 3-boat problem.
     println!("-- axis A: vary rowers, 3-boat fleet --");
-    println!("{:<10} {:<18} {:<12} {}", "N rowers", "solve time", "status", "notes");
+    println!(
+        "{:<10} {:<18} {:<12} {}",
+        "N rowers", "solve time", "status", "notes"
+    );
     println!("{}", "-".repeat(70));
     std::io::stdout().flush().ok();
     for &n in &[10usize, 15, 20, 25, 30, 40] {
@@ -46,7 +49,10 @@ pub fn run() -> Result<()> {
     // the model scales with BOAT count, which is the `use[b]` fleet
     // selection search space.
     println!("\n-- axis B: vary boats, 20-rower roster --");
-    println!("{:<10} {:<18} {:<12} {}", "N boats", "solve time", "status", "notes");
+    println!(
+        "{:<10} {:<18} {:<12} {}",
+        "N boats", "solve time", "status", "notes"
+    );
     println!("{}", "-".repeat(70));
     std::io::stdout().flush().ok();
     for &n in &[1usize, 2, 3, 5, 7, 10] {
@@ -94,11 +100,7 @@ fn run_repeated(
     samples: usize,
     top_n: usize,
 ) -> Result<()> {
-    print!(
-        "{:<10} {:<10} ",
-        n_rowers,
-        format!("{budget_secs}s"),
-    );
+    print!("{:<10} {:<10} ", n_rowers, format!("{budget_secs}s"),);
     std::io::stdout().flush().ok();
 
     let rowers = generate_rowers(n_rowers);
@@ -273,18 +275,98 @@ fn generate_full_fleet() -> Vec<Boat> {
     let mut id = 1i32;
 
     // Four 4-boats: 2 Medium + 2 Light, mixing coxed/coxless and rigs.
-    push_boat(&mut boats, &mut id, "Four-M1", BoatWeightClass::Medium, 4, true, Side::Starboard);
-    push_boat(&mut boats, &mut id, "Four-M2", BoatWeightClass::Medium, 4, true, Side::Port);
-    push_boat(&mut boats, &mut id, "Four-L1", BoatWeightClass::Light, 4, false, Side::Starboard);
-    push_boat(&mut boats, &mut id, "Four-L2", BoatWeightClass::Light, 4, false, Side::Port);
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Four-M1",
+        BoatWeightClass::Medium,
+        4,
+        true,
+        Side::Starboard,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Four-M2",
+        BoatWeightClass::Medium,
+        4,
+        true,
+        Side::Port,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Four-L1",
+        BoatWeightClass::Light,
+        4,
+        false,
+        Side::Starboard,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Four-L2",
+        BoatWeightClass::Light,
+        4,
+        false,
+        Side::Port,
+    );
 
     // Six 8-boats: 2 Light, 2 Medium, 2 Heavy. All coxed.
-    push_boat(&mut boats, &mut id, "Eight-L1", BoatWeightClass::Light, 8, true, Side::Starboard);
-    push_boat(&mut boats, &mut id, "Eight-L2", BoatWeightClass::Light, 8, true, Side::Port);
-    push_boat(&mut boats, &mut id, "Eight-M1", BoatWeightClass::Medium, 8, true, Side::Starboard);
-    push_boat(&mut boats, &mut id, "Eight-M2", BoatWeightClass::Medium, 8, true, Side::Port);
-    push_boat(&mut boats, &mut id, "Eight-H1", BoatWeightClass::Heavy, 8, true, Side::Starboard);
-    push_boat(&mut boats, &mut id, "Eight-H2", BoatWeightClass::Heavy, 8, true, Side::Port);
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-L1",
+        BoatWeightClass::Light,
+        8,
+        true,
+        Side::Starboard,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-L2",
+        BoatWeightClass::Light,
+        8,
+        true,
+        Side::Port,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-M1",
+        BoatWeightClass::Medium,
+        8,
+        true,
+        Side::Starboard,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-M2",
+        BoatWeightClass::Medium,
+        8,
+        true,
+        Side::Port,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-H1",
+        BoatWeightClass::Heavy,
+        8,
+        true,
+        Side::Starboard,
+    );
+    push_boat(
+        &mut boats,
+        &mut id,
+        "Eight-H2",
+        BoatWeightClass::Heavy,
+        8,
+        true,
+        Side::Port,
+    );
 
     boats
 }
@@ -371,7 +453,7 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
             side: side_cycle[(i as usize - 1) % side_cycle.len()],
             side_strength: SideStrength::default(),
             sweep_bias: SweepBias::SWEEP_HARD,
-            can_cox: IntBool::new(i <= 5), // first 5 can cox
+            can_cox: IntBool::new(i <= 5),           // first 5 can cox
             is_designated_cox: IntBool::new(i <= 2), // first 2 are designated
             active: IntBool::TRUE,
             created_at: now,

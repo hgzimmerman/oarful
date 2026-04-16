@@ -14,7 +14,10 @@ use std::collections::{HashMap, HashSet};
 use crate::extract::HtmlForm;
 use crate::magic_link::create_magic_link;
 use crate::state::{AppState, TenantContext};
-use crate::{handlers::{internal_error, ErrorResponse}, templates};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    templates,
+};
 
 /// Per-practice non-respondent info shared by preview and send.
 struct ReminderRecipient {
@@ -102,7 +105,11 @@ pub(crate) async fn reminder_preview_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
-    let pids: Vec<PracticeId> = query.practice_ids.iter().map(|&id| PracticeId::new(id)).collect();
+    let pids: Vec<PracticeId> = query
+        .practice_ids
+        .iter()
+        .map(|&id| PracticeId::new(id))
+        .collect();
 
     let recipients = tenant
         .db
@@ -141,7 +148,11 @@ pub(crate) async fn send_reminders_handler(
     let today = Utc::now().date_naive();
     let sender_id = tenant.claims.user_id();
     let team_name = tenant.config.tenant_name.clone();
-    let pids: Vec<PracticeId> = input.practice_ids.iter().map(|&id| PracticeId::new(id)).collect();
+    let pids: Vec<PracticeId> = input
+        .practice_ids
+        .iter()
+        .map(|&id| PracticeId::new(id))
+        .collect();
 
     // Gather non-respondent users + record sends.
     let recipients = tenant
@@ -165,7 +176,8 @@ pub(crate) async fn send_reminders_handler(
                                 recipient_count: result
                                     .iter()
                                     .filter(|r2| r2.dates.contains(date))
-                                    .count() as i32,
+                                    .count()
+                                    as i32,
                                 sent_by_user_id: sender_id,
                             },
                         )?;
@@ -197,7 +209,10 @@ pub(crate) async fn send_reminders_handler(
             .await
             .map_err(internal_error)?;
 
-        let magic_url = state.full_url(&format!("/auth/magic/{}/{raw_token}", tenant.config.tenant_slug));
+        let magic_url = state.full_url(&format!(
+            "/auth/magic/{}/{raw_token}",
+            tenant.config.tenant_slug
+        ));
         if let Err(err) = state
             .mailer
             .send_reminder(&r.email, &r.name, &team_name, &r.dates, &magic_url)
@@ -227,7 +242,5 @@ pub(crate) async fn send_reminders_handler(
         "No reminders to send — everyone has responded or reminders were already sent today."
             .to_string()
     };
-    Ok(Html(
-        templates::practices::send_result(&msg).into_string(),
-    ))
+    Ok(Html(templates::practices::send_result(&msg).into_string()))
 }

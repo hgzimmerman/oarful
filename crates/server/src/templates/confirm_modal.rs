@@ -20,11 +20,7 @@ const CLOSE_JS: &str =
 /// - `action_markup`: the inner form/button that performs the actual action.
 ///    Typically a `<form hx-post="..." hx-target="...">` with a submit button.
 ///    The modal provides the shell; this slot provides the action.
-pub(crate) fn confirm_modal(
-    title: &str,
-    message: &str,
-    action_markup: Markup,
-) -> Markup {
+pub(crate) fn confirm_modal(title: &str, message: &str, action_markup: Markup) -> Markup {
     html! {
         div id="confirm-modal-backdrop"
             class="fixed inset-0 bg-black/40 z-40"

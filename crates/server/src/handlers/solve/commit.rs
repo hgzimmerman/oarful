@@ -7,16 +7,16 @@ use axum::{
     Extension,
 };
 use axum_extra::extract::CookieJar;
+use lineup_db::app_user::Role;
 use lineup_db::{
     lineup::{CommitSeat, Lineup},
     practice::{Practice, PracticeId},
     snapshot::DbSnapshot,
 };
 use lineup_solver::{ProposedLineup, SolveStatus};
-use lineup_db::app_user::Role;
 
 use crate::extract::HtmlForm;
-use crate::handlers::{internal_error, ErrorResponse, bad_request};
+use crate::handlers::{bad_request, internal_error, ErrorResponse};
 use crate::state::AppState;
 
 use super::*;
@@ -35,8 +35,8 @@ pub(crate) async fn commit_handler(
     let (practice, mut snapshot) = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::get(conn, practice_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             Ok((practice, snapshot))
         })
@@ -54,7 +54,10 @@ pub(crate) async fn commit_handler(
 
     if result.status != SolveStatus::Satisfied {
         tracing::warn!(?result.status, %practice_id, "refusing to commit non-satisfied solve");
-        return Err(crate::handlers::ErrorResponse(StatusCode::CONFLICT, "Solver did not find a satisfying solution.".into()));
+        return Err(crate::handlers::ErrorResponse(
+            StatusCode::CONFLICT,
+            "Solver did not find a satisfying solution.".into(),
+        ));
     }
 
     let used: Vec<ProposedLineup> = result
@@ -109,10 +112,8 @@ pub(crate) async fn commit_lineup_handler(
     let _team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     // Parse "boat_id:seat_pos:rower_id" triples and group by boat.
-    let mut by_boat: std::collections::BTreeMap<
-        lineup_db::boat::types::BoatId,
-        Vec<CommitSeat>,
-    > = std::collections::BTreeMap::new();
+    let mut by_boat: std::collections::BTreeMap<lineup_db::boat::types::BoatId, Vec<CommitSeat>> =
+        std::collections::BTreeMap::new();
     for entry in &input.seat {
         let parts: Vec<&str> = entry.splitn(3, ':').collect();
         if parts.len() != 3 {
@@ -146,8 +147,7 @@ pub(crate) async fn commit_lineup_handler(
         .db
         .with_conn(move |conn| {
             // Verify the practice exists.
-            let _practice = Practice::get(conn, pid)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let _practice = Practice::get(conn, pid)?.ok_or(diesel::result::Error::NotFound)?;
             for (boat_id, seats) in &by_boat {
                 Lineup::commit_for_boat(conn, pid, *boat_id, seats)?;
             }

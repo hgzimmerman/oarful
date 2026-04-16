@@ -112,11 +112,7 @@ impl Practice {
         } else {
             query = query.filter(practice::time.is_null());
         }
-        if let Some(existing) = query
-            .select(Practice::as_select())
-            .first(conn)
-            .optional()?
-        {
+        if let Some(existing) = query.select(Practice::as_select()).first(conn).optional()? {
             return Ok(existing);
         }
         diesel::insert_into(practice::table)
@@ -253,7 +249,10 @@ impl Practice {
 
     /// Compute the [start, end) time window for this practice.
     /// Returns None if either time or duration is unknown.
-    pub fn time_window(&self, team_default_duration: Option<i32>) -> Option<(NaiveTime, NaiveTime)> {
+    pub fn time_window(
+        &self,
+        team_default_duration: Option<i32>,
+    ) -> Option<(NaiveTime, NaiveTime)> {
         let start = self.time?;
         let dur = self.effective_duration(team_default_duration)?;
         let end = start + chrono::TimeDelta::minutes(dur as i64);
@@ -309,7 +308,11 @@ impl Practice {
     /// Full label including year.
     pub fn label_full(&self) -> String {
         match self.time {
-            Some(t) => format!("{} · {}", self.date.format("%A, %B %-d, %Y"), t.format("%-I:%M %p")),
+            Some(t) => format!(
+                "{} · {}",
+                self.date.format("%A, %B %-d, %Y"),
+                t.format("%-I:%M %p")
+            ),
             None => self.date.format("%A, %B %-d, %Y").to_string(),
         }
     }

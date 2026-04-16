@@ -7,9 +7,9 @@ use axum::{
 };
 use axum_extra::extract::{CookieJar, Query};
 use axum_htmx::HxRequest;
-use lineup_db::snapshot::DbSnapshot;
-use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::app_user::Role;
+use lineup_db::practice::{Practice, PracticeId};
+use lineup_db::snapshot::DbSnapshot;
 
 use crate::{state::AppState, templates};
 
@@ -29,8 +29,8 @@ pub(crate) async fn view_handler(
     let (practice, mut snapshot, committed_practices, has_committed) = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::get(conn, practice_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             let practices = Practice::list_committed(conn, team_id)?;
             let has_committed = {
@@ -73,9 +73,16 @@ pub(crate) async fn view_handler(
             return Ok(Html(skeleton.into_string()));
         }
         let profile_names: Vec<(String, Option<String>)> = custom_profiles
-            .iter().map(|p| (p.name.clone(), p.description.clone())).collect();
+            .iter()
+            .map(|p| (p.name.clone(), p.description.clone()))
+            .collect();
         let content = templates::solve::streaming_page(
-            &snapshot, practice_id, date, &knobs, &committed_practices, &profile_names,
+            &snapshot,
+            practice_id,
+            date,
+            &knobs,
+            &committed_practices,
+            &profile_names,
         );
         return Ok(crate::handlers::maybe_page_authed(
             &format!("Set Lineups · {date}"),
@@ -95,7 +102,9 @@ pub(crate) async fn view_handler(
             .map_err(internal_error)?;
         let defaults = tenant
             .db
-            .with_conn(move |conn| lineup_db::team::TeamBoatDefault::boat_ids_for_team(conn, team_id))
+            .with_conn(move |conn| {
+                lineup_db::team::TeamBoatDefault::boat_ids_for_team(conn, team_id)
+            })
             .await
             .map_err(internal_error)?;
         // Single-team tenant with no defaults → all boats (empty set signals "all").
@@ -108,7 +117,10 @@ pub(crate) async fn view_handler(
     };
 
     // Landing page: show knobs + "Generate" / "Re-generate" button.
-    let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
+    let profile_names: Vec<(String, Option<String>)> = custom_profiles
+        .iter()
+        .map(|p| (p.name.clone(), p.description.clone()))
+        .collect();
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
@@ -121,8 +133,15 @@ pub(crate) async fn view_handler(
         boats_in_use_by: std::collections::HashMap::new(),
     };
     let content = templates::solve::landing_content(
-        &snapshot, practice_id, date, &knobs, &committed_practices, has_committed,
-        &profile_names, &flags, &default_boats,
+        &snapshot,
+        practice_id,
+        date,
+        &knobs,
+        &committed_practices,
+        has_committed,
+        &profile_names,
+        &flags,
+        &default_boats,
     );
     Ok(crate::handlers::maybe_page_authed(
         &format!("Set Lineups · {date}"),

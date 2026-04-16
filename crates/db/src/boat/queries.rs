@@ -16,7 +16,10 @@ pub struct BoatUsageSummary {
 
 impl Boat {
     #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn insert(conn: &mut SqliteConnection, new: NewBoat) -> Result<Boat, diesel::result::Error> {
+    pub fn insert(
+        conn: &mut SqliteConnection,
+        new: NewBoat,
+    ) -> Result<Boat, diesel::result::Error> {
         diesel::insert_into(boat::table)
             .values(new)
             .returning(Boat::as_returning())
@@ -29,13 +32,19 @@ impl Boat {
     pub fn list_all(conn: &mut SqliteConnection) -> Result<Vec<Boat>, diesel::result::Error> {
         boat::table
             .select(Boat::as_select())
-            .order((boat::relinquished_at.asc(), boat::seat_count.desc(), boat::name.asc()))
+            .order((
+                boat::relinquished_at.asc(),
+                boat::seat_count.desc(),
+                boat::name.asc(),
+            ))
             .get_results(conn)
     }
 
     /// All in-service boats (not yet relinquished).
     #[tracing::instrument(level = "debug", skip_all, err)]
-    pub fn list_in_service(conn: &mut SqliteConnection) -> Result<Vec<Boat>, diesel::result::Error> {
+    pub fn list_in_service(
+        conn: &mut SqliteConnection,
+    ) -> Result<Vec<Boat>, diesel::result::Error> {
         boat::table
             .filter(boat::relinquished_at.is_null())
             .select(Boat::as_select())
@@ -98,10 +107,7 @@ impl Boat {
     /// Persist all fields of `boat` back to its row. Mirrors
     /// [`crate::rower::Rower::save`] — load via `get`, mutate, save.
     #[tracing::instrument(level = "debug", skip(conn, boat), err)]
-    pub fn save(
-        conn: &mut SqliteConnection,
-        boat: &Boat,
-    ) -> Result<Boat, diesel::result::Error> {
+    pub fn save(conn: &mut SqliteConnection, boat: &Boat) -> Result<Boat, diesel::result::Error> {
         diesel::update(boat::table.filter(boat::id.eq(boat.id)))
             .set(boat)
             .returning(Boat::as_returning())

@@ -113,17 +113,12 @@ impl Tenant {
     }
 
     /// Delete a tenant row from the master DB.
-    pub fn delete(
-        conn: &mut SqliteConnection,
-        id: TenantId,
-    ) -> Result<(), diesel::result::Error> {
+    pub fn delete(conn: &mut SqliteConnection, id: TenantId) -> Result<(), diesel::result::Error> {
         diesel::delete(tenant::table.find(id)).execute(conn)?;
         Ok(())
     }
 
-    pub fn list_all(
-        conn: &mut SqliteConnection,
-    ) -> Result<Vec<Tenant>, diesel::result::Error> {
+    pub fn list_all(conn: &mut SqliteConnection) -> Result<Vec<Tenant>, diesel::result::Error> {
         tenant::table
             .select(Tenant::as_select())
             .order(tenant::name.asc())

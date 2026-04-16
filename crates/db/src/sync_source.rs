@@ -10,8 +10,16 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 #[derive(
-    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
-    serde::Serialize, serde::Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
     diesel_derive_newtype::DieselNewType,
 )]
 pub struct SyncSourceId(i32);
@@ -37,7 +45,6 @@ pub struct NewSyncSource {
     pub config: String,
     pub poll_interval_minutes: Option<i32>,
 }
-
 
 impl SyncSource {
     /// All sync sources for a team.
@@ -132,5 +139,4 @@ impl SyncSource {
             .execute(conn)?;
         Ok(())
     }
-
 }

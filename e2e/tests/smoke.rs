@@ -31,7 +31,9 @@ async fn history_page_loads() {
     client
         .wait()
         .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::XPath("//*[contains(text(), 'Committed practices')]"))
+        .for_element(Locator::XPath(
+            "//*[contains(text(), 'Committed practices')]",
+        ))
         .await
         .expect("expected 'Committed practices' heading");
 

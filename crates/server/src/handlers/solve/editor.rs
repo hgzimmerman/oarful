@@ -1,18 +1,14 @@
 //! `GET /solve/{id}/editor` — re-render the lineup editor partial.
 
-use axum::{
-    extract::Path,
-    response::Html,
-    Extension,
-};
+use axum::{extract::Path, response::Html, Extension};
 use axum_extra::extract::{CookieJar, Query};
-use lineup_db::boat::types::BoatId;
-use lineup_db::snapshot::DbSnapshot;
-use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::app_user::Role;
+use lineup_db::boat::types::BoatId;
+use lineup_db::practice::{Practice, PracticeId};
+use lineup_db::snapshot::DbSnapshot;
 
-use crate::templates;
 use crate::handlers::{internal_error, ErrorResponse};
+use crate::templates;
 
 use super::*;
 
@@ -32,8 +28,8 @@ pub(crate) async fn editor_handler(
     let (practice, mut snapshot) = tenant
         .db
         .with_conn(move |conn| {
-            let practice = Practice::get(conn, practice_id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             Ok((practice, snapshot))
         })
@@ -53,7 +49,8 @@ pub(crate) async fn editor_handler(
             let overlapping = Practice::find_overlapping(conn, &practice_for_overlap, team_dur)?;
 
             let mut other_rowers: Vec<(lineup_db::rower::Rower, String)> = Vec::new();
-            let mut boats_in_use: std::collections::HashMap<BoatId, String> = std::collections::HashMap::new();
+            let mut boats_in_use: std::collections::HashMap<BoatId, String> =
+                std::collections::HashMap::new();
 
             for op in &overlapping {
                 let other_team = lineup_db::team::Team::get(conn, op.team_id)?;
@@ -62,21 +59,32 @@ pub(crate) async fn editor_handler(
                 // Find committed lineups for this overlapping practice — boats in use.
                 let committed = lineup_db::lineup::Lineup::for_practice(conn, op.id)?;
                 for cl in &committed {
-                    boats_in_use.entry(cl.lineup.boat_id).or_insert_with(|| team_name.clone());
+                    boats_in_use
+                        .entry(cl.lineup.boat_id)
+                        .or_insert_with(|| team_name.clone());
                 }
 
                 // Find available rowers from this other practice.
-                let other_team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, op.team_id)?;
-                let other_avail = lineup_db::availability::Availability::map_for_practice(conn, op.id)?;
-                let placed_rower_ids: std::collections::HashSet<lineup_db::rower::types::RowerId> = committed
-                    .iter()
-                    .flat_map(|cl| cl.seats.iter().map(|s| s.rower_id))
-                    .collect();
+                let other_team_rower_ids =
+                    lineup_db::team::TeamMembership::rower_ids_for_team(conn, op.team_id)?;
+                let other_avail =
+                    lineup_db::availability::Availability::map_for_practice(conn, op.id)?;
+                let placed_rower_ids: std::collections::HashSet<lineup_db::rower::types::RowerId> =
+                    committed
+                        .iter()
+                        .flat_map(|cl| cl.seats.iter().map(|s| s.rower_id))
+                        .collect();
 
                 // Get rowers who are available but not placed in any lineup.
                 for rid in &other_team_rower_ids {
-                    if placed_rower_ids.contains(rid) { continue; }
-                    if other_avail.get(rid).map(|s| s.is_available_for_sweep()).unwrap_or(false) {
+                    if placed_rower_ids.contains(rid) {
+                        continue;
+                    }
+                    if other_avail
+                        .get(rid)
+                        .map(|s| s.is_available_for_sweep())
+                        .unwrap_or(false)
+                    {
                         if let Some(rower) = lineup_db::rower::Rower::get(conn, *rid)? {
                             if rower.active.as_bool() {
                                 other_rowers.push((rower, team_name.clone()));
@@ -99,31 +107,50 @@ pub(crate) async fn editor_handler(
     // Apply walk-on overrides.
     for id_str in &params.walkon {
         if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-            snapshot.availability.insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
+            snapshot
+                .availability
+                .insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
         }
     }
 
     // Apply no-shows — remove from availability so they don't appear in pool.
     for id_str in &params.no_show {
         if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-            snapshot.availability.insert(id, lineup_db::availability::types::AvailabilityStatus::No);
+            snapshot
+                .availability
+                .insert(id, lineup_db::availability::types::AvailabilityStatus::No);
         }
     }
 
     // Parse seat placements: "boat_id:seat_pos:rower_id"
-    let mut placements: std::collections::HashMap<BoatId, std::collections::HashMap<i32, lineup_db::rower::types::RowerId>> =
-        std::collections::HashMap::new();
+    let mut placements: std::collections::HashMap<
+        BoatId,
+        std::collections::HashMap<i32, lineup_db::rower::types::RowerId>,
+    > = std::collections::HashMap::new();
     for entry in &params.seat {
         let parts: Vec<&str> = entry.splitn(3, ':').collect();
-        if parts.len() != 3 { continue; }
-        let Ok(boat_id) = parts[0].parse::<BoatId>() else { continue };
-        let Ok(seat) = parts[1].parse::<i32>() else { continue };
-        let Ok(rower_id) = parts[2].parse::<lineup_db::rower::types::RowerId>() else { continue };
-        placements.entry(boat_id).or_default().insert(seat, rower_id);
+        if parts.len() != 3 {
+            continue;
+        }
+        let Ok(boat_id) = parts[0].parse::<BoatId>() else {
+            continue;
+        };
+        let Ok(seat) = parts[1].parse::<i32>() else {
+            continue;
+        };
+        let Ok(rower_id) = parts[2].parse::<lineup_db::rower::types::RowerId>() else {
+            continue;
+        };
+        placements
+            .entry(boat_id)
+            .or_default()
+            .insert(seat, rower_id);
     }
 
     // Parse active boats.
-    let mut active_boats: std::collections::HashSet<BoatId> = params.boat.iter()
+    let mut active_boats: std::collections::HashSet<BoatId> = params
+        .boat
+        .iter()
         .filter_map(|s| s.parse::<BoatId>().ok())
         .collect();
 
@@ -132,7 +159,9 @@ pub(crate) async fn editor_handler(
     if let Some(ref transfer) = params.transfer {
         let parts: Vec<&str> = transfer.splitn(2, ':').collect();
         if parts.len() == 2 {
-            if let (Ok(src_id), Ok(dst_id)) = (parts[0].parse::<BoatId>(), parts[1].parse::<BoatId>()) {
+            if let (Ok(src_id), Ok(dst_id)) =
+                (parts[0].parse::<BoatId>(), parts[1].parse::<BoatId>())
+            {
                 let src_boat = snapshot.boats.iter().find(|b| b.id == src_id);
                 let dst_boat = snapshot.boats.iter().find(|b| b.id == dst_id);
                 if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
@@ -162,21 +191,27 @@ pub(crate) async fn editor_handler(
     }
 
     // Parse locks for display.
-    let locked_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> = params.lock.iter()
-        .filter_map(|entry| {
-            let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() != 3 { return None; }
-            let rower_id = parts[0].parse().ok()?;
-            let boat_id = parts[1].parse().ok()?;
-            let seat = parts[2].parse().ok()?;
-            Some((rower_id, boat_id, seat))
-        })
-        .collect();
+    let locked_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> =
+        params
+            .lock
+            .iter()
+            .filter_map(|entry| {
+                let parts: Vec<&str> = entry.splitn(3, ':').collect();
+                if parts.len() != 3 {
+                    return None;
+                }
+                let rower_id = parts[0].parse().ok()?;
+                let boat_id = parts[1].parse().ok()?;
+                let seat = parts[2].parse().ok()?;
+                Some((rower_id, boat_id, seat))
+            })
+            .collect();
 
     let pinned_seats = SolveKnobs::parse_triples(&params.pin);
     let was_pinned_seats = SolveKnobs::parse_triples(&params.was_pin);
 
-    let editor = templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
+    let editor =
+        templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
@@ -191,10 +226,13 @@ pub(crate) async fn editor_handler(
 
     // Unavailable rowers for the walk-on dropdown.
     let walkon_ids = params.walkon;
-    let unavailable: Vec<&lineup_db::rower::Rower> = snapshot.rowers.iter()
+    let unavailable: Vec<&lineup_db::rower::Rower> = snapshot
+        .rowers
+        .iter()
         .filter(|r| r.active.as_bool())
         .filter(|r| {
-            !snapshot.availability
+            !snapshot
+                .availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
                 .unwrap_or(false)
@@ -202,6 +240,15 @@ pub(crate) async fn editor_handler(
         .collect();
 
     Ok(Html(
-        templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags, &unavailable, &walkon_ids, &other_team_rower_display).into_string(),
+        templates::solve::lineup_editor(
+            &snapshot,
+            practice_id,
+            &editor,
+            &flags,
+            &unavailable,
+            &walkon_ids,
+            &other_team_rower_display,
+        )
+        .into_string(),
     ))
 }

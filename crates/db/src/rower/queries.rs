@@ -166,7 +166,11 @@ impl Rower {
         // All available rowers per committed practice.
         let avail_rows: Vec<(RowerId, i32, AvailabilityStatus)> = availability::table
             .filter(availability::practice_id.eq_any(&committed_practice_ids))
-            .select((availability::rower_id, availability::practice_id, availability::status))
+            .select((
+                availability::rower_id,
+                availability::practice_id,
+                availability::status,
+            ))
             .get_results(conn)?;
 
         let mut available_by_date: HashMap<NaiveDate, HashSet<RowerId>> = HashMap::new();
@@ -316,8 +320,15 @@ mod tests {
         let seeded = seed_rower(&mut conn, Side::Starboard);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, "Alice Smith", Side::Either, false, true, false,
-        ).unwrap();
+            &mut conn,
+            &seeded,
+            "Alice Smith",
+            Side::Either,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(updated.side, Side::Starboard);
         assert_eq!(updated.name, "Alice Smith");
@@ -329,8 +340,15 @@ mod tests {
         let seeded = seed_rower(&mut conn, Side::Either);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, "Alice Smith", Side::Port, false, true, false,
-        ).unwrap();
+            &mut conn,
+            &seeded,
+            "Alice Smith",
+            Side::Port,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(updated.side, Side::Port);
     }
@@ -342,8 +360,15 @@ mod tests {
         assert_eq!(seeded.sweep_bias, SweepBias::default());
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, &seeded.name, Side::Port, true, true, false,
-        ).unwrap();
+            &mut conn,
+            &seeded,
+            &seeded.name,
+            Side::Port,
+            true,
+            true,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(updated.sweep_bias, SweepBias::SCULL_HARD);
     }
@@ -358,10 +383,21 @@ mod tests {
         let adjusted = Rower::save(&mut conn, &adjusted).unwrap();
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &adjusted, &adjusted.name, Side::Port, false, true, false,
-        ).unwrap();
+            &mut conn,
+            &adjusted,
+            &adjusted.name,
+            Side::Port,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
 
-        assert_eq!(updated.sweep_bias, SweepBias::new(1), "sweep row should not override coach-set bias");
+        assert_eq!(
+            updated.sweep_bias,
+            SweepBias::new(1),
+            "sweep row should not override coach-set bias"
+        );
     }
 
     #[test]
@@ -371,10 +407,20 @@ mod tests {
         let seeded_updated_at = seeded.updated_at;
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, &seeded.name, Side::Port, false, true, false,
-        ).unwrap();
+            &mut conn,
+            &seeded,
+            &seeded.name,
+            Side::Port,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
 
-        assert_eq!(updated.updated_at, seeded_updated_at, "no-op promote should not touch updated_at");
+        assert_eq!(
+            updated.updated_at, seeded_updated_at,
+            "no-op promote should not touch updated_at"
+        );
     }
 
     #[test]
@@ -383,10 +429,20 @@ mod tests {
         let seeded = seed_rower(&mut conn, Side::Port);
 
         let updated = Rower::promote_from_sheet(
-            &mut conn, &seeded, "Alice Married-Name", Side::Port, false, true, false,
-        ).unwrap();
+            &mut conn,
+            &seeded,
+            "Alice Married-Name",
+            Side::Port,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
 
         assert_eq!(updated.name, "Alice Married-Name");
-        assert_ne!(updated.updated_at, seeded.updated_at, "a name change should bump updated_at");
+        assert_ne!(
+            updated.updated_at, seeded.updated_at,
+            "a name change should bump updated_at"
+        );
     }
 }

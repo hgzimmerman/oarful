@@ -6,22 +6,21 @@
 mod detail;
 
 pub(crate) use detail::{
-    attributes_handler, detail_handler, edit_attributes_handler,
-    load_detail, pair_affinity_delete_handler, pair_affinity_upsert_handler,
-    seat_affinity_delete_handler, seat_affinity_upsert_handler,
-    toggle_active_handler, update_handler, RowerDetail,
+    attributes_handler, detail_handler, edit_attributes_handler, load_detail,
+    pair_affinity_delete_handler, pair_affinity_upsert_handler, seat_affinity_delete_handler,
+    seat_affinity_upsert_handler, toggle_active_handler, update_handler, RowerDetail,
 };
 
-use axum::{
-    extract::State,
-    response::Html,
-    Extension,
-};
+use axum::{extract::State, response::Html, Extension};
 use axum_extra::extract::CookieJar;
 use lineup_db::app_user::{AppUser, Role};
 use lineup_db::rower::Rower;
 
-use crate::{handlers::{internal_error, ErrorResponse}, state::{AppState, TenantContext}, templates};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    state::{AppState, TenantContext},
+    templates,
+};
 
 /// A rower paired with their linked email (if any).
 pub(crate) struct RosterRow {
@@ -35,27 +34,35 @@ pub(crate) async fn roster_content(
     tenant: &TenantContext,
 ) -> Result<maud::Markup, ErrorResponse> {
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
     let show_emails = tenant.show_emails();
     let rows = tenant
         .db
         .with_conn(move |conn| {
-            let team_rower_ids = lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
+            let team_rower_ids =
+                lineup_db::team::TeamMembership::rower_ids_for_team(conn, team_id)?;
             let all_active = Rower::list_active(conn)?;
             let filtered: Vec<Rower> = all_active
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
-                .filter(|r| {
-                    match AppUser::find_by_rower_id(conn, r.id) {
-                        Ok(Some(u)) => u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled),
-                        _ => true,
+                .filter(|r| match AppUser::find_by_rower_id(conn, r.id) {
+                    Ok(Some(u)) => {
+                        u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled)
                     }
+                    _ => true,
                 })
                 .collect();
             let mut rows = Vec::with_capacity(filtered.len());
             for r in filtered {
                 let email = if show_emails {
-                    AppUser::find_by_rower_id(conn, r.id).ok().flatten().map(|u| u.email)
+                    AppUser::find_by_rower_id(conn, r.id)
+                        .ok()
+                        .flatten()
+                        .map(|u| u.email)
                 } else {
                     None
                 };
@@ -65,7 +72,11 @@ pub(crate) async fn roster_content(
         })
         .await
         .map_err(internal_error)?;
-    Ok(templates::rowers::list_content(&rows, is_coach, show_emails))
+    Ok(templates::rowers::list_content(
+        &rows,
+        is_coach,
+        show_emails,
+    ))
 }
 
 /// `POST /team/roster/batch-invite` — create accounts + send invite
@@ -150,7 +161,11 @@ pub(crate) async fn batch_invite_handler(
     }
     let msg = parts.join(" ");
 
-    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
     let show_emails = tenant.show_emails();
     let rows = tenant
         .db
@@ -161,13 +176,16 @@ pub(crate) async fn batch_invite_handler(
             let rows: Vec<RosterRow> = all_active
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
-                .filter(|r| {
-                    match AppUser::find_by_rower_id(conn, r.id) {
-                        Ok(Some(u)) => u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled),
-                        _ => true,
+                .filter(|r| match AppUser::find_by_rower_id(conn, r.id) {
+                    Ok(Some(u)) => {
+                        u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled)
                     }
+                    _ => true,
                 })
-                .map(|r| RosterRow { rower: r, email: None })
+                .map(|r| RosterRow {
+                    rower: r,
+                    email: None,
+                })
                 .collect();
             Ok(rows)
         })

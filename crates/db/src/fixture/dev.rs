@@ -39,7 +39,13 @@ pub fn seed_fleet_only(conn: &mut SqliteConnection) -> Result<(), diesel::result
         let now = chrono::Utc::now().naive_utc();
         let _team = match Team::first(conn)? {
             Some(t) => t,
-            None => Team::create(conn, NewTeam { name: "Sweep".to_string(), created_at: now })?,
+            None => Team::create(
+                conn,
+                NewTeam {
+                    name: "Sweep".to_string(),
+                    created_at: now,
+                },
+            )?,
         };
         for b in toy_boats() {
             Boat::insert(conn, b)?;
@@ -67,7 +73,13 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     let now = chrono::Utc::now().naive_utc();
     let team = match Team::first(conn)? {
         Some(t) => t,
-        None => Team::create(conn, NewTeam { name: "Sweep".to_string(), created_at: now })?,
+        None => Team::create(
+            conn,
+            NewTeam {
+                name: "Sweep".to_string(),
+                created_at: now,
+            },
+        )?,
     };
 
     for b in toy_boats() {
@@ -82,23 +94,29 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
     }
 
     let date = NaiveDate::from_ymd_opt(2026, 4, 11).expect("valid date");
-    let practice = Practice::upsert(conn, team.id, date, None, Some("Toy seeded practice".to_string()))?;
+    let practice = Practice::upsert(
+        conn,
+        team.id,
+        date,
+        None,
+        Some("Toy seeded practice".to_string()),
+    )?;
 
     let statuses = [
-        AvailabilityStatus::Yes,         // Alice
-        AvailabilityStatus::Yes,         // Bob
-        AvailabilityStatus::Yes,         // Carla
-        AvailabilityStatus::Yes,         // Diego
-        AvailabilityStatus::Yes,         // Erin
-        AvailabilityStatus::Yes,         // Finn
-        AvailabilityStatus::Yes,         // Grace
-        AvailabilityStatus::Yes,         // Hana
-        AvailabilityStatus::Yes,         // Ivan
-        AvailabilityStatus::No,          // Juno
-        AvailabilityStatus::No,          // Kai
-        AvailabilityStatus::Yes,         // Lena (designated cox)
-        AvailabilityStatus::Yes,         // Mika (non-designated cox)
-        AvailabilityStatus::Yes,         // Nico (sweep_bias handles scull distinction)
+        AvailabilityStatus::Yes, // Alice
+        AvailabilityStatus::Yes, // Bob
+        AvailabilityStatus::Yes, // Carla
+        AvailabilityStatus::Yes, // Diego
+        AvailabilityStatus::Yes, // Erin
+        AvailabilityStatus::Yes, // Finn
+        AvailabilityStatus::Yes, // Grace
+        AvailabilityStatus::Yes, // Hana
+        AvailabilityStatus::Yes, // Ivan
+        AvailabilityStatus::No,  // Juno
+        AvailabilityStatus::No,  // Kai
+        AvailabilityStatus::Yes, // Lena (designated cox)
+        AvailabilityStatus::Yes, // Mika (non-designated cox)
+        AvailabilityStatus::Yes, // Nico (sweep_bias handles scull distinction)
     ];
     for (rower_id, status) in rower_ids.iter().copied().zip(statuses) {
         Availability::upsert(
@@ -200,19 +218,54 @@ fn toy_rowers() -> Vec<NewRower> {
     use Strength as St;
     vec![
         NewRower::sweep("Alice", Medium, Sk::Expert, St::Strong, H::Tall, Port),
-        NewRower::sweep("Bob", Heavy, Sk::Master, St::VeryStrong, H::VeryTall, Starboard),
-        NewRower::sweep("Carla", Light, Sk::Intermediate, St::Intermediate, H::Short, Port),
+        NewRower::sweep(
+            "Bob",
+            Heavy,
+            Sk::Master,
+            St::VeryStrong,
+            H::VeryTall,
+            Starboard,
+        ),
+        NewRower::sweep(
+            "Carla",
+            Light,
+            Sk::Intermediate,
+            St::Intermediate,
+            H::Short,
+            Port,
+        ),
         NewRower::sweep("Diego", Medium, Sk::Master, St::Strong, H::Tall, Starboard),
         NewRower::sweep("Erin", Medium, Sk::Expert, St::Strong, H::Medium, Either),
-        NewRower::sweep("Finn", Heavy, Sk::Intermediate, St::Strong, H::VeryTall, Port),
-        NewRower::sweep("Grace", Light, Sk::Expert, St::Intermediate, H::Short, Starboard),
+        NewRower::sweep(
+            "Finn",
+            Heavy,
+            Sk::Intermediate,
+            St::Strong,
+            H::VeryTall,
+            Port,
+        ),
+        NewRower::sweep(
+            "Grace",
+            Light,
+            Sk::Expert,
+            St::Intermediate,
+            H::Short,
+            Starboard,
+        ),
         NewRower::sweep("Hana", Medium, Sk::Master, St::VeryStrong, H::Tall, Port),
         {
             let mut r = NewRower::sweep("Ivan", Heavy, Sk::Novice, St::Weak, H::Tall, Starboard);
             r.can_cox = IntBool::FALSE;
             r
         },
-        NewRower::sweep("Juno", Medium, Sk::Intermediate, St::Intermediate, H::Medium, Either),
+        NewRower::sweep(
+            "Juno",
+            Medium,
+            Sk::Intermediate,
+            St::Intermediate,
+            H::Medium,
+            Either,
+        ),
         NewRower::sweep("Kai", Light, Sk::Master, St::Strong, H::Medium, Port),
         {
             let mut r = NewRower::sweep("Lena", Light, Sk::Expert, St::Weak, H::Short, Either);
@@ -221,8 +274,14 @@ fn toy_rowers() -> Vec<NewRower> {
         },
         NewRower::sweep("Mika", Medium, Sk::Master, St::Strong, H::Medium, Starboard),
         {
-            let mut r =
-                NewRower::sweep("Nico", Medium, Sk::Intermediate, St::Strong, H::Tall, Either);
+            let mut r = NewRower::sweep(
+                "Nico",
+                Medium,
+                Sk::Intermediate,
+                St::Strong,
+                H::Tall,
+                Either,
+            );
             r.sweep_bias = SweepBias::SCULL_HARD;
             r
         },

@@ -20,16 +20,18 @@ use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow};
 use lineup_db::schema::{app_user, user_invite, user_role};
 use serde::Deserialize;
 
-use crate::{handlers::ErrorResponse, state::{AppState, TenantContext}, templates};
+use crate::{
+    handlers::ErrorResponse,
+    state::{AppState, TenantContext},
+    templates,
+};
 
 // =====================================================================
 // User list (PD only)
 // =====================================================================
 
 /// Build the users list markup (shared by `/users` and `/admin/users`).
-pub(crate) async fn users_content(
-    tenant: &TenantContext,
-) -> Result<maud::Markup, ErrorResponse> {
+pub(crate) async fn users_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let (users, roles, user_rower_map) = tenant
         .db
         .with_conn(|conn| {
@@ -52,9 +54,12 @@ pub(crate) async fn users_content(
         })
         .await
         .map_err(super::internal_error)?;
-    Ok(templates::users::list_content(&users, &roles, &user_rower_map))
+    Ok(templates::users::list_content(
+        &users,
+        &roles,
+        &user_rower_map,
+    ))
 }
-
 
 // =====================================================================
 // Invite creation (PD only)
@@ -151,7 +156,12 @@ pub(crate) async fn invite_handler(
             );
 
             let content = templates::users::invite_result(Some(&invite_url), None);
-            Ok(super::maybe_page_authed("Invite sent", content, hx, &tenant))
+            Ok(super::maybe_page_authed(
+                "Invite sent",
+                content,
+                hx,
+                &tenant,
+            ))
         }
         Err(msg) => {
             let content = templates::users::invite_result(None, Some(&msg));
@@ -178,21 +188,18 @@ pub(crate) async fn resend_invite_handler(
     let user = tenant
         .db
         .with_conn(move |conn| {
-            let user = AppUser::get(conn, user_id)?
-                .ok_or_else(|| diesel::result::Error::NotFound)?;
+            let user =
+                AppUser::get(conn, user_id)?.ok_or_else(|| diesel::result::Error::NotFound)?;
             if user.status != "invited" {
                 return Err(diesel::result::Error::NotFound);
             }
 
             // Delete any existing invite token for this user.
-            diesel::delete(
-                user_invite::table.filter(user_invite::user_id.eq(user_id)),
-            )
-            .execute(conn)?;
+            diesel::delete(user_invite::table.filter(user_invite::user_id.eq(user_id)))
+                .execute(conn)?;
 
             // Insert fresh token.
-            let expires = chrono::Utc::now().naive_utc()
-                + chrono::TimeDelta::try_days(7).unwrap();
+            let expires = chrono::Utc::now().naive_utc() + chrono::TimeDelta::try_days(7).unwrap();
             diesel::insert_into(user_invite::table)
                 .values((
                     user_invite::token_hash.eq(&token_for_db),
@@ -301,12 +308,10 @@ pub(crate) async fn accept_handler(
 
     // Hash password on blocking pool.
     let password = input.password.clone();
-    let hash = tokio::task::spawn_blocking(move || {
-        bcrypt::hash(password, bcrypt::DEFAULT_COST)
-    })
-    .await
-    .map_err(super::internal_error)?
-    .map_err(super::internal_error)?;
+    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+        .await
+        .map_err(super::internal_error)?
+        .map_err(super::internal_error)?;
 
     // Find which tenant owns this invite token.
     let Some(db) = find_invite_tenant(&state, &token).await? else {
@@ -335,10 +340,8 @@ pub(crate) async fn accept_handler(
 
             AppUser::set_password_and_activate(conn, user_id, &hash)?;
 
-            diesel::delete(
-                user_invite::table.filter(user_invite::token_hash.eq(&token_for_db)),
-            )
-            .execute(conn)?;
+            diesel::delete(user_invite::table.filter(user_invite::token_hash.eq(&token_for_db)))
+                .execute(conn)?;
 
             Ok(true)
         })
@@ -383,30 +386,35 @@ async fn find_invite_tenant(
 
 async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool, ErrorResponse> {
     let token = token.to_string();
-    db
-        .with_conn(move |conn| {
-            let row: Option<chrono::NaiveDateTime> = user_invite::table
-                .filter(user_invite::token_hash.eq(&token))
-                .select(user_invite::expires_at)
-                .first(conn)
-                .optional()?;
+    db.with_conn(move |conn| {
+        let row: Option<chrono::NaiveDateTime> = user_invite::table
+            .filter(user_invite::token_hash.eq(&token))
+            .select(user_invite::expires_at)
+            .first(conn)
+            .optional()?;
 
-            Ok(row.map(|exp| exp > Utc::now().naive_utc()).unwrap_or(false))
-        })
-        .await
-        .map_err(super::internal_error)
+        Ok(row.map(|exp| exp > Utc::now().naive_utc()).unwrap_or(false))
+    })
+    .await
+    .map_err(super::internal_error)
 }
 
 /// Check that the authenticated user has at least `min` role.
 /// Returns 403 if insufficient. The check is ordinal: Member < Coach
 /// < ProgramDirector, so `require_at_least_role(claims, Coach)` passes
 /// for both Coach and ProgramDirector.
-pub(crate) fn require_at_least_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), ErrorResponse> {
+pub(crate) fn require_at_least_role(
+    claims: &crate::jwt::Claims,
+    min: Role,
+) -> Result<(), ErrorResponse> {
     let role = claims.role().unwrap_or(Role::Member);
     if role.at_least(min) {
         Ok(())
     } else {
-        Err(ErrorResponse(StatusCode::FORBIDDEN, "You don't have permission to perform this action.".into()))
+        Err(ErrorResponse(
+            StatusCode::FORBIDDEN,
+            "You don't have permission to perform this action.".into(),
+        ))
     }
 }
 
@@ -418,4 +426,3 @@ pub(crate) fn generate_token() -> String {
     let b = RandomState::new().build_hasher().finish();
     format!("{a:016x}{b:016x}")
 }
-

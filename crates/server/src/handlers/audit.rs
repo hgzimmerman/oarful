@@ -1,7 +1,7 @@
 //! `GET /audit` — PD-only audit log viewer with filters and pagination.
 
-use axum::{response::Html, Extension};
 use crate::handlers::ErrorResponse;
+use axum::{response::Html, Extension};
 use lineup_db::app_user::{AppUser, Role, UserId};
 use lineup_db::audit_log::{AuditFilter, AuditLog};
 use serde::Deserialize;
@@ -61,15 +61,9 @@ pub(crate) async fn audit_content(
     let entries: Vec<AuditLog> = entries.into_iter().take(PAGE_SIZE as usize).collect();
 
     Ok(templates::audit::list_content(
-        &entries,
-        &actions,
-        &user_map,
-        query,
-        offset,
-        has_more,
+        &entries, &actions, &user_map, query, offset, has_more,
     ))
 }
-
 
 /// `GET /audit/rows` — HTMX partial returning just the table rows
 /// for "load more" pagination.

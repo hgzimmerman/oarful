@@ -40,10 +40,7 @@ impl<'a> ModelBuilder<'a> {
     /// equalities for trait maps no downstream constraint will read.
     /// See `build_seat_trait_map` in `model.rs` for the per-trait
     /// construction details.
-    pub(crate) fn build_seat_trait_maps(
-        &mut self,
-        partial_fill: PartialFillPolicy,
-    ) -> Result<()> {
+    pub(crate) fn build_seat_trait_maps(&mut self, partial_fill: PartialFillPolicy) -> Result<()> {
         if self.cfg.skill_variance_weight != 0 || self.cfg.end_pair_skill_weight != 0 {
             self.seat_skill_by_seat = build_seat_trait_map(
                 &mut self.solver,
@@ -56,9 +53,7 @@ impl<'a> ModelBuilder<'a> {
             )?;
         }
 
-        if self.cfg.pair_strength_weight != 0
-            || self.cfg.engine_room_strength_weight != 0
-        {
+        if self.cfg.pair_strength_weight != 0 || self.cfg.engine_room_strength_weight != 0 {
             self.seat_strength_by_seat = build_seat_trait_map(
                 &mut self.solver,
                 &self.boats,
@@ -191,10 +186,7 @@ impl<'a> ModelBuilder<'a> {
     /// Unavailable rowers, designated coxes, and structurally-
     /// incompatible partitions all yield inert terms rather than
     /// errors — see the README §S2 "naturally inert cases" notes.
-    pub(crate) fn post_s2_pair_affinities(
-        &mut self,
-        snapshot: &DbSnapshot,
-    ) -> Result<()> {
+    pub(crate) fn post_s2_pair_affinities(&mut self, snapshot: &DbSnapshot) -> Result<()> {
         if self.cfg.pair_affinity_weight == 0 {
             return Ok(());
         }
@@ -259,9 +251,7 @@ impl<'a> ModelBuilder<'a> {
                     }
                     let tag = solver.new_constraint_tag();
                     solver
-                        .add_constraint(pumpkin_constraints::less_than_or_equals(
-                            upper_a, 0, tag,
-                        ))
+                        .add_constraint(pumpkin_constraints::less_than_or_equals(upper_a, 0, tag))
                         .post()
                         .map_err(|e| anyhow!("pair reif upper-A: {e:?}"))?;
 
@@ -272,9 +262,7 @@ impl<'a> ModelBuilder<'a> {
                     }
                     let tag = solver.new_constraint_tag();
                     solver
-                        .add_constraint(pumpkin_constraints::less_than_or_equals(
-                            upper_b, 0, tag,
-                        ))
+                        .add_constraint(pumpkin_constraints::less_than_or_equals(upper_b, 0, tag))
                         .post()
                         .map_err(|e| anyhow!("pair reif upper-B: {e:?}"))?;
 
@@ -289,15 +277,12 @@ impl<'a> ModelBuilder<'a> {
                     }
                     let tag = solver.new_constraint_tag();
                     solver
-                        .add_constraint(pumpkin_constraints::less_than_or_equals(
-                            lower, 1, tag,
-                        ))
+                        .add_constraint(pumpkin_constraints::less_than_or_equals(lower, 1, tag))
                         .post()
                         .map_err(|e| anyhow!("pair reif lower: {e:?}"))?;
 
-                    obj_terms.push(
-                        together.scaled(-aff.weight.as_int() * cfg.pair_affinity_weight),
-                    );
+                    obj_terms
+                        .push(together.scaled(-aff.weight.as_int() * cfg.pair_affinity_weight));
                     count += 1;
 
                     s_lo += 2;
@@ -314,10 +299,7 @@ impl<'a> ModelBuilder<'a> {
     /// which maps to concrete seats based on boat size. When multiple
     /// zones overlap on the same (rower, boat, seat), we take the MAX
     /// weight to avoid double-counting.
-    pub(crate) fn post_s3_seat_affinities(
-        &mut self,
-        snapshot: &DbSnapshot,
-    ) -> Result<()> {
+    pub(crate) fn post_s3_seat_affinities(&mut self, snapshot: &DbSnapshot) -> Result<()> {
         if self.cfg.seat_affinity_weight == 0 {
             return Ok(());
         }
@@ -633,8 +615,7 @@ impl<'a> ModelBuilder<'a> {
         let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
             for seat in SeatZone::EngineRoom.seats_for(boat.seat_count) {
-                if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat))
-                {
+                if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat)) {
                     self.obj_terms
                         .push(s_var.scaled(-self.cfg.engine_room_strength_weight));
                     count += 1;
@@ -701,12 +682,14 @@ impl<'a> ModelBuilder<'a> {
             // scaled by rank decay.
             for (b_idx, boat) in self.boats.iter().enumerate() {
                 let factor = factors[b_idx];
-                if factor <= 0 { continue; }
+                if factor <= 0 {
+                    continue;
+                }
                 for seat in 1..=boat.seat_count {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            let quality = rower.skill.ordinal() as i64
-                                + rower.strength.ordinal() as i64;
+                            let quality =
+                                rower.skill.ordinal() as i64 + rower.strength.ordinal() as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
@@ -723,12 +706,14 @@ impl<'a> ModelBuilder<'a> {
             for b_idx in 1..self.boats.len() {
                 let boat = self.boats[b_idx];
                 let factor = factors[b_idx];
-                if factor <= 0 { continue; }
+                if factor <= 0 {
+                    continue;
+                }
                 for seat in 1..=boat.seat_count {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            let quality = rower.skill.ordinal() as i64
-                                + rower.strength.ordinal() as i64;
+                            let quality =
+                                rower.skill.ordinal() as i64 + rower.strength.ordinal() as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));

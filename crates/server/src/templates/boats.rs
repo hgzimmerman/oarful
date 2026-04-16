@@ -238,14 +238,20 @@ fn detail_item(label: &str, value: &str) -> Markup {
 // Shared add / edit form
 // =====================================================================
 
-pub(crate) fn form_content(
-    mode: FormMode,
-    data: &BoatFormData,
-    error: Option<&str>,
-) -> Markup {
+pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&str>) -> Markup {
     let (title, action, submit_label, cancel_href) = match mode {
-        FormMode::New => ("New shell", "/boats".to_string(), "Create", "/boats".to_string()),
-        FormMode::Edit(id) => ("Edit shell", format!("/boats/{id}"), "Save", format!("/boats/{id}")),
+        FormMode::New => (
+            "New shell",
+            "/boats".to_string(),
+            "Create",
+            "/boats".to_string(),
+        ),
+        FormMode::Edit(id) => (
+            "Edit shell",
+            format!("/boats/{id}"),
+            "Save",
+            format!("/boats/{id}"),
+        ),
     };
 
     html! {

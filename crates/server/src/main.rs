@@ -14,10 +14,9 @@ use tracing_subscriber::EnvFilter;
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,lineup_server=debug,lineup_solver=debug,lineup_db=debug")),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new("info,lineup_server=debug,lineup_solver=debug,lineup_db=debug")
+        }))
         .init();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -31,10 +30,8 @@ async fn main() -> Result<()> {
         _ => {}
     }
 
-    let master_db =
-        std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
-    let data_dir =
-        std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
+    let master_db = std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".to_string());
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -69,9 +66,11 @@ async fn main() -> Result<()> {
 /// `cargo run -p lineup_server -- reset-tenant <slug>`
 /// Deletes the tenant's DB file and removes it from the master DB.
 fn cmd_reset_tenant(args: &[String]) -> Result<()> {
-    let slug = args.first().ok_or_else(|| anyhow::anyhow!(
-        "Usage: lineup_server reset-tenant <slug>\n  e.g. lineup_server reset-tenant default"
-    ))?;
+    let slug = args.first().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Usage: lineup_server reset-tenant <slug>\n  e.g. lineup_server reset-tenant default"
+        )
+    })?;
     let master_db = std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
 
     if !std::path::Path::new(&master_db).exists() {
@@ -97,7 +96,10 @@ fn cmd_reset_tenant(args: &[String]) -> Result<()> {
 
     // Remove from master DB.
     lineup_master_db::tenant::Tenant::delete(&mut conn, tenant.id)?;
-    println!("Removed tenant '{}' (id={}) from master DB.", tenant.name, tenant.id);
+    println!(
+        "Removed tenant '{}' (id={}) from master DB.",
+        tenant.name, tenant.id
+    );
     Ok(())
 }
 
@@ -131,9 +133,9 @@ fn cmd_reset_all() -> Result<()> {
 /// "default" tenant in the master DB. Runs migrations on the imported
 /// DB to bring it up to date.
 async fn cmd_import(args: &[String]) -> Result<()> {
-    let path = args.first().ok_or_else(|| {
-        anyhow::anyhow!("Usage: lineup_server import <path.db>")
-    })?;
+    let path = args
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("Usage: lineup_server import <path.db>"))?;
     if !std::path::Path::new(path).exists() {
         anyhow::bail!("File not found: {path}");
     }
@@ -206,25 +208,28 @@ async fn cmd_seed() -> Result<()> {
 
     let db_path = format!("{data_dir}/default.db");
     let db_path_for_closure = db_path.clone();
-    master.with_conn(move |conn| {
-        if lineup_master_db::tenant::Tenant::find_by_slug(conn, "default")?.is_none() {
-            let now = chrono::Utc::now().naive_utc();
-            lineup_master_db::tenant::Tenant::create(
-                conn,
-                lineup_master_db::tenant::NewTenant {
-                    name: "Default Club".to_string(),
-                    slug: "default".to_string(),
-                    db_path: db_path_for_closure,
-                    created_at: now,
-                },
-            )?;
-        }
-        Ok(())
-    }).await?;
+    master
+        .with_conn(move |conn| {
+            if lineup_master_db::tenant::Tenant::find_by_slug(conn, "default")?.is_none() {
+                let now = chrono::Utc::now().naive_utc();
+                lineup_master_db::tenant::Tenant::create(
+                    conn,
+                    lineup_master_db::tenant::NewTenant {
+                        name: "Default Club".to_string(),
+                        slug: "default".to_string(),
+                        db_path: db_path_for_closure,
+                        created_at: now,
+                    },
+                )?;
+            }
+            Ok(())
+        })
+        .await?;
 
     // Connect to tenant DB (runs migrations), seed fixture.
     let db = lineup_db::state::Db::connect(&db_path)?;
-    db.with_conn(|conn| lineup_db::fixture::seed_fleet_only(conn)).await?;
+    db.with_conn(|conn| lineup_db::fixture::seed_fleet_only(conn))
+        .await?;
 
     println!("Default tenant seeded (fleet + dev coach account).");
     println!("  Login: coach@test.com / 12345");

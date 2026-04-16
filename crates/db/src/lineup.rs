@@ -91,14 +91,7 @@ pub struct NewLineup {
 }
 
 #[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    diesel::Queryable,
-    diesel::Selectable,
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, diesel::Queryable, diesel::Selectable,
 )]
 #[diesel(table_name = crate::schema::lineup_seat)]
 pub struct LineupSeatRow {
@@ -270,7 +263,11 @@ impl Lineup {
                 lineup_seat::rower_id,
                 lineup_seat::is_cox,
             ))
-            .order((practice::date.desc(), lineup::id.asc(), lineup_seat::seat_position.asc()))
+            .order((
+                practice::date.desc(),
+                lineup::id.asc(),
+                lineup_seat::seat_position.asc(),
+            ))
             .get_results(conn)?;
 
         Ok(rows

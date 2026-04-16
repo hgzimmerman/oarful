@@ -62,8 +62,7 @@ async fn member_sees_restricted_nav() {
         .expect("expected password input on invite acceptance page");
 
     lineup_e2e::set_input_value(&client, "input[name='password']", "testpassword123").await;
-    lineup_e2e::set_input_value(&client, "input[name='password_confirm']", "testpassword123")
-        .await;
+    lineup_e2e::set_input_value(&client, "input[name='password_confirm']", "testpassword123").await;
     lineup_e2e::scroll_and_click(&client, "button[type='submit']").await;
 
     // Should redirect to /login after accepting the invite.

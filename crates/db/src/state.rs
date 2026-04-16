@@ -101,11 +101,7 @@ impl Db {
         F: FnOnce(&mut SqliteConnection) -> Result<T, diesel::result::Error> + Send + 'static,
         T: Send + 'static,
     {
-        let obj: Object = self
-            .pool
-            .get()
-            .await
-            .context("acquiring pool connection")?;
+        let obj: Object = self.pool.get().await.context("acquiring pool connection")?;
         obj.interact(move |conn| {
             // Per-connection PRAGMAs. These are cheap (no I/O) and
             // idempotent, so re-applying on every checkout is fine.

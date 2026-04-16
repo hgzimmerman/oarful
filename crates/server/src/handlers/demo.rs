@@ -110,19 +110,17 @@ pub(crate) async fn create_demo_handler(
         .issue_with_expiry(demo_user_id, tenant.id, role, team_id, exp_unix)
         .map_err(super::internal_error)?;
 
-    let jwt_cookie =
-        axum_extra::extract::cookie::Cookie::build((super::auth::TOKEN_COOKIE, jwt))
-            .path("/")
-            .http_only(true)
-            .same_site(axum_extra::extract::cookie::SameSite::Lax);
+    let jwt_cookie = axum_extra::extract::cookie::Cookie::build((super::auth::TOKEN_COOKIE, jwt))
+        .path("/")
+        .http_only(true)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
 
     // Set demo_slug cookie so the user can resume after logout.
-    let demo_cookie =
-        axum_extra::extract::cookie::Cookie::build((DEMO_SLUG_COOKIE, slug))
-            .path("/")
-            .http_only(true)
-            .max_age(DEMO_SLUG_MAX_AGE)
-            .same_site(axum_extra::extract::cookie::SameSite::Lax);
+    let demo_cookie = axum_extra::extract::cookie::Cookie::build((DEMO_SLUG_COOKIE, slug))
+        .path("/")
+        .http_only(true)
+        .max_age(DEMO_SLUG_MAX_AGE)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
 
     let jar = jar.add(jwt_cookie).add(demo_cookie);
     Ok((jar, Redirect::to("/practices")).into_response())
@@ -158,9 +156,8 @@ pub(crate) async fn resume_demo_handler(
         Some(exp) if exp > Utc::now().naive_utc() => {}
         _ => {
             // Expired or not a demo — clear the cookie.
-            let jar = jar.remove(
-                axum_extra::extract::cookie::Cookie::build(DEMO_SLUG_COOKIE).path("/"),
-            );
+            let jar =
+                jar.remove(axum_extra::extract::cookie::Cookie::build(DEMO_SLUG_COOKIE).path("/"));
             return Ok((jar, Redirect::to("/login")).into_response());
         }
     }
@@ -192,11 +189,10 @@ pub(crate) async fn resume_demo_handler(
         .issue_with_expiry(user.id, tenant_id, role, team_id, exp_unix)
         .map_err(super::internal_error)?;
 
-    let jwt_cookie =
-        axum_extra::extract::cookie::Cookie::build((super::auth::TOKEN_COOKIE, jwt))
-            .path("/")
-            .http_only(true)
-            .same_site(axum_extra::extract::cookie::SameSite::Lax);
+    let jwt_cookie = axum_extra::extract::cookie::Cookie::build((super::auth::TOKEN_COOKIE, jwt))
+        .path("/")
+        .http_only(true)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax);
 
     let jar = jar.add(jwt_cookie);
     Ok((jar, Redirect::to("/practices")).into_response())

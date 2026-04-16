@@ -234,26 +234,42 @@ fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
     }
 }
 
-fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, force_cox_stern: bool, stale_rowers: &HashSet<RowerId>, is_coach: bool) -> Markup {
+fn lineup_block_with_noshow(
+    snapshot: &DbSnapshot,
+    committed: &CommittedLineup,
+    force_cox_stern: bool,
+    stale_rowers: &HashSet<RowerId>,
+    is_coach: bool,
+) -> Markup {
     let boat = snapshot
         .boats
         .iter()
         .find(|b| b.id == committed.lineup.boat_id);
     let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown boat>");
-    let cox_at_top = force_cox_stern
-        || boat.map(|b| b.cox_position.cox_first()).unwrap_or(true);
+    let cox_at_top = force_cox_stern || boat.map(|b| b.cox_position.cox_first()).unwrap_or(true);
     let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
     let has_cox = boat.map(|b| b.has_cox.as_bool()).unwrap_or(false);
 
     // Build full seat list (all positions), mapping to Option<rower>.
-    let seat_map: std::collections::HashMap<i32, &lineup_db::lineup::LineupSeatRow> =
-        committed.seats.iter().map(|s| (s.seat_position, s)).collect();
+    let seat_map: std::collections::HashMap<i32, &lineup_db::lineup::LineupSeatRow> = committed
+        .seats
+        .iter()
+        .map(|s| (s.seat_position, s))
+        .collect();
     let mut all_positions: Vec<i32> = Vec::new();
-    if has_cox { all_positions.push(0); }
-    for s in 1..=seat_count { all_positions.push(s); }
+    if has_cox {
+        all_positions.push(0);
+    }
+    for s in 1..=seat_count {
+        all_positions.push(s);
+    }
     all_positions.sort_by_key(|s| {
         if *s == 0 {
-            if cox_at_top { i32::MIN } else { i32::MAX }
+            if cox_at_top {
+                i32::MIN
+            } else {
+                i32::MAX
+            }
         } else {
             -*s
         }
@@ -323,7 +339,11 @@ fn lineup_block_with_noshow(snapshot: &DbSnapshot, committed: &CommittedLineup, 
 /// Build JS for the "Edit lineup" button. Constructs a URL to the
 /// editor endpoint with the current placements, minus any no-show
 /// checked rowers.
-fn edit_lineup_js(practice_id: PracticeId, committed: &[CommittedLineup], snapshot: &DbSnapshot) -> String {
+fn edit_lineup_js(
+    practice_id: PracticeId,
+    committed: &[CommittedLineup],
+    snapshot: &DbSnapshot,
+) -> String {
     // Pre-compute the placement params from committed lineups.
     let mut seat_params = Vec::new();
     let mut boat_params = Vec::new();

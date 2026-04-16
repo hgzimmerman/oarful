@@ -2,22 +2,22 @@
 
 use std::collections::HashSet;
 
-use axum::{
-    extract::Path,
-    response::Html,
-    Extension, Form,
-};
+use axum::{extract::Path, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::app_user::Role;
-use lineup_db::boat::Boat;
 use lineup_db::boat::types::BoatId;
-use lineup_db::rower::Rower;
+use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
+use lineup_db::rower::Rower;
 use lineup_db::team::{Team, TeamBoatDefault, TeamId, TeamMembership};
 use serde::Deserialize;
 
-use crate::{handlers::{internal_error, ErrorResponse, bad_request, not_found}, state::TenantContext, templates};
+use crate::{
+    handlers::{bad_request, internal_error, not_found, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 /// `GET /teams/selector` — returns the team dropdown markup. Called
 /// via `hx-trigger="load"` from the navbar placeholder so the layout
@@ -43,7 +43,10 @@ pub(crate) async fn selector_handler(
                 // Coaches see active teams they're assigned to.
                 let team_ids = lineup_db::team::TeamMembership::team_ids_for_coach(conn, user_id)?;
                 let active = Team::list_active(conn)?;
-                Ok(active.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+                Ok(active
+                    .into_iter()
+                    .filter(|t| team_ids.contains(&t.id))
+                    .collect())
             } else {
                 // Members see active teams their rower is in.
                 use lineup_db::app_user::AppUser;
@@ -51,7 +54,10 @@ pub(crate) async fn selector_handler(
                 if let Some(rid) = user.and_then(|u| u.rower_id) {
                     let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, rid)?;
                     let active = Team::list_active(conn)?;
-                    Ok(active.into_iter().filter(|t| team_ids.contains(&t.id)).collect())
+                    Ok(active
+                        .into_iter()
+                        .filter(|t| team_ids.contains(&t.id))
+                        .collect())
                 } else {
                     // No linked rower — fall back to active (shouldn't normally happen).
                     Team::list_active(conn)
@@ -60,7 +66,11 @@ pub(crate) async fn selector_handler(
         })
         .await
         .map_err(internal_error)?;
-    let tenant_name = if is_pd { Some(tenant.config.tenant_name.as_str()) } else { None };
+    let tenant_name = if is_pd {
+        Some(tenant.config.tenant_name.as_str())
+    } else {
+        None
+    };
     Ok(Html(
         templates::teams::selector(&teams, active, tenant_name).into_string(),
     ))
@@ -87,7 +97,13 @@ pub(crate) async fn create_handler(
     let team = tenant
         .db
         .with_conn(move |conn| {
-            Team::create(conn, lineup_db::team::NewTeam { name, created_at: now })
+            Team::create(
+                conn,
+                lineup_db::team::NewTeam {
+                    name,
+                    created_at: now,
+                },
+            )
         })
         .await
         .map_err(internal_error)?;
@@ -103,13 +119,16 @@ pub(crate) async fn create_handler(
 
     // Redirect to the new team's detail page.
     let content = templates::teams::detail_content(&team);
-    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        &format!("Team · {}", team.name),
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 /// Build the teams list markup (shared by `/teams` and `/admin/teams`).
-pub(crate) async fn teams_content(
-    tenant: &TenantContext,
-) -> Result<maud::Markup, ErrorResponse> {
+pub(crate) async fn teams_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let teams = tenant
         .db
         .with_conn(|conn| Team::list_all(conn))
@@ -117,7 +136,6 @@ pub(crate) async fn teams_content(
         .map_err(internal_error)?;
     Ok(templates::teams::list_content(&teams))
 }
-
 
 /// `GET /teams/{id}` — team detail + config (PD only).
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -134,7 +152,12 @@ pub(crate) async fn detail_handler(
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
-    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        &format!("Team · {}", team.name),
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -187,13 +210,27 @@ pub(crate) async fn update_handler(
         .and_then(|s| s.parse().ok())
         .filter(|&m: &i32| m > 0);
     let mut days: Vec<chrono::Weekday> = Vec::new();
-    if input.day_mon.is_some() { days.push(chrono::Weekday::Mon); }
-    if input.day_tue.is_some() { days.push(chrono::Weekday::Tue); }
-    if input.day_wed.is_some() { days.push(chrono::Weekday::Wed); }
-    if input.day_thu.is_some() { days.push(chrono::Weekday::Thu); }
-    if input.day_fri.is_some() { days.push(chrono::Weekday::Fri); }
-    if input.day_sat.is_some() { days.push(chrono::Weekday::Sat); }
-    if input.day_sun.is_some() { days.push(chrono::Weekday::Sun); }
+    if input.day_mon.is_some() {
+        days.push(chrono::Weekday::Mon);
+    }
+    if input.day_tue.is_some() {
+        days.push(chrono::Weekday::Tue);
+    }
+    if input.day_wed.is_some() {
+        days.push(chrono::Weekday::Wed);
+    }
+    if input.day_thu.is_some() {
+        days.push(chrono::Weekday::Thu);
+    }
+    if input.day_fri.is_some() {
+        days.push(chrono::Weekday::Fri);
+    }
+    if input.day_sat.is_some() {
+        days.push(chrono::Weekday::Sat);
+    }
+    if input.day_sun.is_some() {
+        days.push(chrono::Weekday::Sun);
+    }
     let practice_days = if days.is_empty() {
         None
     } else {
@@ -234,7 +271,12 @@ pub(crate) async fn update_handler(
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
-    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        &format!("Team · {}", team.name),
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 // =====================================================================
@@ -261,7 +303,11 @@ pub(crate) async fn roster_matrix_content(
         .map(|m| (m.team_id, m.rower_id))
         .collect();
 
-    Ok(templates::teams::roster_matrix(&rowers, &teams, &member_set))
+    Ok(templates::teams::roster_matrix(
+        &rowers,
+        &teams,
+        &member_set,
+    ))
 }
 
 /// `POST /admin/roster` — batch save team membership assignments.
@@ -358,10 +404,8 @@ pub(crate) async fn fleet_matrix_content(
         .await
         .map_err(internal_error)?;
 
-    let default_set: HashSet<(TeamId, BoatId)> = defaults
-        .iter()
-        .map(|d| (d.team_id, d.boat_id))
-        .collect();
+    let default_set: HashSet<(TeamId, BoatId)> =
+        defaults.iter().map(|d| (d.team_id, d.boat_id)).collect();
 
     Ok(templates::teams::fleet_matrix(&boats, &teams, &default_set))
 }
@@ -427,15 +471,12 @@ pub(crate) async fn fleet_matrix_save_handler(
         .await
         .map_err(internal_error)?;
 
-    let default_set: HashSet<(TeamId, BoatId)> = defaults
-        .iter()
-        .map(|d| (d.team_id, d.boat_id))
-        .collect();
+    let default_set: HashSet<(TeamId, BoatId)> =
+        defaults.iter().map(|d| (d.team_id, d.boat_id)).collect();
 
     let msg = format!("Saved. {added} added, {removed} removed.");
     Ok(Html(
-        templates::teams::fleet_matrix_with_toast(&msg, &boats, &teams, &default_set)
-            .into_string(),
+        templates::teams::fleet_matrix_with_toast(&msg, &boats, &teams, &default_set).into_string(),
     ))
 }
 
@@ -469,7 +510,11 @@ pub(crate) async fn toggle_archive_handler(
     crate::audit::record(
         &tenant.db,
         Some(tenant.claims.user_id().as_int()),
-        if new_archived { "team.archive" } else { "team.unarchive" },
+        if new_archived {
+            "team.archive"
+        } else {
+            "team.unarchive"
+        },
         "team",
         &id.to_string(),
         None,
@@ -483,5 +528,10 @@ pub(crate) async fn toggle_archive_handler(
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
-    Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
+    Ok(super::maybe_page_authed(
+        &format!("Team · {}", team.name),
+        content,
+        hx,
+        &tenant,
+    ))
 }

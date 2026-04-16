@@ -60,14 +60,13 @@ async fn main() -> Result<()> {
     // will expose a --team flag or team selector; for the fixture
     // this is always the seeded "Sweep" team.
     let team_id = db
-        .with_conn(|conn| {
-            Ok(Team::first(conn)?
-                .map(|t| t.id)
-                .unwrap_or(TeamId::new(1)))
-        })
+        .with_conn(|conn| Ok(Team::first(conn)?.map(|t| t.id).unwrap_or(TeamId::new(1))))
         .await?;
 
-    let args: Vec<String> = std::env::args().skip(1).filter(|a| !a.starts_with("--fleet")).collect();
+    let args: Vec<String> = std::env::args()
+        .skip(1)
+        .filter(|a| !a.starts_with("--fleet"))
+        .collect();
     match args.first().map(String::as_str) {
         Some("solve") => {
             let opts = parse_solve_args(&args[1..])?;
@@ -138,9 +137,7 @@ fn parse_solve_args(args: &[String]) -> Result<SolveOpts> {
             "--alternatives" => {
                 let n: usize = args
                     .get(i + 1)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("--alternatives requires a number")
-                    })?
+                    .ok_or_else(|| anyhow::anyhow!("--alternatives requires a number"))?
                     .parse()
                     .map_err(|e| {
                         anyhow::anyhow!("--alternatives N must be a positive integer: {e}")
@@ -232,8 +229,8 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
     // --novelty N is given (N > 0). Each historical practice becomes
     // one ReferenceLineup with positive weight (avoid similarity).
     let reference_lineups = if novelty > 0 {
-        use std::collections::BTreeMap;
         use lineup_solver::{ReferenceLineup, ReferencePlacement};
+        use std::collections::BTreeMap;
         let mut groups: BTreeMap<
             (chrono::NaiveDate, lineup_db::boat::types::BoatId),
             Vec<ReferencePlacement>,
@@ -280,10 +277,8 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
 
     match result.status {
         SolveStatus::Satisfied => {
-            let used: Vec<_> =
-                result.primary.lineups.iter().filter(|l| l.used).collect();
-            let skipped: Vec<_> =
-                result.primary.lineups.iter().filter(|l| !l.used).collect();
+            let used: Vec<_> = result.primary.lineups.iter().filter(|l| l.used).collect();
+            let skipped: Vec<_> = result.primary.lineups.iter().filter(|l| !l.used).collect();
             // `seats` includes the cox slot; subtract it for the "rowers
             // placed" count so cox isn't double-counted with rowers.
             let rowers_placed: usize = used
@@ -315,9 +310,7 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
 
             if top_n > 1 {
                 let found = 1 + result.alternatives.len();
-                println!(
-                    "\n=== Primary lineup ({found}/{top_n} alternatives found) ==="
-                );
+                println!("\n=== Primary lineup ({found}/{top_n} alternatives found) ===");
             }
             print_lineups(&snapshot, &used);
             print_unplaced(&snapshot, &result.primary.unplaced);
@@ -336,8 +329,7 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
             }
 
             if commit {
-                let used_owned: Vec<ProposedLineup> =
-                    used.into_iter().cloned().collect();
+                let used_owned: Vec<ProposedLineup> = used.into_iter().cloned().collect();
                 let committed = commit_lineups(db, team_id, date, &used_owned).await?;
                 println!(
                     "\nCommitted primary lineup ({} boat(s)) to the database. \
@@ -397,12 +389,7 @@ fn print_lineups(snapshot: &DbSnapshot, used: &[&ProposedLineup]) {
             };
             println!(
                 "  {:<8} {:<20} [{}/{}/{}, side={}]",
-                label,
-                rower.name,
-                rower.weight_class,
-                rower.skill,
-                rower.strength,
-                rower.side
+                label, rower.name, rower.weight_class, rower.skill, rower.strength, rower.side
             );
         }
     }
@@ -467,10 +454,7 @@ async fn cmd_history(db: &Db, team_id: TeamId, date: NaiveDate) -> Result<()> {
 
     println!("=== Committed lineups for {date} ({}) ===", committed.len());
     for c in &committed {
-        let boat = snapshot
-            .boats
-            .iter()
-            .find(|b| b.id == c.lineup.boat_id);
+        let boat = snapshot.boats.iter().find(|b| b.id == c.lineup.boat_id);
         let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown>");
         println!(
             "\nLineup #{} — boat #{} {} (committed {})",
@@ -515,9 +499,7 @@ async fn cmd_sync_sheet(db: &Db, team_id: TeamId, args: &[String]) -> Result<()>
         }
     }
     let sheet_id = sheet_id.ok_or_else(|| {
-        anyhow::anyhow!(
-            "usage: lineup_cli sync-sheet <SPREADSHEET_ID> [--gid N]"
-        )
+        anyhow::anyhow!("usage: lineup_cli sync-sheet <SPREADSHEET_ID> [--gid N]")
     })?;
 
     println!("=== Syncing sheet {sheet_id} (gid={gid}) ===");
@@ -526,9 +508,8 @@ async fn cmd_sync_sheet(db: &Db, team_id: TeamId, args: &[String]) -> Result<()>
     // fetch inside it. Split the work: fetch the CSV in the outer async
     // context, then hand the resulting String into a sync closure that
     // runs `lineup_sheets::sync_csv` on a pooled connection.
-    let url = format!(
-        "https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    );
+    let url =
+        format!("https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}");
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
@@ -551,7 +532,13 @@ async fn cmd_sync_sheet(db: &Db, team_id: TeamId, args: &[String]) -> Result<()>
     // on the outside.
     let sync_result: Result<lineup_sheets::SyncSummary> = db
         .with_conn(move |conn| {
-            match lineup_sheets::sync_csv(&csv_text, year, team_id, lineup_sheets::RowFilter::All, conn) {
+            match lineup_sheets::sync_csv(
+                &csv_text,
+                year,
+                team_id,
+                lineup_sheets::RowFilter::All,
+                conn,
+            ) {
                 Ok(summary) => Ok(Ok(summary)),
                 Err(e) => Ok(Err(e)),
             }

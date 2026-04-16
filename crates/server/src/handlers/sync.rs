@@ -8,10 +8,7 @@
 //! connection. The two-step shape is forced by `with_conn` taking a
 //! sync closure — we can't `.await` the reqwest call inside it.
 
-use axum::{
-    response::Html,
-    Extension, Form,
-};
+use axum::{response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::{Datelike, Utc};
@@ -35,7 +32,11 @@ where
 
 use lineup_db::app_user::Role;
 
-use crate::{handlers::{internal_error, ErrorResponse}, state::TenantContext, templates};
+use crate::{
+    handlers::{internal_error, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 fn parse_row_filter(s: &str) -> Option<lineup_sheets::RowFilter> {
     match s {
@@ -87,20 +88,27 @@ pub(crate) async fn sync_content(
         .map_err(internal_error)?;
     let last_synced = saved.as_ref().and_then(|s| s.last_synced_at);
     let prefill = saved.and_then(|s| {
-        serde_json::from_str::<GoogleSheetConfig>(&s.config).ok().map(|cfg| SyncFormInput {
-            spreadsheet_id: cfg.sheet_id,
-            gid: cfg.gid,
-            row_filter: match cfg.row_filter {
-                lineup_sheets::RowFilter::All => "All",
-                lineup_sheets::RowFilter::Sweep => "Sweep",
-                lineup_sheets::RowFilter::Sculling => "Sculling",
-            }.to_string(),
-            poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
-        })
+        serde_json::from_str::<GoogleSheetConfig>(&s.config)
+            .ok()
+            .map(|cfg| SyncFormInput {
+                spreadsheet_id: cfg.sheet_id,
+                gid: cfg.gid,
+                row_filter: match cfg.row_filter {
+                    lineup_sheets::RowFilter::All => "All",
+                    lineup_sheets::RowFilter::Sweep => "Sweep",
+                    lineup_sheets::RowFilter::Sculling => "Sculling",
+                }
+                .to_string(),
+                poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
+            })
     });
-    Ok(templates::sync::form_content(prefill.as_ref(), None, None, last_synced))
+    Ok(templates::sync::form_content(
+        prefill.as_ref(),
+        None,
+        None,
+        last_synced,
+    ))
 }
-
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn sync_handler(
@@ -114,7 +122,10 @@ pub(crate) async fn sync_handler(
     let trimmed = input.spreadsheet_id.trim().to_string();
     if trimmed.is_empty() {
         let content = templates::sync::form_content(
-            Some(&input), None, Some("Spreadsheet ID is required."), None,
+            Some(&input),
+            None,
+            Some("Spreadsheet ID is required."),
+            None,
         );
         return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
     }
@@ -122,7 +133,10 @@ pub(crate) async fn sync_handler(
         Some(f) => f,
         None => {
             let content = templates::sync::form_content(
-                Some(&input), None, Some("Row filter is required."), None,
+                Some(&input),
+                None,
+                Some("Row filter is required."),
+                None,
             );
             return Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant));
         }
@@ -153,7 +167,15 @@ pub(crate) async fn sync_handler(
     let csv_for_sync = csv_text.clone();
     let sync_outcome: anyhow::Result<SyncSummary> = tenant
         .db
-        .with_conn(move |conn| Ok(lineup_sheets::sync_csv(&csv_for_sync, year, team_id, row_filter, conn)))
+        .with_conn(move |conn| {
+            Ok(lineup_sheets::sync_csv(
+                &csv_for_sync,
+                year,
+                team_id,
+                row_filter,
+                conn,
+            ))
+        })
         .await
         .map_err(internal_error)?;
 
@@ -175,11 +197,17 @@ pub(crate) async fn sync_handler(
                 .db
                 .with_conn(move |conn| {
                     lineup_db::sync_source::SyncSource::upsert(
-                        conn, team_id, "google_sheet", &config_json, poll_minutes,
+                        conn,
+                        team_id,
+                        "google_sheet",
+                        &config_json,
+                        poll_minutes,
                     )?;
                     // Mark synced so the timestamp persists on reload.
                     if let Some(src) = lineup_db::sync_source::SyncSource::find_by_type(
-                        conn, team_id, "google_sheet",
+                        conn,
+                        team_id,
+                        "google_sheet",
                     )? {
                         lineup_db::sync_source::SyncSource::mark_synced(conn, src.id)?;
                     }
@@ -192,23 +220,24 @@ pub(crate) async fn sync_handler(
                 "sync.import",
                 "sync_source",
                 "google_sheet",
-                Some(serde_json::json!({
-                    "rows": summary.rows_read,
-                    "created": summary.rowers_created,
-                    "updated": summary.rowers_updated,
-                }).to_string()),
+                Some(
+                    serde_json::json!({
+                        "rows": summary.rows_read,
+                        "created": summary.rowers_created,
+                        "updated": summary.rowers_updated,
+                    })
+                    .to_string(),
+                ),
             );
 
             let now = Some(chrono::Utc::now().naive_utc());
-            let content =
-                templates::sync::form_content(Some(&input), Some(&summary), None, now);
+            let content = templates::sync::form_content(Some(&input), Some(&summary), None, now);
             Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
         }
         Err(err) => {
             tracing::warn!(?err, "sheet parse/sync failed");
             let msg = format!("Sync failed: {err}");
-            let content =
-                templates::sync::form_content(Some(&input), None, Some(&msg), None);
+            let content = templates::sync::form_content(Some(&input), None, Some(&msg), None);
             Ok(super::maybe_page_authed("Sync sheet", content, hx, &tenant))
         }
     }
@@ -310,7 +339,13 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
             let poll_row_filter = config.row_filter;
             let sync_result: anyhow::Result<lineup_sheets::SyncSummary> = match db
                 .with_conn(move |conn| {
-                    Ok(lineup_sheets::sync_csv(&csv_text, year, team_id, poll_row_filter, conn))
+                    Ok(lineup_sheets::sync_csv(
+                        &csv_text,
+                        year,
+                        team_id,
+                        poll_row_filter,
+                        conn,
+                    ))
                 })
                 .await
             {
@@ -338,11 +373,14 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
                         "sync.poll",
                         "sync_source",
                         "google_sheet",
-                        Some(serde_json::json!({
-                            "rows": summary.rows_read,
-                            "created": summary.rowers_created,
-                            "updated": summary.rowers_updated,
-                        }).to_string()),
+                        Some(
+                            serde_json::json!({
+                                "rows": summary.rows_read,
+                                "created": summary.rowers_created,
+                                "updated": summary.rowers_updated,
+                            })
+                            .to_string(),
+                        ),
                     );
                     let _ = db
                         .with_conn(move |conn| {

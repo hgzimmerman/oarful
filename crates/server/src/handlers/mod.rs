@@ -21,16 +21,16 @@ pub(crate) mod admin;
 pub(crate) mod audit;
 pub(crate) mod auth;
 pub(crate) mod boats;
-pub(crate) mod team_hub;
 pub(crate) mod demo;
-pub(crate) mod my;
-pub(crate) mod users;
 pub(crate) mod history;
+pub(crate) mod my;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod solve;
 pub(crate) mod sync;
+pub(crate) mod team_hub;
 pub(crate) mod teams;
+pub(crate) mod users;
 
 /// Compose the full route table. Called from [`crate::build_router`] so
 /// the binary doesn't need to know about individual handlers.
@@ -48,19 +48,37 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/auth/magic/{slug}/{token}", get(auth::magic_link_handler))
         .route("/demo", post(demo::create_demo_handler))
-        .route("/demo/resume", get(demo::resume_demo_handler).post(demo::resume_demo_handler))
+        .route(
+            "/demo/resume",
+            get(demo::resume_demo_handler).post(demo::resume_demo_handler),
+        )
         .with_state(state.clone());
 
     // Protected routes — require a valid JWT cookie.
     let protected = Router::new()
         .route("/", get(|| async { Redirect::permanent("/practices") }))
-        .route("/practices", get(practices::list_handler).post(practices::create_handler))
+        .route(
+            "/practices",
+            get(practices::list_handler).post(practices::create_handler),
+        )
         .route("/practices/planning", get(practices::planning_handler))
         .route("/practices/committed", get(practices::committed_handler))
-        .route("/practices/reminder-preview", get(practices::reminder_preview_handler))
-        .route("/practices/send-reminders", post(practices::send_reminders_handler))
-        .route("/practices/lineup-preview", get(practices::lineup_preview_handler))
-        .route("/practices/send-lineups", post(practices::send_lineups_handler))
+        .route(
+            "/practices/reminder-preview",
+            get(practices::reminder_preview_handler),
+        )
+        .route(
+            "/practices/send-reminders",
+            post(practices::send_reminders_handler),
+        )
+        .route(
+            "/practices/lineup-preview",
+            get(practices::lineup_preview_handler),
+        )
+        .route(
+            "/practices/send-lineups",
+            post(practices::send_lineups_handler),
+        )
         .route("/practices/{id}/cancel", post(practices::cancel_handler))
         .route("/solve/{id}", get(solve::view_handler))
         .route("/solve/{id}/stream", get(solve::stream_handler))
@@ -68,7 +86,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/solve/{id}/preset-bar", get(solve::preset_bar_handler))
         .route("/solver-profile", post(solve::save_profile_handler))
         .route("/solver-profile/edit", get(solve::edit_profile_handler))
-        .route("/solver-profile/{name}", delete(solve::delete_profile_handler))
+        .route(
+            "/solver-profile/{name}",
+            delete(solve::delete_profile_handler),
+        )
         .route("/commit/{id}", post(solve::commit_handler))
         .route("/commit-lineup/{id}", post(solve::commit_lineup_handler))
         .route("/history", get(history::list_handler))
@@ -78,31 +99,73 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/team", get(team_hub::index_handler))
         .route("/team/roster", get(team_hub::roster_handler))
         .route("/team/attendance", get(team_hub::attendance_handler))
-        .route("/team/roster/batch-invite", post(rowers::batch_invite_handler))
-        .route("/team/sync", get(team_hub::sync_handler).post(sync::sync_handler))
+        .route(
+            "/team/roster/batch-invite",
+            post(rowers::batch_invite_handler),
+        )
+        .route(
+            "/team/sync",
+            get(team_hub::sync_handler).post(sync::sync_handler),
+        )
         // Admin hub (PD+)
         .route("/admin", get(admin::index_handler))
         .route("/admin/users", get(admin::users_handler))
         .route("/admin/teams", get(admin::teams_handler))
-        .route("/admin/roster", get(admin::roster_handler).post(teams::roster_matrix_save_handler))
+        .route(
+            "/admin/roster",
+            get(admin::roster_handler).post(teams::roster_matrix_save_handler),
+        )
         .route("/admin/fleet", get(admin::fleet_handler))
         .route("/admin/fleet/boats", get(admin::fleet_boats_handler))
-        .route("/admin/fleet/defaults", get(admin::fleet_defaults_handler).post(teams::fleet_matrix_save_handler))
+        .route(
+            "/admin/fleet/defaults",
+            get(admin::fleet_defaults_handler).post(teams::fleet_matrix_save_handler),
+        )
         .route("/admin/audit", get(admin::audit_handler))
-        .route("/admin/settings", get(admin::settings_handler).post(admin::settings_update_handler))
+        .route(
+            "/admin/settings",
+            get(admin::settings_handler).post(admin::settings_update_handler),
+        )
         .route("/admin/export", get(admin::export_handler))
-        .route("/admin/restore", get(admin::restore_form_handler).post(admin::restore_handler))
-        .route("/admin/restore/confirm", post(admin::restore_confirm_handler))
+        .route(
+            "/admin/restore",
+            get(admin::restore_form_handler).post(admin::restore_handler),
+        )
+        .route(
+            "/admin/restore/confirm",
+            post(admin::restore_confirm_handler),
+        )
         .route("/audit/rows", get(audit::rows_handler))
         // Old list URLs → redirect to new hubs (keep POSTs working)
         .route("/club", get(|| async { Redirect::permanent("/team") }))
-        .route("/rowers", get(|| async { Redirect::permanent("/team/roster") }))
-        .route("/boats", get(|| async { Redirect::permanent("/admin/fleet") }).post(boats::create_handler))
-        .route("/team/fleet", get(|| async { Redirect::permanent("/admin/fleet") }))
-        .route("/sync", get(|| async { Redirect::permanent("/team/sync") }).post(sync::sync_handler))
-        .route("/users", get(|| async { Redirect::permanent("/admin/users") }))
-        .route("/audit", get(|| async { Redirect::permanent("/admin/audit") }))
-        .route("/teams", get(|| async { Redirect::permanent("/admin/teams") }).post(teams::create_handler))
+        .route(
+            "/rowers",
+            get(|| async { Redirect::permanent("/team/roster") }),
+        )
+        .route(
+            "/boats",
+            get(|| async { Redirect::permanent("/admin/fleet") }).post(boats::create_handler),
+        )
+        .route(
+            "/team/fleet",
+            get(|| async { Redirect::permanent("/admin/fleet") }),
+        )
+        .route(
+            "/sync",
+            get(|| async { Redirect::permanent("/team/sync") }).post(sync::sync_handler),
+        )
+        .route(
+            "/users",
+            get(|| async { Redirect::permanent("/admin/users") }),
+        )
+        .route(
+            "/audit",
+            get(|| async { Redirect::permanent("/admin/audit") }),
+        )
+        .route(
+            "/teams",
+            get(|| async { Redirect::permanent("/admin/teams") }).post(teams::create_handler),
+        )
         // Detail routes (unchanged)
         .route("/boats/new", get(boats::new_handler))
         .route("/boats/export.csv", get(boats::export_csv_handler))
@@ -118,8 +181,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(rowers::detail_handler).post(rowers::update_handler),
         )
         .route("/rowers/{id}/attributes", get(rowers::attributes_handler))
-        .route("/rowers/{id}/edit-attributes", get(rowers::edit_attributes_handler))
-        .route("/rowers/{id}/toggle-active", post(rowers::toggle_active_handler))
+        .route(
+            "/rowers/{id}/edit-attributes",
+            get(rowers::edit_attributes_handler),
+        )
+        .route(
+            "/rowers/{id}/toggle-active",
+            post(rowers::toggle_active_handler),
+        )
         .route(
             "/rowers/{id}/seat-affinity",
             post(rowers::seat_affinity_upsert_handler),
@@ -141,8 +210,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/users/{id}/resend-invite",
             post(users::resend_invite_handler),
         )
-        .route("/teams/{id}", get(teams::detail_handler).post(teams::update_handler))
-        .route("/teams/{id}/toggle-archive", post(teams::toggle_archive_handler))
+        .route(
+            "/teams/{id}",
+            get(teams::detail_handler).post(teams::update_handler),
+        )
+        .route(
+            "/teams/{id}/toggle-archive",
+            post(teams::toggle_archive_handler),
+        )
         .route("/teams/selector", get(teams::selector_handler))
         // My pages
         .route(
@@ -167,7 +242,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
 
     public.merge(protected)
 }
-
 
 pub(crate) fn maybe_page_authed(
     title: &str,
@@ -210,7 +284,10 @@ impl axum::response::IntoResponse for ErrorResponse {
 /// Handlers use `.map_err(internal_error)` as their escape hatch.
 pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> ErrorResponse {
     tracing::error!(?error, "handler error");
-    ErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, "An unexpected error occurred.".into())
+    ErrorResponse(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "An unexpected error occurred.".into(),
+    )
 }
 
 pub(crate) fn bad_request(msg: impl Into<String>) -> ErrorResponse {

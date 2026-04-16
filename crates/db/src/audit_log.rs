@@ -110,7 +110,6 @@ impl AuditLog {
         conn: &mut SqliteConnection,
         cutoff: NaiveDateTime,
     ) -> Result<usize, diesel::result::Error> {
-        diesel::delete(audit_log::table.filter(audit_log::timestamp.lt(cutoff)))
-            .execute(conn)
+        diesel::delete(audit_log::table.filter(audit_log::timestamp.lt(cutoff))).execute(conn)
     }
 }

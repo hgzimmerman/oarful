@@ -62,12 +62,8 @@ impl MagicLink {
 
     /// Consume a magic link after successful use. Deletes it so it
     /// can't be replayed.
-    pub fn consume(
-        conn: &mut SqliteConnection,
-        hash: &str,
-    ) -> Result<(), diesel::result::Error> {
-        diesel::delete(magic_link::table.filter(magic_link::token_hash.eq(hash)))
-            .execute(conn)?;
+    pub fn consume(conn: &mut SqliteConnection, hash: &str) -> Result<(), diesel::result::Error> {
+        diesel::delete(magic_link::table.filter(magic_link::token_hash.eq(hash))).execute(conn)?;
         Ok(())
     }
 
@@ -83,11 +79,8 @@ impl MagicLink {
     }
 
     /// Delete all expired magic links (housekeeping).
-    pub fn cleanup_expired(
-        conn: &mut SqliteConnection,
-    ) -> Result<usize, diesel::result::Error> {
+    pub fn cleanup_expired(conn: &mut SqliteConnection) -> Result<usize, diesel::result::Error> {
         let now = chrono::Utc::now().naive_utc();
-        diesel::delete(magic_link::table.filter(magic_link::expires_at.lt(now)))
-            .execute(conn)
+        diesel::delete(magic_link::table.filter(magic_link::expires_at.lt(now))).execute(conn)
     }
 }

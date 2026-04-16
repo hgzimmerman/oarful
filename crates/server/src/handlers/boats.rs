@@ -24,21 +24,26 @@ use serde::{Deserialize, Serialize};
 
 use lineup_db::app_user::Role;
 
-use crate::{handlers::{internal_error, ErrorResponse, not_found}, state::TenantContext, templates};
+use crate::{
+    handlers::{internal_error, not_found, ErrorResponse},
+    state::TenantContext,
+    templates,
+};
 
 /// Build the fleet list markup (shared by `/boats` and `/admin/fleet`).
-pub(crate) async fn fleet_content(
-    tenant: &TenantContext,
-) -> Result<maud::Markup, ErrorResponse> {
+pub(crate) async fn fleet_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let boats = tenant
         .db
         .with_conn(|conn| Boat::list_all(conn))
         .await
         .map_err(internal_error)?;
-    let can_export = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::ProgramDirector);
+    let can_export = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::ProgramDirector);
     Ok(templates::boats::list_content(&boats, can_export))
 }
-
 
 /// `GET /boats/export.csv` — fleet CSV download. ProgramDirector+ only.
 ///
@@ -150,8 +155,7 @@ pub(crate) async fn create_handler(
         Ok(p) => p,
         Err(msg) => {
             let data = BoatFormData::from_input(&input);
-            let content =
-                templates::boats::form_content(FormMode::New, &data, Some(&msg));
+            let content = templates::boats::form_content(FormMode::New, &data, Some(&msg));
             return Ok(Html(content.into_string()).into_response());
         }
     };
@@ -199,14 +203,17 @@ pub(crate) async fn detail_handler(
     let (boat, usage) = tenant
         .db
         .with_conn(move |conn| {
-            let boat = Boat::get(conn, id)?
-                .ok_or(diesel::result::Error::NotFound)?;
+            let boat = Boat::get(conn, id)?.ok_or(diesel::result::Error::NotFound)?;
             let usage = Boat::usage_summary(conn, id)?;
             Ok((boat, usage))
         })
         .await
         .map_err(internal_error)?;
-    let can_edit = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::ProgramDirector);
+    let can_edit = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::ProgramDirector);
     let content = templates::boats::detail_content(&boat, &usage, can_edit);
     Ok(super::maybe_page_authed(&boat.name, content, hx, &tenant))
 }
@@ -221,8 +228,7 @@ pub(crate) async fn edit_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boat = load(&tenant.db, id).await?;
     let data = BoatFormData::from_boat(&boat);
-    let content =
-        templates::boats::form_content(FormMode::Edit(id), &data, None);
+    let content = templates::boats::form_content(FormMode::Edit(id), &data, None);
     Ok(super::maybe_page_authed(
         &format!("{} — edit", boat.name),
         content,
@@ -246,8 +252,7 @@ pub(crate) async fn update_handler(
         Ok(p) => p,
         Err(msg) => {
             let data = BoatFormData::from_input(&input);
-            let content =
-                templates::boats::form_content(FormMode::Edit(id), &data, Some(&msg));
+            let content = templates::boats::form_content(FormMode::Edit(id), &data, Some(&msg));
             return Ok(Html(content.into_string()).into_response());
         }
     };
@@ -406,7 +411,12 @@ fn boat_type_label(b: &Boat) -> String {
         (4, true, 1) => "FourPlus".into(),
         (8, true, 1) => "Eight".into(),
         (8, false, 1) => "CoxlessEight".into(),
-        _ => format!("{}x{}{}", b.seat_count, b.oars_per_seat, if b.has_cox.as_bool() { "+" } else { "" }),
+        _ => format!(
+            "{}x{}{}",
+            b.seat_count,
+            b.oars_per_seat,
+            if b.has_cox.as_bool() { "+" } else { "" }
+        ),
     }
 }
 
@@ -454,7 +464,11 @@ fn parse_input(input: &BoatFormInput) -> Result<ParsedBoat, String> {
     let stroke_side = match input.stroke_side.as_str() {
         "Port" => Side::Port,
         "Starboard" => Side::Starboard,
-        other => return Err(format!("invalid stroke side: {other} (must be Port or Starboard)")),
+        other => {
+            return Err(format!(
+                "invalid stroke side: {other} (must be Port or Starboard)"
+            ))
+        }
     };
 
     // 8s are always stern-loaded; for smaller coxed boats, parse the input.
@@ -468,8 +482,8 @@ fn parse_input(input: &BoatFormInput) -> Result<ParsedBoat, String> {
         }
     };
 
-    let acquired_at = parse_optional_date(&input.acquired_at)
-        .map_err(|e| format!("acquired date: {e}"))?;
+    let acquired_at =
+        parse_optional_date(&input.acquired_at).map_err(|e| format!("acquired date: {e}"))?;
     let manufactured_at = parse_optional_date(&input.manufactured_at)
         .map_err(|e| format!("manufactured date: {e}"))?;
     let relinquished_at = parse_optional_date(&input.relinquished_at)

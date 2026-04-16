@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 use chrono::NaiveDate;
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::practice::PracticeId;
-use lineup_db::rower::Rower;
 use lineup_db::rower::types::RowerId;
+use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
 pub(crate) fn grid_content(
@@ -118,7 +118,11 @@ pub(crate) fn grid_content(
 
 fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&PracticeId>) -> Markup {
     let is_today = *date == today;
-    let bg = if is_today { "bg-blue-50" } else { "bg-slate-100" };
+    let bg = if is_today {
+        "bg-blue-50"
+    } else {
+        "bg-slate-100"
+    };
     let base_class = format!("sticky top-0 z-10 {bg} px-1.5 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[44px]");
     let full_date = date.format("%A, %B %-d, %Y").to_string();
 

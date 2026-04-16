@@ -133,10 +133,7 @@ pub async fn sync_public_sheet(
             status
         );
     }
-    let csv_text = response
-        .text()
-        .await
-        .context("reading sheet csv body")?;
+    let csv_text = response.text().await.context("reading sheet csv body")?;
 
     let year = Utc::now().year();
     sync_csv(&csv_text, year, team_id, row_filter, conn)
@@ -191,16 +188,26 @@ pub fn sync_csv(
     // Load team defaults so sync-created practices get the configured time.
     let team = lineup_db::team::Team::get(conn, team_id)?;
     let default_time = team.as_ref().and_then(|t| t.default_practice_time);
-    let default_duration = team.as_ref().and_then(|t| t.default_practice_duration_minutes);
+    let default_duration = team
+        .as_ref()
+        .and_then(|t| t.default_practice_duration_minutes);
 
     for record in &all_records[header_idx + 1..] {
         summary.rows_read += 1;
-        match sync_row(record, &date_columns, team_id, row_filter, default_time, default_duration, conn, &mut summary) {
+        match sync_row(
+            record,
+            &date_columns,
+            team_id,
+            row_filter,
+            default_time,
+            default_duration,
+            conn,
+            &mut summary,
+        ) {
             Ok(()) => {}
-            Err(e) => summary.warnings.push(format!(
-                "row {}: {e}",
-                summary.rows_read
-            )),
+            Err(e) => summary
+                .warnings
+                .push(format!("row {}: {e}", summary.rows_read)),
         }
     }
 
@@ -280,15 +287,22 @@ fn sync_row(
             // User exists — load or create linked rower.
             match user.rower_id {
                 Some(rower_id) => {
-                    let existing = Rower::get(conn, rower_id)?
-                        .ok_or_else(|| anyhow!("app_user.rower_id points to missing rower {rower_id}"))?;
+                    let existing = Rower::get(conn, rower_id)?.ok_or_else(|| {
+                        anyhow!("app_user.rower_id points to missing rower {rower_id}")
+                    })?;
                     // Reactivate if previously soft-deleted.
                     if !existing.active.as_bool() {
                         Rower::set_active(conn, rower_id, true)?;
                         summary.rowers_updated += 1;
                     }
                     let updated = Rower::promote_from_sheet(
-                        conn, &existing, &display_name, side, is_sculling, can_cox, is_designated_cox,
+                        conn,
+                        &existing,
+                        &display_name,
+                        side,
+                        is_sculling,
+                        can_cox,
+                        is_designated_cox,
                     )?;
                     if updated.updated_at != existing.updated_at {
                         summary.rowers_updated += 1;
@@ -297,7 +311,13 @@ fn sync_row(
                 }
                 None => {
                     // User exists but has no rower — create one and link.
-                    let new = NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
+                    let new = NewRower::from_sheet(
+                        &display_name,
+                        side,
+                        sweep_bias,
+                        can_cox,
+                        is_designated_cox,
+                    );
                     let created = Rower::insert(conn, new)?;
                     AppUser::set_rower_id(conn, user.id, Some(created.id))?;
                     summary.rowers_created += 1;
@@ -307,17 +327,21 @@ fn sync_row(
         }
         None => {
             // No user with this email — create rower + passwordless active user.
-            let new = NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
+            let new =
+                NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
             let created = Rower::insert(conn, new)?;
             let now = chrono::Utc::now().naive_utc();
-            let user = AppUser::create(conn, NewAppUser {
-                email: email.to_string(),
-                password_hash: None,
-                name: display_name.clone(),
-                status: "active".to_string(),
-                created_at: now,
-                updated_at: now,
-            })?;
+            let user = AppUser::create(
+                conn,
+                NewAppUser {
+                    email: email.to_string(),
+                    password_hash: None,
+                    name: display_name.clone(),
+                    status: "active".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )?;
             AppUser::set_role(conn, user.id, Role::Member)?;
             AppUser::set_rower_id(conn, user.id, Some(created.id))?;
             summary.rowers_created += 1;
@@ -350,7 +374,13 @@ fn sync_row(
         let practice = match lineup_db::practice::Practice::find_by_date(conn, team_id, *date)? {
             Some(p) => p,
             None => {
-                let p = lineup_db::practice::Practice::upsert(conn, team_id, *date, default_time, None)?;
+                let p = lineup_db::practice::Practice::upsert(
+                    conn,
+                    team_id,
+                    *date,
+                    default_time,
+                    None,
+                )?;
                 // Apply team default duration on newly created practices.
                 if p.duration_minutes.is_none() && default_duration.is_some() {
                     use diesel::prelude::*;
@@ -378,10 +408,7 @@ fn sync_row(
 /// Pull the date columns (index, parsed date) out of the header row,
 /// assuming the first 7 columns are the known metadata columns and
 /// everything after that is an `M/D` date.
-fn parse_date_headers(
-    headers: &csv::StringRecord,
-    year: i32,
-) -> Result<Vec<(usize, NaiveDate)>> {
+fn parse_date_headers(headers: &csv::StringRecord, year: i32) -> Result<Vec<(usize, NaiveDate)>> {
     const EXPECTED_METADATA: &[&str] = &[
         "Sweep/Scull",
         "Last Name",
@@ -395,9 +422,7 @@ fn parse_date_headers(
     for (i, expected) in EXPECTED_METADATA.iter().enumerate() {
         let got = headers.get(i).unwrap_or("").trim();
         if !got.eq_ignore_ascii_case(expected) {
-            bail!(
-                "unexpected header at column {i}: got {got:?}, expected {expected:?}"
-            );
+            bail!("unexpected header at column {i}: got {got:?}, expected {expected:?}");
         }
     }
 
@@ -453,7 +478,9 @@ mod tests {
     use lineup_db::app_user::{AppUser, NewAppUser};
     use lineup_db::availability::types::AvailabilityStatus;
     use lineup_db::availability::Availability;
-    use lineup_db::rower::types::{RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias};
+    use lineup_db::rower::types::{
+        RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+    };
     use lineup_db::rower::{NewRower, Rower};
     use lineup_db::schema::availability as availability_schema;
     use lineup_db::team::{NewTeam, Team, TeamId};
@@ -474,21 +501,34 @@ mod tests {
     /// Seed a team for tests. Returns its id.
     fn seed_team(conn: &mut SqliteConnection) -> TeamId {
         let now = chrono::Utc::now().naive_utc();
-        Team::create(conn, NewTeam { name: "Test".into(), created_at: now })
-            .expect("seed team")
-            .id
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .expect("seed team")
+        .id
     }
 
     /// Fetch the rowers table ordered by id so assertions can rely
     /// on insertion order.
     fn all_rowers(conn: &mut SqliteConnection) -> Vec<Rower> {
         use lineup_db::schema::rower::dsl::*;
-        rower.order(id.asc()).select(Rower::as_select()).load(conn).unwrap()
+        rower
+            .order(id.asc())
+            .select(Rower::as_select())
+            .load(conn)
+            .unwrap()
     }
 
     fn all_availabilities(conn: &mut SqliteConnection) -> Vec<Availability> {
         availability_schema::table
-            .order((availability_schema::rower_id.asc(), availability_schema::practice_id.asc()))
+            .order((
+                availability_schema::rower_id.asc(),
+                availability_schema::practice_id.asc(),
+            ))
             .select(Availability::as_select())
             .load(conn)
             .unwrap()
@@ -513,7 +553,11 @@ mod tests {
         assert_eq!(summary.availabilities_upserted, 4);
         assert_eq!(summary.sweep_rows, 2);
         assert_eq!(summary.sculling_rows, 0);
-        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+        assert!(
+            summary.warnings.is_empty(),
+            "warnings: {:?}",
+            summary.warnings
+        );
 
         let rowers = all_rowers(&mut conn);
         assert_eq!(rowers.len(), 2);
@@ -524,7 +568,9 @@ mod tests {
         assert_eq!(rowers[1].side, Side::Starboard);
         assert_eq!(rowers[1].sweep_bias, SweepBias::SWEEP_HARD);
         // Email now lives on app_user, not rower.
-        let alice_user = AppUser::find_by_email(&mut conn, "alice@example.com").unwrap().expect("alice user");
+        let alice_user = AppUser::find_by_email(&mut conn, "alice@example.com")
+            .unwrap()
+            .expect("alice user");
         assert_eq!(alice_user.rower_id, Some(rowers[0].id));
 
         let avails = all_availabilities(&mut conn);
@@ -557,7 +603,11 @@ mod tests {
         assert_eq!(summary.rows_read, 1);
         assert_eq!(summary.rowers_created, 1);
         assert_eq!(summary.availabilities_upserted, 2);
-        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+        assert!(
+            summary.warnings.is_empty(),
+            "warnings: {:?}",
+            summary.warnings
+        );
     }
 
     #[test]
@@ -681,14 +731,18 @@ mod tests {
 
         // Create an app_user linked to this rower (email is the identity key).
         let now = chrono::Utc::now().naive_utc();
-        let user = AppUser::create(&mut conn, NewAppUser {
-            email: "alice@example.com".into(),
-            password_hash: None,
-            name: "Alice Smith".into(),
-            status: "active".into(),
-            created_at: now,
-            updated_at: now,
-        }).unwrap();
+        let user = AppUser::create(
+            &mut conn,
+            NewAppUser {
+                email: "alice@example.com".into(),
+                password_hash: None,
+                name: "Alice Smith".into(),
+                status: "active".into(),
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap();
         AppUser::set_rower_id(&mut conn, user.id, Some(seeded.id)).unwrap();
 
         // Now re-import from a sheet that says "Both" for this rower.
@@ -764,7 +818,11 @@ mod tests {
         assert_eq!(summary.rows_read, 3);
         assert_eq!(summary.rowers_created, 2);
         assert_eq!(summary.availabilities_upserted, 2);
-        assert!(summary.warnings.is_empty(), "warnings: {:?}", summary.warnings);
+        assert!(
+            summary.warnings.is_empty(),
+            "warnings: {:?}",
+            summary.warnings
+        );
     }
 
     #[test]
@@ -811,4 +869,3 @@ mod tests {
         assert_eq!(rowers[0].name, "Nico Scully");
     }
 }
-

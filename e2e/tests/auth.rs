@@ -71,7 +71,9 @@ async fn magic_link_login() {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let source = client.source().await.unwrap();
     assert!(
-        source.contains("demo@localhost") || source.contains("check your email") || source.contains("sign-in link"),
+        source.contains("demo@localhost")
+            || source.contains("check your email")
+            || source.contains("sign-in link"),
         "expected magic link confirmation page"
     );
 

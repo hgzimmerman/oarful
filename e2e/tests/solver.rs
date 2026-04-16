@@ -27,9 +27,7 @@ async fn generate_and_commit_lineup() {
     client
         .wait()
         .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::XPath(
-            "//button[contains(text(), 'Generate')]",
-        ))
+        .for_element(Locator::XPath("//button[contains(text(), 'Generate')]"))
         .await
         .expect("expected Generate button on solve page");
 

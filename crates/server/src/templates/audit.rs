@@ -136,22 +136,27 @@ fn action_badge(action: &str) -> Markup {
     }
 }
 
-fn filter_bar(
-    actions: &[String],
-    user_map: &HashMap<i32, String>,
-    query: &AuditQuery,
-) -> Markup {
+fn filter_bar(actions: &[String], user_map: &HashMap<i32, String>, query: &AuditQuery) -> Markup {
     let sel_action = query.action.as_deref().unwrap_or("");
     let sel_user = query.user_id.map(|u| u.to_string()).unwrap_or_default();
     let sel_resource = query.resource_type.as_deref().unwrap_or("");
 
     // Collect sorted user list for dropdown
-    let mut users: Vec<(i32, &str)> = user_map.iter().map(|(id, name)| (*id, name.as_str())).collect();
+    let mut users: Vec<(i32, &str)> = user_map
+        .iter()
+        .map(|(id, name)| (*id, name.as_str()))
+        .collect();
     users.sort_by(|a, b| a.1.cmp(b.1));
 
     let resource_types = [
-        "availability", "boat", "practice", "rower",
-        "solver_profile", "sync_source", "team", "user",
+        "availability",
+        "boat",
+        "practice",
+        "rower",
+        "solver_profile",
+        "sync_source",
+        "team",
+        "user",
     ];
 
     html! {

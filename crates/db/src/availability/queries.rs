@@ -15,10 +15,7 @@ impl Availability {
     ) -> Result<(), diesel::result::Error> {
         diesel::insert_into(availability::table)
             .values(&new)
-            .on_conflict((
-                availability::rower_id,
-                availability::practice_id,
-            ))
+            .on_conflict((availability::rower_id, availability::practice_id))
             .do_update()
             .set(availability::status.eq(new.status))
             .execute(conn)?;

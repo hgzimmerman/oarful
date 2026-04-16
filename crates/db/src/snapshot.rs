@@ -125,7 +125,11 @@ impl std::fmt::Display for DbSnapshot {
             let flags = format!(
                 "{}{}b={}",
                 if r.can_cox.as_bool() { "C" } else { "" },
-                if r.is_designated_cox.as_bool() { "*" } else { "" },
+                if r.is_designated_cox.as_bool() {
+                    "*"
+                } else {
+                    ""
+                },
                 r.sweep_bias.as_int(),
             );
             let last_cox = self

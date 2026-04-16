@@ -14,7 +14,7 @@ use chrono::NaiveDate;
 use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
-use super::layout::{empty_state, page_header, TabDef, tab_swap, tabbed_section};
+use super::layout::{empty_state, page_header, tab_swap, tabbed_section, TabDef};
 
 /// Per-row summary used by both the Planning and Committed tabs.
 pub(crate) struct PracticeRow {
@@ -31,17 +31,21 @@ pub(crate) struct PracticeRow {
 }
 
 const PRACTICES_TABS: &[TabDef] = &[
-    TabDef { label: "Planning", url: "/practices/planning", id: "planning" },
-    TabDef { label: "Committed", url: "/practices/committed", id: "committed" },
+    TabDef {
+        label: "Planning",
+        url: "/practices/planning",
+        id: "planning",
+    },
+    TabDef {
+        label: "Committed",
+        url: "/practices/committed",
+        id: "committed",
+    },
 ];
 const PRACTICES_TARGET: &str = "practices-tab-content";
 
 /// Full tabbed page wrapper.
-pub(crate) fn tabbed_page(
-    active_tab: &str,
-    tab_content: Markup,
-    _is_coach: bool,
-) -> Markup {
+pub(crate) fn tabbed_page(active_tab: &str, tab_content: Markup, _is_coach: bool) -> Markup {
     html! {
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
@@ -82,8 +86,12 @@ pub(crate) fn planning_content(
     suggested_date: Option<chrono::NaiveDate>,
 ) -> Markup {
     let min_date = today.format("%Y-%m-%d").to_string();
-    let date_value = suggested_date.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
-    let time_value = default_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
+    let date_value = suggested_date
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_default();
+    let time_value = default_time
+        .map(|t| t.format("%H:%M").to_string())
+        .unwrap_or_default();
     let end_time_value = match (default_time, default_duration) {
         (Some(t), Some(dur)) => {
             let end = t + chrono::TimeDelta::minutes(dur as i64);
@@ -207,7 +215,12 @@ fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     }
 }
 
-fn planning_row_inner(row: &PracticeRow, weekday: &str, is_coach: bool, cancel_action: &str) -> Markup {
+fn planning_row_inner(
+    row: &PracticeRow,
+    weekday: &str,
+    is_coach: bool,
+    cancel_action: &str,
+) -> Markup {
     html! {
         div {
             div class="flex items-center gap-2" {

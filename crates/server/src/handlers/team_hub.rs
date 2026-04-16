@@ -1,22 +1,30 @@
 //! `/team` — Coach+ hub with tabs: Roster, Attendance, Sync.
 
-use axum::{
-    http::HeaderMap,
-    response::Html,
-    Extension,
-};
+use axum::{http::HeaderMap, response::Html, Extension};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::app_user::Role;
 
+use crate::handlers::{self, ErrorResponse};
 use crate::state::TenantContext;
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
-use crate::handlers::{self, ErrorResponse};
 
 const TABS: &[TabDef] = &[
-    TabDef { label: "Roster", url: "/team/roster", id: "roster" },
-    TabDef { label: "Attendance", url: "/team/attendance", id: "attendance" },
-    TabDef { label: "Sync", url: "/team/sync", id: "sync" },
+    TabDef {
+        label: "Roster",
+        url: "/team/roster",
+        id: "roster",
+    },
+    TabDef {
+        label: "Attendance",
+        url: "/team/attendance",
+        id: "attendance",
+    },
+    TabDef {
+        label: "Sync",
+        url: "/team/sync",
+        id: "sync",
+    },
 ];
 const TARGET: &str = "team-tab-content";
 
@@ -32,7 +40,9 @@ pub(crate) async fn index_handler(
     let tab_content = handlers::rowers::roster_content(&jar, &tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
@@ -50,7 +60,9 @@ pub(crate) async fn roster_handler(
     let tab_content = handlers::rowers::roster_content(&jar, &tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
@@ -68,7 +80,9 @@ pub(crate) async fn sync_handler(
     let tab_content = handlers::sync::sync_content(&jar, &tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "sync", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "sync", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "sync", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
@@ -87,7 +101,9 @@ pub(crate) async fn attendance_handler(
     let tab_content = attendance_content(&jar, &tenant, &query).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "attendance", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "attendance", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "attendance", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
@@ -147,31 +163,48 @@ async fn attendance_content(
     // Convert the (RowerId, PracticeId) map to (RowerId, NaiveDate) for template compatibility.
     // NOTE: This is a simplification — if multiple practices share the same date,
     // the last one wins. The template will need updating for full practice-id support.
-    let date_avail: std::collections::HashMap<(lineup_db::rower::types::RowerId, chrono::NaiveDate), lineup_db::availability::types::AvailabilityStatus> =
-        avail_map.into_iter()
-            .filter_map(|((rid, pid), status)| {
-                practices.iter().find(|p| p.id == pid).map(|p| ((rid, p.date), status))
-            })
-            .collect();
-    let committed_dates: std::collections::HashSet<chrono::NaiveDate> =
-        committed_ids.iter()
-            .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| p.date))
-            .collect();
-    let committed_practice_ids: std::collections::HashMap<chrono::NaiveDate, lineup_db::practice::PracticeId> =
-        committed_ids.iter()
-            .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| (p.date, p.id)))
-            .collect();
+    let date_avail: std::collections::HashMap<
+        (lineup_db::rower::types::RowerId, chrono::NaiveDate),
+        lineup_db::availability::types::AvailabilityStatus,
+    > = avail_map
+        .into_iter()
+        .filter_map(|((rid, pid), status)| {
+            practices
+                .iter()
+                .find(|p| p.id == pid)
+                .map(|p| ((rid, p.date), status))
+        })
+        .collect();
+    let committed_dates: std::collections::HashSet<chrono::NaiveDate> = committed_ids
+        .iter()
+        .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| p.date))
+        .collect();
+    let committed_practice_ids: std::collections::HashMap<
+        chrono::NaiveDate,
+        lineup_db::practice::PracticeId,
+    > = committed_ids
+        .iter()
+        .filter_map(|pid| {
+            practices
+                .iter()
+                .find(|p| p.id == *pid)
+                .map(|p| (p.date, p.id))
+        })
+        .collect();
 
     Ok(crate::templates::attendance::grid_content(
-        &rowers, &dates, &date_avail, &committed_dates, &committed_practice_ids, show_past, today,
+        &rowers,
+        &dates,
+        &date_avail,
+        &committed_dates,
+        &committed_practice_ids,
+        show_past,
+        today,
     ))
 }
 
 /// True when the HTMX request targets the tab content div (tab click),
 /// as opposed to `#content` (navbar navigation).
 fn is_tab_swap(headers: &HeaderMap) -> bool {
-    headers
-        .get("HX-Target")
-        .and_then(|v| v.to_str().ok())
-        == Some(TARGET)
+    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TARGET)
 }

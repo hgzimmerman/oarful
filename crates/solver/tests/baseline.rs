@@ -50,8 +50,7 @@ use lineup_db::rower::types::RowerId;
 use lineup_db::snapshot::DbSnapshot;
 use lineup_db::test_support::in_memory_conn;
 use lineup_solver::{
-    solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveResult, SolveStatus,
-    SolverConfig,
+    solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveResult, SolveStatus, SolverConfig,
 };
 
 /// The practice date baked into the toy fixture by
@@ -74,10 +73,10 @@ fn fixture_snapshot() -> DbSnapshot {
     let team = lineup_db::team::Team::first(&mut conn)
         .expect("querying first team")
         .expect("fixture should seed a team");
-    let practice = lineup_db::practice::Practice::upsert(&mut conn, team.id, fixture_date(), None, None)
-        .expect("creating/finding practice for fixture date");
-    DbSnapshot::for_practice(&mut conn, &practice)
-        .expect("building snapshot from seeded fixture")
+    let practice =
+        lineup_db::practice::Practice::upsert(&mut conn, team.id, fixture_date(), None, None)
+            .expect("creating/finding practice for fixture date");
+    DbSnapshot::for_practice(&mut conn, &practice).expect("building snapshot from seeded fixture")
 }
 
 /// Assemble a `SolveRequest` for the given scenario.
@@ -134,10 +133,8 @@ fn format_result(result: &SolveResult, snapshot: &DbSnapshot) -> String {
         return out;
     }
 
-    let used: Vec<&ProposedLineup> =
-        result.primary.lineups.iter().filter(|l| l.used).collect();
-    let skipped: Vec<&ProposedLineup> =
-        result.primary.lineups.iter().filter(|l| !l.used).collect();
+    let used: Vec<&ProposedLineup> = result.primary.lineups.iter().filter(|l| l.used).collect();
+    let skipped: Vec<&ProposedLineup> = result.primary.lineups.iter().filter(|l| !l.used).collect();
 
     writeln!(
         out,
@@ -149,8 +146,7 @@ fn format_result(result: &SolveResult, snapshot: &DbSnapshot) -> String {
 
     // Sort skipped boats by name so the line is stable across
     // solver-internal iteration order changes.
-    let mut skipped_names: Vec<&str> =
-        skipped.iter().map(|l| l.boat_name.as_str()).collect();
+    let mut skipped_names: Vec<&str> = skipped.iter().map(|l| l.boat_name.as_str()).collect();
     skipped_names.sort_unstable();
     writeln!(out, "skipped: {}", skipped_names.join(", ")).unwrap();
 
@@ -209,8 +205,7 @@ fn assert_matches_baseline(name: &str, actual: &str) {
 
     if std::env::var("UPDATE_BASELINES").is_ok() {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .expect("creating baselines directory");
+            std::fs::create_dir_all(parent).expect("creating baselines directory");
         }
         std::fs::write(&path, actual)
             .unwrap_or_else(|e| panic!("writing baseline {}: {e}", path.display()));

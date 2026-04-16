@@ -39,17 +39,13 @@ async fn use_streamed_alternative() {
     let alt_header = client
         .wait()
         .at_most(std::time::Duration::from_secs(15))
-        .for_element(Locator::XPath(
-            "//*[contains(text(), 'Alternative #2')]",
-        ))
+        .for_element(Locator::XPath("//*[contains(text(), 'Alternative #2')]"))
         .await
         .expect("expected Alternative #2 to appear via SSE");
 
     // Verify the "Use this" link exists.
     let use_this = client
-        .find(Locator::XPath(
-            "//a[contains(text(), 'Use this')]",
-        ))
+        .find(Locator::XPath("//a[contains(text(), 'Use this')]"))
         .await
         .expect("expected 'Use this' link on alternative");
 

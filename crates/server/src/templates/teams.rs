@@ -2,10 +2,10 @@
 
 use std::collections::HashSet;
 
-use lineup_db::boat::Boat;
 use lineup_db::boat::types::BoatId;
-use lineup_db::rower::Rower;
+use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
+use lineup_db::rower::Rower;
 use lineup_db::team::{PracticeDays, Team, TeamId};
 use maud::{html, Markup};
 
@@ -16,15 +16,14 @@ use super::layout::page_header;
 /// the name as plain text (no dropdown) since there's nothing to
 /// switch to.
 pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>) -> Markup {
-    let tenant_prefix = tenant_name.map(|n| html! {
-        span class="text-xs text-slate-400 mr-2 hidden 2xl:inline" { (n) " ·" }
+    let tenant_prefix = tenant_name.map(|n| {
+        html! {
+            span class="text-xs text-slate-400 mr-2 hidden 2xl:inline" { (n) " ·" }
+        }
     });
 
     if teams.len() <= 1 {
-        let name = teams
-            .first()
-            .map(|t| t.name.as_str())
-            .unwrap_or("No team");
+        let name = teams.first().map(|t| t.name.as_str()).unwrap_or("No team");
         return html! {
             span class="flex items-center" {
                 @if let Some(prefix) = tenant_prefix { (prefix) }

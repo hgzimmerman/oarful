@@ -20,8 +20,8 @@ use crate::MIGRATIONS;
 /// broken migration / connect step is something the harness should
 /// surface loudly rather than quietly.
 pub fn in_memory_conn() -> SqliteConnection {
-    let mut conn = SqliteConnection::establish(":memory:")
-        .expect("establishing in-memory sqlite for tests");
+    let mut conn =
+        SqliteConnection::establish(":memory:").expect("establishing in-memory sqlite for tests");
     conn.run_pending_migrations(MIGRATIONS)
         .expect("running embedded migrations against in-memory sqlite");
     conn

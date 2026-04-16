@@ -10,19 +10,43 @@ use axum_htmx::HxRequest;
 use lineup_db::app_user::{AppUser, Role};
 use maud::html;
 
-use crate::state::{AppState, TenantContext};
-use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
-use crate::handlers::{self, ErrorResponse, not_found};
 use crate::handlers::audit::AuditQuery;
 use crate::handlers::internal_error;
+use crate::handlers::{self, not_found, ErrorResponse};
+use crate::state::{AppState, TenantContext};
+use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 
 const TABS: &[TabDef] = &[
-    TabDef { label: "Users", url: "/admin/users", id: "users" },
-    TabDef { label: "Teams", url: "/admin/teams", id: "teams" },
-    TabDef { label: "Roster", url: "/admin/roster", id: "roster" },
-    TabDef { label: "Fleet", url: "/admin/fleet", id: "fleet" },
-    TabDef { label: "Audit", url: "/admin/audit", id: "audit" },
-    TabDef { label: "Settings", url: "/admin/settings", id: "settings" },
+    TabDef {
+        label: "Users",
+        url: "/admin/users",
+        id: "users",
+    },
+    TabDef {
+        label: "Teams",
+        url: "/admin/teams",
+        id: "teams",
+    },
+    TabDef {
+        label: "Roster",
+        url: "/admin/roster",
+        id: "roster",
+    },
+    TabDef {
+        label: "Fleet",
+        url: "/admin/fleet",
+        id: "fleet",
+    },
+    TabDef {
+        label: "Audit",
+        url: "/admin/audit",
+        id: "audit",
+    },
+    TabDef {
+        label: "Settings",
+        url: "/admin/settings",
+        id: "settings",
+    },
 ];
 const TARGET: &str = "admin-tab-content";
 
@@ -37,7 +61,9 @@ pub(crate) async fn index_handler(
     let tab_content = handlers::users::users_content(&tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "users", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "users", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "users", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -54,7 +80,9 @@ pub(crate) async fn users_handler(
     let tab_content = handlers::users::users_content(&tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "users", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "users", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "users", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -71,7 +99,9 @@ pub(crate) async fn teams_handler(
     let tab_content = handlers::teams::teams_content(&tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "teams", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "teams", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "teams", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -88,7 +118,9 @@ pub(crate) async fn roster_handler(
     let tab_content = handlers::teams::roster_matrix_content(&tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "roster", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "roster", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -96,8 +128,16 @@ pub(crate) async fn roster_handler(
 
 // ── Fleet subtabs ────────────────────────────────────────────────
 const FLEET_SUBTABS: &[TabDef] = &[
-    TabDef { label: "Boats", url: "/admin/fleet/boats", id: "boats" },
-    TabDef { label: "Team defaults", url: "/admin/fleet/defaults", id: "defaults" },
+    TabDef {
+        label: "Boats",
+        url: "/admin/fleet/boats",
+        id: "boats",
+    },
+    TabDef {
+        label: "Team defaults",
+        url: "/admin/fleet/defaults",
+        id: "defaults",
+    },
 ];
 const FLEET_TARGET: &str = "admin-fleet-content";
 
@@ -113,7 +153,9 @@ pub(crate) async fn fleet_handler(
     let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -130,11 +172,15 @@ pub(crate) async fn fleet_boats_handler(
     let boats_content = handlers::boats::fleet_content(&tenant).await?;
 
     if is_fleet_subtab_swap(&headers) {
-        return Ok(Html(tab_swap(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content).into_string()));
+        return Ok(Html(
+            tab_swap(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content).into_string(),
+        ));
     }
     let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -151,21 +197,22 @@ pub(crate) async fn fleet_defaults_handler(
     let defaults_content = handlers::teams::fleet_matrix_content(&tenant).await?;
 
     if is_fleet_subtab_swap(&headers) {
-        return Ok(Html(tab_swap(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content).into_string()));
+        return Ok(Html(
+            tab_swap(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content).into_string(),
+        ));
     }
     let fleet_section = tabbed_section(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content);
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "fleet", TARGET, fleet_section).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
 fn is_fleet_subtab_swap(headers: &HeaderMap) -> bool {
-    headers
-        .get("HX-Target")
-        .and_then(|v| v.to_str().ok())
-        == Some(FLEET_TARGET)
+    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(FLEET_TARGET)
 }
 
 /// `GET /admin/audit`
@@ -180,7 +227,9 @@ pub(crate) async fn audit_handler(
     let tab_content = handlers::audit::audit_content(&tenant, &query).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "audit", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "audit", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "audit", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -198,7 +247,9 @@ pub(crate) async fn settings_handler(
     let tab_content = settings_content(&state, &tenant).await?;
 
     if is_tab_swap(&headers) {
-        return Ok(Html(tab_swap(TABS, "settings", TARGET, tab_content).into_string()));
+        return Ok(Html(
+            tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
+        ));
     }
     let page = tabbed_section(TABS, "settings", TARGET, tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -297,9 +348,17 @@ pub(crate) async fn settings_update_handler(
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let tenant_id = tenant.tenant_id;
-    let attrs = if input.attributes_public.is_some() { 1 } else { 0 };
+    let attrs = if input.attributes_public.is_some() {
+        1
+    } else {
+        0
+    };
     let emails = if input.emails_visible.is_some() { 1 } else { 0 };
-    let cox = if input.force_cox_stern.is_some() { 1 } else { 0 };
+    let cox = if input.force_cox_stern.is_some() {
+        1
+    } else {
+        0
+    };
 
     state
         .master_db
@@ -326,23 +385,25 @@ pub(crate) async fn settings_update_handler(
         "tenant.settings.update",
         "tenant",
         &tenant_id.to_string(),
-        Some(serde_json::json!({
-            "attributes_public": attrs,
-            "emails_visible": emails,
-            "force_cox_stern": cox,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "attributes_public": attrs,
+                "emails_visible": emails,
+                "force_cox_stern": cox,
+            })
+            .to_string(),
+        ),
     );
 
     // Re-load and re-render with fresh config.
     let tab_content = settings_content(&state, &tenant).await?;
-    Ok(Html(tab_swap(TABS, "settings", TARGET, tab_content).into_string()))
+    Ok(Html(
+        tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
+    ))
 }
 
 fn is_tab_swap(headers: &HeaderMap) -> bool {
-    headers
-        .get("HX-Target")
-        .and_then(|v| v.to_str().ok())
-        == Some(TARGET)
+    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TARGET)
 }
 
 // ── Export / Restore ────────────────────────────────────────────
@@ -402,7 +463,12 @@ pub(crate) async fn restore_form_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let content = restore_form_markup(None, None);
-    Ok(handlers::maybe_page_authed("Restore Backup", content, hx, &tenant))
+    Ok(handlers::maybe_page_authed(
+        "Restore Backup",
+        content,
+        hx,
+        &tenant,
+    ))
 }
 
 /// `POST /admin/restore` — receive the uploaded DB, validate, and restore.
@@ -425,7 +491,9 @@ pub(crate) async fn restore_handler(
     let file_bytes = match file_bytes {
         Some(b) if !b.is_empty() => b,
         _ => {
-            return Ok(Html(restore_form_markup(Some("No file uploaded."), None).into_string()));
+            return Ok(Html(
+                restore_form_markup(Some("No file uploaded."), None).into_string(),
+            ));
         }
     };
 
@@ -449,31 +517,35 @@ pub(crate) async fn restore_handler(
         .with_conn(move |conn| AppUser::get(conn, user_id))
         .await
         .map_err(internal_error)?
-        .ok_or_else(|| crate::handlers::ErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, "An unexpected error occurred.".into()))?;
+        .ok_or_else(|| {
+            crate::handlers::ErrorResponse(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "An unexpected error occurred.".into(),
+            )
+        })?;
     let current_email = current_user.email.clone();
     let current_hash = current_user.password_hash.clone();
 
     // Open the uploaded DB read-only and check for the current user.
     let check_temp = temp_path.clone();
     let check_email = current_email.clone();
-    let check_result: Result<Option<BackupUser>, String> =
-        tokio::task::spawn_blocking(move || {
-            use diesel::prelude::*;
-            let mut conn = diesel::SqliteConnection::establish(&check_temp)
-                .map_err(|e| format!("Invalid SQLite file: {e}"))?;
-            // Use raw SQL to avoid schema mismatch issues with older backups.
-            // Use direct string formatting — email is from our own DB, not user input.
-            let query = format!(
-                "SELECT email, password_hash FROM app_user WHERE email = '{}' LIMIT 1",
-                check_email.replace('\'', "''")
-            );
-            diesel::sql_query(&query)
+    let check_result: Result<Option<BackupUser>, String> = tokio::task::spawn_blocking(move || {
+        use diesel::prelude::*;
+        let mut conn = diesel::SqliteConnection::establish(&check_temp)
+            .map_err(|e| format!("Invalid SQLite file: {e}"))?;
+        // Use raw SQL to avoid schema mismatch issues with older backups.
+        // Use direct string formatting — email is from our own DB, not user input.
+        let query = format!(
+            "SELECT email, password_hash FROM app_user WHERE email = '{}' LIMIT 1",
+            check_email.replace('\'', "''")
+        );
+        diesel::sql_query(&query)
             .get_result::<BackupUser>(&mut conn)
             .optional()
             .map_err(|e| format!("Error reading backup: {e}"))
-        })
-        .await
-        .map_err(internal_error)?;
+    })
+    .await
+    .map_err(internal_error)?;
 
     match check_result {
         Err(msg) => {
@@ -515,10 +587,13 @@ pub(crate) async fn restore_confirm_handler(
 
     let temp_path = input.temp_path;
     if !std::path::Path::new(&temp_path).exists() {
-        return Ok(Html(restore_form_markup(
-            Some("Temp file expired. Please upload the backup again."),
-            None,
-        ).into_string()));
+        return Ok(Html(
+            restore_form_markup(
+                Some("Temp file expired. Please upload the backup again."),
+                None,
+            )
+            .into_string(),
+        ));
     }
 
     do_restore(&state, &tenant, &temp_path).await
@@ -570,10 +645,7 @@ async fn do_restore(
     Ok(Html(restore_success_markup().into_string()))
 }
 
-fn restore_form_markup(
-    error: Option<&str>,
-    confirm_temp_path: Option<&str>,
-) -> maud::Markup {
+fn restore_form_markup(error: Option<&str>, confirm_temp_path: Option<&str>) -> maud::Markup {
     html! {
         div class="max-w-lg mx-auto mt-8" {
             h2 class="text-xl font-bold mb-4" { "Restore Database Backup" }

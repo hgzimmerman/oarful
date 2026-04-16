@@ -18,20 +18,21 @@ fn http_client() -> reqwest::Client {
 /// Create a demo tenant and return the auth cookie header value.
 /// The demo endpoint issues a JWT and sets a cookie.
 async fn setup_demo(base: &str, client: &reqwest::Client) -> String {
-    let resp = client
-        .post(format!("{base}/demo"))
-        .send()
-        .await
-        .unwrap();
+    let resp = client.post(format!("{base}/demo")).send().await.unwrap();
     assert!(
-        resp.status().is_success() || resp.status() == StatusCode::SEE_OTHER || resp.status() == StatusCode::OK,
+        resp.status().is_success()
+            || resp.status() == StatusCode::SEE_OTHER
+            || resp.status() == StatusCode::OK,
         "demo creation should succeed, got {}",
         resp.status()
     );
     // The cookie store handles the JWT cookie automatically.
     // Return the final URL to confirm we landed on /practices.
     let url = resp.url().to_string();
-    assert!(url.contains("/practices"), "should redirect to practices, got {url}");
+    assert!(
+        url.contains("/practices"),
+        "should redirect to practices, got {url}"
+    );
     url
 }
 
@@ -72,7 +73,11 @@ async fn export_downloads_sqlite_file() {
     );
 
     let bytes = resp.bytes().await.unwrap();
-    assert!(bytes.len() > 1000, "exported file should be non-trivial ({} bytes)", bytes.len());
+    assert!(
+        bytes.len() > 1000,
+        "exported file should be non-trivial ({} bytes)",
+        bytes.len()
+    );
 
     // Verify it's a valid SQLite file (starts with "SQLite format 3\0").
     assert_eq!(
@@ -92,19 +97,27 @@ async fn restore_rejects_missing_account() {
 
     // Create a minimal SQLite database that has NO app_user matching
     // the demo user (demo@localhost). We'll create one with a different email.
-    let temp_db = instance.base_url().replace("http://localhost:", "/tmp/lineup_e2e_restore_reject_")
+    let temp_db = instance
+        .base_url()
+        .replace("http://localhost:", "/tmp/lineup_e2e_restore_reject_")
         + ".db";
     {
         use diesel::prelude::*;
         use diesel::Connection;
         // Copy the real DB first so schema is correct, then delete the demo user.
-        let export_resp = client.get(format!("{base}/admin/export")).send().await.unwrap();
+        let export_resp = client
+            .get(format!("{base}/admin/export"))
+            .send()
+            .await
+            .unwrap();
         let export_bytes = export_resp.bytes().await.unwrap();
         tokio::fs::write(&temp_db, &export_bytes).await.unwrap();
 
         // Open and delete all users.
         let mut conn = diesel::SqliteConnection::establish(&temp_db).unwrap();
-        diesel::sql_query("DELETE FROM app_user").execute(&mut conn).unwrap();
+        diesel::sql_query("DELETE FROM app_user")
+            .execute(&mut conn)
+            .unwrap();
     }
 
     // Upload the DB with no matching user.
@@ -144,22 +157,32 @@ async fn restore_warns_on_credential_mismatch() {
     setup_demo(&base, &client).await;
 
     // Export the current DB, then modify the password hash.
-    let temp_db = instance.base_url().replace("http://localhost:", "/tmp/lineup_e2e_restore_creds_")
+    let temp_db = instance
+        .base_url()
+        .replace("http://localhost:", "/tmp/lineup_e2e_restore_creds_")
         + ".db";
     {
         use diesel::prelude::*;
         use diesel::Connection;
-        let export_resp = client.get(format!("{base}/admin/export")).send().await.unwrap();
+        let export_resp = client
+            .get(format!("{base}/admin/export"))
+            .send()
+            .await
+            .unwrap();
         let export_bytes = export_resp.bytes().await.unwrap();
         tokio::fs::write(&temp_db, &export_bytes).await.unwrap();
 
         // Change the password hash for the demo user.
         let mut conn = diesel::SqliteConnection::establish(&temp_db).unwrap();
-        diesel::sql_query("UPDATE app_user SET password_hash = 'different_hash' WHERE email = 'demo@localhost'")
+        diesel::sql_query(
+            "UPDATE app_user SET password_hash = 'different_hash' WHERE email = 'demo@localhost'",
+        )
+        .execute(&mut conn)
+        .unwrap();
+        // Checkpoint WAL so the base file has all changes.
+        diesel::sql_query("PRAGMA wal_checkpoint(TRUNCATE)")
             .execute(&mut conn)
             .unwrap();
-        // Checkpoint WAL so the base file has all changes.
-        diesel::sql_query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&mut conn).unwrap();
     }
 
     let file_bytes = tokio::fs::read(&temp_db).await.unwrap();

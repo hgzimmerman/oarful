@@ -63,9 +63,9 @@ impl<'a> EditorData<'a> {
         let strength = r.side_strength.as_int(); // 0 = hard lock, 5 = flexible
         let bias = 5 - strength; // higher = stronger preference
         match r.side {
-            Side::Port => -(bias + 1),      // -6..-1
+            Side::Port => -(bias + 1), // -6..-1
             Side::Either => 0,
-            Side::Starboard => bias + 1,    // 1..6
+            Side::Starboard => bias + 1, // 1..6
         }
     }
 
@@ -78,17 +78,37 @@ impl<'a> EditorData<'a> {
     /// only those boats start active; otherwise all boats are active.
     pub(crate) fn empty(snapshot: &'a DbSnapshot, default_boats: &HashSet<BoatId>) -> Self {
         let use_defaults = !default_boats.is_empty();
-        let boats = snapshot.boats.iter().map(|b| {
-            let has_cox = b.has_cox.as_bool();
-            let mut seats = Vec::new();
-            if has_cox { seats.push((0, None)); }
-            for s in 1..=b.seat_count { seats.push((s, None)); }
-            let active = if use_defaults { default_boats.contains(&b.id) } else { true };
-            EditorBoat { boat: b, seats, active }
-        }).collect();
+        let boats = snapshot
+            .boats
+            .iter()
+            .map(|b| {
+                let has_cox = b.has_cox.as_bool();
+                let mut seats = Vec::new();
+                if has_cox {
+                    seats.push((0, None));
+                }
+                for s in 1..=b.seat_count {
+                    seats.push((s, None));
+                }
+                let active = if use_defaults {
+                    default_boats.contains(&b.id)
+                } else {
+                    true
+                };
+                EditorBoat {
+                    boat: b,
+                    seats,
+                    active,
+                }
+            })
+            .collect();
         let mut pool: Vec<&Rower> = snapshot.available_rowers().collect();
         Self::sort_pool(&mut pool);
-        Self { boats, pool, sculling: vec![] }
+        Self {
+            boats,
+            pool,
+            sculling: vec![],
+        }
     }
 
     /// Build from a solver result — used boats have seats filled,
@@ -106,27 +126,42 @@ impl<'a> EditorData<'a> {
             })
             .collect();
 
-        let boats = snapshot.boats.iter().map(|b| {
-            let lineup = primary.lineups.iter().find(|l| l.boat_id == b.id);
-            let active = lineup.map(|l| l.used).unwrap_or(false);
-            let seat_map = filled_map.get(&b.id);
-            let has_cox = b.has_cox.as_bool();
-            let mut seats = Vec::new();
-            if has_cox {
-                seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
-            }
-            for s in 1..=b.seat_count {
-                seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
-            }
-            EditorBoat { boat: b, seats, active }
-        }).collect();
+        let boats = snapshot
+            .boats
+            .iter()
+            .map(|b| {
+                let lineup = primary.lineups.iter().find(|l| l.boat_id == b.id);
+                let active = lineup.map(|l| l.used).unwrap_or(false);
+                let seat_map = filled_map.get(&b.id);
+                let has_cox = b.has_cox.as_bool();
+                let mut seats = Vec::new();
+                if has_cox {
+                    seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
+                }
+                for s in 1..=b.seat_count {
+                    seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
+                }
+                EditorBoat {
+                    boat: b,
+                    seats,
+                    active,
+                }
+            })
+            .collect();
 
-        let mut pool: Vec<&Rower> = primary.unplaced.benched.iter()
+        let mut pool: Vec<&Rower> = primary
+            .unplaced
+            .benched
+            .iter()
             .filter_map(|id| snapshot.rowers.iter().find(|r| r.id == *id))
             .collect();
         Self::sort_pool(&mut pool);
 
-        Self { boats, pool, sculling: vec![] }
+        Self {
+            boats,
+            pool,
+            sculling: vec![],
+        }
     }
 
     /// Build from explicit placements — used by the editor endpoint
@@ -137,31 +172,44 @@ impl<'a> EditorData<'a> {
         placements: &HashMap<BoatId, HashMap<i32, RowerId>>,
         active_boats: &HashSet<BoatId>,
     ) -> Self {
-        let boats = snapshot.boats.iter().map(|b| {
-            let active = active_boats.contains(&b.id);
-            let seat_map = placements.get(&b.id);
-            let has_cox = b.has_cox.as_bool();
-            let mut seats = Vec::new();
-            if has_cox {
-                seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
-            }
-            for s in 1..=b.seat_count {
-                seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
-            }
-            EditorBoat { boat: b, seats, active }
-        }).collect();
+        let boats = snapshot
+            .boats
+            .iter()
+            .map(|b| {
+                let active = active_boats.contains(&b.id);
+                let seat_map = placements.get(&b.id);
+                let has_cox = b.has_cox.as_bool();
+                let mut seats = Vec::new();
+                if has_cox {
+                    seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
+                }
+                for s in 1..=b.seat_count {
+                    seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
+                }
+                EditorBoat {
+                    boat: b,
+                    seats,
+                    active,
+                }
+            })
+            .collect();
 
         // Pool = available rowers not placed in any seat.
         let placed: HashSet<RowerId> = placements
             .values()
             .flat_map(|m| m.values().copied())
             .collect();
-        let mut pool: Vec<&Rower> = snapshot.available_rowers()
+        let mut pool: Vec<&Rower> = snapshot
+            .available_rowers()
             .filter(|r| !placed.contains(&r.id))
             .collect();
         Self::sort_pool(&mut pool);
 
-        Self { boats, pool, sculling: vec![] }
+        Self {
+            boats,
+            pool,
+            sculling: vec![],
+        }
     }
 }
 
@@ -473,7 +521,11 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     let mut seats = eb.seats.clone();
     seats.sort_by_key(|(s, _)| {
         if *s == 0 {
-            if cox_at_top { i32::MIN } else { i32::MAX }
+            if cox_at_top {
+                i32::MIN
+            } else {
+                i32::MAX
+            }
         } else {
             -*s
         }
@@ -662,7 +714,9 @@ fn editor_js() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineup_db::rower::types::{Side, SideStrength, SweepBias, RowerWeightClass, Skill, Strength, Height};
+    use lineup_db::rower::types::{
+        Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+    };
     use lineup_db::types::IntBool;
 
     fn rower_with_side(side: Side, strength: i32) -> Rower {
@@ -705,8 +759,14 @@ mod tests {
 
     #[test]
     fn side_sort_key_either_is_zero() {
-        assert_eq!(EditorData::side_sort_key(&rower_with_side(Side::Either, 0)), 0);
-        assert_eq!(EditorData::side_sort_key(&rower_with_side(Side::Either, 5)), 0);
+        assert_eq!(
+            EditorData::side_sort_key(&rower_with_side(Side::Either, 0)),
+            0
+        );
+        assert_eq!(
+            EditorData::side_sort_key(&rower_with_side(Side::Either, 5)),
+            0
+        );
     }
 
     #[test]

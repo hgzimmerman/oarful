@@ -7,9 +7,9 @@ mod editor;
 pub(crate) mod knobs;
 pub(crate) mod profile_modal;
 
-use alternatives::alternatives_panel;
 pub(crate) use alternatives::alternative_block as stream_alternative_block;
-pub(crate) use editor::{DisplayFlags, EditorData, OtherTeamRower, lineup_editor};
+use alternatives::alternatives_panel;
+pub(crate) use editor::{lineup_editor, DisplayFlags, EditorData, OtherTeamRower};
 use knobs::knobs_form;
 pub(crate) use knobs::preset_bar;
 
@@ -57,13 +57,15 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     // Notches centered vertically: use a repeating gradient sized to
     // the notch block height, positioned at center.
     let notch_h = 2; // px per gray line
-    let gap = 3;     // px between lines
+    let gap = 3; // px between lines
     let block_h = notches * (notch_h + gap) - gap; // total notch block height
     let mut stops = Vec::new();
     for i in 0..notches {
         let start = i * (notch_h + gap);
         let end = start + notch_h;
-        stops.push(format!("#cbd5e1 {start}px,#cbd5e1 {end}px,transparent {end}px"));
+        stops.push(format!(
+            "#cbd5e1 {start}px,#cbd5e1 {end}px,transparent {end}px"
+        ));
     }
     let gradient = format!(
         "background-image:linear-gradient(to bottom,{});background-size:100% {block_h}px;background-repeat:no-repeat;background-position:center",
@@ -151,7 +153,11 @@ pub(super) fn cox_first(snapshot: &DbSnapshot, boat_id: BoatId, force_cox_stern:
 pub(super) fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
     seats.sort_by_key(|(s, _)| {
         if *s == 0 {
-            if cox_at_top { i32::MIN } else { i32::MAX }
+            if cox_at_top {
+                i32::MIN
+            } else {
+                i32::MAX
+            }
         } else {
             // Numbered seats display high→low (stern→bow): s8, s7, ..., s1
             -*s
@@ -242,13 +248,26 @@ pub(crate) fn landing_content(
         let mut placements: HashMap<BoatId, HashMap<i32, RowerId>> = HashMap::new();
         for entry in &knobs.seat {
             let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() != 3 { continue; }
-            let Ok(boat_id) = parts[0].parse::<BoatId>() else { continue };
-            let Ok(seat) = parts[1].parse::<i32>() else { continue };
-            let Ok(rower_id) = parts[2].parse::<RowerId>() else { continue };
-            placements.entry(boat_id).or_default().insert(seat, rower_id);
+            if parts.len() != 3 {
+                continue;
+            }
+            let Ok(boat_id) = parts[0].parse::<BoatId>() else {
+                continue;
+            };
+            let Ok(seat) = parts[1].parse::<i32>() else {
+                continue;
+            };
+            let Ok(rower_id) = parts[2].parse::<RowerId>() else {
+                continue;
+            };
+            placements
+                .entry(boat_id)
+                .or_default()
+                .insert(seat, rower_id);
         }
-        let active_boats: HashSet<BoatId> = knobs.boat.iter()
+        let active_boats: HashSet<BoatId> = knobs
+            .boat
+            .iter()
             .filter_map(|s| s.parse::<BoatId>().ok())
             .collect();
         EditorData::from_placements(snapshot, &placements, &active_boats)
@@ -300,10 +319,7 @@ pub(crate) fn streaming_page(
 
 /// Streaming skeleton: swapped into `#solve-results` when generate=1.
 /// Contains the SSE connection that streams solver results.
-pub(crate) fn streaming_skeleton(
-    practice_id: PracticeId,
-    knobs: &SolveKnobs,
-) -> Markup {
+pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) -> Markup {
     let sse_url = format!(
         "/solve/{practice_id}/stream?{}",
         serde_html_form::to_string(knobs).unwrap_or_default()
@@ -365,10 +381,13 @@ pub(crate) fn view_content(
     };
 
     // Unavailable rowers for the walk-on dropdown.
-    let unavailable: Vec<&Rower> = snapshot.rowers.iter()
+    let unavailable: Vec<&Rower> = snapshot
+        .rowers
+        .iter()
         .filter(|r| r.active.as_bool())
         .filter(|r| {
-            !snapshot.availability
+            !snapshot
+                .availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
                 .unwrap_or(false)
@@ -397,7 +416,9 @@ pub(crate) fn view_content(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineup_db::rower::types::{Side, SideStrength, SweepBias, RowerWeightClass, Skill, Strength, Height};
+    use lineup_db::rower::types::{
+        Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+    };
     use lineup_db::types::IntBool;
     use test_case::test_case;
 
@@ -452,5 +473,4 @@ mod tests {
     fn compact_side_cases(side: Side, strength: i32) -> String {
         compact_side(&rower_with_side(side, strength))
     }
-
 }

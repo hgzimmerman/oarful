@@ -40,8 +40,7 @@ impl<'a> ModelBuilder<'a> {
         }
         let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let seats_total =
-                boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+            let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
             // Scale the base reward by the boat-class bias: (1 + bias).
             // A bias of 0 = normal reward; positive = prefer this class.
             let class = crate::BoatClass::from_boat(boat);
@@ -171,8 +170,7 @@ impl<'a> ModelBuilder<'a> {
             // `.scaled(0)` would panic anyway. Computed in i64 to
             // avoid overflow on exotic penalty values, then cast
             // back to i32 for the Pumpkin API.
-            let numerator = cfg.cox_cooldown_penalty as i64
-                * (COX_COOLDOWN_DAYS - days_since);
+            let numerator = cfg.cox_cooldown_penalty as i64 * (COX_COOLDOWN_DAYS - days_since);
             let effective = ((numerator + COX_COOLDOWN_DAYS - 1) / COX_COOLDOWN_DAYS) as i32;
             if effective <= 0 {
                 // Defensive: only reachable if `cox_cooldown_penalty`
@@ -246,8 +244,7 @@ impl<'a> ModelBuilder<'a> {
                 continue;
             }
             for p in &reference.placements {
-                let Some(r_idx) = available.iter().position(|r| r.id == p.rower_id)
-                else {
+                let Some(r_idx) = available.iter().position(|r| r.id == p.rower_id) else {
                     continue;
                 };
                 let Some(b_idx) = boats.iter().position(|b| b.id == p.boat_id) else {
@@ -451,9 +448,15 @@ impl<'a> ModelBuilder<'a> {
             // Collect all cox-seat x variables for this rower.
             let cox_vars: Vec<DomainId> = x
                 .iter()
-                .filter_map(|(&(r, _, s), &v)| {
-                    if r == r_idx && s == 0 { Some(v) } else { None }
-                })
+                .filter_map(
+                    |(&(r, _, s), &v)| {
+                        if r == r_idx && s == 0 {
+                            Some(v)
+                        } else {
+                            None
+                        }
+                    },
+                )
                 .collect();
             if cox_vars.is_empty() {
                 continue;
@@ -659,10 +662,8 @@ impl<'a> ModelBuilder<'a> {
             }
 
             // Linear decay: recently benched = full penalty, older = less.
-            let numerator = cfg.bench_cooldown_penalty as i64
-                * (BENCH_COOLDOWN_DAYS - days_since);
-            let effective =
-                ((numerator + BENCH_COOLDOWN_DAYS - 1) / BENCH_COOLDOWN_DAYS) as i32;
+            let numerator = cfg.bench_cooldown_penalty as i64 * (BENCH_COOLDOWN_DAYS - days_since);
+            let effective = ((numerator + BENCH_COOLDOWN_DAYS - 1) / BENCH_COOLDOWN_DAYS) as i32;
             if effective <= 0 {
                 continue;
             }

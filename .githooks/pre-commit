@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Regenerate Tailwind CSS before each commit so the built CSS
-# stays in sync with template changes.
+# Format Rust code and regenerate Tailwind CSS before each commit.
+
+cargo fmt --all
+git add -u '*.rs'
+
 tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify 2>/dev/null
 git add crates/server/public/tailwind.css

@@ -33,13 +33,13 @@ use lineup_db::boat::{
     Boat,
 };
 use lineup_db::pair_affinity::PairAffinity;
+use lineup_db::rower::types::SweepBias;
 use lineup_db::rower::types::{
     Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength,
 };
 use lineup_db::rower::Rower;
 use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::snapshot::DbSnapshot;
-use lineup_db::rower::types::SweepBias;
 use lineup_db::types::{AffinityWeight, IntBool};
 use lineup_solver::{
     solve, PartialFillPolicy, ProposedLineup, SolveRequest, SolveStatus, SolverConfig,
@@ -277,10 +277,42 @@ fn s2_pair_affinity_seats_the_pair_together() {
     // partitions; with a positive weight, they must land in the
     // same 2-seat partition.
     let rowers = vec![
-        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "Alice",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "Bob",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "Carla",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "Diego",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let mut snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -310,10 +342,42 @@ fn s3_seat_affinity_places_rower_in_preferred_seat() {
     // Grace has a +5 Stroke zone affinity. In a 4+ that maps to seat 4.
     // With S3 on and everything else off, she should land there.
     let rowers = vec![
-        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "Grace", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "Alice",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "Bob",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "Carla",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "Grace",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let mut snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -351,12 +415,28 @@ fn s4_soft_side_prefers_on_side_placement() {
     // eligibility.
     let rowers = vec![
         {
-            let mut r = rower(1, "HardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            let mut r = rower(
+                1,
+                "HardA",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Starboard,
+            );
             r.side_strength = SideStrength::HARD;
             r
         },
         {
-            let mut r = rower(2, "HardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            let mut r = rower(
+                2,
+                "HardB",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Starboard,
+            );
             r.side_strength = SideStrength::HARD;
             r
         },
@@ -364,12 +444,28 @@ fn s4_soft_side_prefers_on_side_placement() {
             // SoftSide is nominally Starboard but soft-locked, so
             // the eligibility filter allows her on Port seats with
             // a per-placement S4 penalty.
-            let mut r = rower(3, "SoftSide", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            let mut r = rower(
+                3,
+                "SoftSide",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Starboard,
+            );
             r.side_strength = SideStrength::soft(3);
             r
         },
         {
-            let mut r = rower(4, "PortOne", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                4,
+                "PortOne",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.side_strength = SideStrength::HARD;
             r
         },
@@ -387,14 +483,8 @@ fn s4_soft_side_prefers_on_side_placement() {
     // Port seats in a Starboard-stroke 4+ are {1, 3}. HardA / HardB
     // are eligibility-filtered out of them entirely, so the only
     // rowers that can occupy them are PortOne and SoftSide.
-    let port_rowers: Vec<RowerId> = [1, 3]
-        .iter()
-        .map(|&s| rower_in_seat(lineup, s))
-        .collect();
-    let starboard_rowers: Vec<RowerId> = [2, 4]
-        .iter()
-        .map(|&s| rower_in_seat(lineup, s))
-        .collect();
+    let port_rowers: Vec<RowerId> = [1, 3].iter().map(|&s| rower_in_seat(lineup, s)).collect();
+    let starboard_rowers: Vec<RowerId> = [2, 4].iter().map(|&s| rower_in_seat(lineup, s)).collect();
 
     assert!(
         port_rowers.contains(&RowerId::new(4)),
@@ -409,7 +499,10 @@ fn s4_soft_side_prefers_on_side_placement() {
     assert!(!port_rowers.contains(&RowerId::new(2)));
     // They must both be on the two Starboard seats.
     assert_eq!(
-        starboard_rowers.iter().filter(|&&r| r == RowerId::new(1) || r == RowerId::new(2)).count(),
+        starboard_rowers
+            .iter()
+            .filter(|&&r| r == RowerId::new(1) || r == RowerId::new(2))
+            .count(),
         2,
         "HardA and HardB must both be on Starboard seats; got {starboard_rowers:?}"
     );
@@ -427,30 +520,68 @@ fn s6_cox_cooldown_picks_the_cold_cox() {
     // without that, the solver can satisfy S6 by putting any of
     // them in seat 0 and the test assertion becomes ambiguous.
     let rowers = vec![
-        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
-        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
+        rower(
+            1,
+            "Alice",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Either,
+        ),
+        rower(
+            2,
+            "Bob",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Either,
+        ),
         {
-            let mut r = rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                3,
+                "Carla",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
         {
-            let mut r = rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            let mut r = rower(
+                4,
+                "Diego",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Starboard,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
         {
-            let mut r = rower(5, "Erin", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                5,
+                "Erin",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
     ];
     let mut snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
     // Alice coxed 3 days before the test date. Bob has no history.
-    snap.last_coxed.insert(
-        RowerId::new(1),
-        test_date() - chrono::Duration::days(3),
-    );
+    snap.last_coxed
+        .insert(RowerId::new(1), test_date() - chrono::Duration::days(3));
 
     let mut cfg = silent_config();
     cfg.cox_cooldown_penalty = 5;
@@ -481,20 +612,60 @@ fn s6_cox_cooldown_prefers_least_recently_coxed() {
     // has exactly these two candidates — keeps the assertion
     // unambiguous.
     let rowers = vec![
-        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
-        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Either),
+        rower(
+            1,
+            "Alice",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Either,
+        ),
+        rower(
+            2,
+            "Bob",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Either,
+        ),
         {
-            let mut r = rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                3,
+                "Carla",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
         {
-            let mut r = rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard);
+            let mut r = rower(
+                4,
+                "Diego",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Starboard,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
         {
-            let mut r = rower(5, "Erin", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                5,
+                "Erin",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.can_cox = IntBool::FALSE;
             r
         },
@@ -530,10 +701,42 @@ fn s9_pair_strength_matches_strengths_per_partition() {
     // Weak. S9 should group them so each partition contains
     // rowers of the same strength.
     let rowers = vec![
-        rower(1, "PortStrong",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardStrong", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortWeak",        RowerWeightClass::Medium, Skill::Expert, Strength::Weak,   Height::Medium, Side::Port),
-        rower(4, "StarboardWeak",   RowerWeightClass::Medium, Skill::Expert, Strength::Weak,   Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortStrong",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardStrong",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortWeak",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Weak,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardWeak",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Weak,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -571,10 +774,42 @@ fn s9b_bow_pair_gets_the_matched_strengths() {
     // With S9 regular on at weight 1 and S9b on at weight 2, the
     // bow partition (1, 2) should be the balanced one.
     let rowers = vec![
-        rower(1, "PortStrongA",    RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardStrong", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortStrongB",    RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "StarboardWeak",  RowerWeightClass::Medium, Skill::Expert, Strength::Weak,   Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortStrongA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardStrong",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortStrongB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardWeak",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Weak,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -600,10 +835,42 @@ fn s9b_bow_pair_gets_the_matched_strengths() {
 #[test]
 fn s10_pair_height_matches_heights_per_partition() {
     let rowers = vec![
-        rower(1, "PortShort",     RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Short,    Side::Port),
-        rower(2, "StarboardShort", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Short,    Side::Starboard),
-        rower(3, "PortTall",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::VeryTall, Side::Port),
-        rower(4, "StarboardTall", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::VeryTall, Side::Starboard),
+        rower(
+            1,
+            "PortShort",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Short,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardShort",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Short,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortTall",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::VeryTall,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardTall",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::VeryTall,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -649,14 +916,78 @@ fn s11_end_pair_skill_puts_experts_in_the_ends() {
     // for the 4 Novices, so the side constraints are satisfiable
     // with the expected placement.
     let rowers = vec![
-        rower(1, "ExpertPortA",     RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "ExpertStarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "ExpertPortB",     RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "ExpertStarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(5, "NovicePortA",     RowerWeightClass::Medium, Skill::Novice, Strength::Strong, Height::Medium, Side::Port),
-        rower(6, "NoviceStarboardA", RowerWeightClass::Medium, Skill::Novice, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(7, "NovicePortB",     RowerWeightClass::Medium, Skill::Novice, Strength::Strong, Height::Medium, Side::Port),
-        rower(8, "NoviceStarboardB", RowerWeightClass::Medium, Skill::Novice, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "ExpertPortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "ExpertStarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "ExpertPortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "ExpertStarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "NovicePortA",
+            RowerWeightClass::Medium,
+            Skill::Novice,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "NoviceStarboardA",
+            RowerWeightClass::Medium,
+            Skill::Novice,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "NovicePortB",
+            RowerWeightClass::Medium,
+            Skill::Novice,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "NoviceStarboardB",
+            RowerWeightClass::Medium,
+            Skill::Novice,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(9, "Cox"),
     ];
     let snap = snapshot(rowers, vec![eight_boat(1, "TestEight")]);
@@ -668,7 +999,12 @@ fn s11_end_pair_skill_puts_experts_in_the_ends() {
     assert_eq!(result.status, SolveStatus::Satisfied);
     let lineup = single_used(&result.primary.lineups);
 
-    let experts: [RowerId; 4] = [RowerId::new(1), RowerId::new(2), RowerId::new(3), RowerId::new(4)];
+    let experts: [RowerId; 4] = [
+        RowerId::new(1),
+        RowerId::new(2),
+        RowerId::new(3),
+        RowerId::new(4),
+    ];
     for seat in [1, 2, 7, 8] {
         let r = rower_in_seat(lineup, seat);
         assert!(
@@ -690,14 +1026,78 @@ fn s12_engine_room_strength_puts_strong_rowers_in_middle() {
     // Symmetric to s11: 4 VeryStrong + 4 Weak rowers on an 8+,
     // S11 off, S12 on. Expect VeryStrong in seats {3, 4, 5, 6}.
     let rowers = vec![
-        rower(1, "VSPortA",      RowerWeightClass::Medium, Skill::Master, Strength::VeryStrong, Height::Medium, Side::Port),
-        rower(2, "VSStarboardA", RowerWeightClass::Medium, Skill::Master, Strength::VeryStrong, Height::Medium, Side::Starboard),
-        rower(3, "VSPortB",      RowerWeightClass::Medium, Skill::Master, Strength::VeryStrong, Height::Medium, Side::Port),
-        rower(4, "VSStarboardB", RowerWeightClass::Medium, Skill::Master, Strength::VeryStrong, Height::Medium, Side::Starboard),
-        rower(5, "WeakPortA",    RowerWeightClass::Medium, Skill::Master, Strength::Weak,       Height::Medium, Side::Port),
-        rower(6, "WeakStarboardA", RowerWeightClass::Medium, Skill::Master, Strength::Weak,       Height::Medium, Side::Starboard),
-        rower(7, "WeakPortB",    RowerWeightClass::Medium, Skill::Master, Strength::Weak,       Height::Medium, Side::Port),
-        rower(8, "WeakStarboardB", RowerWeightClass::Medium, Skill::Master, Strength::Weak,       Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "VSPortA",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::VeryStrong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "VSStarboardA",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::VeryStrong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "VSPortB",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::VeryStrong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "VSStarboardB",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::VeryStrong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "WeakPortA",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::Weak,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "WeakStarboardA",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::Weak,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "WeakPortB",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::Weak,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "WeakStarboardB",
+            RowerWeightClass::Medium,
+            Skill::Master,
+            Strength::Weak,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(9, "Cox"),
     ];
     let snap = snapshot(rowers, vec![eight_boat(1, "TestEight")]);
@@ -750,15 +1150,55 @@ fn s13_non_scull_retention_prefers_benching_sculler() {
     // solver should pick rower 5 (sculling-leaning) over
     // rowers 1 or 3 (sweep_bias = 2, strong sweep preference).
     let rowers = vec![
-        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         {
             // Sculling-leaning Port rower — the solver should
             // prefer to bench *this* one because they have a
             // fallback.
-            let mut r = rower(5, "Scullable", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port);
+            let mut r = rower(
+                5,
+                "Scullable",
+                RowerWeightClass::Medium,
+                Skill::Expert,
+                Strength::Strong,
+                Height::Medium,
+                Side::Port,
+            );
             r.sweep_bias = SweepBias::new(-1);
             r
         },
@@ -775,11 +1215,8 @@ fn s13_non_scull_retention_prefers_benching_sculler() {
 
     // Both sweep-biased Port rowers (PortA, PortB) should be
     // seated; the sculling-leaning rower should be unplaced (benched).
-    let placed_ids: std::collections::HashSet<RowerId> = lineup
-        .seats
-        .iter()
-        .map(|(_, r)| *r)
-        .collect();
+    let placed_ids: std::collections::HashSet<RowerId> =
+        lineup.seats.iter().map(|(_, r)| *r).collect();
     assert!(
         placed_ids.contains(&RowerId::new(1)),
         "PortA (sweep-biased) should be seated, got lineup {:?}",
@@ -822,14 +1259,78 @@ fn partial_fill_bonus_prefers_filling_optional_seats() {
     // for the hard constraints; only the partial-fill bonus
     // tells the solver which one to pick.
     let rowers = vec![
-        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(5, "PortC", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(6, "StarboardC", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(7, "PortD", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(8, "StarboardD", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "PortC",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "StarboardC",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "PortD",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "StarboardD",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(9, "Cox"),
     ];
     let snap = snapshot(rowers, vec![eight_boat(1, "TestEight")]);
@@ -880,10 +1381,42 @@ fn partial_fill_bonus_is_inert_under_strict() {
     // without the bonus affecting any decision, and — crucially —
     // solve() must not panic on the (inert) bonus block.
     let rowers = vec![
-        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -938,10 +1471,42 @@ fn topn_returns_requested_number_of_alternatives() {
     // placements are equally optimal. Ask for 3 alternatives and
     // confirm we get primary + 2 more.
     let rowers = vec![
-        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            3,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -967,10 +1532,42 @@ fn topn_alternatives_respect_tabu_min_diff() {
     // must differ by at least 2 placements × 2 (symmetric
     // difference counts both "removed" and "added").
     let rowers = vec![
-        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            3,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -1016,10 +1613,42 @@ fn topn_one_is_identical_to_single_solve() {
     // means an empty alternatives vec. This protects callers
     // who read `result.lineups` and never look at alternatives.
     let rowers = vec![
-        rower(1, "Alice", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "Bob",   RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "Carla", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "Diego", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "Alice",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "Bob",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "Carla",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "Diego",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -1047,10 +1676,42 @@ fn topn_gracefully_caps_at_feasible_region() {
     // 5 filled seats total — the tabu constraint is trivially
     // infeasible, so no second alternative can be found.
     let rowers = vec![
-        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(3, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            3,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -1061,7 +1722,10 @@ fn topn_gracefully_caps_at_feasible_region() {
 
     let result = solve(&snap, &req).unwrap();
     assert_eq!(result.status, SolveStatus::Satisfied);
-    assert!(!result.primary.lineups.is_empty(), "primary should still solve");
+    assert!(
+        !result.primary.lineups.is_empty(),
+        "primary should still solve"
+    );
     assert!(
         result.alternatives.is_empty(),
         "no alternative should satisfy tabu_min_diff = 10 on a 5-seat boat"
@@ -1076,10 +1740,42 @@ fn h2_designated_cox_never_rows() {
     // This is an eligibility-layer rule (not an objective-layer one)
     // so the test doesn't need any particular soft-weight setup.
     let rowers = vec![
-        rower(1, "PortA",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortB",      RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "DesignatedCox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
@@ -1112,10 +1808,42 @@ fn h2_designated_cox_never_rows() {
 fn solver_emits_debug_diagnostics() {
     // Run a basic solve and verify that key debug log lines are emitted.
     let rowers = vec![
-        rower(1, "PortA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Port),
-        rower(2, "StarboardA", RowerWeightClass::Medium, Skill::Expert, Strength::Strong, Height::Medium, Side::Starboard),
-        rower(3, "PortB", RowerWeightClass::Medium, Skill::Intermediate, Strength::Intermediate, Height::Medium, Side::Port),
-        rower(4, "StarboardB", RowerWeightClass::Medium, Skill::Intermediate, Strength::Intermediate, Height::Medium, Side::Starboard),
+        rower(
+            1,
+            "PortA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "StarboardA",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "PortB",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "StarboardB",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
         cox_rower(5, "Cox"),
     ];
     let snap = snapshot(rowers, vec![four_boat(1, "TestFour")]);

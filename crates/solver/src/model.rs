@@ -21,7 +21,10 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use lineup_db::boat::{types::WeightClass, Boat};
-use lineup_db::rower::{types::{Side, Skill}, Rower};
+use lineup_db::rower::{
+    types::{Side, Skill},
+    Rower,
+};
 use pumpkin_core::variables::{AffineView, DomainId, TransformableVariable};
 use pumpkin_core::Solver;
 
@@ -72,11 +75,7 @@ impl<'a> ModelBuilder<'a> {
     /// Set up a fresh Pumpkin `Solver`, allocate the per-boat `use[b]`
     /// decision variables, and return an empty builder ready to have
     /// its variable-creation and constraint-posting methods called.
-    pub(crate) fn new(
-        boats: Vec<&'a Boat>,
-        available: Vec<&'a Rower>,
-        cfg: SolverConfig,
-    ) -> Self {
+    pub(crate) fn new(boats: Vec<&'a Boat>, available: Vec<&'a Rower>, cfg: SolverConfig) -> Self {
         let mut solver = Solver::default();
         // `use[b] ∈ {0, 1}` for each candidate boat. Ordering matches
         // the `boats` vec so `use_b[b_idx]` is always the right var.
@@ -142,10 +141,7 @@ impl<'a> ModelBuilder<'a> {
                     // S4: collect wrong-side placements for per-rower
                     // aggregation rather than pushing a term per variable.
                     if wrong_side_penalty(rower, boat, seat) > 0 {
-                        self.wrong_side_by_rower
-                            .entry(r_idx)
-                            .or_default()
-                            .push(var);
+                        self.wrong_side_by_rower.entry(r_idx).or_default().push(var);
                         wrong_side_count += 1;
                     }
                 }
@@ -179,19 +175,14 @@ impl<'a> ModelBuilder<'a> {
     /// Finally, when `k > 0` and the boat has optional seats, post
     /// the "at most k empty optional seats" cap:
     ///   `Σ_{s ∈ opt_seats, r} x[r, b, s] ≥ (n_opt − k) · use[b]`
-    pub(crate) fn post_h1_seat_fill(
-        &mut self,
-        partial_fill: PartialFillPolicy,
-    ) -> Result<()> {
+    pub(crate) fn post_h1_seat_fill(&mut self, partial_fill: PartialFillPolicy) -> Result<()> {
         let k_allowed = partial_fill.max_empty();
         for (b_idx, boat) in self.boats.iter().enumerate() {
             let opt_seats = optional_seats(boat);
             let mut force_unused = false;
             for seat in seat_positions(boat) {
                 let mut terms: Vec<AffineView<DomainId>> = (0..self.available.len())
-                    .filter_map(|r_idx| {
-                        self.x.get(&(r_idx, b_idx, seat)).map(|v| v.scaled(1))
-                    })
+                    .filter_map(|r_idx| self.x.get(&(r_idx, b_idx, seat)).map(|v| v.scaled(1)))
                     .collect();
                 if terms.is_empty() {
                     // If no rower is eligible for this seat at all, the
@@ -204,9 +195,7 @@ impl<'a> ModelBuilder<'a> {
                             tag,
                         ))
                         .post()
-                        .map_err(|e| {
-                            anyhow!("posting boat-unusable constraint: {e:?}")
-                        })?;
+                        .map_err(|e| anyhow!("posting boat-unusable constraint: {e:?}"))?;
                     tracing::debug!(
                         boat = %boat.name,
                         seat,
@@ -220,20 +209,14 @@ impl<'a> ModelBuilder<'a> {
                 let tag = self.solver.new_constraint_tag();
                 if opt_seats.contains(&seat) && k_allowed > 0 {
                     self.solver
-                        .add_constraint(pumpkin_constraints::less_than_or_equals(
-                            terms, 0, tag,
-                        ))
+                        .add_constraint(pumpkin_constraints::less_than_or_equals(terms, 0, tag))
                         .post()
-                        .map_err(|e| {
-                            anyhow!("posting optional seat-fill constraint: {e:?}")
-                        })?;
+                        .map_err(|e| anyhow!("posting optional seat-fill constraint: {e:?}"))?;
                 } else {
                     self.solver
                         .add_constraint(pumpkin_constraints::equals(terms, 0, tag))
                         .post()
-                        .map_err(|e| {
-                            anyhow!("posting seat-fill constraint: {e:?}")
-                        })?;
+                        .map_err(|e| anyhow!("posting seat-fill constraint: {e:?}"))?;
                 }
             }
             if force_unused {
@@ -261,9 +244,7 @@ impl<'a> ModelBuilder<'a> {
                     cap_terms.push(self.use_b[b_idx].scaled(min_filled_opt));
                     let tag = self.solver.new_constraint_tag();
                     self.solver
-                        .add_constraint(pumpkin_constraints::less_than_or_equals(
-                            cap_terms, 0, tag,
-                        ))
+                        .add_constraint(pumpkin_constraints::less_than_or_equals(cap_terms, 0, tag))
                         .post()
                         .map_err(|e| anyhow!("posting partial-fill cap: {e:?}"))?;
                 }
@@ -302,10 +283,7 @@ impl<'a> ModelBuilder<'a> {
     /// `x[r, b, s] = 1` and `use[b] = 1`. Invalid locks (unknown
     /// rower/boat, missing x variable) are collected as diagnostics
     /// and skipped.
-    pub(crate) fn post_seat_locks(
-        &mut self,
-        locks: &[SeatLock],
-    ) -> Result<Vec<Diagnostic>> {
+    pub(crate) fn post_seat_locks(&mut self, locks: &[SeatLock]) -> Result<Vec<Diagnostic>> {
         let mut diags = Vec::new();
         for lock in locks {
             // Resolve rower index.
@@ -347,11 +325,7 @@ impl<'a> ModelBuilder<'a> {
             // Force x[r, b, s] = 1.
             let tag = self.solver.new_constraint_tag();
             self.solver
-                .add_constraint(pumpkin_constraints::equals(
-                    vec![var.scaled(1)],
-                    1,
-                    tag,
-                ))
+                .add_constraint(pumpkin_constraints::equals(vec![var.scaled(1)], 1, tag))
                 .post()
                 .map_err(|e| anyhow!("posting seat-lock x=1: {e:?}"))?;
             // Force use[b] = 1.
@@ -444,8 +418,7 @@ impl<'a> ModelBuilder<'a> {
             .iter()
             .enumerate()
             .map(|(b_idx, boat)| {
-                let seats_total =
-                    boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+                let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
                 // Subtract the number of optional seats that can be
                 // left empty (capped by k and the boat's optional count).
                 let n_opt = optional_seats(boat).len() as i32;
