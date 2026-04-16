@@ -12,7 +12,7 @@ fn su_shell(title: &str, content: Markup) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Oarful Admin" }
-                script src="/tailwindcss.js" {}
+                link rel="stylesheet" href="/tailwind.css";
                 script src="/htmx.min.js" {}
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {

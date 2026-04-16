@@ -13,7 +13,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Sign up · Oarful" }
-                script src="/tailwindcss.js" {}
+                link rel="stylesheet" href="/tailwind.css";
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {

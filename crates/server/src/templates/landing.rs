@@ -13,7 +13,7 @@ pub(crate) fn landing_page() -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Oarful — Lineup Generator for Rowing Clubs" }
-                script src="/tailwindcss.js" {}
+                link rel="stylesheet" href="/tailwind.css";
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
                 // Nav bar
