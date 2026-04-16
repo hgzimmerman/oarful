@@ -22,6 +22,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 // Swap for a built CSS file once we add a pipeline.
                 script src="/tailwindcss.js" {}
                 script src="/htmx.min.js" {}
+                script src="/htmx-ext-sse.js" {}
                 script src="/alpine.min.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
                 style { "[x-cloak] { display: none !important; }" }

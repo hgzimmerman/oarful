@@ -10,11 +10,13 @@
 mod commit;
 mod editor;
 mod profiles;
+mod stream;
 mod view;
 
 pub(crate) use commit::{commit_handler, commit_lineup_handler};
 pub(crate) use editor::editor_handler;
 pub(crate) use profiles::{delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler};
+pub(crate) use stream::stream_handler;
 pub(crate) use view::view_handler;
 
 use std::time::Duration;
@@ -71,7 +73,7 @@ const DEFAULT_ALTS: usize = 0;
 ///
 /// `serde` defaults handle the bare-URL case (`/solve/2026-04-11`)
 /// without forcing every visitor to fill in a form.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub(crate) struct SolveKnobs {
     /// Partial-fill budget. `0` means [`PartialFillPolicy::Strict`];
     /// any positive value means [`PartialFillPolicy::Allowed`] with

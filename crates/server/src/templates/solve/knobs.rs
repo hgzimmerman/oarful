@@ -397,7 +397,7 @@ fn knob_input(
 
 /// Error-only status banner. Success metadata is shown inline in the
 /// knobs form summary. This function only renders for failures.
-pub(super) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
+pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
     match result.status {
         SolveStatus::Satisfied => html! {},
         SolveStatus::Unsatisfiable => html! {

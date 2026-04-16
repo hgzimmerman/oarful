@@ -49,7 +49,7 @@ pub(super) fn alternatives_panel(
     }
 }
 
-fn alternative_block(
+pub(crate) fn alternative_block(
     snapshot: &DbSnapshot,
     practice_id: PracticeId,
     primary: &ProposedSolution,

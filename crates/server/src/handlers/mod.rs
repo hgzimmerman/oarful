@@ -63,6 +63,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/practices/send-lineups", post(practices::send_lineups_handler))
         .route("/practices/{id}/cancel", post(practices::cancel_handler))
         .route("/solve/{id}", get(solve::view_handler))
+        .route("/solve/{id}/stream", get(solve::stream_handler))
         .route("/solve/{id}/editor", get(solve::editor_handler))
         .route("/solve/{id}/preset-bar", get(solve::preset_bar_handler))
         .route("/solver-profile", post(solve::save_profile_handler))

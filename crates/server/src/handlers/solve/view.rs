@@ -64,72 +64,13 @@ pub(crate) async fn view_handler(
     // both the editor pool and the solver.
     apply_no_shows(&mut snapshot, &knobs);
 
-    // Only run the solver when explicitly requested via generate=1.
+    // When generate=1, return a streaming skeleton that opens an SSE
+    // connection to /solve/{id}/stream. The solver runs asynchronously
+    // and pushes results as SSE events.
     if knobs.generate > 0 {
-        let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
-
-        let _permit = acquire_solve_permit(&state).await?;
-        // Resolve config: check custom profiles first, then built-in presets.
-        let config = custom_profiles
-            .iter()
-            .find(|p| p.name == preset_name)
-            .map(|p| profile_to_config(p))
-            .unwrap_or_else(|| knobs.resolve_config());
-        let mut request = knobs.to_request(date, &snapshot, baselines);
-        request.config = config;
-        // Combine explicit locks + dirty pins as solver constraints.
-        let mut solver_locks = knobs.parse_locks();
-        for entry in &knobs.pin {
-            let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() == 3 {
-                if let (Ok(rid), Ok(bid), Ok(seat)) = (parts[0].parse(), parts[1].parse(), parts[2].parse()) {
-                    solver_locks.push(lineup_solver::SeatLock { rower_id: rid, boat_id: bid, seat });
-                }
-            }
-        }
-        request.locks = solver_locks;
-        let result = run_solve(&state, snapshot.clone(), request).await?;
-
-        // State transitions: pin→was_pin, was_pin→dropped, lock→lock.
-        let locked_seats = SolveKnobs::parse_triples(&knobs.lock);
-        let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
-            knobs.pin.iter().filter_map(|e| {
-                e.splitn(3, ':').next()?.parse().ok()
-            }).collect();
-        let was_pinned_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, lineup_db::boat::types::BoatId, i32)> =
-            result.primary.lineups.iter()
-                .filter(|l| l.used)
-                .flat_map(|l| l.seats.iter().map(move |&(seat, rid)| (rid, l.boat_id, seat)))
-                .filter(|(rid, _, _)| pinned_rowers.contains(rid))
-                .collect();
-        let pinned_seats = std::collections::HashSet::new(); // fresh solve clears dirty
-        // Transform knobs for the response: pin→was_pin (at actual positions), was_pin→cleared.
-        let mut response_knobs = knobs.clone();
-        response_knobs.was_pin = was_pinned_seats.iter()
-            .map(|(rid, bid, seat)| format!("{rid}:{bid}:{seat}"))
-            .collect();
-        response_knobs.pin = vec![];
-        // Boat state transitions: boat_pin→boat_was_pin, boat_was_pin→dropped, boat_lock→boat_lock.
-        let locked_boats = SolveKnobs::parse_boat_ids(&knobs.boat_lock);
-        let was_pinned_boats = SolveKnobs::parse_boat_ids(&knobs.boat_pin);
-        let pinned_boats = std::collections::HashSet::new();
-        response_knobs.boat_was_pin = knobs.boat_pin.clone();
-        response_knobs.boat_pin = vec![];
-        let flags = templates::solve::DisplayFlags {
-            show_attributes: tenant.show_attributes(),
-            force_cox_stern: tenant.config.force_cox_stern,
-            locked_seats,
-            pinned_seats,
-            was_pinned_seats,
-            pinned_boats,
-            was_pinned_boats,
-            locked_boats,
-            boats_in_use_by: std::collections::HashMap::new(),
-        };
         let profile_names: Vec<(String, Option<String>)> = custom_profiles.iter().map(|p| (p.name.clone(), p.description.clone())).collect();
-        let content = templates::solve::view_content(
-            &snapshot, practice_id, date, &response_knobs, &result, &committed_practices,
-            &flags, &profile_names,
+        let content = templates::solve::streaming_skeleton(
+            &snapshot, practice_id, date, &knobs, &committed_practices, &profile_names,
         );
         return Ok(crate::handlers::maybe_page_authed(
             &format!("Set Lineups · {date}"),

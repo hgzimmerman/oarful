@@ -678,6 +678,32 @@ pub enum SolveStatus {
     Timeout,
 }
 
+/// Event emitted by [`solve_streaming`] as each result becomes available.
+#[derive(Debug, Clone)]
+pub enum SolveStreamEvent {
+    /// Primary solve completed successfully.
+    Primary {
+        status: SolveStatus,
+        solution: ProposedSolution,
+        diagnostics: Vec<Diagnostic>,
+        objective: Option<i32>,
+    },
+    /// Primary solve failed (Unsatisfiable or Timeout with no solution).
+    PrimaryFailed {
+        status: SolveStatus,
+        diagnostics: Vec<Diagnostic>,
+    },
+    /// One alternative completed.
+    Alternative {
+        index: usize,
+        solution: ProposedSolution,
+    },
+    /// All alternatives done (or none requested).
+    Done {
+        elapsed: std::time::Duration,
+    },
+}
+
 /// A pre-solve diagnostic explaining why a problem is (or is likely)
 /// unsatisfiable. Populated by cheap eligibility checks *before*
 /// invoking Pumpkin, so the coach gets actionable feedback without
@@ -840,6 +866,165 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     );
 
     Ok(result)
+}
+
+/// Streaming solver: sends primary result and each alternative through
+/// a channel as they complete, rather than accumulating and returning
+/// all at once. The caller (typically the SSE handler) converts the
+/// channel into an event stream.
+///
+/// Uses `std::sync::mpsc::SyncSender` (blocking) because this runs on
+/// the rayon pool — not an async runtime.
+#[tracing::instrument(level = "debug", skip_all, fields(date = %request.date), err)]
+pub fn solve_streaming(
+    snapshot: &DbSnapshot,
+    request: &SolveRequest,
+    tx: std::sync::mpsc::SyncSender<SolveStreamEvent>,
+) -> Result<()> {
+    let boats: Vec<&Boat> = if request.boats.is_empty() {
+        snapshot.boats.iter().collect()
+    } else {
+        request
+            .boats
+            .iter()
+            .map(|bid| {
+                snapshot
+                    .boats
+                    .iter()
+                    .find(|b| b.id == *bid)
+                    .ok_or_else(|| anyhow!("boat {} not in snapshot fleet", bid))
+            })
+            .collect::<Result<_>>()?
+    };
+    let solve_start = std::time::Instant::now();
+
+    if boats.is_empty() {
+        let _ = tx.send(SolveStreamEvent::Primary {
+            status: SolveStatus::Satisfied,
+            solution: ProposedSolution::default(),
+            diagnostics: vec![],
+            objective: None,
+        });
+        let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+        return Ok(());
+    }
+
+    let available: Vec<&Rower> = snapshot.available_rowers().collect();
+    if available.is_empty() {
+        bail!("no rowers are available for seating on {}", request.date);
+    }
+
+    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill);
+    for &req_bid in &request.required_boats {
+        if !boats.iter().any(|b| b.id == req_bid) {
+            if let Some(b) = snapshot.boats.iter().find(|b| b.id == req_bid) {
+                boats.push(b);
+            }
+        }
+    }
+    for lock in &request.locks {
+        if !boats.iter().any(|b| b.id == lock.boat_id) {
+            if let Some(b) = snapshot.boats.iter().find(|b| b.id == lock.boat_id) {
+                boats.push(b);
+            }
+        }
+    }
+
+    let mut diagnostics = pre_solve_diagnostics(&boats, &available);
+    let (mut builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
+
+    let mut brancher = builder.solver.default_brancher();
+    let mut resolver = ResolutionResolver::default();
+
+    let run_one = |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
+        match request.time_budget {
+            None => {
+                let mut termination = Indefinite;
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                solver.optimise(brancher, &mut termination, resolver, procedure)
+            }
+            Some(budget) => {
+                let mut termination = TimeBudget::starting_now(budget);
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
+                solver.optimise(brancher, &mut termination, resolver, procedure)
+            }
+        }
+    };
+
+    // Primary solve
+    let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+    let (_primary_lineups, primary_placements) = match primary_opt {
+        OptimisationResult::Optimal(sol)
+        | OptimisationResult::Satisfiable(sol)
+        | OptimisationResult::Stopped(sol, _) => {
+            let obj_val = sol.get_integer_value(objective);
+            let lineups = decode_solution(&builder.x, &builder.use_b, &builder.boats, &builder.available, |v| sol.get_integer_value(v));
+            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+            let unplaced = compute_unplaced(&builder.available, &lineups);
+            let _ = tx.send(SolveStreamEvent::Primary {
+                status: SolveStatus::Satisfied,
+                solution: ProposedSolution { lineups: lineups.clone(), unplaced },
+                diagnostics: diagnostics.clone(),
+                objective: Some(obj_val),
+            });
+            (lineups, placements)
+        }
+        OptimisationResult::Unsatisfiable => {
+            let _ = tx.send(SolveStreamEvent::PrimaryFailed {
+                status: SolveStatus::Unsatisfiable,
+                diagnostics,
+            });
+            let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+            return Ok(());
+        }
+        OptimisationResult::Unknown => {
+            let _ = tx.send(SolveStreamEvent::PrimaryFailed {
+                status: SolveStatus::Timeout,
+                diagnostics: vec![],
+            });
+            let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+            return Ok(());
+        }
+    };
+
+    // Alternatives
+    if request.wants_alternatives() {
+        if post_tabu_constraint(&mut builder.solver, &primary_placements, request.tabu_min_diff)? {
+            let mut alt_index = 0usize;
+            for _ in 1..request.top_n {
+                // If the receiver is dropped (client disconnected), stop early.
+                let next = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+                let sol = match next {
+                    OptimisationResult::Optimal(sol)
+                    | OptimisationResult::Satisfiable(sol)
+                    | OptimisationResult::Stopped(sol, _) => sol,
+                    OptimisationResult::Unsatisfiable | OptimisationResult::Unknown => break,
+                };
+
+                let alt_lineups = decode_solution(&builder.x, &builder.use_b, &builder.boats, &builder.available, |v| sol.get_integer_value(v));
+                let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
+
+                if tx.send(SolveStreamEvent::Alternative {
+                    index: alt_index,
+                    solution: ProposedSolution { lineups: alt_lineups, unplaced: alt_unplaced },
+                }).is_err() {
+                    // Receiver dropped — client disconnected.
+                    return Ok(());
+                }
+
+                alt_index += 1;
+                if alt_index + 1 < request.top_n
+                    && !post_tabu_constraint(&mut builder.solver, &alt_placements, request.tabu_min_diff)?
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    let _ = tx.send(SolveStreamEvent::Done { elapsed: solve_start.elapsed() });
+    Ok(())
 }
 
 /// Read the process RSS in KB from /proc/self/statm (Linux only).
