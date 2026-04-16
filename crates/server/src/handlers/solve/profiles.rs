@@ -76,7 +76,6 @@ async fn preset_bar_inner(
 pub(crate) async fn save_profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
-    headers: axum::http::HeaderMap,
     axum::Form(input): axum::Form<SaveProfileInput>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
@@ -179,22 +178,12 @@ pub(crate) async fn save_profile_handler(
         None,
     );
 
-    // Tell HTMX to do a full page redirect back to the referring page.
-    // HX-Redirect causes a real navigation (not a swap), which also
-    // clears the modal backdrop.
-    let referer = headers
-        .get(axum::http::header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| url::Url::parse(s).ok())
-        .map(|u| u.path().to_string())
-        .unwrap_or_else(|| "/practices".to_string());
-    Ok((
-        [(
-            axum::http::header::HeaderName::from_static("hx-redirect"),
-            axum::http::header::HeaderValue::from_str(&referer).unwrap(),
-        )],
-        StatusCode::OK,
-    ))
+    // The form has hx-swap="delete" targeting #profile-modal, which
+    // removes the modal. Return an OOB swap to also remove the backdrop.
+    let html = maud::html! {
+        div id="profile-modal-backdrop" hx-swap-oob="delete" {}
+    };
+    Ok(Html(html.into_string()))
 }
 
 /// `GET /solver-profile/edit` — return the profile editor modal as an
