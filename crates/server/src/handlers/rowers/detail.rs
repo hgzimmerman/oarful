@@ -235,7 +235,8 @@ pub(crate) async fn detail_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let detail = load_detail(&tenant.db, id).await?;
-    let content = templates::rowers::detail_content(&detail, perms);
+    let show_emails = tenant.show_emails();
+    let content = templates::rowers::detail_content(&detail, perms, show_emails);
     Ok(crate::handlers::maybe_page_authed(
         &format!("Rower · {}", detail.rower.name),
         content,
@@ -246,6 +247,7 @@ pub(crate) async fn detail_handler(
 
 pub(crate) struct RowerDetail {
     pub(crate) rower: Rower,
+    pub(crate) email: Option<String>,
     pub(crate) seat_affinities: Vec<SeatAffinity>,
     pub(crate) pair_affinities: Vec<PairAffinity>,
     pub(crate) other_rowers: Vec<Rower>,
@@ -257,6 +259,8 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
             let Some(rower) = Rower::get(conn, id)? else {
                 return Ok(None);
             };
+            let email = AppUser::find_by_rower_id(conn, rower.id)?
+                .map(|u| u.email);
             let seat_affinities = SeatAffinity::list_for_rower(conn, id)?;
             let pair_affinities = PairAffinity::list_for_rower(conn, id)?;
             let mut other_rowers: Vec<Rower> = Rower::list_active(conn)?
@@ -266,6 +270,7 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
             other_rowers.sort_by(|a, b| a.name.cmp(&b.name));
             Ok(Some(RowerDetail {
                 rower,
+                email,
                 seat_affinities,
                 pair_affinities,
                 other_rowers,

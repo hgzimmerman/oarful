@@ -9,6 +9,7 @@ use lineup_db::rower::{
     Rower,
 };
 use lineup_db::team::SelfEditLevel;
+use crate::handlers::rowers::RosterRow;
 
 /// Controls what the current user can do on this rower's detail page.
 #[derive(Debug, Clone, Copy)]
@@ -52,7 +53,7 @@ use maud::{html, Markup};
 use super::layout::{empty_state, page_header};
 use crate::handlers::rowers::RowerDetail;
 
-pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
+pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: bool) -> Markup {
     let subtitle = format!("{} active members", rows.len());
     html! {
         (page_header("Roster", Some(&subtitle)))
@@ -62,8 +63,8 @@ pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
             } @else {
                 // Mobile: compact card list
                 div class="md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" {
-                    @for r in rows {
-                        (mobile_row(r))
+                    @for row in rows {
+                        (mobile_row(&row.rower, row.email.as_deref(), show_emails))
                     }
                 }
                 // Desktop: full table
@@ -72,6 +73,9 @@ pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
                         thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
                             tr {
                                 th class="px-4 py-2" { "Name" }
+                                @if show_emails {
+                                    th class="px-4 py-2" { "Email" }
+                                }
                                 th class="px-4 py-2" { "Weight" }
                                 th class="px-4 py-2" { "Form" }
                                 th class="px-4 py-2" { "Strength" }
@@ -81,8 +85,8 @@ pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
                             }
                         }
                         tbody {
-                            @for r in rows {
-                                (static_row(r))
+                            @for row in rows {
+                                (static_row(&row.rower, row.email.as_deref(), show_emails))
                             }
                         }
                     }
@@ -93,17 +97,17 @@ pub(crate) fn list_content(rows: &[Rower], _is_coach: bool) -> Markup {
 }
 
 /// Toast banner + refreshed roster after a batch invite.
-pub(crate) fn batch_invite_result(message: &str, rows: &[Rower], is_coach: bool) -> Markup {
+pub(crate) fn batch_invite_result(message: &str, rows: &[RosterRow], is_coach: bool, show_emails: bool) -> Markup {
     html! {
         div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
             (message)
         }
-        (list_content(rows, is_coach))
+        (list_content(rows, is_coach, show_emails))
     }
 }
 
 /// Mobile card for one rower — name and side.
-fn mobile_row(r: &Rower) -> Markup {
+fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
         a href={"/rowers/" (r.id)}
           hx-get={"/rowers/" (r.id)}
@@ -112,7 +116,14 @@ fn mobile_row(r: &Rower) -> Markup {
           class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition" {
             div {
                 div class="font-medium text-blue-700" { (r.name) }
-                div class="text-xs text-slate-500" { (side_display_label(r)) }
+                div class="text-xs text-slate-500" {
+                    (side_display_label(r))
+                    @if show_emails {
+                        @if let Some(e) = email {
+                            " · " (e)
+                        }
+                    }
+                }
             }
             div class="flex items-center gap-2" {
                 span class="text-slate-400" { "→" }
@@ -121,9 +132,8 @@ fn mobile_row(r: &Rower) -> Markup {
     }
 }
 
-/// Read-only `<tr>` for one rower with a Details link to the full
-/// detail/edit page.
-fn static_row(r: &Rower) -> Markup {
+/// Read-only `<tr>` for one rower.
+fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
         tr class="border-t border-slate-100 hover:bg-slate-50" {
             td class="px-4 py-2 font-medium" {
@@ -133,6 +143,11 @@ fn static_row(r: &Rower) -> Markup {
                   hx-push-url="true"
                   class="text-blue-700 hover:text-blue-900 underline" {
                     (r.name)
+                }
+            }
+            @if show_emails {
+                td class="px-4 py-2 text-slate-500" {
+                    @if let Some(e) = email { (e) }
                 }
             }
             td class="px-4 py-2" { (r.weight_class) }
@@ -164,7 +179,7 @@ fn static_row(r: &Rower) -> Markup {
 /// whether the affinity add/delete forms are shown (Coach+ only).
 /// Attribute editing is always available for the rower's own profile
 /// and for Coach+.
-pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> Markup {
+pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions, show_emails: bool) -> Markup {
     let r = &detail.rower;
     let subtitle = format!(
         "{} · {} · {} · {}",
@@ -182,6 +197,11 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
                 h1 class="text-2xl font-bold text-slate-800" { (r.name) }
             }
             p class="text-sm text-slate-500 mt-1" { (subtitle) }
+            @if show_emails {
+                @if let Some(email) = &detail.email {
+                    p class="text-sm text-slate-400 mt-0.5" { (email) }
+                }
+            }
         }
         div class="px-8 py-6 max-w-4xl mx-auto space-y-6" {
             (attribute_section(r, None, &perms))

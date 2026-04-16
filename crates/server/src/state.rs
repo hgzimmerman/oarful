@@ -59,6 +59,18 @@ impl TenantContext {
                 .unwrap_or(lineup_db::app_user::Role::Member)
                 .at_least(lineup_db::app_user::Role::Coach)
     }
+
+    /// Whether the current user should see rower email addresses.
+    /// True when the tenant has enabled email visibility or the user
+    /// is Coach+.
+    pub(crate) fn show_emails(&self) -> bool {
+        self.config.emails_visible
+            || self
+                .claims
+                .role()
+                .unwrap_or(lineup_db::app_user::Role::Member)
+                .at_least(lineup_db::app_user::Role::Coach)
+    }
 }
 
 impl AppState {

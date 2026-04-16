@@ -56,7 +56,7 @@ pub(crate) async fn profile_handler(
         .map(|t| lineup_db::team::SelfEditLevel::from_str(&t.self_edit_level))
         .unwrap_or(lineup_db::team::SelfEditLevel::Low);
     let perms = templates::rowers::DetailPermissions::member(level);
-    let content = templates::rowers::detail_content(&detail, perms);
+    let content = templates::rowers::detail_content(&detail, perms, true);
     Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
 }
 
@@ -116,7 +116,7 @@ pub(crate) async fn profile_update_handler(
     // Re-render the full detail page with correct permissions.
     let rower_id = saved.id;
     let detail = load_detail(&tenant.db, rower_id).await?;
-    let content = templates::rowers::detail_content(&detail, perms);
+    let content = templates::rowers::detail_content(&detail, perms, true);
     Ok(super::maybe_page_authed("My profile", content, hx, &tenant))
 }
 

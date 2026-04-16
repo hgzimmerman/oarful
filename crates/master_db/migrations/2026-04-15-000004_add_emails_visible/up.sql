@@ -1,0 +1,1 @@
+ALTER TABLE tenant ADD COLUMN emails_visible INTEGER NOT NULL DEFAULT 0;

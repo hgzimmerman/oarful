@@ -16,6 +16,7 @@ use lineup_master_db::tenant::{Tenant, TenantId};
 pub(crate) struct TenantConfig {
     pub(crate) attributes_public: bool,
     pub(crate) force_cox_stern: bool,
+    pub(crate) emails_visible: bool,
     pub(crate) tenant_name: String,
     pub(crate) tenant_slug: String,
 }
@@ -25,6 +26,7 @@ impl TenantConfig {
         Self {
             attributes_public: t.are_attributes_public(),
             force_cox_stern: t.force_cox_stern(),
+            emails_visible: t.are_emails_visible(),
             tenant_name: t.name.clone(),
             tenant_slug: t.slug.clone(),
         }

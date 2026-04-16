@@ -69,6 +69,9 @@ pub struct Tenant {
     /// When set, this tenant is an ephemeral demo that should be
     /// cleaned up after this timestamp.
     pub demo_expires_at: Option<NaiveDateTime>,
+    /// Whether email addresses are visible to members on the roster
+    /// and rower detail pages. `0` = Coach+ only (default), `1` = visible.
+    pub emails_visible: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -83,6 +86,10 @@ pub struct NewTenant {
 impl Tenant {
     pub fn are_attributes_public(&self) -> bool {
         self.attributes_public != 0
+    }
+
+    pub fn are_emails_visible(&self) -> bool {
+        self.emails_visible != 0
     }
 
     pub fn force_cox_stern(&self) -> bool {

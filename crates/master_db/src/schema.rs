@@ -8,6 +8,7 @@ diesel::table! {
         attributes_public -> Integer,
         force_cox_stern -> Integer,
         demo_expires_at -> Nullable<Timestamp>,
+        emails_visible -> Integer,
     }
 }
 
