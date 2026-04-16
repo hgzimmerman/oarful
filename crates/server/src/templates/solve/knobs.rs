@@ -28,9 +28,7 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
         section class="bg-white rounded-lg shadow" {
             @let preset_label = if knobs.preset.is_empty() { "Balanced" } else { &knobs.preset };
             @let initially_open = !has_generated;
-            div "x-data"={"{ open: " (initially_open) " }"}
-                // Collapse on generate — the form fires htmx:beforeRequest.
-                "@htmx:before-request.camel.window"="open = false" {
+            div "x-data"={"{ open: " (initially_open) " }"} {
                 button type="button"
                        "@click"="open = !open"
                        class="w-full flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50 transition text-left" {
@@ -70,7 +68,8 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                  hx-get=(action)
                  hx-target="#solve-results"
                  hx-push-url="true"
-                 hx-indicator="#solve-spinner" {
+                 hx-indicator="#solve-spinner"
+                 "@htmx:before-request"="open = false" {
 
                 // Based-on checkbox list + similarity weight
                 @if !practices.is_empty() {
