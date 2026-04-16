@@ -193,14 +193,12 @@ pub(crate) fn detail_content(detail: &RowerDetail, perms: DetailPermissions) -> 
             @if perms.can_edit_affinities {
                 section class="mt-6 border-t border-red-200 pt-4" {
                     @if r.active.as_bool() {
-                        form method="post" action={"/rowers/" (r.id) "/toggle-active"}
-                             hx-post={"/rowers/" (r.id) "/toggle-active"}
-                             hx-target="#content"
-                             hx-confirm="Deactivate this rower? They will be hidden from the roster and ineligible for lineups." {
-                            button type="submit"
-                                   class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
-                                "Deactivate rower"
-                            }
+                        button type="button"
+                               hx-get={"/confirm?kind=deactivate-rower&id=" (r.id)}
+                               hx-target="body"
+                               hx-swap="beforeend"
+                               class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                            "Deactivate rower"
                         }
                     } @else {
                         div class="flex items-center gap-3" {

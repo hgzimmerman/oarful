@@ -232,14 +232,12 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                         }
                     }
                 } @else {
-                    form method="post" action={"/teams/" (team.id) "/toggle-archive"}
-                         hx-post={"/teams/" (team.id) "/toggle-archive"}
-                         hx-target="#content"
-                         hx-confirm="Archive this team? It will be hidden from the team switcher for non-PD users." {
-                        button type="submit"
-                               class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
-                            "Archive team"
-                        }
+                    button type="button"
+                           hx-get={"/confirm?kind=archive-team&id=" (team.id)}
+                           hx-target="body"
+                           hx-swap="beforeend"
+                           class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                        "Archive team"
                     }
                 }
             }

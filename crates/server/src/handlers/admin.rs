@@ -460,8 +460,7 @@ fn restore_form_markup(
                     "This will overwrite all current data in this tenant."
                 }
 
-                form method="post" action="/admin/restore" enctype="multipart/form-data"
-                     hx-confirm="This will overwrite ALL current data with the backup. Are you sure?" {
+                form id="restore-form" method="post" action="/admin/restore" enctype="multipart/form-data" {
                     div class="mb-4" {
                         label class="block text-sm font-semibold text-slate-700 mb-1" for="backup" {
                             "Backup file (.db)"
@@ -470,7 +469,10 @@ fn restore_form_markup(
                               class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
                               required;
                     }
-                    button type="submit"
+                    button type="button"
+                           hx-get="/confirm?kind=restore-backup"
+                           hx-target="body"
+                           hx-swap="beforeend"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded shadow transition" {
                         "Restore backup"
                     }

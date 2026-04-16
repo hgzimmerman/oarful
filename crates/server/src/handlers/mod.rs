@@ -13,6 +13,8 @@ use lineup_db::team::TeamId;
 use maud::Markup;
 use serde::Deserialize;
 
+use axum::extract::Query;
+
 use crate::{state::AppState, templates};
 
 pub(crate) mod admin;
@@ -154,6 +156,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
         )
         .route("/switch-team", post(switch_team_handler))
+        .route("/confirm", get(confirm_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,
@@ -234,4 +237,85 @@ pub(crate) async fn switch_team_handler(
             .http_only(true),
     );
     (jar, Redirect::to("/practices"))
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ConfirmQuery {
+    kind: String,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+/// `GET /confirm?kind=...&id=...` — render a styled confirmation modal.
+pub(crate) async fn confirm_handler(
+    Query(q): Query<ConfirmQuery>,
+) -> Result<Html<String>, StatusCode> {
+    use maud::html;
+    let id = q.id.as_deref().unwrap_or("");
+    let name = q.name.as_deref().unwrap_or("");
+
+    let delete_msg = format!("Delete preset \"{name}\"? This cannot be undone.");
+    let (title, message, action) = match q.kind.as_str() {
+        "archive-team" => (
+            "Archive team",
+            "Archive this team? It will be hidden from the team switcher for non-PD users.",
+            html! {
+                form method="post" action={"/teams/" (id) "/toggle-archive"}
+                     hx-post={"/teams/" (id) "/toggle-archive"}
+                     hx-target="#content"
+                     onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
+                    button type="submit"
+                           class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
+                        "Archive"
+                    }
+                }
+            },
+        ),
+        "deactivate-rower" => (
+            "Deactivate rower",
+            "Deactivate this rower? They will be hidden from the roster and ineligible for lineups.",
+            html! {
+                form method="post" action={"/rowers/" (id) "/toggle-active"}
+                     hx-post={"/rowers/" (id) "/toggle-active"}
+                     hx-target="#content"
+                     onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
+                    button type="submit"
+                           class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
+                        "Deactivate"
+                    }
+                }
+            },
+        ),
+        "delete-preset" => (
+            "Delete preset",
+            delete_msg.as_str(),
+            html! {
+                button type="button"
+                       hx-delete={"/solver-profile/" (name)}
+                       hx-target="#content"
+                       onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
+                       class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
+                    "Delete"
+                }
+            },
+        ),
+        "restore-backup" => (
+            "Restore from backup",
+            "This will overwrite ALL current data with the backup. Are you sure?",
+            html! {
+                button type="submit" form="restore-form"
+                       onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
+                       class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
+                    "Restore"
+                }
+            },
+        ),
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    Ok(Html(
+        templates::confirm_modal::confirm_modal(title, message, action).into_string(),
+    ))
 }

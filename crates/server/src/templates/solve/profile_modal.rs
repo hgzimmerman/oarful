@@ -178,9 +178,9 @@ pub(crate) fn profile_editor_modal(
                         @if !is_builtin && !name.is_empty() {
                             button type="button"
                                    class="text-sm text-red-500 hover:text-red-700 font-medium"
-                                   hx-delete={"/solver-profile/" (name)}
-                                   hx-confirm={"Delete preset \"" (name) "\"?"}
-                                   hx-target="#content" {
+                                   hx-get={"/confirm?kind=delete-preset&name=" (name)}
+                                   hx-target="body"
+                                   hx-swap="beforeend" {
                                 "Delete"
                             }
                         } @else {
