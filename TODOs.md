@@ -154,6 +154,11 @@ can resume without re-deriving context.
   immediately, alternatives append as they complete. `solve_streaming`
   in solver crate, SSE handler, HTMX SSE extension.
 - **User account status toggle** — active ↔ disabled on admin Users tab.
+- **AppState sub-state extraction via FromRef** — `MailerCtx`,
+  `SolverCtx`, `TenantDb`, `JwtKeys` sub-states with `FromRef<AppState>`
+  impls. Handlers narrowed: solve→`SolverCtx`, email→`MailerCtx`,
+  admin→`TenantDb`, invite→`MailerCtx`/`TenantDb`. Auth middleware +
+  demo + sync stay on full `AppState`.
 - **Solver tuning** — bumped pair_affinity_weight (3→4),
   seat_affinity_weight (3→5), weight_class_slack_weight (1→3),
   default budget (3s→5s) for better real-world results.
@@ -213,26 +218,6 @@ centiseconds as `M:SS.dd` (e.g. 42350 → `7:03.50`). All get
 bucket. Team settings page gets threshold config per metric. Auto-
 derive buckets on save when raw values are present and thresholds
 are configured.
-
-### Refactor: extract AppState sub-states via FromRef
-
-`State<AppState>` is used by ~20 handlers but each only needs a
-subset. Extract logical groupings with `FromRef<AppState>` impls
-so handlers declare exactly what they need:
-
-- **`MailerCtx`** (`mailer` + `origin`) — sending emails with full
-  URLs. Includes `full_url()`. Used by reminders, lineups, invites,
-  magic link, auth.
-- **`SolverCtx`** (`solver_pool` + `solve_semaphore`) — dispatching
-  solver work. Used by stream handler.
-- **`TenantDb`** (`master_db` + `tenant_cache` + `data_dir`) — tenant
-  resolution, cache eviction, export/restore. Methods: `tenant_db()`,
-  `evict_tenant()`, `tenant_db_by_slug()`.
-- **`JwtKeys`** — already a standalone struct, just needs `FromRef`.
-
-`AppState` stays for construction and the auth middleware (which
-touches multiple sub-states). Handlers change from
-`State(state): State<AppState>` to e.g. `State(mailer): State<MailerCtx>`.
 
 ### Parked
 
