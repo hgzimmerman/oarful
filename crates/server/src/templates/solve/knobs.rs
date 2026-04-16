@@ -26,10 +26,14 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
             (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
         section class="bg-white rounded-lg shadow" {
-            // Collapsible knobs — open on landing, collapsed after generation.
             @let preset_label = if knobs.preset.is_empty() { "Balanced" } else { &knobs.preset };
-            details open[!has_generated] class="group" {
-                summary class="list-none flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50 transition [&::-webkit-details-marker]:hidden" {
+            @let initially_open = !has_generated;
+            div "x-data"={"{ open: " (initially_open) " }"}
+                // Collapse on generate — the form fires htmx:beforeRequest.
+                "@htmx:before-request.camel.window"="open = false" {
+                button type="button"
+                       "@click"="open = !open"
+                       class="w-full flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50 transition text-left" {
                     div class="flex items-center gap-3 flex-wrap" {
                         h3 class="text-sm font-semibold text-slate-800" { "Solver settings" }
                         span #knob-preset-label class="text-xs text-slate-500" { (preset_label) }
@@ -50,9 +54,17 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                             }
                         }
                     }
-                    // CSS-only chevron: rotates on open.
-                    span class="border-solid border-slate-400 border-r-2 border-b-2 border-t-0 border-l-0 inline-block w-2 h-2 transform rotate-[-45deg] group-open:rotate-45 transition-transform" {}
+                    span class="border-solid border-slate-400 border-r-2 border-b-2 border-t-0 border-l-0 inline-block w-2 h-2 transform transition-transform duration-200"
+                         ":class"="open ? 'rotate-45' : 'rotate-[-45deg]'" {}
                 }
+                div x-show="open"
+                    x-transition:enter="transition-all ease-out duration-300"
+                    x-transition:enter-start="opacity-0 max-h-0"
+                    x-transition:enter-end="opacity-100 max-h-[2000px]"
+                    x-transition:leave="transition-all ease-in duration-300"
+                    x-transition:leave-start="opacity-100 max-h-[2000px]"
+                    x-transition:leave-end="opacity-0 max-h-0"
+                    class="overflow-hidden" {
                 div class="px-6 pb-6 border-t border-slate-100 pt-4" {
             form method="get" action=(action)
                  hx-get=(action)
@@ -235,8 +247,9 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                     }
                 }
             }
-                } // div.px-6 (details body)
-            } // details
+                } // div.px-6
+                } // div x-show
+            } // div x-data
         }
     }
 }
