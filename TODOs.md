@@ -168,7 +168,8 @@ can resume without re-deriving context.
   page, signup flow (club name → tenant + PD user + SQLite file),
   30-day free trial with billing_status/trial_expires_at on tenant,
   billing middleware (expired/suspended → "renew" page), AGPL source
-  link footer (SOURCE_URL env var).
+  link footer (SOURCE_URL env var). `grandfathered` billing status
+  for permanently free early-adopter tenants. `set-billing` CLI command.
 
 ## Open work
 
