@@ -60,7 +60,7 @@ use crate::{
 /// budget, so the marginal quality gained by going above 1s is at
 /// best invisible to the coach. Drop to 1s; let the user crank it up
 /// via the knob form when they care.
-const DEFAULT_BUDGET_SECS: u64 = 3;
+const DEFAULT_BUDGET_SECS: u64 = 5;
 
 /// Default number of *additional* alternatives beyond the primary.
 /// The UI shows this directly (0 = primary only, 1-3 = extra lineups).
