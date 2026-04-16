@@ -406,7 +406,7 @@ impl SolverConfig {
     pub fn balanced() -> Self {
         Self {
             skill_variance_weight: 1,
-            pair_affinity_weight: 3,
+            pair_affinity_weight: 4,
             seat_affinity_weight: 3,
             side_preference_weight: 2,
             weight_class_slack_weight: 1,
