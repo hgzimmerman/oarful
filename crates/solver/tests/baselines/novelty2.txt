@@ -7,9 +7,9 @@ boat 1: Persephone
   cox  Lena
   s1   Hana
   s2   Bob
-  s3   Carla
-  s4   Diego
-  s5   Finn
-  s6   Mika
+  s3   Finn
+  s4   Mika
+  s5   Carla
+  s6   Diego
   s7   Erin
   s8   Alice
