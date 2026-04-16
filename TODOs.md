@@ -170,12 +170,30 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-### Productionization
+### Coach features (continued)
 
-#### #56 — Custom Tailwind build pipeline
+#### Raw rower metrics + team-defined bucketing
 
-Replace CDN with local `tailwind.config.js` scanning
-`crates/server/src/**/*.rs` → `crates/server/public/tailwind.css`.
+Add optional raw numeric fields to rower:
+- `weight_lbs: Option<WeightLbs>` — body weight in pounds (newtype over `i32`)
+- `erg_2k_cs: Option<Erg2kTime>` — 2k erg time in centiseconds (newtype over `i32`, displayed as `M:SS.dd`)
+
+Teams define their own threshold mappings from raw values to the
+existing categorical buckets (Lightweight/Middleweight/Heavyweight,
+Novice/Intermediate/Master/Expert, Weak/Intermediate/Strong/VeryStrong).
+Stored as team-level config — e.g. "lightweight < 150 lbs,
+middleweight 150–185, heavyweight > 185". Raw values are editable
+by rowers (subject to self-edit trust level); bucket boundaries are
+Coach+ only.
+
+**Newtypes:** `WeightLbs(i32)` with `Display` rendering as pounds,
+`Erg2kTime(i32)` with `Display` rendering centiseconds as `M:SS.dd`
+(e.g. 42350 → `7:03.50`). Both get `DieselNewType` for column mapping.
+
+**UI:** Raw values shown on rower detail page alongside the derived
+bucket. Team settings page gets threshold config per metric. Auto-
+derive buckets on save when raw values are present and thresholds
+are configured.
 
 ### Parked
 
@@ -386,5 +404,5 @@ Start with push-only; bidirectional can follow if there's demand.
 ## Suggested next moves
 
 1. **Stale lineup notification (coach-side)** — nav badge or toast.
-2. **#56** Custom Tailwind build pipeline — replace CDN.
+2. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes + threshold config.
 3. **Per-team roles** — design + migration.
