@@ -180,11 +180,15 @@ Add optional raw numeric fields to rower:
 - `erg_2k_cs: Option<Erg2kTime>` — 2k erg time in centiseconds (newtype over `i32`, displayed as `M:SS.dd`)
 
 Teams define their own threshold mappings from raw values to the
-existing categorical buckets (Lightweight/Middleweight/Heavyweight,
-Short/Medium/Tall/VeryTall, Novice/Intermediate/Master/Expert,
-Weak/Intermediate/Strong/VeryStrong). Stored as team-level config —
-e.g. "lightweight < 150 lbs, middleweight 150–185, heavyweight > 185",
-"short < 66in, medium 66–71, tall 71–75, very tall > 75".
+existing categorical buckets:
+- Weight: Lightweight/Middleweight/Heavyweight (from `weight_lbs`)
+- Height: Short/Medium/Tall/VeryTall (from `height_in`)
+- Strength: Weak/Intermediate/Strong/VeryStrong (from `erg_2k_cs`)
+- Skill/Form: stays as a manual coach-set enum (not quantifiable)
+
+Stored as team-level config — e.g. "lightweight < 150 lbs,
+middleweight 150–185, heavyweight > 185", "short < 66in, medium
+66–71, tall 71–75, very tall > 75".
 Raw values are editable by rowers (subject to self-edit trust level);
 bucket boundaries are Coach+ only.
 
