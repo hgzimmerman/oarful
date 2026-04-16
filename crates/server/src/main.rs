@@ -27,6 +27,7 @@ async fn main() -> Result<()> {
         Some("reset-all") => return cmd_reset_all(),
         Some("seed") => return cmd_seed().await,
         Some("import") => return cmd_import(&args[1..]).await,
+        Some("set-billing") => return cmd_set_billing(&args[1..]),
         _ => {}
     }
 
@@ -239,5 +240,49 @@ async fn cmd_seed() -> Result<()> {
 
     println!("Default tenant seeded (fleet + dev coach account).");
     println!("  Login: coach@test.com / 12345");
+    Ok(())
+}
+
+/// `cargo run -p lineup_server -- set-billing <slug> <status>`
+/// Set billing status for a tenant. Valid statuses: trial, active,
+/// grandfathered, suspended, cancelled.
+fn cmd_set_billing(args: &[String]) -> Result<()> {
+    if args.len() < 2 {
+        anyhow::bail!(
+            "Usage: lineup_server set-billing <slug> <status>\n  \
+             Statuses: trial, active, grandfathered, suspended, cancelled\n  \
+             e.g. lineup_server set-billing riverside-rowing grandfathered"
+        );
+    }
+    let slug = &args[0];
+    let status_str = &args[1];
+
+    let status = match status_str.as_str() {
+        "trial" => lineup_master_db::tenant::BillingStatus::Trial,
+        "active" => lineup_master_db::tenant::BillingStatus::Active,
+        "grandfathered" => lineup_master_db::tenant::BillingStatus::Grandfathered,
+        "suspended" => lineup_master_db::tenant::BillingStatus::Suspended,
+        "cancelled" => lineup_master_db::tenant::BillingStatus::Cancelled,
+        other => anyhow::bail!(
+            "Unknown billing status '{other}'.\n  \
+             Valid: trial, active, grandfathered, suspended, cancelled"
+        ),
+    };
+
+    let master_db = std::env::var("MASTER_DB").unwrap_or_else(|_| "master.db".to_string());
+    let mut conn = lineup_master_db::connect_sync(&master_db)?;
+
+    let tenant = lineup_master_db::tenant::Tenant::find_by_slug(&mut conn, slug)?;
+    let Some(tenant) = tenant else {
+        anyhow::bail!("No tenant with slug '{slug}' found.");
+    };
+
+    let old = tenant.billing_status;
+    lineup_master_db::tenant::Tenant::set_billing_status(&mut conn, tenant.id, status)?;
+    println!(
+        "Updated '{}' (slug={slug}): {old} → {}",
+        tenant.name,
+        status.as_str()
+    );
     Ok(())
 }

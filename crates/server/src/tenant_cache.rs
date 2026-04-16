@@ -44,7 +44,7 @@ impl TenantConfig {
             return true;
         }
         match self.billing_status {
-            BillingStatus::Active => true,
+            BillingStatus::Active | BillingStatus::Grandfathered => true,
             BillingStatus::Trial => self
                 .trial_expires_at
                 .map(|exp| exp > chrono::Utc::now().naive_utc())

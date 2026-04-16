@@ -19,7 +19,7 @@ pub(crate) fn suspended_page(tenant_name: &str, config: &TenantConfig) -> Markup
             "Subscription cancelled",
             "Your subscription has been cancelled. Contact us if you'd like to return.",
         ),
-        BillingStatus::Active => (
+        BillingStatus::Active | BillingStatus::Grandfathered => (
             "Account issue",
             "There's an issue with your account. Please contact support.",
         ),

@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 pub enum BillingStatus {
     Trial,
     Active,
+    /// Permanently free — early adopters / beta testers.
+    Grandfathered,
     Suspended,
     Cancelled,
 }
@@ -20,6 +22,7 @@ impl BillingStatus {
         match self {
             Self::Trial => "trial",
             Self::Active => "active",
+            Self::Grandfathered => "grandfathered",
             Self::Suspended => "suspended",
             Self::Cancelled => "cancelled",
         }
@@ -28,6 +31,7 @@ impl BillingStatus {
     pub fn from_str(s: &str) -> Self {
         match s {
             "active" => Self::Active,
+            "grandfathered" => Self::Grandfathered,
             "suspended" => Self::Suspended,
             "cancelled" => Self::Cancelled,
             _ => Self::Trial,
@@ -147,7 +151,7 @@ impl Tenant {
             return true;
         }
         match self.billing_status() {
-            BillingStatus::Active => true,
+            BillingStatus::Active | BillingStatus::Grandfathered => true,
             BillingStatus::Trial => self
                 .trial_expires_at
                 .map(|exp| exp > chrono::Utc::now().naive_utc())
@@ -201,6 +205,21 @@ impl Tenant {
             .select(Tenant::as_select())
             .first(conn)
             .optional()
+    }
+
+    pub fn set_billing_status(
+        conn: &mut SqliteConnection,
+        id: TenantId,
+        status: BillingStatus,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(tenant::table.find(id))
+            .set((
+                tenant::billing_status.eq(status.as_str()),
+                // Clear trial expiry when moving to a non-trial status.
+                tenant::trial_expires_at.eq::<Option<NaiveDateTime>>(None),
+            ))
+            .execute(conn)?;
+        Ok(())
     }
 
     pub fn create(
