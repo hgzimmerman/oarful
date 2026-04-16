@@ -313,7 +313,7 @@ async fn availability_content(
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::my::availability_content(&rower, &rows, None))
+    Ok(templates::my::availability_content(&rows, None))
 }
 
 #[derive(Debug, Deserialize)]
@@ -441,7 +441,7 @@ pub(crate) async fn availability_update_handler(
         .await
         .map_err(internal_error)?;
 
-    let content = templates::my::availability_content(&rower, &rows, stale_warning);
+    let content = templates::my::availability_content(&rows, stale_warning);
     Ok(super::maybe_page_authed(
         "My availability",
         content,

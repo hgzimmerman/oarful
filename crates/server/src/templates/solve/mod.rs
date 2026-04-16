@@ -8,7 +8,6 @@ pub(crate) mod knobs;
 pub(crate) mod profile_modal;
 
 pub(crate) use alternatives::alternative_block as stream_alternative_block;
-use alternatives::alternatives_panel;
 pub(crate) use editor::{lineup_editor, DisplayFlags, EditorData, OtherTeamRower};
 use knobs::knobs_form;
 pub(crate) use knobs::preset_bar;
@@ -22,7 +21,6 @@ use lineup_db::{
     rower::{types::RowerId, Rower},
     snapshot::DbSnapshot,
 };
-use lineup_solver::{SolveResult, SolveStatus};
 use maud::{html, Markup};
 
 use super::layout::page_header;
@@ -353,61 +351,6 @@ pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) ->
                     div class="inline-block w-5 h-5 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
                     "Generating..."
                 }
-            }
-        }
-    }
-}
-
-pub(crate) fn view_content(
-    snapshot: &DbSnapshot,
-    practice_id: PracticeId,
-    date: NaiveDate,
-    knobs: &SolveKnobs,
-    result: &SolveResult,
-    committed_practices: &[Practice],
-    flags: &DisplayFlags,
-    custom_profiles: &[(String, Option<String>)],
-) -> Markup {
-    let available = snapshot.available_rowers().count();
-    let subtitle = format!(
-        "{available} members available · {boats} candidate shells",
-        boats = snapshot.boats.len(),
-    );
-
-    let editor = if result.status == SolveStatus::Satisfied {
-        EditorData::from_solve(snapshot, &result.primary)
-    } else {
-        EditorData::empty(snapshot, &HashSet::new())
-    };
-
-    // Unavailable rowers for the walk-on dropdown.
-    let unavailable: Vec<&Rower> = snapshot
-        .rowers
-        .iter()
-        .filter(|r| r.active.as_bool())
-        .filter(|r| {
-            !snapshot
-                .availability
-                .get(&r.id)
-                .map(|s| s.is_available_for_sweep())
-                .unwrap_or(false)
-        })
-        .collect();
-
-    html! {
-        (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
-            div class="no-print" {
-                (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, Some(result)))
-            }
-            // Error banners only (unsatisfiable / zero-result timeout).
-            @if result.status != SolveStatus::Satisfied {
-                (knobs::status_banner(date, result))
-            }
-            (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
-
-            @if result.status == SolveStatus::Satisfied && !result.alternatives.is_empty() {
-                (alternatives_panel(snapshot, practice_id, &result.primary, &result.alternatives, flags))
             }
         }
     }

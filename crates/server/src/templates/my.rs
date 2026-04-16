@@ -4,7 +4,6 @@ use chrono::NaiveDate;
 use lineup_db::app_user::AppUser;
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::practice::PracticeId;
-use lineup_db::rower::Rower;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header, tab_swap, tabbed_section, TabDef};
@@ -65,7 +64,6 @@ pub(crate) struct AvailabilityRow {
 // =====================================================================
 
 pub(crate) fn availability_content(
-    rower: &Rower,
     rows: &[AvailabilityRow],
     stale_warning: Option<(PracticeId, NaiveDate)>,
 ) -> Markup {

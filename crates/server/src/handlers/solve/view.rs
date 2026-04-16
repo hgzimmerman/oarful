@@ -1,23 +1,18 @@
 //! `GET /solve/{id}` — main solve view handler.
 
-use axum::{
-    extract::{Path, State},
-    response::Html,
-    Extension,
-};
+use axum::{extract::Path, response::Html, Extension};
 use axum_extra::extract::{CookieJar, Query};
 use axum_htmx::HxRequest;
 use lineup_db::app_user::Role;
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::snapshot::DbSnapshot;
 
-use crate::{state::AppState, templates};
+use crate::templates;
 
 use super::*;
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn view_handler(
-    State(state): State<AppState>,
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
@@ -49,9 +44,7 @@ pub(crate) async fn view_handler(
     // Apply walk-on overrides before anything reads availability.
     apply_walkons(&mut snapshot, &knobs);
 
-    // Load custom solver profiles for this team (used by both the
-    // resolver and the template's preset selector).
-    let preset_name = knobs.preset.clone();
+    // Load custom solver profiles for this team.
     let custom_profiles = tenant
         .db
         .with_conn(move |conn| {

@@ -18,6 +18,7 @@ use super::{
     sort_seats_for_display,
 };
 
+#[allow(dead_code)] // kept for potential non-streaming fallback
 pub(super) fn alternatives_panel(
     snapshot: &DbSnapshot,
     practice_id: PracticeId,

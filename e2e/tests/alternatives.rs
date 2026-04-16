@@ -36,7 +36,7 @@ async fn use_streamed_alternative() {
         .expect("expected boat cards in lineup editor after generation");
 
     // Wait for an alternative to stream in — look for "Alternative #2".
-    let alt_header = client
+    let _alt_header = client
         .wait()
         .at_most(std::time::Duration::from_secs(15))
         .for_element(Locator::XPath("//*[contains(text(), 'Alternative #2')]"))
@@ -44,7 +44,7 @@ async fn use_streamed_alternative() {
         .expect("expected Alternative #2 to appear via SSE");
 
     // Verify the "Use this" link exists.
-    let use_this = client
+    let _use_this = client
         .find(Locator::XPath("//a[contains(text(), 'Use this')]"))
         .await
         .expect("expected 'Use this' link on alternative");
