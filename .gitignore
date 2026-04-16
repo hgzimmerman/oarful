@@ -8,3 +8,4 @@ master.db
 *.db-shm
 *.db-wal
 .claude/
+tailwindcss-linux-*

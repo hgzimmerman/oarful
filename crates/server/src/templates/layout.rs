@@ -18,9 +18,9 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Lineup Generator" }
-                // Tailwind JIT compiler (local copy of the CDN script).
-                // Swap for a built CSS file once we add a pipeline.
-                script src="/tailwindcss.js" {}
+                // Pre-built Tailwind CSS. Rebuild with:
+                //   tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify
+                link rel="stylesheet" href="/tailwind.css";
                 script src="/htmx.min.js" {}
                 script src="/alpine.min.js" defer {}
                 script src="/htmx-ext-sse.js" defer {}
