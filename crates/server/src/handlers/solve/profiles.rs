@@ -24,6 +24,21 @@ pub(crate) async fn preset_bar_handler(
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
     Query(knobs): Query<SolveKnobs>,
+    hx: axum_htmx::HxRequest,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    // Redirect to the solve page if accessed directly (not via HTMX).
+    if !hx.0 {
+        return Ok(Redirect::to(&format!("/solve/{practice_id}")).into_response());
+    }
+    let result = preset_bar_inner(jar, &tenant, practice_id, &knobs).await?;
+    Ok(result.into_response())
+}
+
+async fn preset_bar_inner(
+    jar: CookieJar,
+    tenant: &crate::state::TenantContext,
+    practice_id: PracticeId,
+    knobs: &SolveKnobs,
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
