@@ -41,6 +41,9 @@
             '')
           ];
           DATABASE_URL = "lineup.sql";
+          shellHook = ''
+            git config core.hooksPath .githooks
+          '';
         };
       }
     );
