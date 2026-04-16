@@ -192,6 +192,67 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
+#### Default availability assumption
+
+Team-level toggle controlling how unfilled availability slots are
+interpreted: "assume unavailable" (current behaviour — no response
+means excluded from lineups) vs "assume available" (no response
+means included). Stored as a flag on the `team` table (e.g.
+`assume_available INTEGER NOT NULL DEFAULT 0`). Affects the
+availability query when building the solver's eligible rower pool.
+Exposed on the team settings UI as a toggle.
+
+#### Email restrictions for trial tenants
+
+Disable outbound email (reminders, lineup notifications, invites)
+for trial tenants to prevent spam abuse. Trial users can still use
+the app fully but emails go nowhere (or show a "upgrade to send
+emails" message in the UI). As a secondary safeguard, add a daily
+email cap per tenant (e.g. 300/day for paid, 0 for trial) tracked
+via a counter in the master DB. Bulk actions (e.g. reminders to
+the full roster) should be allowed to exceed the cap rather than
+partially sending.
+
+#### Unsubscribe links in emails
+
+All outbound emails need a one-click unsubscribe link per CAN-SPAM
+/ GDPR. Should toggle the existing per-user email preference flags
+(`wants_reminders`, `wants_lineups`) without requiring login. Use
+a signed token in the URL to authenticate the unsubscribe action.
+
+#### Gate backup restore behind billing status
+
+The backup import/restore flow should be disabled for trial
+tenants. Prevents free trials from being used to clone production
+data. Allow for active, grandfathered, and paid tenants only.
+
+#### Practice time in reminder and lineup emails
+
+Reminder and lineup emails currently only show the date. Include
+the practice start time so rowers know when to show up.
+
+#### Password reset flow
+
+"Forgot password" link on the login page. Sends a magic link that
+lands on a password-reset form instead of logging in directly.
+Reuses the existing magic link infrastructure.
+
+#### Coach-editable availability
+
+Allow coaches to set availability on behalf of rowers. Useful for
+teams where attendance is the norm and members just text the coach
+when they can't make it — avoids spamming the whole roster with
+availability requests when most people will be there. Coach+ role
+gate on the availability edit action.
+
+#### Boat usage matrix CSV export
+
+A second CSV export from the fleet page: boat name × date matrix
+where each cell is the number of times that boat was used on that
+date (derived from committed lineups, grouped by practice start
+time). Complements the existing summary CSV which shows aggregate
+usage stats.
+
 ### Coach features (continued)
 
 #### Raw rower metrics + team-defined bucketing
@@ -250,6 +311,18 @@ switching, user list UI.
 
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
+
+#### Webmaster email
+
+Configurable via `WEBMASTER_EMAIL` env var. Used as the `From`
+address for outbound emails, `mailto:` on the billing suspended
+page, and in a hidden `<meta name="author">` tag. Avoids
+hardcoding `support@oarful.com` in templates.
+
+#### Pricing on landing page
+
+Add pricing to the landing page once Stripe is wired up. Starting
+at $150/year. State it plainly, frame as annual not monthly.
 
 ### Stripe payment integration
 

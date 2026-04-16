@@ -12,7 +12,7 @@ pub(crate) fn landing_page() -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { "Oarful — Lineup Generator for Rowing Clubs" }
+                title { "Oarful 🚣 Lineup Generator for Rowing Clubs" }
                 link rel="stylesheet" href="/tailwind.css";
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
@@ -32,53 +32,62 @@ pub(crate) fn landing_page() -> Markup {
                 }
 
                 // Hero
-                main class="flex-grow flex flex-col items-center justify-center px-6 pb-16" {
+                main class="flex-grow flex flex-col items-center px-6 pt-16 sm:pt-24 pb-16" {
                     div class="max-w-2xl text-center" {
                         h1 class="text-4xl sm:text-5xl font-bold text-slate-800 leading-tight" {
-                            "Practice lineups,"
-                            br;
-                            "without the spreadsheet."
+                            "Rowing lineup tool"
                         }
                         p class="mt-4 text-lg text-slate-600 max-w-lg mx-auto" {
-                            "Oarful is a lineup generator for rowing clubs. "
-                            "Set availability, define constraints, and let the solver "
-                            "do the rest."
+                            "Collect availability, generate lineups with a constraint solver, "
+                            "edit them by hand, send them out."
                         }
-                        div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3" {
-                            a href="/signup"
-                              class="bg-slate-800 text-white font-semibold px-6 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
-                                "Get started free"
-                            }
-                            form method="post" action="/demo" {
-                                button type="submit"
-                                       class="border border-slate-300 text-slate-600 hover:text-slate-800 hover:border-slate-400 font-medium px-6 py-3 rounded-lg transition text-sm" {
-                                    "Try the demo"
+                        div class="mt-8 flex flex-col sm:flex-row items-start justify-center gap-8" {
+                            div class="text-center" {
+                                a href="/signup"
+                                  class="block bg-slate-800 text-white font-semibold px-8 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
+                                    "Get started free"
                                 }
+                                p class="mt-2 text-xs text-slate-400" { "30-day trial, no credit card" }
+                            }
+                            div class="text-center" {
+                                form method="post" action="/demo" {
+                                    button type="submit"
+                                           class="w-full border border-slate-300 text-slate-600 hover:text-slate-800 hover:border-slate-400 font-medium px-8 py-3 rounded-lg transition text-sm" {
+                                        "Try the demo"
+                                    }
+                                }
+                                p class="mt-2 text-xs text-slate-400" { "Sample data, temporary," br; "expires in 7 days" }
                             }
                         }
                     }
 
-                    // Feature highlights
-                    div class="mt-16 max-w-3xl w-full grid grid-cols-1 sm:grid-cols-3 gap-6" {
-                        (feature_card(
-                            "Constraint solver",
-                            "Seat affinities, pair preferences, weight classes — the solver handles it all.",
-                        ))
-                        (feature_card(
-                            "Availability tracking",
-                            "Rowers mark their own availability. Coaches see who's in at a glance.",
-                        ))
-                        (feature_card(
-                            "Multi-team support",
-                            "Run multiple squads under one club. Cross-team coordination built in.",
-                        ))
+                    // What it does
+                    div class="mt-20 max-w-3xl w-full" {
+                        h2 class="text-lg font-semibold text-slate-800 mb-4" { "What it does" }
+                        div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 text-base text-slate-600" {
+                            (bullet("Rowers or their coaches set availability and get lineup emails; no more spreadsheets"))
+                            (bullet("Constraint solver accounts for seat, side, and pair preferences, coarse height, weight, and skill matching, and weight-class boat eligibility"))
+                            (bullet("Lineup editor for manual adjustments, or skip the solver and build lineups manually"))
+                            (bullet("Multiple teams per club with boat sharing and double-booking detection"))
+                            (bullet("Handle no-shows without redoing lineups from scratch"))
+                            (bullet("Boat usage tracking across practices"))
+                        }
+                    }
+
+                    // Second CTA
+                    div class="mt-16 text-center" {
+                        a href="/signup"
+                          class="bg-slate-800 text-white font-semibold px-6 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
+                            "Get started free"
+                        }
+                        p class="mt-2 text-xs text-slate-400" {
+                            "30-day trial, no credit card"
+                        }
                     }
                 }
 
                 // Footer
                 footer class="text-center text-xs text-slate-400 py-4" {
-                    "30-day free trial · No credit card required"
-                    span class="mx-2" { "·" }
                     a href=(source_url) target="_blank"
                       class="hover:text-slate-600 transition" {
                         "Source (AGPL-3.0)"
@@ -89,11 +98,11 @@ pub(crate) fn landing_page() -> Markup {
     }
 }
 
-fn feature_card(title: &str, desc: &str) -> Markup {
+fn bullet(text: &str) -> Markup {
     html! {
-        div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5" {
-            h3 class="font-semibold text-slate-800 mb-1" { (title) }
-            p class="text-sm text-slate-600" { (desc) }
+        div class="flex gap-2" {
+            span class="text-slate-400 shrink-0" { "·" }
+            span { (text) }
         }
     }
 }
