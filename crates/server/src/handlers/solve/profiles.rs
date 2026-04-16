@@ -76,6 +76,7 @@ async fn preset_bar_inner(
 pub(crate) async fn save_profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
+    headers: axum::http::HeaderMap,
     axum::Form(input): axum::Form<SaveProfileInput>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
@@ -178,8 +179,14 @@ pub(crate) async fn save_profile_handler(
         None,
     );
 
-    // Redirect back to the referring page (or practices).
-    Ok(Redirect::to("/practices"))
+    // Redirect back to the referring page (the solve page).
+    let referer = headers
+        .get(axum::http::header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| url::Url::parse(s).ok())
+        .map(|u| u.path().to_string())
+        .unwrap_or_else(|| "/practices".to_string());
+    Ok(Redirect::to(&referer))
 }
 
 /// `GET /solver-profile/edit` — return the profile editor modal as an
