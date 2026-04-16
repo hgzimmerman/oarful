@@ -97,7 +97,30 @@ pub(crate) fn detail_content(
     let cancel_action = format!("/practices/{practice_id}/cancel");
 
     html! {
-        (page_header(&format!("Lineups · {date}"), None))
+        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+            div class="flex items-center justify-between" {
+                h1 class="text-2xl font-bold text-slate-800" {
+                    "Lineups \u{00b7} " (date)
+                }
+                @if is_coach && !committed.is_empty() && !is_cancelled {
+                    div class="no-print flex items-center gap-3" {
+                        form method="post" action=(cancel_action)
+                             hx-post=(cancel_action)
+                             hx-target="#content" {
+                            button type="submit"
+                                   class="text-xs text-slate-400 hover:text-red-600 font-medium py-2" {
+                                "Cancel practice"
+                            }
+                        }
+                        button type="button"
+                               class="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition font-semibold"
+                               onclick=(edit_lineup_js(practice_id, committed, snapshot)) {
+                            "Edit lineup"
+                        }
+                    }
+                }
+            }
+        }
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-4" {
             @if is_cancelled {
                 div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900 flex items-center justify-between" {
@@ -120,18 +143,8 @@ pub(crate) fn detail_content(
             }
 
             @if is_coach {
-                div class="no-print flex items-center justify-between" {
-                    div { (notes_section(practice, practice_id)) }
-                    @if !is_cancelled {
-                        form method="post" action=(cancel_action)
-                             hx-post=(cancel_action)
-                             hx-target="#content" {
-                            button type="submit"
-                                   class="text-xs text-slate-400 hover:text-red-600 font-medium" {
-                                "Cancel practice"
-                            }
-                        }
-                    }
+                div class="no-print" {
+                    (notes_section(practice, practice_id))
                 }
             }
 
@@ -156,13 +169,6 @@ pub(crate) fn detail_content(
                         }
                     }
                 (unplaced_section(snapshot, committed))
-                    div class="mt-4 flex justify-end no-print" {
-                        button type="button"
-                               class="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition font-semibold"
-                               onclick=(edit_lineup_js(practice_id, committed, snapshot)) {
-                            "Edit lineup"
-                        }
-                    }
                 }
             } @else {
                 // Read-only view for members — no checkboxes or re-solve.

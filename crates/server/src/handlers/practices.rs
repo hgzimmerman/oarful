@@ -2,6 +2,7 @@
 //! `POST /practices` — create a practice for a given date.
 //! `GET /practices/planning` — planning tab content (HTMX partial).
 //! `GET /practices/committed` — committed tab content (HTMX partial).
+//! `GET /practices/reminder-preview` — preview modal for reminders.
 //! `POST /practices/send-reminders` — send availability reminders.
 //! `POST /practices/send-lineups` — send lineup notifications.
 
@@ -315,78 +316,155 @@ async fn committed_tab_content(
 }
 
 // =====================================================================
+// Reminder helpers
+// =====================================================================
+
+/// Per-practice non-respondent info shared by preview and send.
+struct ReminderRecipient {
+    user_id: lineup_db::app_user::UserId,
+    email: String,
+    name: String,
+    dates: Vec<NaiveDate>,
+}
+
+/// Gather non-respondent users for the given practices (or all pending
+/// when `practice_ids` is empty). Returns one entry per user with the
+/// list of dates they haven't responded to.
+fn gather_reminder_recipients(
+    conn: &mut diesel::SqliteConnection,
+    team_id: lineup_db::team::TeamId,
+    practice_ids: &[PracticeId],
+    today: NaiveDate,
+) -> Result<Vec<ReminderRecipient>, diesel::result::Error> {
+    let upcoming = Practice::list_upcoming(conn, team_id, today)?;
+    let upcoming_ids: Vec<PracticeId> = upcoming.iter().map(|p| p.id).collect();
+    let committed: HashSet<PracticeId> = Practice::committed_ids(conn, team_id, &upcoming_ids)?
+        .into_iter()
+        .collect();
+    let pending: Vec<&Practice> = upcoming
+        .iter()
+        .filter(|p| !committed.contains(&p.id))
+        .filter(|p| practice_ids.is_empty() || practice_ids.contains(&p.id))
+        .collect();
+
+    if pending.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let all_rowers = Rower::list_active(conn)?;
+    let mut rower_users: HashMap<
+        lineup_db::rower::types::RowerId,
+        (lineup_db::app_user::UserId, String, String),
+    > = HashMap::new();
+    for r in &all_rowers {
+        if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
+            if user.wants_reminders()
+                && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
+            {
+                rower_users.insert(r.id, (user.id, user.email.clone(), r.name.clone()));
+            }
+        }
+    }
+
+    let mut result: Vec<ReminderRecipient> = Vec::new();
+    for (rower_id, (user_id, email, name)) in &rower_users {
+        let mut missing = Vec::new();
+        for practice in &pending {
+            let responses = Availability::map_for_practice(conn, practice.id)?;
+            if !responses.contains_key(rower_id) {
+                if !EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)? {
+                    missing.push(practice.date);
+                }
+            }
+        }
+        if !missing.is_empty() {
+            result.push(ReminderRecipient {
+                user_id: *user_id,
+                email: email.clone(),
+                name: name.clone(),
+                dates: missing,
+            });
+        }
+    }
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(result)
+}
+
+// =====================================================================
+// Reminder preview
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ReminderPreviewQuery {
+    #[serde(default)]
+    practice_ids: Vec<i32>,
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn reminder_preview_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    crate::extract::HtmlQuery(query): crate::extract::HtmlQuery<ReminderPreviewQuery>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let today = Utc::now().date_naive();
+    let pids: Vec<PracticeId> = query.practice_ids.iter().map(|&id| PracticeId::new(id)).collect();
+
+    let recipients = tenant
+        .db
+        .with_conn(move |conn| gather_reminder_recipients(conn, team_id, &pids, today))
+        .await
+        .map_err(internal_error)?;
+
+    let preview: Vec<templates::practices::ReminderRecipientPreview> = recipients
+        .iter()
+        .map(|r| templates::practices::ReminderRecipientPreview {
+            name: r.name.clone(),
+            dates: r.dates.clone(),
+        })
+        .collect();
+
+    Ok(Html(
+        templates::practices::reminder_preview_modal(&preview, &query.practice_ids).into_string(),
+    ))
+}
+
+// =====================================================================
 // Send reminders
 // =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SendRemindersInput {
+    #[serde(default)]
+    practice_ids: Vec<i32>,
+}
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn send_reminders_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
+    HtmlForm(input): HtmlForm<SendRemindersInput>,
 ) -> Result<Html<String>, StatusCode> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
     let sender_id = tenant.claims.user_id();
     let team_name = tenant.config.tenant_name.clone();
+    let pids: Vec<PracticeId> = input.practice_ids.iter().map(|&id| PracticeId::new(id)).collect();
 
-    // Gather non-respondent users + their pending dates.
+    // Gather non-respondent users + record sends.
     let recipients = tenant
         .db
         .with_conn(move |conn| {
-            let upcoming = Practice::list_upcoming(conn, team_id, today)?;
-            let upcoming_ids: Vec<PracticeId> = upcoming.iter().map(|p| p.id).collect();
-            let committed: HashSet<PracticeId> =
-                Practice::committed_ids(conn, team_id, &upcoming_ids)?
-                    .into_iter()
-                    .collect();
-            let pending: Vec<&Practice> = upcoming
-                .iter()
-                .filter(|p| !committed.contains(&p.id))
-                .collect();
-
-            if pending.is_empty() {
-                return Ok(Vec::new());
-            }
-
-            let all_rowers = Rower::list_active(conn)?;
-            // Build rower_id → (user_id, email, name) for rowers with user accounts.
-            let mut rower_users: HashMap<
-                lineup_db::rower::types::RowerId,
-                (lineup_db::app_user::UserId, String, String),
-            > = HashMap::new();
-            for r in &all_rowers {
-                if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
-                    if user.wants_reminders() && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active) {
-                        rower_users.insert(r.id, (user.id, user.email.clone(), r.name.clone()));
-                    }
-                }
-            }
-
-            // For each rower, find which pending practices they haven't responded to.
-            let mut result: Vec<(lineup_db::app_user::UserId, String, String, Vec<NaiveDate>)> =
-                Vec::new();
-            for (rower_id, (user_id, email, name)) in &rower_users {
-                let mut missing = Vec::new();
-                for practice in &pending {
-                    let responses = Availability::map_for_practice(conn, practice.id)?;
-                    if !responses.contains_key(rower_id) {
-                        // Check rate limit per date.
-                        if !EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)? {
-                            missing.push(practice.date);
-                        }
-                    }
-                }
-                if !missing.is_empty() {
-                    result.push((*user_id, email.clone(), name.clone(), missing));
-                }
-            }
+            let result = gather_reminder_recipients(conn, team_id, &pids, today)?;
 
             // Record sends.
             let now = Utc::now().naive_utc();
             let mut dates_sent: HashSet<NaiveDate> = HashSet::new();
-            for (_uid, _email, _name, dates) in &result {
-                for date in dates {
+            for r in &result {
+                for date in &r.dates {
                     if dates_sent.insert(*date) {
                         EmailLog::record(
                             conn,
@@ -397,7 +475,7 @@ pub(crate) async fn send_reminders_handler(
                                 sent_at: now,
                                 recipient_count: result
                                     .iter()
-                                    .filter(|(_, _, _, ds)| ds.contains(date))
+                                    .filter(|r2| r2.dates.contains(date))
                                     .count() as i32,
                                 sent_by_user_id: sender_id,
                             },
@@ -413,12 +491,13 @@ pub(crate) async fn send_reminders_handler(
 
     // Send emails (outside the DB transaction).
     let mut sent_count = 0;
-    for (user_id, email, name, dates) in &recipients {
+    let mut sent_names: Vec<String> = Vec::new();
+    for r in &recipients {
         // Magic link expires end-of-day of the last relevant date.
-        let last_date = dates.iter().max().copied().unwrap();
+        let last_date = r.dates.iter().max().copied().unwrap();
         let expires_at = last_date.and_hms_opt(23, 59, 59).unwrap();
 
-        let created = create_magic_link(*user_id, "/my/availability", expires_at, Some(team_id));
+        let created = create_magic_link(r.user_id, "/my/availability", expires_at, Some(team_id));
         let raw_token = created.raw_token.clone();
 
         // Insert the magic link row.
@@ -432,12 +511,13 @@ pub(crate) async fn send_reminders_handler(
         let magic_url = state.full_url(&format!("/auth/magic/{}/{raw_token}", tenant.config.tenant_slug));
         if let Err(err) = state
             .mailer
-            .send_reminder(&email, &name, &team_name, dates, &magic_url)
+            .send_reminder(&r.email, &r.name, &team_name, &r.dates, &magic_url)
             .await
         {
-            tracing::warn!(?err, %email, "failed to send reminder");
+            tracing::warn!(?err, email = %r.email, "failed to send reminder");
         } else {
             sent_count += 1;
+            sent_names.push(r.name.clone());
         }
     }
 
@@ -453,9 +533,9 @@ pub(crate) async fn send_reminders_handler(
     }
 
     let msg = if sent_count > 0 {
-        format!("Reminders sent to {sent_count} rower(s).")
+        format!("Reminders sent to: {}", sent_names.join(", "))
     } else {
-        "No reminders to send -- everyone has responded or reminders were already sent today."
+        "No reminders to send — everyone has responded or reminders were already sent today."
             .to_string()
     };
     Ok(Html(

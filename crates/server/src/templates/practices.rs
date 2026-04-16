@@ -4,7 +4,15 @@ use chrono::NaiveDate;
 use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
+use maud::PreEscaped;
+
 use super::layout::{empty_state, page_header};
+
+/// Recipient info for the reminder preview modal.
+pub(crate) struct ReminderRecipientPreview {
+    pub(crate) name: String,
+    pub(crate) dates: Vec<NaiveDate>,
+}
 
 /// Per-row summary used by both the Planning and Committed tabs.
 pub(crate) struct PracticeRow {
@@ -127,24 +135,34 @@ pub(crate) fn planning_content(
 
         @if rows.is_empty() {
             (empty_state("No practices awaiting lineups. Create a practice above or check the Committed tab."))
+        } @else if is_coach {
+            @let initial_checked = rows.iter().filter(|r| !r.cancelled && r.non_respondent_count > 0).count();
+            div "x-data"={"{ checked: " (initial_checked) " }"} {
+                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                    @for row in rows {
+                        (planning_row_card(row, is_coach))
+                    }
+                }
+
+                @if total_non_respondents > 0 {
+                    div class="flex justify-end mt-4"
+                        "x-show"="checked > 0"
+                        "x-transition" {
+                        button type="button"
+                               hx-get="/practices/reminder-preview"
+                               hx-include="[name='practice_ids']:checked"
+                               hx-target="body"
+                               hx-swap="beforeend"
+                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Send reminders"
+                        }
+                    }
+                }
+            }
         } @else {
             div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
                 @for row in rows {
                     (planning_row_card(row, is_coach))
-                }
-            }
-
-            // Send reminders button (Coach+ only)
-            @if is_coach && total_non_respondents > 0 {
-                form method="post" action="/practices/send-reminders"
-                     hx-post="/practices/send-reminders"
-                     hx-target="#practices-tab-content"
-                     hx-confirm={"Send availability reminders to " (total_non_respondents) " rower(s)?"}
-                     class="flex justify-end mt-4" {
-                    button type="submit"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
-                        "Send reminders"
-                    }
                 }
             }
         }
@@ -158,27 +176,36 @@ fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     } else {
         String::new()
     };
-    let clickable = !href.is_empty();
     let cancel_action = format!("/practices/{}/cancel", row.practice_id);
 
-    let base_class = if row.cancelled {
-        "flex items-center justify-between px-6 py-3 opacity-40"
-    } else {
-        "flex items-center justify-between px-6 py-4"
-    };
+    let opacity = if row.cancelled { " opacity-40" } else { "" };
 
     html! {
-        @if clickable {
-            a href=(href)
-              class={(base_class) " hover:bg-slate-50 transition cursor-pointer"}
-              hx-get=(href)
-              hx-target="#content"
-              hx-push-url="true" {
-                (planning_row_inner(row, &weekday, is_coach, &cancel_action))
+        div class={"flex items-center px-6 py-3 hover:bg-slate-50 transition" (opacity)} {
+            // Checkbox for reminder selection (Coach+ only, non-cancelled with pending)
+            @if is_coach && !row.cancelled && row.non_respondent_count > 0 {
+                input type="checkbox" name="practice_ids"
+                      value=(row.practice_id)
+                      checked
+                      "@change"="checked += $el.checked ? 1 : -1"
+                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500 mr-3 shrink-0";
+            } @else if is_coach {
+                // Spacer to keep alignment when some rows have checkboxes
+                div class="w-4 mr-3 shrink-0" {}
             }
-        } @else {
-            div class=(base_class) {
-                (planning_row_inner(row, &weekday, is_coach, &cancel_action))
+            // Clickable row content
+            @if !href.is_empty() {
+                a href=(href)
+                  class="flex items-center justify-between flex-1 cursor-pointer"
+                  hx-get=(href)
+                  hx-target="#content"
+                  hx-push-url="true" {
+                    (planning_row_inner(row, &weekday, is_coach, &cancel_action))
+                }
+            } @else {
+                div class="flex items-center justify-between flex-1" {
+                    (planning_row_inner(row, &weekday, is_coach, &cancel_action))
+                }
             }
         }
     }
@@ -339,6 +366,92 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
                 @if row.already_sent_today {
                     span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
                         "Sent today"
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =====================================================================
+// Reminder preview modal
+// =====================================================================
+
+const CLOSE_MODAL_JS: &str = "document.getElementById('reminder-modal').remove(); document.getElementById('reminder-modal-backdrop').remove()";
+
+pub(crate) fn reminder_preview_modal(
+    recipients: &[ReminderRecipientPreview],
+    practice_ids: &[i32],
+) -> Markup {
+    let unique_count = recipients.len();
+    let practice_count: usize = {
+        let mut dates: Vec<&NaiveDate> = recipients.iter().flat_map(|r| r.dates.iter()).collect();
+        dates.sort();
+        dates.dedup();
+        dates.len()
+    };
+
+    html! {
+        // Backdrop
+        div id="reminder-modal-backdrop"
+            class="fixed inset-0 bg-black/40 z-40"
+            onclick=(CLOSE_MODAL_JS) {}
+        // Modal
+        div id="reminder-modal"
+            class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
+            div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
+                // Header
+                div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between" {
+                    h2 class="text-lg font-bold text-slate-800" { "Send reminders" }
+                    button type="button"
+                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                           onclick=(CLOSE_MODAL_JS) {
+                        "\u{00d7}"
+                    }
+                }
+                // Body
+                div class="px-6 py-4" {
+                    @if recipients.is_empty() {
+                        p class="text-sm text-slate-500 italic" {
+                            "No reminders to send — everyone has responded or reminders were already sent today."
+                        }
+                    } @else {
+                        p class="text-sm text-slate-600 mb-3" {
+                            "Will email " strong { (unique_count) }
+                            " rower(s) about "
+                            strong { (practice_count) }
+                            " practice(s):"
+                        }
+                        div class="space-y-1 mb-4 max-h-60 overflow-y-auto" {
+                            @for r in recipients {
+                                div class="flex items-center justify-between text-sm py-1" {
+                                    span class="text-slate-800" { (r.name) }
+                                    span class="text-xs text-slate-400" {
+                                        @for (i, d) in r.dates.iter().enumerate() {
+                                            @if i > 0 { ", " }
+                                            (d.format("%b %-d"))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // Footer
+                @if !recipients.is_empty() {
+                    div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-end" {
+                        form method="post" action="/practices/send-reminders"
+                             hx-post="/practices/send-reminders"
+                             hx-target="#practices-tab-content"
+                             onclick=(PreEscaped(CLOSE_MODAL_JS)) {
+                            @for id in practice_ids {
+                                input type="hidden" name="practice_ids" value=(id);
+                            }
+                            button type="submit"
+                                   class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                                "Send " (unique_count) " reminder(s)"
+                            }
+                        }
                     }
                 }
             }
