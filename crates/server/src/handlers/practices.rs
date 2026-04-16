@@ -8,7 +8,7 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
     Extension, Form,
 };
@@ -30,6 +30,15 @@ use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
 use crate::magic_link::create_magic_link;
 use crate::state::{AppState, TenantContext};
 use crate::{handlers::internal_error, templates};
+
+const TAB_TARGET: &str = "practices-tab-content";
+
+fn is_tab_swap(headers: &HeaderMap) -> bool {
+    headers
+        .get("HX-Target")
+        .and_then(|v| v.to_str().ok())
+        == Some(TAB_TARGET)
+}
 
 // =====================================================================
 // Main practices page (with tabs)
@@ -65,11 +74,18 @@ pub(crate) async fn list_handler(
 pub(crate) async fn planning_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
 ) -> Result<Html<String>, StatusCode> {
     let content = planning_tab_content(&jar, &tenant).await?;
-    Ok(Html(
-        templates::practices::tab_content_swap("planning", content).into_string(),
-    ))
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            templates::practices::tab_content_swap("planning", content).into_string(),
+        ));
+    }
+    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let page = templates::practices::tabbed_page("planning", content, is_coach);
+    Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
 
 async fn planning_tab_content(
@@ -261,11 +277,18 @@ pub(crate) async fn cancel_handler(
 pub(crate) async fn committed_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
 ) -> Result<Html<String>, StatusCode> {
     let content = committed_tab_content(&jar, &tenant).await?;
-    Ok(Html(
-        templates::practices::tab_content_swap("committed", content).into_string(),
-    ))
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            templates::practices::tab_content_swap("committed", content).into_string(),
+        ));
+    }
+    let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
+    let page = templates::practices::tabbed_page("committed", content, is_coach);
+    Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
 
 async fn committed_tab_content(
