@@ -333,8 +333,8 @@ pub(crate) fn streaming_skeleton(
             // stream in above it. Replaced by elapsed time on "done".
             div "sse-swap"="done"
                 hx-swap="innerHTML" {
-                div class="flex items-center gap-2 py-4 text-slate-400 text-sm" {
-                    div class="inline-block w-4 h-4 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
+                div class="flex items-center justify-center gap-2 py-8 text-slate-400 text-sm" {
+                    div class="inline-block w-5 h-5 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
                     "Generating..."
                 }
             }
