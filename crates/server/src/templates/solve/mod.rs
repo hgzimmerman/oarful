@@ -327,7 +327,7 @@ pub(crate) fn streaming_skeleton(
             div "sse-swap"="alternative"
                 hx-swap="beforeend"
                 hx-disinherit="hx-ext"
-                class="space-y-4" {}
+                class="space-y-4 mt-6" {}
 
             // Single spinner at the bottom — pushed down as results
             // stream in above it. Replaced by elapsed time on "done".
