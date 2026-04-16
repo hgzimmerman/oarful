@@ -57,6 +57,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/practices/committed", get(practices::committed_handler))
         .route("/practices/reminder-preview", get(practices::reminder_preview_handler))
         .route("/practices/send-reminders", post(practices::send_reminders_handler))
+        .route("/practices/lineup-preview", get(practices::lineup_preview_handler))
         .route("/practices/send-lineups", post(practices::send_lineups_handler))
         .route("/practices/{id}/cancel", post(practices::cancel_handler))
         .route("/solve/{id}", get(solve::view_handler))

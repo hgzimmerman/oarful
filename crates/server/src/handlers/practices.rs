@@ -565,6 +565,143 @@ fn default_scope() -> String {
     "placed".to_string()
 }
 
+// =====================================================================
+// Lineup preview
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct LineupPreviewQuery {
+    #[serde(default)]
+    dates: Vec<String>,
+    #[serde(default = "default_scope")]
+    scope: String,
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn lineup_preview_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    crate::extract::HtmlQuery(query): crate::extract::HtmlQuery<LineupPreviewQuery>,
+) -> Result<Html<String>, StatusCode> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let scope_all = query.scope == "all";
+
+    let dates: Vec<NaiveDate> = query
+        .dates
+        .iter()
+        .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
+        .collect();
+
+    let date_strs: Vec<String> = dates.iter().map(|d| d.format("%Y-%m-%d").to_string()).collect();
+
+    if dates.is_empty() {
+        return Ok(Html(
+            templates::practices::lineup_preview_modal(&[], &date_strs, "placed").into_string(),
+        ));
+    }
+
+    let scope = query.scope.clone();
+    let recipients = tenant
+        .db
+        .with_conn(move |conn| {
+            gather_lineup_recipients(conn, team_id, &dates, scope_all)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let preview: Vec<templates::practices::LineupRecipientPreview> = recipients
+        .iter()
+        .map(|(_uid, _email, name)| templates::practices::LineupRecipientPreview {
+            name: name.clone(),
+        })
+        .collect();
+
+    Ok(Html(
+        templates::practices::lineup_preview_modal(&preview, &date_strs, &scope).into_string(),
+    ))
+}
+
+/// Gather lineup email recipients for the given dates and scope.
+/// Returns (user_id, email, name) tuples.
+fn gather_lineup_recipients(
+    conn: &mut diesel::SqliteConnection,
+    team_id: lineup_db::team::TeamId,
+    dates: &[NaiveDate],
+    scope_all: bool,
+) -> Result<Vec<(lineup_db::app_user::UserId, String, String)>, diesel::result::Error> {
+    let all_rowers = Rower::list_active(conn)?;
+    let rower_map: HashMap<lineup_db::rower::types::RowerId, &Rower> =
+        all_rowers.iter().map(|r| (r.id, r)).collect();
+
+    let mut placed_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
+    let mut benched_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
+    let mut valid_dates = Vec::new();
+
+    for date in dates {
+        if EmailLog::already_sent_today(conn, team_id, "lineup", *date)? {
+            continue;
+        }
+        let practice = match Practice::find_by_date(conn, team_id, *date)? {
+            Some(p) => p,
+            None => continue,
+        };
+        let committed = lineup_db::lineup::Lineup::for_practice(conn, practice.id)?;
+        if committed.is_empty() {
+            continue;
+        }
+        valid_dates.push(*date);
+
+        for cl in &committed {
+            for seat_row in &cl.seats {
+                placed_rower_ids.insert(seat_row.rower_id);
+            }
+        }
+
+        let available = Availability::map_for_practice(conn, practice.id)?;
+        for (rid, status) in &available {
+            if status.is_available_for_sweep() && !placed_rower_ids.contains(rid) {
+                benched_rower_ids.insert(*rid);
+            }
+        }
+    }
+
+    let mut recipient_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
+    recipient_rower_ids.extend(&placed_rower_ids);
+    recipient_rower_ids.extend(&benched_rower_ids);
+
+    if scope_all {
+        for date in &valid_dates {
+            if let Some(practice) = Practice::find_by_date(conn, team_id, *date)? {
+                let responses = Availability::map_for_practice(conn, practice.id)?;
+                for r in &all_rowers {
+                    if !recipient_rower_ids.contains(&r.id)
+                        && AppUser::find_by_rower_id(conn, r.id)?.is_some()
+                        && !responses.contains_key(&r.id)
+                    {
+                        recipient_rower_ids.insert(r.id);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut recipients = Vec::new();
+    for rid in &recipient_rower_ids {
+        if let Some(r) = rower_map.get(rid) {
+            if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
+                if user.wants_lineups()
+                    && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
+                {
+                    recipients.push((user.id, user.email.clone(), r.name.clone()));
+                }
+            }
+        }
+    }
+    recipients.sort_by(|a, b| a.2.cmp(&b.2));
+    Ok(recipients)
+}
+
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn send_lineups_handler(
     State(state): State<AppState>,
@@ -586,7 +723,7 @@ pub(crate) async fn send_lineups_handler(
         .collect();
     if dates.is_empty() {
         return Ok(Html(
-            templates::practices::send_result("No valid dates selected.").into_string(),
+            templates::practices::send_warning("No practices selected — check at least one to send lineups.").into_string(),
         ));
     }
 
@@ -741,6 +878,7 @@ pub(crate) async fn send_lineups_handler(
 
     // Send emails.
     let mut sent_count = 0;
+    let mut sent_names: Vec<String> = Vec::new();
     if !summaries.is_empty() {
         // Magic link expires end-of-day of the last date.
         let last_date = summaries.iter().map(|s| s.date).max().unwrap();
@@ -771,6 +909,7 @@ pub(crate) async fn send_lineups_handler(
                 tracing::warn!(?err, %email, "failed to send lineup");
             } else {
                 sent_count += 1;
+                sent_names.push(name.clone());
             }
         }
     }
@@ -788,9 +927,9 @@ pub(crate) async fn send_lineups_handler(
     }
 
     let msg = if sent_count > 0 {
-        format!("Lineup notifications sent to {sent_count} rower(s).")
+        format!("Lineups sent to: {}", sent_names.join(", "))
     } else {
-        "No lineup notifications to send -- no committed dates selected or already sent today."
+        "No lineup notifications to send — lineups may have already been sent today."
             .to_string()
     };
     Ok(Html(
