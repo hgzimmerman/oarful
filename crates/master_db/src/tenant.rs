@@ -7,6 +7,34 @@ use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BillingStatus {
+    Trial,
+    Active,
+    Suspended,
+    Cancelled,
+}
+
+impl BillingStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Trial => "trial",
+            Self::Active => "active",
+            Self::Suspended => "suspended",
+            Self::Cancelled => "cancelled",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "active" => Self::Active,
+            "suspended" => Self::Suspended,
+            "cancelled" => Self::Cancelled,
+            _ => Self::Trial,
+        }
+    }
+}
+
 #[derive(
     Clone,
     Copy,
@@ -72,6 +100,11 @@ pub struct Tenant {
     /// Whether email addresses are visible to members on the roster
     /// and rower detail pages. `0` = Coach+ only (default), `1` = visible.
     pub emails_visible: i32,
+    /// Billing status: trial, active, suspended, cancelled.
+    pub billing_status: String,
+    /// When the trial period expires. `None` means no expiry (legacy
+    /// tenants or manually activated).
+    pub trial_expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -81,6 +114,8 @@ pub struct NewTenant {
     pub slug: String,
     pub db_path: String,
     pub created_at: NaiveDateTime,
+    pub billing_status: String,
+    pub trial_expires_at: Option<NaiveDateTime>,
 }
 
 impl Tenant {
@@ -98,6 +133,27 @@ impl Tenant {
 
     pub fn is_demo(&self) -> bool {
         self.demo_expires_at.is_some()
+    }
+
+    pub fn billing_status(&self) -> BillingStatus {
+        BillingStatus::from_str(&self.billing_status)
+    }
+
+    /// Whether the tenant has an active billing relationship (not
+    /// expired trial, not suspended/cancelled). Demo tenants are
+    /// always considered active (they have their own expiry logic).
+    pub fn is_billing_ok(&self) -> bool {
+        if self.is_demo() {
+            return true;
+        }
+        match self.billing_status() {
+            BillingStatus::Active => true,
+            BillingStatus::Trial => self
+                .trial_expires_at
+                .map(|exp| exp > chrono::Utc::now().naive_utc())
+                .unwrap_or(true), // no expiry = active
+            BillingStatus::Suspended | BillingStatus::Cancelled => false,
+        }
     }
 
     /// List all expired demo tenants (for cleanup).

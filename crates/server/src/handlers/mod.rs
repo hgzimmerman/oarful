@@ -2,8 +2,9 @@
 //! [`create_router`] wires them all together.
 
 use axum::{
+    extract::State,
     http::StatusCode,
-    response::{Html, Redirect},
+    response::{Html, IntoResponse, Redirect},
     routing::{delete, get, post},
     Form, Router,
 };
@@ -26,6 +27,7 @@ pub(crate) mod history;
 pub(crate) mod my;
 pub(crate) mod practices;
 pub(crate) mod rowers;
+pub(crate) mod signup;
 pub(crate) mod solve;
 pub(crate) mod sync;
 pub(crate) mod team_hub;
@@ -37,11 +39,16 @@ pub(crate) mod users;
 pub(crate) fn create_router(state: AppState) -> Router {
     // Public routes — no auth required.
     let public = Router::new()
+        .route("/", get(landing_handler))
         .route("/login", get(auth::login_page).post(auth::login_handler))
         .route("/login/email", post(auth::email_step_handler))
         .route("/login/magic", post(auth::magic_login_handler))
         .route("/login/pick", post(auth::pick_handler))
         .route("/logout", post(auth::logout_handler))
+        .route(
+            "/signup",
+            get(signup::signup_page).post(signup::signup_handler),
+        )
         .route(
             "/invite/{token}",
             get(users::accept_page).post(users::accept_handler),
@@ -56,7 +63,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
 
     // Protected routes — require a valid JWT cookie.
     let protected = Router::new()
-        .route("/", get(|| async { Redirect::permanent("/practices") }))
         .route(
             "/practices",
             get(practices::list_handler).post(practices::create_handler),
@@ -246,6 +252,21 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .with_state(state);
 
     public.merge(protected)
+}
+
+/// `GET /` — landing page for unauthenticated users, redirect for
+/// authenticated ones.
+async fn landing_handler(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> axum::response::Response {
+    // If the user has a valid JWT, send them straight to the app.
+    if let Some(token) = jar.get(auth::TOKEN_COOKIE) {
+        if state.jwt_keys.verify(token.value()).is_ok() {
+            return Redirect::to("/practices").into_response();
+        }
+    }
+    Html(templates::landing::landing_page().into_string()).into_response()
 }
 
 pub(crate) fn maybe_page_authed(

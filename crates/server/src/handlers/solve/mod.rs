@@ -36,7 +36,7 @@ use tokio::sync::OwnedSemaphorePermit;
 
 use crate::{
     handlers::{internal_error, ErrorResponse},
-    state::AppState,
+    state::SolverCtx,
 };
 
 /// Default per-alternative solve budget, in seconds. Total wall time
@@ -559,12 +559,12 @@ fn default_budget() -> u64 {
 /// are unaffected regardless of how many concurrent solves are
 /// in flight.
 pub(super) async fn run_solve(
-    state: &AppState,
+    solver: &SolverCtx,
     snapshot: DbSnapshot,
     request: SolveRequest,
 ) -> Result<SolveResult, ErrorResponse> {
     let (tx, rx) = tokio::sync::oneshot::channel();
-    state.solver_pool.spawn(move || {
+    solver.solver_pool.spawn(move || {
         let result = solve(&snapshot, &request);
         let _ = tx.send(result);
     });
@@ -582,17 +582,17 @@ pub(super) async fn run_solve(
 /// it across an `await` for `spawn_blocking` without lifetime
 /// gymnastics. Drop the permit by letting it fall out of scope.
 pub(super) async fn acquire_solve_permit(
-    state: &AppState,
+    solver: &SolverCtx,
 ) -> Result<OwnedSemaphorePermit, ErrorResponse> {
-    if let Ok(permit) = state.solve_semaphore.clone().try_acquire_owned() {
+    if let Ok(permit) = solver.solve_semaphore.clone().try_acquire_owned() {
         return Ok(permit);
     }
     let queue_start = std::time::Instant::now();
     tracing::info!(
-        capacity = state.solve_semaphore.available_permits(),
+        capacity = solver.solve_semaphore.available_permits(),
         "solve queued — semaphore at capacity"
     );
-    let permit = state
+    let permit = solver
         .solve_semaphore
         .clone()
         .acquire_owned()

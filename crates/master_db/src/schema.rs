@@ -9,6 +9,8 @@ diesel::table! {
         force_cox_stern -> Integer,
         demo_expires_at -> Nullable<Timestamp>,
         emails_visible -> Integer,
+        billing_status -> Text,
+        trial_expires_at -> Nullable<Timestamp>,
     }
 }
 

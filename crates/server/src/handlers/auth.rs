@@ -589,6 +589,20 @@ pub(crate) async fn require_auth(
         }
     };
 
+    // Check billing status — expired trials and suspended tenants
+    // see a "renew" page instead of the app. Allow /logout and /my
+    // so users can still manage their account.
+    if !config.is_billing_ok() {
+        let path = req.uri().path().to_string();
+        if path != "/logout" && !path.starts_with("/my") {
+            return Html(
+                crate::templates::billing::suspended_page(&config.tenant_name, &config)
+                    .into_string(),
+            )
+            .into_response();
+        }
+    }
+
     let ctx = crate::state::TenantContext {
         db,
         tenant_id,

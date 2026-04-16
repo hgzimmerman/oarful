@@ -17,13 +17,13 @@ use lineup_solver::{ProposedLineup, SolveStatus};
 
 use crate::extract::HtmlForm;
 use crate::handlers::{bad_request, internal_error, ErrorResponse};
-use crate::state::AppState;
+use crate::state::SolverCtx;
 
 use super::*;
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn commit_handler(
-    State(state): State<AppState>,
+    State(solver): State<SolverCtx>,
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
@@ -49,8 +49,8 @@ pub(crate) async fn commit_handler(
     let mut request = knobs.to_request(date, &snapshot, baselines);
     request.top_n = 1;
 
-    let _permit = acquire_solve_permit(&state).await?;
-    let result = run_solve(&state, snapshot.clone(), request).await?;
+    let _permit = acquire_solve_permit(&solver).await?;
+    let result = run_solve(&solver, snapshot.clone(), request).await?;
 
     if result.status != SolveStatus::Satisfied {
         tracing::warn!(?result.status, %practice_id, "refusing to commit non-satisfied solve");

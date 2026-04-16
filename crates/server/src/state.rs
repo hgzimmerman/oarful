@@ -2,9 +2,14 @@
 //!
 //! Holds the master DB, a tenant cache for lazy per-tenant pool
 //! opening, solver infrastructure, and JWT keys.
+//!
+//! Sub-states (`MailerCtx`, `SolverCtx`, `TenantDb`, `JwtKeys`) are
+//! extractable via `FromRef<AppState>` so handlers declare only what
+//! they need.
 
 use std::sync::Arc;
 
+use axum::extract::FromRef;
 use lineup_db::state::Db;
 use lineup_master_db::state::MasterDb;
 use lineup_master_db::tenant::{NewTenant, Tenant, TenantId};
@@ -33,6 +38,115 @@ pub(crate) struct AppState {
     /// Base directory for tenant SQLite files. Default tenant lives at
     /// `{data_dir}/default.db`, demos at `{data_dir}/demos/{slug}.db`.
     pub(crate) data_dir: String,
+}
+
+// ── Sub-states extractable via FromRef ──────────────────────────
+
+/// Email delivery + full-URL generation.
+#[derive(Clone)]
+pub(crate) struct MailerCtx {
+    pub(crate) mailer: Arc<dyn Mailer>,
+    origin: Option<url::Url>,
+}
+
+impl MailerCtx {
+    /// Build a full URL from a relative path. Returns the path as-is
+    /// if ORIGIN is not configured.
+    pub(crate) fn full_url(&self, path: &str) -> String {
+        match &self.origin {
+            Some(base) => {
+                let mut u = base.clone();
+                u.set_path(path);
+                u.to_string()
+            }
+            None => path.to_string(),
+        }
+    }
+}
+
+impl FromRef<AppState> for MailerCtx {
+    fn from_ref(state: &AppState) -> Self {
+        Self {
+            mailer: state.mailer.clone(),
+            origin: state.origin.clone(),
+        }
+    }
+}
+
+/// Solver thread pool + concurrency semaphore.
+#[derive(Clone)]
+pub(crate) struct SolverCtx {
+    pub(crate) solver_pool: Arc<rayon::ThreadPool>,
+    pub(crate) solve_semaphore: Arc<Semaphore>,
+}
+
+impl FromRef<AppState> for SolverCtx {
+    fn from_ref(state: &AppState) -> Self {
+        Self {
+            solver_pool: state.solver_pool.clone(),
+            solve_semaphore: state.solve_semaphore.clone(),
+        }
+    }
+}
+
+/// Tenant resolution: master DB + connection cache + data directory.
+#[derive(Clone)]
+#[allow(dead_code)]
+pub(crate) struct TenantDb {
+    pub(crate) master_db: MasterDb,
+    pub(crate) tenant_cache: Arc<TenantCache>,
+    pub(crate) data_dir: String,
+}
+
+#[allow(dead_code)]
+impl TenantDb {
+    /// Resolve a tenant's Db and config from the cache, opening it on
+    /// first access. Used by the auth middleware and public invite routes.
+    pub(crate) async fn tenant_db(
+        &self,
+        tenant_id: TenantId,
+    ) -> anyhow::Result<(Db, TenantConfig)> {
+        self.tenant_cache
+            .get_or_connect(tenant_id, &self.master_db)
+            .await
+    }
+
+    /// Evict a tenant from the connection cache.
+    pub(crate) fn evict_tenant(&self, tenant_id: TenantId) {
+        self.tenant_cache.remove(tenant_id);
+    }
+
+    /// Resolve a tenant by slug. Looks up the tenant_id in the master
+    /// DB, then delegates to [`tenant_db`].
+    pub(crate) async fn tenant_db_by_slug(
+        &self,
+        slug: &str,
+    ) -> anyhow::Result<(TenantId, Db, TenantConfig)> {
+        let slug = slug.to_string();
+        let tenant = self
+            .master_db
+            .with_conn(move |conn| Tenant::find_by_slug(conn, &slug))
+            .await?;
+        let tenant = tenant.ok_or_else(|| anyhow::anyhow!("unknown tenant slug"))?;
+        let (db, config) = self.tenant_db(tenant.id).await?;
+        Ok((tenant.id, db, config))
+    }
+}
+
+impl FromRef<AppState> for TenantDb {
+    fn from_ref(state: &AppState) -> Self {
+        Self {
+            master_db: state.master_db.clone(),
+            tenant_cache: state.tenant_cache.clone(),
+            data_dir: state.data_dir.clone(),
+        }
+    }
+}
+
+impl FromRef<AppState> for JwtKeys {
+    fn from_ref(state: &AppState) -> Self {
+        state.jwt_keys.clone()
+    }
 }
 
 /// Bundle of per-request tenant state injected into request
@@ -83,6 +197,8 @@ impl AppState {
 
         // Ensure data directories exist.
         std::fs::create_dir_all(format!("{data_dir}/demos"))
+            .map_err(|e| anyhow::anyhow!("creating data dirs: {e}"))?;
+        std::fs::create_dir_all(format!("{data_dir}/tenants"))
             .map_err(|e| anyhow::anyhow!("creating data dirs: {e}"))?;
 
         let default_db_path = format!("{data_dir}/default.db");
@@ -157,21 +273,10 @@ impl AppState {
         })
     }
 
-    /// Build a full URL from a relative path. Returns the path as-is
-    /// if ORIGIN is not configured.
-    pub(crate) fn full_url(&self, path: &str) -> String {
-        match &self.origin {
-            Some(base) => {
-                let mut u = base.clone();
-                u.set_path(path);
-                u.to_string()
-            }
-            None => path.to_string(),
-        }
-    }
+    // ── Delegation to sub-states ───────────────────────────────
+    // Used by the auth middleware and demo cleanup, which operate
+    // on the full AppState.
 
-    /// Resolve a tenant's Db and config from the cache, opening it on
-    /// first access. Used by the auth middleware and public invite routes.
     pub(crate) async fn tenant_db(
         &self,
         tenant_id: TenantId,
@@ -181,13 +286,10 @@ impl AppState {
             .await
     }
 
-    /// Evict a tenant from the connection cache.
     pub(crate) fn evict_tenant(&self, tenant_id: TenantId) {
         self.tenant_cache.remove(tenant_id);
     }
 
-    /// Resolve a tenant by slug. Looks up the tenant_id in the master
-    /// DB, then delegates to [`tenant_db`].
     pub(crate) async fn tenant_db_by_slug(
         &self,
         slug: &str,
@@ -200,6 +302,10 @@ impl AppState {
         let tenant = tenant.ok_or_else(|| anyhow::anyhow!("unknown tenant slug"))?;
         let (db, config) = self.tenant_db(tenant.id).await?;
         Ok((tenant.id, db, config))
+    }
+
+    pub(crate) fn full_url(&self, path: &str) -> String {
+        MailerCtx::from_ref(self).full_url(path)
     }
 }
 
@@ -226,6 +332,8 @@ fn ensure_default_tenant(master_conn_str: &str, tenant_db_path: &str) -> anyhow:
             slug: "default".to_string(),
             db_path: tenant_db_path.to_string(),
             created_at: now,
+            billing_status: "active".to_string(),
+            trial_expires_at: None,
         },
     )?;
     tracing::info!(tenant_id = %tenant.id, "Created default tenant");

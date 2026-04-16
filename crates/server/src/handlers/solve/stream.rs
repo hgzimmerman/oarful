@@ -16,14 +16,14 @@ use lineup_solver::SolveStreamEvent;
 use tokio::sync::mpsc;
 
 use crate::handlers::{internal_error, ErrorResponse};
-use crate::state::AppState;
+use crate::state::SolverCtx;
 use crate::templates;
 
 use super::*;
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn stream_handler(
-    State(state): State<AppState>,
+    State(solver): State<SolverCtx>,
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
@@ -48,7 +48,7 @@ pub(crate) async fn stream_handler(
     apply_no_shows(&mut snapshot, &knobs);
 
     let baselines = build_baselines(&knobs, &tenant.db, team_id).await?;
-    let permit = acquire_solve_permit(&state).await?;
+    let permit = acquire_solve_permit(&solver).await?;
 
     let custom_profiles = tenant
         .db
@@ -106,7 +106,7 @@ pub(crate) async fn stream_handler(
     // Spawn solver on rayon, bridging to a tokio channel.
     let (tokio_tx, mut tokio_rx) = mpsc::channel::<SolveStreamEvent>(4);
     let snapshot_for_solve = snapshot.clone();
-    state.solver_pool.spawn(move || {
+    solver.solver_pool.spawn(move || {
         // Bridge: std::sync channel for the solver, forwarded to tokio channel.
         let (std_tx, std_rx) = std::sync::mpsc::sync_channel::<SolveStreamEvent>(2);
         let fwd_handle = std::thread::spawn({

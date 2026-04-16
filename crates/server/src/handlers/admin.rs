@@ -13,7 +13,7 @@ use maud::html;
 use crate::handlers::audit::AuditQuery;
 use crate::handlers::internal_error;
 use crate::handlers::{self, not_found, ErrorResponse};
-use crate::state::{AppState, TenantContext};
+use crate::state::{TenantContext, TenantDb};
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 
 const TABS: &[TabDef] = &[
@@ -238,13 +238,13 @@ pub(crate) async fn audit_handler(
 /// `GET /admin/settings` — tenant-level configuration.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn settings_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let tab_content = settings_content(&state, &tenant).await?;
+    let tab_content = settings_content(&tdb, &tenant).await?;
 
     if is_tab_swap(&headers) {
         return Ok(Html(
@@ -256,11 +256,11 @@ pub(crate) async fn settings_handler(
 }
 
 async fn settings_content(
-    state: &AppState,
+    tdb: &TenantDb,
     tenant: &TenantContext,
 ) -> Result<maud::Markup, ErrorResponse> {
     let tenant_id = tenant.tenant_id;
-    let t = state
+    let t = tdb
         .master_db
         .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
         .await
@@ -341,7 +341,7 @@ pub(crate) struct SettingsInput {
 /// `POST /admin/settings` — update tenant-level flags.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn settings_update_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Extension(tenant): Extension<TenantContext>,
     Form(input): Form<SettingsInput>,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -360,8 +360,7 @@ pub(crate) async fn settings_update_handler(
         0
     };
 
-    state
-        .master_db
+    tdb.master_db
         .with_conn(move |conn| {
             use diesel::prelude::*;
             use lineup_master_db::schema::tenant as t;
@@ -377,7 +376,7 @@ pub(crate) async fn settings_update_handler(
         .map_err(internal_error)?;
 
     // Bust the cached config so changes take effect immediately.
-    state.evict_tenant(tenant.tenant_id);
+    tdb.evict_tenant(tenant.tenant_id);
 
     crate::audit::record(
         &tenant.db,
@@ -396,7 +395,7 @@ pub(crate) async fn settings_update_handler(
     );
 
     // Re-load and re-render with fresh config.
-    let tab_content = settings_content(&state, &tenant).await?;
+    let tab_content = settings_content(&tdb, &tenant).await?;
     Ok(Html(
         tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
     ))
@@ -411,13 +410,13 @@ fn is_tab_swap(headers: &HeaderMap) -> bool {
 /// `GET /admin/export` — download the tenant's SQLite database file.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn export_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let tenant_id = tenant.tenant_id;
-    let tenant_row = state
+    let tenant_row = tdb
         .master_db
         .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
         .await
@@ -474,7 +473,7 @@ pub(crate) async fn restore_form_handler(
 /// `POST /admin/restore` — receive the uploaded DB, validate, and restore.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn restore_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Extension(tenant): Extension<TenantContext>,
     mut multipart: Multipart,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -573,13 +572,13 @@ pub(crate) async fn restore_handler(
     }
 
     // No credential issues — proceed with restore directly.
-    do_restore(&state, &tenant, &temp_path).await
+    do_restore(&tdb, &tenant, &temp_path).await
 }
 
 /// `POST /admin/restore/confirm` — proceed with restore after credential warning.
 #[tracing::instrument(level = "info", skip_all, err)]
 pub(crate) async fn restore_confirm_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Extension(tenant): Extension<TenantContext>,
     Form(input): Form<RestoreConfirmInput>,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -596,7 +595,7 @@ pub(crate) async fn restore_confirm_handler(
         ));
     }
 
-    do_restore(&state, &tenant, &temp_path).await
+    do_restore(&tdb, &tenant, &temp_path).await
 }
 
 #[derive(serde::Deserialize)]
@@ -615,12 +614,12 @@ struct BackupUser {
 }
 
 async fn do_restore(
-    state: &AppState,
+    tdb: &TenantDb,
     tenant: &TenantContext,
     temp_path: &str,
 ) -> Result<Html<String>, ErrorResponse> {
     let tenant_id = tenant.tenant_id;
-    let tenant_row = state
+    let tenant_row = tdb
         .master_db
         .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
         .await
@@ -629,7 +628,7 @@ async fn do_restore(
     let db_path = tenant_row.db_path;
 
     // Evict the tenant from the connection cache before overwriting.
-    state.evict_tenant(tenant.tenant_id);
+    tdb.evict_tenant(tenant.tenant_id);
 
     tokio::fs::copy(temp_path, &db_path)
         .await
@@ -637,8 +636,7 @@ async fn do_restore(
     let _ = tokio::fs::remove_file(temp_path).await;
 
     // Re-connect the tenant (runs migrations on the restored DB).
-    state
-        .tenant_db(tenant.tenant_id)
+    tdb.tenant_db(tenant.tenant_id)
         .await
         .map_err(internal_error)?;
 

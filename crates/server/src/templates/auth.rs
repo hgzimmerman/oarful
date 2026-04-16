@@ -10,17 +10,31 @@ fn auth_shell(title: &str, body: Markup) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (title) " · Lineup Generator" }
+                title { (title) " · Oarful" }
                 script src="/tailwindcss.js" {}
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
                     div class="text-center mb-8" {
-                        h1 class="text-2xl font-bold text-slate-800" { "Lineup Generator" }
+                        h1 class="text-2xl font-bold text-slate-800" { "Oarful" }
                         p class="text-sm text-slate-500 mt-1" { "Sign in to your club" }
                     }
                     (body)
+                    (source_link())
                 }
+            }
+        }
+    }
+}
+
+fn source_link() -> Markup {
+    let url = std::env::var("SOURCE_URL")
+        .unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string());
+    html! {
+        p class="mt-8 text-center text-xs text-slate-400" {
+            a href=(url) target="_blank"
+              class="hover:text-slate-600 transition" {
+                "Source code (AGPL-3.0)"
             }
         }
     }

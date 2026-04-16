@@ -18,7 +18,7 @@ use lineup_db::rower::Rower;
 
 use crate::{
     handlers::{internal_error, ErrorResponse},
-    state::{AppState, TenantContext},
+    state::{MailerCtx, TenantContext},
     templates,
 };
 
@@ -83,7 +83,7 @@ pub(crate) async fn roster_content(
 /// emails for all roster members with an email but no linked user.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn batch_invite_handler(
-    State(state): State<AppState>,
+    State(mailer): State<MailerCtx>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -126,8 +126,8 @@ pub(crate) async fn batch_invite_handler(
 
     for (email, name, token) in &invited {
         let invite_path = format!("/invite/{token}");
-        let invite_url = state.full_url(&invite_path);
-        if let Err(err) = state.mailer.send_invite(email, name, &invite_url).await {
+        let invite_url = mailer.full_url(&invite_path);
+        if let Err(err) = mailer.mailer.send_invite(email, name, &invite_url).await {
             tracing::warn!(?err, %email, "batch invite: mailer failed");
         }
     }

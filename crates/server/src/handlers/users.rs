@@ -22,7 +22,7 @@ use serde::Deserialize;
 
 use crate::{
     handlers::ErrorResponse,
-    state::{AppState, TenantContext},
+    state::{MailerCtx, TenantContext, TenantDb},
     templates,
 };
 
@@ -74,7 +74,7 @@ pub(crate) struct InviteInput {
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn invite_handler(
-    State(state): State<AppState>,
+    State(mailer): State<MailerCtx>,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<InviteInput>,
@@ -134,11 +134,11 @@ pub(crate) async fn invite_handler(
     match result {
         Ok(new_user_id) => {
             let invite_path = format!("/invite/{token}");
-            let invite_url = state.full_url(&invite_path);
+            let invite_url = mailer.full_url(&invite_path);
 
             // Best-effort delivery — failure is logged but doesn't
             // block the invite (the UI still shows the link).
-            if let Err(err) = state
+            if let Err(err) = mailer
                 .mailer
                 .send_invite(&email_for_mailer, &name_for_mailer, &invite_url)
                 .await
@@ -176,7 +176,7 @@ pub(crate) async fn invite_handler(
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn resend_invite_handler(
-    State(state): State<AppState>,
+    State(mailer): State<MailerCtx>,
     Extension(tenant): Extension<TenantContext>,
     Path(user_id): Path<UserId>,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -214,8 +214,8 @@ pub(crate) async fn resend_invite_handler(
         .map_err(super::internal_error)?;
 
     let invite_path = format!("/invite/{token}");
-    let invite_url = state.full_url(&invite_path);
-    if let Err(err) = state
+    let invite_url = mailer.full_url(&invite_path);
+    if let Err(err) = mailer
         .mailer
         .send_invite(&user.email, &user.name, &invite_url)
         .await
@@ -264,12 +264,12 @@ pub(crate) async fn resend_invite_handler(
 /// `GET /invite/{token}` — password-set form.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn accept_page(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Path(token): Path<String>,
 ) -> Result<Html<String>, ErrorResponse> {
     // Scan all tenants for the invite token (the invite URL doesn't
     // encode which tenant it belongs to).
-    if find_invite_tenant(&state, &token).await?.is_none() {
+    if find_invite_tenant(&tdb, &token).await?.is_none() {
         return Ok(Html(
             templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
         ));
@@ -288,7 +288,7 @@ pub(crate) struct AcceptInput {
 /// `POST /invite/{token}` — set password + activate.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn accept_handler(
-    State(state): State<AppState>,
+    State(tdb): State<TenantDb>,
     Path(token): Path<String>,
     Form(input): Form<AcceptInput>,
 ) -> Result<impl IntoResponse, ErrorResponse> {
@@ -314,7 +314,7 @@ pub(crate) async fn accept_handler(
         .map_err(super::internal_error)?;
 
     // Find which tenant owns this invite token.
-    let Some(db) = find_invite_tenant(&state, &token).await? else {
+    let Some(db) = find_invite_tenant(&tdb, &token).await? else {
         return Ok(Html(
             templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
         )
@@ -364,19 +364,19 @@ pub(crate) async fn accept_handler(
 
 /// Scan all tenants to find which one owns an invite token.
 async fn find_invite_tenant(
-    state: &AppState,
+    tdb: &TenantDb,
     token: &str,
 ) -> Result<Option<lineup_db::state::Db>, ErrorResponse> {
     use lineup_master_db::tenant::Tenant;
 
-    let tenants = state
+    let tenants = tdb
         .master_db
         .with_conn(|conn| Tenant::list_all(conn))
         .await
         .map_err(super::internal_error)?;
 
     for t in &tenants {
-        let (db, _config) = state.tenant_db(t.id).await.map_err(super::internal_error)?;
+        let (db, _config) = tdb.tenant_db(t.id).await.map_err(super::internal_error)?;
         if validate_invite(&db, token).await? {
             return Ok(Some(db));
         }

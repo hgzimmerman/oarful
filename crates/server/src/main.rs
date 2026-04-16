@@ -145,6 +145,7 @@ async fn cmd_import(args: &[String]) -> Result<()> {
 
     // Ensure data directories exist.
     std::fs::create_dir_all(format!("{data_dir}/demos"))?;
+    std::fs::create_dir_all(format!("{data_dir}/tenants"))?;
 
     // Ensure master DB exists (MasterDb::connect runs migrations).
     let master = lineup_master_db::state::MasterDb::connect(&master_db)?;
@@ -167,6 +168,8 @@ async fn cmd_import(args: &[String]) -> Result<()> {
                         slug: "default".to_string(),
                         db_path: dest_for_closure,
                         created_at: now,
+                        billing_status: "active".to_string(),
+                        trial_expires_at: None,
                     },
                 )?;
                 println!("Registered 'default' tenant in master DB.");
@@ -202,6 +205,7 @@ async fn cmd_seed() -> Result<()> {
 
     // Ensure data directories exist.
     std::fs::create_dir_all(format!("{data_dir}/demos"))?;
+    std::fs::create_dir_all(format!("{data_dir}/tenants"))?;
 
     // Ensure master DB + default tenant exist (MasterDb::connect runs migrations).
     let master = lineup_master_db::state::MasterDb::connect(&master_db)?;
@@ -219,6 +223,8 @@ async fn cmd_seed() -> Result<()> {
                         slug: "default".to_string(),
                         db_path: db_path_for_closure,
                         created_at: now,
+                        billing_status: "active".to_string(),
+                        trial_expires_at: None,
                     },
                 )?;
             }

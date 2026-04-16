@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use lineup_db::state::Db;
 use lineup_master_db::state::MasterDb;
-use lineup_master_db::tenant::{Tenant, TenantId};
+use lineup_master_db::tenant::{BillingStatus, Tenant, TenantId};
 
 /// Tenant-level UI configuration flags, cached from the master DB.
 #[derive(Clone, Debug)]
@@ -19,6 +19,9 @@ pub(crate) struct TenantConfig {
     pub(crate) emails_visible: bool,
     pub(crate) tenant_name: String,
     pub(crate) tenant_slug: String,
+    pub(crate) billing_status: BillingStatus,
+    pub(crate) trial_expires_at: Option<chrono::NaiveDateTime>,
+    pub(crate) is_demo: bool,
 }
 
 impl TenantConfig {
@@ -29,6 +32,24 @@ impl TenantConfig {
             emails_visible: t.are_emails_visible(),
             tenant_name: t.name.clone(),
             tenant_slug: t.slug.clone(),
+            billing_status: t.billing_status(),
+            trial_expires_at: t.trial_expires_at,
+            is_demo: t.is_demo(),
+        }
+    }
+
+    /// Whether this tenant has an active billing relationship.
+    pub(crate) fn is_billing_ok(&self) -> bool {
+        if self.is_demo {
+            return true;
+        }
+        match self.billing_status {
+            BillingStatus::Active => true,
+            BillingStatus::Trial => self
+                .trial_expires_at
+                .map(|exp| exp > chrono::Utc::now().naive_utc())
+                .unwrap_or(true),
+            BillingStatus::Suspended | BillingStatus::Cancelled => false,
         }
     }
 }

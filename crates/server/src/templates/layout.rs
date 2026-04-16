@@ -17,7 +17,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (title) " · Lineup Generator" }
+                title { (title) " · Oarful" }
                 // Pre-built Tailwind CSS. Rebuild with:
                 //   tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify
                 link rel="stylesheet" href="/tailwind.css";
@@ -53,6 +53,12 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 (navbar(role))
                 main #content class="flex-grow" {
                     (content)
+                }
+                footer class="text-center text-xs text-slate-400 py-2 no-print" {
+                    a href=(source_url()) target="_blank"
+                      class="hover:text-slate-600 transition" {
+                        "Source code (AGPL-3.0)"
+                    }
                 }
                 // Error toast (fixed bottom-left, hidden by default)
                 div id="error-toast"
@@ -245,6 +251,10 @@ pub(crate) fn empty_state(message: &str) -> Markup {
     html! {
         div class="text-center text-slate-500 italic py-12" { (message) }
     }
+}
+
+fn source_url() -> String {
+    std::env::var("SOURCE_URL").unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string())
 }
 
 /// Generic page header: large title + optional subtitle.

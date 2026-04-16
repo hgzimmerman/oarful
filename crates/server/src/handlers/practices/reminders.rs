@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::extract::HtmlForm;
 use crate::magic_link::create_magic_link;
-use crate::state::{AppState, TenantContext};
+use crate::state::{MailerCtx, TenantContext};
 use crate::{
     handlers::{internal_error, ErrorResponse},
     templates,
@@ -138,7 +138,7 @@ pub(crate) struct SendRemindersInput {
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn send_reminders_handler(
-    State(state): State<AppState>,
+    State(mailer_ctx): State<MailerCtx>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendRemindersInput>,
@@ -209,11 +209,11 @@ pub(crate) async fn send_reminders_handler(
             .await
             .map_err(internal_error)?;
 
-        let magic_url = state.full_url(&format!(
+        let magic_url = mailer_ctx.full_url(&format!(
             "/auth/magic/{}/{raw_token}",
             tenant.config.tenant_slug
         ));
-        if let Err(err) = state
+        if let Err(err) = mailer_ctx
             .mailer
             .send_reminder(&r.email, &r.name, &team_name, &r.dates, &magic_url)
             .await

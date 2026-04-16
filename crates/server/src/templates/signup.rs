@@ -1,0 +1,102 @@
+//! Signup form for new club registration.
+
+use maud::{html, Markup, DOCTYPE};
+
+pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Markup {
+    let source_url = std::env::var("SOURCE_URL")
+        .unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string());
+
+    html! {
+        (DOCTYPE)
+        html lang="en" {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { "Sign up · Oarful" }
+                script src="/tailwindcss.js" {}
+            }
+            body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
+                div class="w-full max-w-sm" {
+                    div class="text-center mb-8" {
+                        h1 class="text-2xl font-bold text-slate-800" { "Oarful" }
+                        p class="text-sm text-slate-500 mt-1" { "Create your club" }
+                    }
+
+                    @if let Some(msg) = error {
+                        div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
+                            (msg)
+                        }
+                    }
+
+                    form method="post" action="/signup"
+                         class="bg-white rounded-lg shadow p-6 space-y-4" {
+                        div {
+                            label for="club_name" class="block text-sm font-semibold text-slate-700 mb-1" { "Club name" }
+                            input id="club_name" name="club_name" type="text" required autofocus
+                                  value=(prefill.club_name)
+                                  placeholder="e.g. Riverside Rowing Club"
+                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        }
+                        div {
+                            label for="name" class="block text-sm font-semibold text-slate-700 mb-1" { "Your name" }
+                            input id="name" name="name" type="text" required
+                                  value=(prefill.name)
+                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        }
+                        div {
+                            label for="email" class="block text-sm font-semibold text-slate-700 mb-1" { "Email" }
+                            input id="email" name="email" type="email" required
+                                  value=(prefill.email)
+                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        }
+                        div {
+                            label for="password" class="block text-sm font-semibold text-slate-700 mb-1" { "Password" }
+                            input id="password" name="password" type="password" required
+                                  minlength="8"
+                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        }
+                        div {
+                            label for="password_confirm" class="block text-sm font-semibold text-slate-700 mb-1" { "Confirm password" }
+                            input id="password_confirm" name="password_confirm" type="password" required
+                                  minlength="8"
+                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                        }
+                        button type="submit"
+                               class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
+                            "Create club"
+                        }
+                    }
+
+                    p class="mt-4 text-center text-sm text-slate-500" {
+                        "Already have an account? "
+                        a href="/login" class="text-slate-700 hover:text-slate-900 font-medium" { "Sign in" }
+                    }
+
+                    p class="mt-6 text-center text-xs text-slate-400" {
+                        a href=(source_url) target="_blank"
+                          class="hover:text-slate-600 transition" {
+                            "Source code (AGPL-3.0)"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Prefill values for re-rendering the form after validation errors.
+pub(crate) struct SignupPrefill {
+    pub club_name: String,
+    pub name: String,
+    pub email: String,
+}
+
+impl Default for SignupPrefill {
+    fn default() -> Self {
+        Self {
+            club_name: String::new(),
+            name: String::new(),
+            email: String::new(),
+        }
+    }
+}

@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet};
 use crate::extract::HtmlForm;
 use crate::magic_link::create_magic_link;
 use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
-use crate::state::{AppState, TenantContext};
+use crate::state::{MailerCtx, TenantContext};
 use crate::{
     handlers::{internal_error, ErrorResponse},
     templates,
@@ -172,7 +172,7 @@ fn gather_lineup_recipients(
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn send_lineups_handler(
-    State(state): State<AppState>,
+    State(mailer_ctx): State<MailerCtx>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendLineupsInput>,
@@ -357,11 +357,11 @@ pub(crate) async fn send_lineups_handler(
                 .await
                 .map_err(internal_error)?;
 
-            let magic_url = state.full_url(&format!(
+            let magic_url = mailer_ctx.full_url(&format!(
                 "/auth/magic/{}/{raw_token}",
                 tenant.config.tenant_slug
             ));
-            if let Err(err) = state
+            if let Err(err) = mailer_ctx
                 .mailer
                 .send_lineup(&email, &name, &team_name, &summaries, &magic_url)
                 .await
