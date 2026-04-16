@@ -311,11 +311,11 @@ pub(crate) fn streaming_skeleton(
 
     html! {
         div hx-ext="sse"
-            sse-connect=(sse_url)
-            sse-close="done" {
+            "sse-connect"=(sse_url)
+            "sse-close"="done" {
 
             // Primary result placeholder — replaced by the primary event.
-            div sse-swap="primary"
+            div "sse-swap"="primary"
                 hx-swap="innerHTML"
                 hx-disinherit="hx-ext" {
                 div class="flex items-center justify-center py-12 text-slate-500" {
@@ -327,18 +327,18 @@ pub(crate) fn streaming_skeleton(
             }
 
             // Error placeholder — shown if primary fails.
-            div sse-swap="error"
+            div "sse-swap"="error"
                 hx-swap="innerHTML" {}
 
             // Alternatives container — each alternative is appended.
-            div sse-swap="alternative"
+            div "sse-swap"="alternative"
                 hx-swap="beforeend"
                 hx-disinherit="hx-ext"
                 class="space-y-4" {}
 
             // Progress indicator — visible while alternatives are computing.
             // Hidden when the "done" event replaces its content.
-            div sse-swap="done"
+            div "sse-swap"="done"
                 hx-swap="innerHTML" {
                 @if knobs.alts > 0 {
                     div class="flex items-center gap-2 py-4 text-slate-400 text-sm" {

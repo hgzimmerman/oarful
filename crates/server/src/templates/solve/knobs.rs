@@ -57,7 +57,7 @@ pub(super) fn knobs_form(practice_id: PracticeId, knobs: &SolveKnobs, practices:
                     span class="border-solid border-slate-400 border-r-2 border-b-2 border-t-0 border-l-0 inline-block w-2 h-2 transform transition-transform duration-200"
                          ":class"="open ? 'rotate-45' : 'rotate-[-45deg]'" {}
                 }
-                div x-show="open"
+                div "x-show"="open"
                     "x-transition:enter"="transition-all ease-out duration-300"
                     "x-transition:enter-start"="opacity-0 max-h-0"
                     "x-transition:enter-end"="opacity-100 max-h-[2000px]"
