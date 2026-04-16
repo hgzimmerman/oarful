@@ -88,9 +88,6 @@ pub(crate) fn alternative_block(
                     }
                 }
                 a href=(promote_url)
-                  hx-get=(promote_url)
-                  hx-target="#content"
-                  hx-push-url="true"
                   class="text-sm font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-300 px-3 py-1 rounded transition hover:bg-emerald-50" {
                     "Use this"
                 }
