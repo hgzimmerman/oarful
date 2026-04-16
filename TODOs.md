@@ -164,6 +164,11 @@ can resume without re-deriving context.
   default budget (3s→5s) for better real-world results.
 - **Handler/template refactoring** — split practices, rowers, fixture
   into submodules. Removed all section separator comments.
+- **Self-service club onboarding** — "Oarful" branding, public landing
+  page, signup flow (club name → tenant + PD user + SQLite file),
+  30-day free trial with billing_status/trial_expires_at on tenant,
+  billing middleware (expired/suspended → "renew" page), AGPL source
+  link footer (SOURCE_URL env var).
 
 ## Open work
 
@@ -245,50 +250,19 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
-### Self-service team onboarding + business model
+### Stripe payment integration
 
-**Business model.** The software is FOSS (AGPL-3.0 — copyleft
-covers network use, appropriate for a hosted SaaS). Revenue comes
-from a flat yearly hosting fee per tenant. Custom feature work
-available at additional cost. Deployment config (k3s/k8s) is
-private — not part of the open-source release.
+Wire up a payment processor to gate tenant creation or convert
+trials to paid. `billing_status` and `trial_expires_at` already
+exist on the tenant table. Needs `stripe_customer_id` on tenant,
+a checkout/portal flow, and webhook handling for subscription
+lifecycle events.
 
-**Self-service onboarding.** A public signup flow where a new
-club can create their own tenant without manual intervention:
+### CI/CD
 
-1. Landing/marketing page explaining the product + pricing.
-2. "Get started" → registration form: club name, admin email,
-   admin name, password. Creates a tenant + PD user in one step.
-3. Tenant gets its own SQLite file, seeded with an empty roster
-   and the PD account. The PD can then invite coaches and rowers.
-4. Payment integration (Stripe or similar) — gate tenant creation
-   behind payment, or allow a trial period then require payment
-   to continue. Details TBD.
-
-**Schema.** The `tenant` table already exists. Onboarding creates
-a new row + a new SQLite file. May want a `billing_status` field
-(trial / active / suspended / cancelled) and `trial_expires_at`
-on the tenant to gate access.
-
-**Payment.** Integrate a payment processor (Stripe likely).
-Tenant table gets `billing_status` (trial / active / suspended /
-cancelled), `trial_expires_at`, and a `stripe_customer_id` (or
-equivalent) to link tenants to their payment state. Middleware
-checks billing status on each request — suspended tenants see a
-"renew your subscription" page instead of the app.
-
-**CI/CD.** Build/test/lint pipelines live in this repo (GitHub
-Actions or similar). Deployment pipelines (k3s/k8s rollout) live
-in the separate private infra repo.
-
-**Source link.** AGPL requires making source available to network
-users. Add a link to the hosted repo (GitHub/etc.) somewhere in
-the UI — footer, about page, or login page. Blocked on hosting
-the repo publicly.
-
-**Licensing.** AGPL-3.0 LICENSE file and copyright notice shipped.
-The deployment manifests (k3s/k8s YAML, infrastructure-as-code)
-live in a separate private repo.
+Build/test/lint pipelines for this repo (GitHub Actions or
+similar). Deployment pipelines (k3s/k8s rollout) live in the
+separate private infra repo.
 
 ### Regatta lineup generator (long-term)
 
@@ -405,3 +379,4 @@ Start with push-only; bidirectional can follow if there's demand.
 1. **Stale lineup notification (coach-side)** — nav badge or toast.
 2. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes + threshold config.
 3. **Per-team roles** — design + migration.
+4. **Stripe payment integration** — convert trials to paid tenants.
