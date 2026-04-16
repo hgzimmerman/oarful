@@ -181,9 +181,12 @@ pub(crate) async fn stream_handler(
                     }
                 }
                 SolveStreamEvent::Done { elapsed } => {
-                    yield Ok(Event::default().event("done").data(
-                        format!("Completed in {:.1}s", elapsed.as_secs_f64())
-                    ));
+                    let html = maud::html! {
+                        p class="text-xs text-slate-300 text-center pt-4 pb-2" {
+                            "Completed in " (format!("{:.1}s", elapsed.as_secs_f64()))
+                        }
+                    };
+                    yield Ok(Event::default().event("done").data(html.into_string()));
                     break;
                 }
             }
