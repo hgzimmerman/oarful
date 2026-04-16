@@ -9,7 +9,6 @@
 
 use axum::{
     extract::{Path, Request, State},
-    http::StatusCode,
     middleware::Next,
     response::{Html, IntoResponse, Redirect, Response},
     Form,
@@ -91,7 +90,7 @@ pub(crate) async fn login_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, super::ErrorResponse> {
     let email = input.email.trim().to_lowercase();
     let password = input.password.clone();
     let show_magic = jar.get(KNOWN_USER_COOKIE).is_some();
@@ -261,7 +260,7 @@ pub(crate) async fn pick_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Form(input): Form<PickInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, super::ErrorResponse> {
     let email = input.email.trim().to_lowercase();
     let password = input.password.clone();
     let tenant_id = TenantId::new(input.tenant_id);
@@ -355,7 +354,7 @@ pub(crate) struct MagicLoginInput {
 pub(crate) async fn magic_login_handler(
     State(state): State<AppState>,
     Form(input): Form<MagicLoginInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, super::ErrorResponse> {
     let email = input.email.trim().to_lowercase();
 
     // Find all matching tenants. If none found, we still show the
@@ -453,7 +452,7 @@ pub(crate) async fn magic_link_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Path((slug, token)): Path<(String, String)>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, super::ErrorResponse> {
     let token_hash = hash_token(&token);
 
     let (tenant_id, db, _config) = state

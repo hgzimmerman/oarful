@@ -9,7 +9,6 @@
 //! sync closure — we can't `.await` the reqwest call inside it.
 
 use axum::{
-    http::StatusCode,
     response::Html,
     Extension, Form,
 };
@@ -36,7 +35,7 @@ where
 
 use lineup_db::app_user::Role;
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse}, state::TenantContext, templates};
 
 fn parse_row_filter(s: &str) -> Option<lineup_sheets::RowFilter> {
     match s {
@@ -77,7 +76,7 @@ pub(crate) struct SyncFormInput {
 pub(crate) async fn sync_content(
     jar: &CookieJar,
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let saved = tenant
         .db
@@ -109,7 +108,7 @@ pub(crate) async fn sync_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<SyncFormInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let trimmed = input.spreadsheet_id.trim().to_string();

@@ -4,7 +4,6 @@
 
 use axum::{
     extract::Path,
-    http::StatusCode,
     response::Html,
     Extension, Form,
 };
@@ -14,14 +13,14 @@ use lineup_db::{app_user::Role, availability::Availability, lineup::Lineup, prac
 use std::collections::HashSet;
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse}, state::TenantContext, templates};
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let (practices, stale_ids) = tenant
         .db
@@ -62,7 +61,7 @@ pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let (snapshot, practice, committed) = tenant
         .db
@@ -103,7 +102,7 @@ pub(crate) async fn notes_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<NotesInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let notes = if input.notes.trim().is_empty() {

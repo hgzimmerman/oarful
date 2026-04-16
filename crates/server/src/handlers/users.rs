@@ -20,7 +20,7 @@ use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow};
 use lineup_db::schema::{app_user, user_invite, user_role};
 use serde::Deserialize;
 
-use crate::{state::{AppState, TenantContext}, templates};
+use crate::{handlers::ErrorResponse, state::{AppState, TenantContext}, templates};
 
 // =====================================================================
 // User list (PD only)
@@ -29,7 +29,7 @@ use crate::{state::{AppState, TenantContext}, templates};
 /// Build the users list markup (shared by `/users` and `/admin/users`).
 pub(crate) async fn users_content(
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let (users, roles, user_rower_map) = tenant
         .db
         .with_conn(|conn| {
@@ -73,7 +73,7 @@ pub(crate) async fn invite_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<InviteInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let email = input.email.trim().to_lowercase();
@@ -169,7 +169,7 @@ pub(crate) async fn resend_invite_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
     Path(user_id): Path<UserId>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let token = generate_token();
@@ -259,7 +259,7 @@ pub(crate) async fn resend_invite_handler(
 pub(crate) async fn accept_page(
     State(state): State<AppState>,
     Path(token): Path<String>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     // Scan all tenants for the invite token (the invite URL doesn't
     // encode which tenant it belongs to).
     if find_invite_tenant(&state, &token).await?.is_none() {
@@ -284,7 +284,7 @@ pub(crate) async fn accept_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
     Form(input): Form<AcceptInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     if input.password.len() < 8 {
         return Ok(Html(
             templates::users::accept_form(&token, Some("Password must be at least 8 characters."))
@@ -363,7 +363,7 @@ pub(crate) async fn accept_handler(
 async fn find_invite_tenant(
     state: &AppState,
     token: &str,
-) -> Result<Option<lineup_db::state::Db>, StatusCode> {
+) -> Result<Option<lineup_db::state::Db>, ErrorResponse> {
     use lineup_master_db::tenant::Tenant;
 
     let tenants = state
@@ -381,7 +381,7 @@ async fn find_invite_tenant(
     Ok(None)
 }
 
-async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool, StatusCode> {
+async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool, ErrorResponse> {
     let token = token.to_string();
     db
         .with_conn(move |conn| {
@@ -401,12 +401,12 @@ async fn validate_invite(db: &lineup_db::state::Db, token: &str) -> Result<bool,
 /// Returns 403 if insufficient. The check is ordinal: Member < Coach
 /// < ProgramDirector, so `require_at_least_role(claims, Coach)` passes
 /// for both Coach and ProgramDirector.
-pub(crate) fn require_at_least_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), StatusCode> {
+pub(crate) fn require_at_least_role(claims: &crate::jwt::Claims, min: Role) -> Result<(), ErrorResponse> {
     let role = claims.role().unwrap_or(Role::Member);
     if role.at_least(min) {
         Ok(())
     } else {
-        Err(StatusCode::FORBIDDEN)
+        Err(ErrorResponse(StatusCode::FORBIDDEN, "You don't have permission to perform this action.".into()))
     }
 }
 

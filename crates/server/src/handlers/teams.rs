@@ -4,7 +4,6 @@ use std::collections::HashSet;
 
 use axum::{
     extract::Path,
-    http::StatusCode,
     response::Html,
     Extension, Form,
 };
@@ -18,7 +17,7 @@ use lineup_db::rower::types::RowerId;
 use lineup_db::team::{Team, TeamBoatDefault, TeamId, TeamMembership};
 use serde::Deserialize;
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse, bad_request, not_found}, state::TenantContext, templates};
 
 /// `GET /teams/selector` — returns the team dropdown markup. Called
 /// via `hx-trigger="load"` from the navbar placeholder so the layout
@@ -27,7 +26,7 @@ use crate::{handlers::internal_error, state::TenantContext, templates};
 pub(crate) async fn selector_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let active = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let role = tenant.claims.role().unwrap_or(Role::Member);
     let is_pd = role.at_least(Role::ProgramDirector);
@@ -78,11 +77,11 @@ pub(crate) async fn create_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<CreateTeamInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let name = input.name.trim().to_string();
     if name.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad_request("Invalid request."));
     }
     let now = chrono::Utc::now().naive_utc();
     let team = tenant
@@ -110,7 +109,7 @@ pub(crate) async fn create_handler(
 /// Build the teams list markup (shared by `/teams` and `/admin/teams`).
 pub(crate) async fn teams_content(
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let teams = tenant
         .db
         .with_conn(|conn| Team::list_all(conn))
@@ -126,14 +125,14 @@ pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<TeamId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let team = tenant
         .db
         .with_conn(move |conn| Team::get(conn, id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }
@@ -169,12 +168,12 @@ pub(crate) async fn update_handler(
     Path(id): Path<TeamId>,
     hx: HxRequest,
     Form(input): Form<TeamUpdateInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let name = input.name.trim().to_string();
     let level = input.self_edit_level.clone();
     if name.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad_request("Invalid request."));
     }
     let practice_time = input
         .default_practice_time
@@ -233,7 +232,7 @@ pub(crate) async fn update_handler(
         .with_conn(move |conn| Team::get(conn, id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }
@@ -245,7 +244,7 @@ pub(crate) async fn update_handler(
 /// Build the roster assignment matrix markup.
 pub(crate) async fn roster_matrix_content(
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let (rowers, teams, memberships) = tenant
         .db
         .with_conn(|conn| {
@@ -270,7 +269,7 @@ pub(crate) async fn roster_matrix_content(
 pub(crate) async fn roster_matrix_save_handler(
     Extension(tenant): Extension<TenantContext>,
     Form(form): Form<std::collections::HashMap<String, String>>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     // Parse checkbox values. Form fields are named "m_{team_id}_{rower_id}"
@@ -347,7 +346,7 @@ pub(crate) async fn roster_matrix_save_handler(
 /// Build the fleet assignment matrix markup.
 pub(crate) async fn fleet_matrix_content(
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let (boats, teams, defaults) = tenant
         .db
         .with_conn(|conn| {
@@ -372,7 +371,7 @@ pub(crate) async fn fleet_matrix_content(
 pub(crate) async fn fleet_matrix_save_handler(
     Extension(tenant): Extension<TenantContext>,
     Form(form): Form<std::collections::HashMap<String, String>>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     // Form fields named "b_{team_id}_{boat_id}" — present means checked.
@@ -450,7 +449,7 @@ pub(crate) async fn toggle_archive_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<TeamId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let team = tenant
@@ -458,7 +457,7 @@ pub(crate) async fn toggle_archive_handler(
         .with_conn(move |conn| Team::get(conn, id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Team not found."))?;
 
     let new_archived = !team.archived.as_bool();
     tenant
@@ -482,7 +481,7 @@ pub(crate) async fn toggle_archive_handler(
         .with_conn(move |conn| Team::get(conn, id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Team not found."))?;
     let content = templates::teams::detail_content(&team);
     Ok(super::maybe_page_authed(&format!("Team · {}", team.name), content, hx, &tenant))
 }

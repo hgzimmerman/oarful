@@ -53,6 +53,22 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>) -> Markup {
                 main #content class="flex-grow" {
                     (content)
                 }
+                // Error toast (fixed bottom-left, hidden by default)
+                div id="error-toast"
+                    class="fixed bottom-4 left-4 z-50 max-w-sm hidden"
+                    role="alert" {
+                    div class="bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
+                        span id="error-toast-msg" class="flex-1" {}
+                        button type="button"
+                               class="text-white/80 hover:text-white font-bold text-lg leading-none"
+                               onclick="document.getElementById('error-toast').classList.add('hidden')" {
+                            "\u{00d7}"
+                        }
+                    }
+                }
+                script {
+                    (maud::PreEscaped(include_str!("js/error_toast.js")))
+                }
             }
         }
     }

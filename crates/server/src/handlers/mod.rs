@@ -180,11 +180,43 @@ pub(crate) fn maybe_page_authed(
     }
 }
 
+/// Error response: status code + plain-text message body.
+/// The layout's `htmx:beforeSwap` listener reads the body for the toast.
+/// Implements `Display` (for `#[tracing::instrument(err)]`) and
+/// `IntoResponse` (for axum handler returns).
+pub(crate) struct ErrorResponse(pub StatusCode, pub String);
+
+impl std::fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.0, self.1)
+    }
+}
+
+impl std::fmt::Debug for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ErrorResponse({}, {:?})", self.0, self.1)
+    }
+}
+
+impl axum::response::IntoResponse for ErrorResponse {
+    fn into_response(self) -> axum::response::Response {
+        (self.0, self.1).into_response()
+    }
+}
+
 /// Collapse an anyhow/diesel/etc. error into a 500 response and log it.
 /// Handlers use `.map_err(internal_error)` as their escape hatch.
-pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> StatusCode {
+pub(crate) fn internal_error<E: std::fmt::Debug>(error: E) -> ErrorResponse {
     tracing::error!(?error, "handler error");
-    StatusCode::INTERNAL_SERVER_ERROR
+    ErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, "An unexpected error occurred.".into())
+}
+
+pub(crate) fn bad_request(msg: impl Into<String>) -> ErrorResponse {
+    ErrorResponse(StatusCode::BAD_REQUEST, msg.into())
+}
+
+pub(crate) fn not_found(msg: impl Into<String>) -> ErrorResponse {
+    ErrorResponse(StatusCode::NOT_FOUND, msg.into())
 }
 
 // =====================================================================
@@ -198,7 +230,7 @@ pub(crate) async fn active_team(
     db: &lineup_db::state::Db,
     jar: &CookieJar,
     claims: Option<&crate::jwt::Claims>,
-) -> Result<TeamId, StatusCode> {
+) -> Result<TeamId, ErrorResponse> {
     // Cookie takes priority — set by POST /switch-team.
     if let Some(cookie) = jar.get("active_team_id") {
         if let Ok(id) = cookie.value().parse::<TeamId>() {
@@ -215,7 +247,7 @@ pub(crate) async fn active_team(
         .map_err(internal_error)?;
     team.map(|t| t.id).ok_or_else(|| {
         tracing::error!("no teams in the database");
-        StatusCode::INTERNAL_SERVER_ERROR
+        ErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, "No teams found.".into())
     })
 }
 
@@ -251,7 +283,7 @@ pub(crate) struct ConfirmQuery {
 /// `GET /confirm?kind=...&id=...` — render a styled confirmation modal.
 pub(crate) async fn confirm_handler(
     Query(q): Query<ConfirmQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     use maud::html;
     let id = q.id.as_deref().unwrap_or("");
     let name = q.name.as_deref().unwrap_or("");
@@ -312,7 +344,7 @@ pub(crate) async fn confirm_handler(
                 }
             },
         ),
-        _ => return Err(StatusCode::BAD_REQUEST),
+        _ => return Err(bad_request("Unknown confirmation type.")),
     };
 
     Ok(Html(

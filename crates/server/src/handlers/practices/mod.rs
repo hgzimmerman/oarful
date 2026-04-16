@@ -12,7 +12,7 @@ pub(crate) use reminders::{reminder_preview_handler, send_reminders_handler};
 
 use axum::{
     extract::Path,
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::{Html, IntoResponse, Redirect},
     Extension, Form,
 };
@@ -29,7 +29,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 
 use crate::state::TenantContext;
-use crate::{handlers::internal_error, templates};
+use crate::{handlers::{internal_error, ErrorResponse, bad_request}, templates};
 
 const TAB_TARGET: &str = "practices-tab-content";
 
@@ -45,7 +45,7 @@ pub(crate) async fn list_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let is_coach = tenant
         .claims
         .role()
@@ -67,7 +67,7 @@ pub(crate) async fn planning_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let content = planning_tab_content(&jar, &tenant).await?;
     if is_tab_swap(&headers) {
         return Ok(Html(
@@ -82,7 +82,7 @@ pub(crate) async fn planning_handler(
 async fn planning_tab_content(
     jar: &CookieJar,
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
     let is_coach = tenant
@@ -167,21 +167,21 @@ pub(crate) async fn create_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Form(input): Form<CreatePracticeInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     let date = NaiveDate::parse_from_str(input.date.trim(), "%Y-%m-%d")
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+        .map_err(|_| bad_request("Invalid date format."))?;
     let time: Option<NaiveTime> = input.time
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| StatusCode::BAD_REQUEST))
+        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| bad_request("Invalid time format.")))
         .transpose()?;
     let end_time: Option<NaiveTime> = input.end_time
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| StatusCode::BAD_REQUEST))
+        .map(|s| NaiveTime::parse_from_str(s.trim(), "%H:%M").map_err(|_| bad_request("Invalid time format.")))
         .transpose()?;
     let duration_minutes: Option<i32> = match (time, end_time) {
         (Some(start), Some(end)) => {
@@ -223,7 +223,7 @@ pub(crate) async fn cancel_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
@@ -257,7 +257,7 @@ pub(crate) async fn committed_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let content = committed_tab_content(&jar, &tenant).await?;
     if is_tab_swap(&headers) {
         return Ok(Html(
@@ -272,7 +272,7 @@ pub(crate) async fn committed_handler(
 async fn committed_tab_content(
     jar: &CookieJar,
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let is_coach = tenant
         .claims

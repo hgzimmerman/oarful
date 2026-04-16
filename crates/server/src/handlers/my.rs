@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use axum::{http::StatusCode, response::Html, Extension, Form};
+use axum::{response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
@@ -22,7 +22,7 @@ use lineup_db::team::{SelfEditLevel, Team};
 
 use lineup_db::app_user::AppUser;
 
-use crate::{handlers::internal_error, handlers::rowers::load_detail, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse, bad_request, not_found}, handlers::rowers::load_detail, state::TenantContext, templates};
 
 // =====================================================================
 // Profile
@@ -33,7 +33,7 @@ pub(crate) async fn profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let rower = match try_load_my_rower(&tenant).await? {
         Some(r) => r,
         None => {
@@ -66,7 +66,7 @@ pub(crate) async fn profile_update_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<ProfileInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let mut rower = load_my_rower(&tenant).await?;
 
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
@@ -190,7 +190,7 @@ pub(crate) async fn availability_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let rower = match try_load_my_rower(&tenant).await? {
         Some(r) => r,
@@ -270,7 +270,7 @@ pub(crate) async fn availability_update_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<AvailabilityInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let rower = load_my_rower(&tenant).await?;
 
@@ -279,7 +279,7 @@ pub(crate) async fn availability_update_handler(
         "No" => AvailabilityStatus::No,
         other => {
             tracing::warn!(?other, "invalid availability status");
-            return Err(StatusCode::BAD_REQUEST);
+            return Err(bad_request("Invalid availability status."));
         }
     };
 
@@ -397,7 +397,7 @@ pub(crate) async fn availability_update_handler(
 pub(crate) async fn email_prefs_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let user_id = tenant.claims.user_id();
     let user = tenant
         .db
@@ -424,7 +424,7 @@ pub(crate) async fn email_prefs_update_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<EmailPrefsInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let user_id = tenant.claims.user_id();
     let reminders = input.opt_in_reminders.is_some();
     let lineups = input.opt_in_lineups.is_some();
@@ -466,7 +466,7 @@ pub(crate) async fn email_prefs_update_handler(
 
 /// Try to load the rower linked to the authenticated user. Returns
 /// None if the user has no linked rower record.
-async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, StatusCode> {
+async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, ErrorResponse> {
     let user_id = tenant.claims.user_id();
     tenant
         .db
@@ -483,6 +483,6 @@ async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, Stat
 
 /// Load the rower linked to the authenticated user. Returns 404 if
 /// the user doesn't have a linked rower record.
-async fn load_my_rower(tenant: &TenantContext) -> Result<Rower, StatusCode> {
-    try_load_my_rower(tenant).await?.ok_or(StatusCode::NOT_FOUND)
+async fn load_my_rower(tenant: &TenantContext) -> Result<Rower, ErrorResponse> {
+    try_load_my_rower(tenant).await?.ok_or_else(|| not_found("Rower not found."))
 }

@@ -1,6 +1,6 @@
 //! Lineup preview + send handlers.
 
-use axum::{extract::State, http::StatusCode, response::Html, Extension};
+use axum::{extract::State, response::Html, Extension};
 use axum_extra::extract::CookieJar;
 use chrono::NaiveDate;
 use lineup_db::app_user::{AppUser, Role};
@@ -17,7 +17,7 @@ use crate::extract::HtmlForm;
 use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
 use crate::magic_link::create_magic_link;
 use crate::state::{AppState, TenantContext};
-use crate::{handlers::internal_error, templates};
+use crate::{handlers::{internal_error, ErrorResponse}, templates};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SendLineupsInput {
@@ -44,7 +44,7 @@ pub(crate) async fn lineup_preview_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     crate::extract::HtmlQuery(query): crate::extract::HtmlQuery<LineupPreviewQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let scope_all = query.scope == "all";
@@ -170,7 +170,7 @@ pub(crate) async fn send_lineups_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendLineupsInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let sender_id = tenant.claims.user_id();

@@ -11,7 +11,7 @@ use lineup_db::practice::PracticeId;
 use lineup_solver::SolverConfig;
 use lineup_db::app_user::Role;
 
-use crate::handlers::internal_error;
+use crate::handlers::{internal_error, ErrorResponse, bad_request};
 use crate::templates;
 
 use super::*;
@@ -24,7 +24,7 @@ pub(crate) async fn preset_bar_handler(
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
     Query(knobs): Query<SolveKnobs>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
@@ -62,13 +62,13 @@ pub(crate) async fn save_profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     axum::Form(input): axum::Form<SaveProfileInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     let name = input.name.trim().to_string();
     if name.is_empty() || SolverConfig::is_builtin(&name) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad_request("Invalid profile name."));
     }
     let audit_name = name.clone();
 
@@ -149,7 +149,7 @@ pub(crate) async fn edit_profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Query(query): Query<EditProfileQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
@@ -209,12 +209,12 @@ pub(crate) async fn delete_profile_handler(
     jar: CookieJar,
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(name): Path<String>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     if name.is_empty() || SolverConfig::is_builtin(&name) {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad_request("Invalid profile name."));
     }
 
     let profile_name = name.clone();

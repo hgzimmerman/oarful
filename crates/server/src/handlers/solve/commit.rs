@@ -16,7 +16,7 @@ use lineup_solver::{ProposedLineup, SolveStatus};
 use lineup_db::app_user::Role;
 
 use crate::extract::HtmlForm;
-use crate::handlers::internal_error;
+use crate::handlers::{internal_error, ErrorResponse, bad_request};
 use crate::state::AppState;
 
 use super::*;
@@ -28,7 +28,7 @@ pub(crate) async fn commit_handler(
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
     HtmlForm(knobs): HtmlForm<SolveKnobs>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let team_id = _team_id;
@@ -54,7 +54,7 @@ pub(crate) async fn commit_handler(
 
     if result.status != SolveStatus::Satisfied {
         tracing::warn!(?result.status, %practice_id, "refusing to commit non-satisfied solve");
-        return Err(StatusCode::CONFLICT);
+        return Err(crate::handlers::ErrorResponse(StatusCode::CONFLICT, "Solver did not find a satisfying solution.".into()));
     }
 
     let used: Vec<ProposedLineup> = result
@@ -104,7 +104,7 @@ pub(crate) async fn commit_lineup_handler(
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
     HtmlForm(input): HtmlForm<DirectCommitInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
@@ -137,7 +137,7 @@ pub(crate) async fn commit_lineup_handler(
 
     if by_boat.is_empty() {
         tracing::warn!(%practice_id, "direct commit with no valid seats");
-        return Err(StatusCode::BAD_REQUEST);
+        return Err(bad_request("No valid seats to commit."));
     }
 
     let boat_count = by_boat.len();

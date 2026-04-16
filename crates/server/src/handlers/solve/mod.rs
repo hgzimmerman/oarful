@@ -19,7 +19,7 @@ pub(crate) use view::view_handler;
 
 use std::time::Duration;
 
-use axum::http::StatusCode;
+
 use chrono::NaiveDate;
 use lineup_db::{
     boat::types::BoatId,
@@ -34,7 +34,7 @@ use lineup_solver::{
 use serde::Deserialize;
 use tokio::sync::OwnedSemaphorePermit;
 
-use crate::{handlers::internal_error, state::AppState};
+use crate::{handlers::{internal_error, ErrorResponse}, state::AppState};
 
 /// Default per-alternative solve budget, in seconds. Total wall time
 /// for one request is roughly `DEFAULT_BUDGET_SECS × DEFAULT_ALTS`
@@ -327,7 +327,7 @@ pub(super) async fn build_baselines(
     knobs: &SolveKnobs,
     db: &lineup_db::state::Db,
     _team_id: lineup_db::team::TeamId,
-) -> Result<Vec<lineup_solver::ReferenceLineup>, StatusCode> {
+) -> Result<Vec<lineup_solver::ReferenceLineup>, ErrorResponse> {
     use lineup_solver::{ReferenceLineup, ReferencePlacement};
 
     let similarity = knobs.similarity.max(0);
@@ -530,7 +530,7 @@ pub(super) async fn run_solve(
     state: &AppState,
     snapshot: DbSnapshot,
     request: SolveRequest,
-) -> Result<SolveResult, StatusCode> {
+) -> Result<SolveResult, ErrorResponse> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     state.solver_pool.spawn(move || {
         let result = solve(&snapshot, &request);
@@ -551,7 +551,7 @@ pub(super) async fn run_solve(
 /// gymnastics. Drop the permit by letting it fall out of scope.
 pub(super) async fn acquire_solve_permit(
     state: &AppState,
-) -> Result<OwnedSemaphorePermit, StatusCode> {
+) -> Result<OwnedSemaphorePermit, ErrorResponse> {
     if let Ok(permit) = state.solve_semaphore.clone().try_acquire_owned() {
         return Ok(permit);
     }

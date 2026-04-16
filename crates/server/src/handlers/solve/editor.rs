@@ -2,7 +2,6 @@
 
 use axum::{
     extract::Path,
-    http::StatusCode,
     response::Html,
     Extension,
 };
@@ -13,7 +12,7 @@ use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::app_user::Role;
 
 use crate::templates;
-use crate::handlers::internal_error;
+use crate::handlers::{internal_error, ErrorResponse};
 
 use super::*;
 
@@ -26,7 +25,7 @@ pub(crate) async fn editor_handler(
     Extension(tenant): Extension<crate::state::TenantContext>,
     Path(practice_id): Path<PracticeId>,
     Query(params): Query<EditorParams>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 

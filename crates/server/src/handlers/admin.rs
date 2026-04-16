@@ -12,7 +12,7 @@ use maud::html;
 
 use crate::state::{AppState, TenantContext};
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
-use crate::handlers;
+use crate::handlers::{self, ErrorResponse, not_found};
 use crate::handlers::audit::AuditQuery;
 use crate::handlers::internal_error;
 
@@ -31,7 +31,7 @@ pub(crate) async fn index_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let tab_content = handlers::users::users_content(&tenant).await?;
 
@@ -48,7 +48,7 @@ pub(crate) async fn users_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let tab_content = handlers::users::users_content(&tenant).await?;
 
@@ -65,7 +65,7 @@ pub(crate) async fn teams_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let tab_content = handlers::teams::teams_content(&tenant).await?;
 
@@ -82,7 +82,7 @@ pub(crate) async fn roster_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let tab_content = handlers::teams::roster_matrix_content(&tenant).await?;
 
@@ -106,7 +106,7 @@ pub(crate) async fn fleet_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boats_content = handlers::boats::fleet_content(&tenant).await?;
     let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
@@ -124,7 +124,7 @@ pub(crate) async fn fleet_boats_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boats_content = handlers::boats::fleet_content(&tenant).await?;
 
@@ -145,7 +145,7 @@ pub(crate) async fn fleet_defaults_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let defaults_content = handlers::teams::fleet_matrix_content(&tenant).await?;
 
@@ -174,7 +174,7 @@ pub(crate) async fn audit_handler(
     hx: HxRequest,
     headers: HeaderMap,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let tab_content = handlers::audit::audit_content(&tenant, &query).await?;
 
@@ -199,7 +199,7 @@ fn is_tab_swap(headers: &HeaderMap) -> bool {
 pub(crate) async fn export_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let tenant_id = tenant.tenant_id;
@@ -208,7 +208,7 @@ pub(crate) async fn export_handler(
         .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Not found."))?;
     let db_path = tenant_row.db_path;
 
     // Checkpoint the WAL so the base file contains all recent writes.
@@ -246,7 +246,7 @@ pub(crate) async fn export_handler(
 pub(crate) async fn restore_form_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let content = restore_form_markup(None, None);
     Ok(handlers::maybe_page_authed("Restore Backup", content, hx, &tenant))
@@ -258,7 +258,7 @@ pub(crate) async fn restore_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
     mut multipart: Multipart,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     // Read the uploaded file from multipart.
@@ -296,7 +296,7 @@ pub(crate) async fn restore_handler(
         .with_conn(move |conn| AppUser::get(conn, user_id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        .ok_or_else(|| crate::handlers::ErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, "An unexpected error occurred.".into()))?;
     let current_email = current_user.email.clone();
     let current_hash = current_user.password_hash.clone();
 
@@ -357,7 +357,7 @@ pub(crate) async fn restore_confirm_handler(
     State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
     Form(input): Form<RestoreConfirmInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let temp_path = input.temp_path;
@@ -390,14 +390,14 @@ async fn do_restore(
     state: &AppState,
     tenant: &TenantContext,
     temp_path: &str,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let tenant_id = tenant.tenant_id;
     let tenant_row = state
         .master_db
         .with_conn(move |conn| lineup_master_db::tenant::Tenant::get(conn, tenant_id))
         .await
         .map_err(internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| not_found("Not found."))?;
     let db_path = tenant_row.db_path;
 
     // Evict the tenant from the connection cache before overwriting.

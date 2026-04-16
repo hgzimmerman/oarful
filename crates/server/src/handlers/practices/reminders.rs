@@ -1,6 +1,6 @@
 //! Reminder preview + send handlers.
 
-use axum::{extract::State, http::StatusCode, response::Html, Extension};
+use axum::{extract::State, response::Html, Extension};
 use axum_extra::extract::CookieJar;
 use chrono::{NaiveDate, Utc};
 use lineup_db::app_user::{AppUser, Role};
@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use crate::extract::HtmlForm;
 use crate::magic_link::create_magic_link;
 use crate::state::{AppState, TenantContext};
-use crate::{handlers::internal_error, templates};
+use crate::{handlers::{internal_error, ErrorResponse}, templates};
 
 /// Per-practice non-respondent info shared by preview and send.
 struct ReminderRecipient {
@@ -98,7 +98,7 @@ pub(crate) async fn reminder_preview_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     crate::extract::HtmlQuery(query): crate::extract::HtmlQuery<ReminderPreviewQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
@@ -135,7 +135,7 @@ pub(crate) async fn send_reminders_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendRemindersInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();

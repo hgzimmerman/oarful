@@ -5,7 +5,6 @@
 
 use axum::{
     extract::State,
-    http::StatusCode,
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::CookieJar;
@@ -29,7 +28,7 @@ const DEMO_SLUG_MAX_AGE: time::Duration = time::Duration::days(DEMO_DAYS);
 pub(crate) async fn create_demo_handler(
     State(state): State<AppState>,
     jar: CookieJar,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, super::ErrorResponse> {
     // Soft rate limit: if the user already has a demo_slug cookie,
     // redirect to resume instead of creating a new one.
     if jar.get(DEMO_SLUG_COOKIE).is_some() {
@@ -136,11 +135,11 @@ pub(crate) async fn create_demo_handler(
 pub(crate) async fn resume_demo_handler(
     State(state): State<AppState>,
     jar: CookieJar,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, super::ErrorResponse> {
     let slug = jar
         .get(DEMO_SLUG_COOKIE)
         .map(|c| c.value().to_string())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+        .ok_or_else(|| super::bad_request("No demo session found."))?;
 
     let (tenant_id, db, _config) = state
         .tenant_db_by_slug(&slug)
@@ -153,7 +152,7 @@ pub(crate) async fn resume_demo_handler(
         .with_conn(move |conn| Tenant::get(conn, tenant_id))
         .await
         .map_err(super::internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| super::not_found("Not found."))?;
 
     match tenant.demo_expires_at {
         Some(exp) if exp > Utc::now().naive_utc() => {}
@@ -171,7 +170,7 @@ pub(crate) async fn resume_demo_handler(
         .with_conn(|conn| AppUser::find_by_email(conn, "demo@localhost"))
         .await
         .map_err(super::internal_error)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or_else(|| super::not_found("Not found."))?;
 
     let (role, default_team) = db
         .with_conn(move |conn| {

@@ -1,6 +1,7 @@
 //! `GET /audit` — PD-only audit log viewer with filters and pagination.
 
-use axum::{http::StatusCode, response::Html, Extension};
+use axum::{response::Html, Extension};
+use crate::handlers::ErrorResponse;
 use lineup_db::app_user::{AppUser, Role, UserId};
 use lineup_db::audit_log::{AuditFilter, AuditLog};
 use serde::Deserialize;
@@ -29,7 +30,7 @@ pub(crate) struct AuditQuery {
 pub(crate) async fn audit_content(
     tenant: &TenantContext,
     query: &AuditQuery,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let offset = query.offset.unwrap_or(0);
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
@@ -76,7 +77,7 @@ pub(crate) async fn audit_content(
 pub(crate) async fn rows_handler(
     Extension(tenant): Extension<TenantContext>,
     axum::extract::Query(query): axum::extract::Query<AuditQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let offset = query.offset.unwrap_or(0);

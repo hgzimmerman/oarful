@@ -24,12 +24,12 @@ use serde::{Deserialize, Serialize};
 
 use lineup_db::app_user::Role;
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse, not_found}, state::TenantContext, templates};
 
 /// Build the fleet list markup (shared by `/boats` and `/admin/fleet`).
 pub(crate) async fn fleet_content(
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let boats = tenant
         .db
         .with_conn(|conn| Boat::list_all(conn))
@@ -47,7 +47,7 @@ pub(crate) async fn fleet_content(
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn export_csv_handler(
     Extension(tenant): Extension<TenantContext>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let rows = tenant
@@ -132,7 +132,7 @@ fn csv_serialize<T: Serialize>(rows: Vec<T>) -> Result<String, Box<dyn std::erro
 pub(crate) async fn new_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let content = templates::boats::form_content(FormMode::New, &BoatFormData::empty(), None);
     Ok(super::maybe_page_authed("New boat", content, hx, &tenant))
@@ -144,7 +144,7 @@ pub(crate) async fn create_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let parsed = match parse_input(&input) {
         Ok(p) => p,
@@ -195,7 +195,7 @@ pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let (boat, usage) = tenant
         .db
         .with_conn(move |conn| {
@@ -217,7 +217,7 @@ pub(crate) async fn edit_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<BoatId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boat = load(&tenant.db, id).await?;
     let data = BoatFormData::from_boat(&boat);
@@ -240,7 +240,7 @@ pub(crate) async fn update_handler(
     Path(id): Path<BoatId>,
     hx: HxRequest,
     Form(input): Form<BoatFormInput>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let parsed = match parse_input(&input) {
         Ok(p) => p,
@@ -286,7 +286,7 @@ pub(crate) async fn update_handler(
 async fn redirect_or_list(
     db: &Db,
     HxRequest(is_htmx): HxRequest,
-) -> Result<axum::response::Response, StatusCode> {
+) -> Result<axum::response::Response, ErrorResponse> {
     if is_htmx {
         let boats = db
             .with_conn(|conn| Boat::list_all(conn))
@@ -499,12 +499,12 @@ fn parse_optional_date(s: &str) -> Result<Option<NaiveDate>, String> {
         .map_err(|e| format!("invalid date '{s}': {e}"))
 }
 
-async fn load(db: &Db, id: BoatId) -> Result<Boat, StatusCode> {
+async fn load(db: &Db, id: BoatId) -> Result<Boat, ErrorResponse> {
     let maybe = db
         .with_conn(move |conn| Boat::get(conn, id))
         .await
         .map_err(internal_error)?;
-    maybe.ok_or(StatusCode::NOT_FOUND)
+    maybe.ok_or_else(|| not_found("Boat not found."))
 }
 
 /// Public re-export of the type label helper so templates can use it

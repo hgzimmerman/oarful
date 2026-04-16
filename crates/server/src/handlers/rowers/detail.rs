@@ -22,7 +22,7 @@ use serde::Deserialize;
 use lineup_db::app_user::{AppUser, Role};
 use lineup_db::team::{SelfEditLevel, Team};
 
-use crate::{handlers::internal_error, state::TenantContext, templates};
+use crate::{handlers::{internal_error, ErrorResponse, not_found}, state::TenantContext, templates};
 
 /// `GET /rowers/{id}/attributes` — read-only attribute section partial.
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -30,7 +30,7 @@ pub(crate) async fn attributes_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
@@ -44,7 +44,7 @@ pub(crate) async fn edit_attributes_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let rower = load(&tenant.db, id).await?;
     Ok(Html(
@@ -74,7 +74,7 @@ pub(crate) async fn update_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<RowerEditInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let mut rower = load(&tenant.db, id).await?;
 
@@ -185,19 +185,19 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
     })
 }
 
-async fn load(db: &Db, id: RowerId) -> Result<Rower, StatusCode> {
+async fn load(db: &Db, id: RowerId) -> Result<Rower, ErrorResponse> {
     let maybe = db
         .with_conn(move |conn| Rower::get(conn, id))
         .await
         .map_err(internal_error)?;
-    maybe.ok_or(StatusCode::NOT_FOUND)
+    maybe.ok_or_else(|| not_found("Rower not found."))
 }
 
 async fn resolve_perms(
     tenant: &TenantContext,
     jar: &CookieJar,
     rower_id: RowerId,
-) -> Result<templates::rowers::DetailPermissions, StatusCode> {
+) -> Result<templates::rowers::DetailPermissions, ErrorResponse> {
     let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
     if is_coach {
         return Ok(templates::rowers::DetailPermissions::coach());
@@ -212,7 +212,7 @@ async fn resolve_perms(
         .await
         .map_err(internal_error)?;
     if !owns_rower {
-        return Err(StatusCode::FORBIDDEN);
+        return Err(crate::handlers::ErrorResponse(StatusCode::FORBIDDEN, "You don't have permission to perform this action.".into()));
     }
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let level = tenant
@@ -232,7 +232,7 @@ pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let detail = load_detail(&tenant.db, id).await?;
     let content = templates::rowers::detail_content(&detail, perms);
@@ -251,7 +251,7 @@ pub(crate) struct RowerDetail {
     pub(crate) other_rowers: Vec<Rower>,
 }
 
-pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, StatusCode> {
+pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, ErrorResponse> {
     let maybe = db
         .with_conn(move |conn| {
             let Some(rower) = Rower::get(conn, id)? else {
@@ -273,7 +273,7 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Sta
         })
         .await
         .map_err(internal_error)?;
-    maybe.ok_or(StatusCode::NOT_FOUND)
+    maybe.ok_or_else(|| not_found("Rower not found."))
 }
 
 // ---- Seat affinities ------------------------------------------------
@@ -294,7 +294,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let weight = match validate_weight(input.weight) {
         Ok(w) => w,
@@ -327,7 +327,7 @@ pub(crate) async fn seat_affinity_delete_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<SeatAffinityDelete>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let zone = match SeatZone::from_str_opt(&input.zone) {
         Some(z) => z,
@@ -349,12 +349,12 @@ pub(crate) async fn seat_affinity_delete_handler(
     seat_section_response(&tenant.db, id).await
 }
 
-async fn seat_section_response(db: &Db, id: RowerId) -> Result<Html<String>, StatusCode> {
+async fn seat_section_response(db: &Db, id: RowerId) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
     Ok(Html(templates::rowers::seat_affinities_section(&detail, None, true).into_string()))
 }
 
-async fn seat_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, StatusCode> {
+async fn seat_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
     Ok(Html(templates::rowers::seat_affinities_section(&detail, Some(msg), true).into_string()))
 }
@@ -377,7 +377,7 @@ pub(crate) async fn pair_affinity_upsert_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityInput>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if input.partner_id == id {
         return pair_section_with_error(&tenant.db, id, "cannot pair a rower with themselves").await;
@@ -408,7 +408,7 @@ pub(crate) async fn pair_affinity_delete_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
     Form(input): Form<PairAffinityDelete>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let partner = input.partner_id;
     tenant
@@ -427,12 +427,12 @@ pub(crate) async fn pair_affinity_delete_handler(
     pair_section_response(&tenant.db, id).await
 }
 
-async fn pair_section_response(db: &Db, id: RowerId) -> Result<Html<String>, StatusCode> {
+async fn pair_section_response(db: &Db, id: RowerId) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
     Ok(Html(templates::rowers::pair_affinities_section(&detail, None, true).into_string()))
 }
 
-async fn pair_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, StatusCode> {
+async fn pair_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html<String>, ErrorResponse> {
     let detail = load_detail(db, id).await?;
     Ok(Html(templates::rowers::pair_affinities_section(&detail, Some(msg), true).into_string()))
 }
@@ -443,7 +443,7 @@ async fn pair_section_with_error(db: &Db, id: RowerId, msg: &str) -> Result<Html
 pub(crate) async fn toggle_active_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(id): Path<RowerId>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let rower = load(&tenant.db, id).await?;

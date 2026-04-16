@@ -14,7 +14,6 @@ pub(crate) use detail::{
 
 use axum::{
     extract::State,
-    http::StatusCode,
     response::Html,
     Extension,
 };
@@ -22,13 +21,13 @@ use axum_extra::extract::CookieJar;
 use lineup_db::app_user::{AppUser, Role};
 use lineup_db::rower::Rower;
 
-use crate::{handlers::internal_error, state::{AppState, TenantContext}, templates};
+use crate::{handlers::{internal_error, ErrorResponse}, state::{AppState, TenantContext}, templates};
 
 /// Build the roster list markup (shared by `/rowers` and `/team/roster`).
 pub(crate) async fn roster_content(
     jar: &CookieJar,
     tenant: &TenantContext,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let is_coach = tenant.claims.role().unwrap_or(Role::Member).at_least(Role::Coach);
     let rowers = tenant
@@ -60,7 +59,7 @@ pub(crate) async fn batch_invite_handler(
     State(state): State<AppState>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 

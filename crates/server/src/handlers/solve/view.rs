@@ -2,7 +2,6 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     response::Html,
     Extension,
 };
@@ -24,7 +23,7 @@ pub(crate) async fn view_handler(
     Path(practice_id): Path<PracticeId>,
     Query(knobs): Query<SolveKnobs>,
     hx: HxRequest,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, super::ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let (practice, mut snapshot, committed_practices, has_committed) = tenant

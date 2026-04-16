@@ -1,7 +1,7 @@
 //! `/team` — Coach+ hub with tabs: Roster, Attendance, Sync.
 
 use axum::{
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::Html,
     Extension,
 };
@@ -11,7 +11,7 @@ use lineup_db::app_user::Role;
 
 use crate::state::TenantContext;
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
-use crate::handlers;
+use crate::handlers::{self, ErrorResponse};
 
 const TABS: &[TabDef] = &[
     TabDef { label: "Roster", url: "/team/roster", id: "roster" },
@@ -27,7 +27,7 @@ pub(crate) async fn index_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let tab_content = handlers::rowers::roster_content(&jar, &tenant).await?;
 
@@ -45,7 +45,7 @@ pub(crate) async fn roster_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let tab_content = handlers::rowers::roster_content(&jar, &tenant).await?;
 
@@ -63,7 +63,7 @@ pub(crate) async fn sync_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let tab_content = handlers::sync::sync_content(&jar, &tenant).await?;
 
@@ -82,7 +82,7 @@ pub(crate) async fn attendance_handler(
     hx: HxRequest,
     headers: HeaderMap,
     axum::extract::Query(query): axum::extract::Query<AttendanceQuery>,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let tab_content = attendance_content(&jar, &tenant, &query).await?;
 
@@ -103,7 +103,7 @@ async fn attendance_content(
     jar: &CookieJar,
     tenant: &TenantContext,
     query: &AttendanceQuery,
-) -> Result<maud::Markup, StatusCode> {
+) -> Result<maud::Markup, ErrorResponse> {
     use lineup_db::availability::Availability;
     use lineup_db::practice::{Practice, PracticeId};
     use lineup_db::rower::Rower;
