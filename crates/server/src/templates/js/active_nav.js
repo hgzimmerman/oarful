@@ -9,9 +9,9 @@ function updateActiveNav() {
     document.querySelectorAll('[data-nav]').forEach(function(a) {
         var href = a.dataset.nav;
         var active = (href === '/' && path === '/') ||
-                     (href !== '/' && path.startsWith(href));
+                     (href !== '/' && (path === href || path.startsWith(href + '/')));
         if (!active && aliases[href]) {
-            active = aliases[href].some(function(p) { return path.startsWith(p); });
+            active = aliases[href].some(function(p) { return path === p || path.startsWith(p + '/'); });
         }
         if (active) {
             a.classList.add('bg-white/15', 'font-semibold');
