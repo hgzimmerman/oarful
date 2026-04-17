@@ -207,6 +207,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/boats/new", get(boats::new_handler))
         .route("/boats/export.csv", get(boats::export_csv_handler))
         .route(
+            "/boats/usage-matrix.csv",
+            get(boats::usage_matrix_csv_handler),
+        )
+        .route(
             "/boats/{id}",
             get(boats::detail_handler)
                 .put(boats::update_handler)

@@ -25,6 +25,10 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
                 }
                 div class="flex items-center gap-2" {
                     @if can_export {
+                        a href="/boats/usage-matrix.csv"
+                          class="text-slate-500 hover:text-slate-800 text-sm font-semibold border border-slate-300 px-4 py-2 rounded transition" {
+                            "Usage matrix"
+                        }
                         a href="/boats/export.csv"
                           class="text-slate-500 hover:text-slate-800 text-sm font-semibold border border-slate-300 px-4 py-2 rounded transition" {
                             "Export CSV"

@@ -132,6 +132,84 @@ fn csv_serialize<T: Serialize>(rows: Vec<T>) -> Result<String, Box<dyn std::erro
     Ok(String::from_utf8(writer.into_inner()?)?)
 }
 
+/// `GET /boats/usage-matrix.csv` — boat × date usage matrix. PD+ only.
+///
+/// Each row is a boat, each column is a practice date with committed
+/// lineups, and each cell is 1 (used) or empty (not used).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn usage_matrix_csv_handler(
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let (boats, usage_pairs) = tenant
+        .db
+        .with_conn(|conn| {
+            use diesel::prelude::*;
+            use lineup_db::schema::{lineup, practice};
+
+            let boats = Boat::list_in_service(conn)?;
+            let today = chrono::Local::now().date_naive();
+
+            let pairs: Vec<(BoatId, NaiveDate)> = lineup::table
+                .inner_join(practice::table)
+                .filter(practice::date.lt(today))
+                .select((lineup::boat_id, practice::date))
+                .distinct()
+                .order(practice::date.asc())
+                .get_results(conn)?;
+
+            Ok((boats, pairs))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Collect unique sorted dates.
+    let mut dates: Vec<NaiveDate> = usage_pairs.iter().map(|(_, d)| *d).collect();
+    dates.sort();
+    dates.dedup();
+
+    // Build a lookup set for O(1) cell checks.
+    let used: std::collections::HashSet<(BoatId, NaiveDate)> = usage_pairs.into_iter().collect();
+
+    // Write CSV with dynamic columns.
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(Vec::with_capacity(4096));
+
+    // Header row: "Boat", date1, date2, ...
+    let mut header = vec!["Boat".to_string()];
+    header.extend(dates.iter().map(|d| d.to_string()));
+    wtr.write_record(&header).map_err(|e| internal_error(e))?;
+
+    // Data rows.
+    for boat in &boats {
+        let mut row = vec![boat.name.clone()];
+        for date in &dates {
+            if used.contains(&(boat.id, *date)) {
+                row.push("1".to_string());
+            } else {
+                row.push(String::new());
+            }
+        }
+        wtr.write_record(&row).map_err(|e| internal_error(e))?;
+    }
+
+    let body = String::from_utf8(wtr.into_inner().map_err(|e| internal_error(e))?)
+        .map_err(|e| internal_error(e))?;
+
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "text/csv"),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"usage-matrix.csv\"",
+            ),
+        ],
+        body,
+    ))
+}
+
 /// `GET /boats/new` — empty creation form.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn new_handler(

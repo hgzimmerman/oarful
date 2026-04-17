@@ -199,6 +199,9 @@ can resume without re-deriving context.
 - **Invite URL with tenant slug** — new invite URLs use
   `/invite/{slug}/{token}` for direct tenant resolution. Old
   `/invite/{token}` still works (scans all tenants as fallback).
+- **Boat usage matrix CSV export** — `GET /boats/usage-matrix.csv`
+  exports a boat × date matrix (1 = used, empty = not used) from
+  committed lineups. "Usage matrix" button on fleet page (PD+).
 
 ## Open work
 
@@ -222,14 +225,6 @@ side: the coach should know without checking the history page.
 - **Email to coach:** optional — send an email when a rower changes
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
-
-#### Boat usage matrix CSV export
-
-A second CSV export from the fleet page: boat name × date matrix
-where each cell is the number of times that boat was used on that
-date (derived from committed lineups, grouped by practice start
-time). Complements the existing summary CSV which shows aggregate
-usage stats.
 
 #### Raw rower metrics + team-defined bucketing
 
