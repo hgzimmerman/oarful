@@ -381,6 +381,8 @@ mod tests {
             active: IntBool::new(true),
             created_at: chrono::NaiveDateTime::default(),
             updated_at: chrono::NaiveDateTime::default(),
+            weight_kg: None,
+            height_m: None,
         }
     }
 

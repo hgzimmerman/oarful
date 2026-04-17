@@ -202,6 +202,11 @@ can resume without re-deriving context.
 - **Boat usage matrix CSV export** — `GET /boats/usage-matrix.csv`
   exports a boat × date matrix (1 = used, empty = not used) from
   committed lineups. "Usage matrix" button on fleet page (PD+).
+- **Raw rower metrics (Phase 1)** — `weight_kg` (float) and
+  `height_m` (float) on rower table, displayed as lbs and
+  feet/inches. `erg_test` table with `(rower_id, distance_m,
+  time_cs, rowed_at, created_at)` log. Erg test CRUD on rower
+  detail page (Coach+). Split /500m displayed alongside time.
 
 ## Open work
 
@@ -226,36 +231,32 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### Raw rower metrics + team-defined bucketing
+#### Raw rower metrics — Phase 2: threshold config + auto-bucketing
 
-Add optional raw numeric fields to rower:
-- `weight_lbs: Option<WeightLbs>` — body weight in pounds (newtype over `i32`)
-- `height_in: Option<HeightInches>` — height in inches (newtype over `i32`, displayed as `X'Y"`)
-- `erg_2k_cs: Option<Erg2kTime>` — 2k erg time in centiseconds (newtype over `i32`, displayed as `M:SS.dd`)
+Phase 1 shipped (raw `weight_kg`, `height_m` on rower + `erg_test`
+log table). Remaining for Phase 2:
 
-Teams define their own threshold mappings from raw values to the
-existing categorical buckets:
-- Weight: Lightweight/Middleweight/Heavyweight (from `weight_lbs`)
-- Height: Short/Medium/Tall/VeryTall (from `height_in`)
+Weight class needs a 4th category: `VeryHeavy` (all categorical
+enums should have 4 tiers to match the 3-caret threshold UI).
+When a raw value is present, the corresponding categorical bucket
+field should be locked (greyed out) — auto-derived from thresholds.
+
+**Threshold config + auto-bucketing.** Teams define their
+own threshold mappings from raw values to categorical buckets:
+- Weight: Lightweight/Middleweight/Heavyweight/VeryHeavy (from `weight_kg`)
+- Height: Short/Medium/Tall/VeryTall (from `height_m`)
 - Strength: Weak/Intermediate/Strong/VeryStrong (from `erg_2k_cs`)
 - Skill/Form: stays as a manual coach-set enum (not quantifiable)
 
-Stored as team-level config — e.g. "lightweight < 150 lbs,
-middleweight 150–185, heavyweight > 185", "short < 66in, medium
-66–71, tall 71–75, very tall > 75".
-Raw values are editable by rowers (subject to self-edit trust level);
-bucket boundaries are Coach+ only.
+3 threshold values per metric split the range into 4 buckets.
+On threshold save, batch-recalculate all rowers with raw values.
 
-**Newtypes:** `WeightLbs(i32)` with `Display` rendering as pounds,
-`HeightInches(i32)` with `Display` rendering as feet/inches
-(e.g. 71 → `5'11"`), `Erg2kTime(i32)` with `Display` rendering
-centiseconds as `M:SS.dd` (e.g. 42350 → `7:03.50`). All get
-`DieselNewType` for column mapping.
-
-**UI:** Raw values shown on rower detail page alongside the derived
-bucket. Team settings page gets threshold config per metric. Auto-
-derive buckets on save when raw values are present and thresholds
-are configured.
+**Threshold config UI:** A segmented slider with 3 draggable
+carets splitting 4 labeled zones. Overlaid on a histogram of
+actual rower values (grouped by ~5 lbs / ~2 inches / ~2 split
+seconds). Coaches drag boundaries and see rowers shift between
+buckets in real time. One slider per metric on the team settings
+page. Coach+ only.
 
 #### Rower self-service guard rails (field locking)
 

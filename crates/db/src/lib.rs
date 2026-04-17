@@ -10,6 +10,7 @@ pub mod audit_log;
 pub mod availability;
 pub mod boat;
 pub mod email_log;
+pub mod erg_test;
 pub mod fixture;
 pub mod lineup;
 pub mod magic_link;

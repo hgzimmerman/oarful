@@ -65,6 +65,10 @@ pub(crate) struct RowerEditInput {
     pub(crate) sweep_bias: i32,
     #[serde(default)]
     pub(crate) is_designated_cox: Option<String>,
+    #[serde(default)]
+    pub(crate) weight_lbs: Option<String>,
+    #[serde(default)]
+    pub(crate) height_in: Option<String>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -114,6 +118,20 @@ pub(crate) async fn update_handler(
     if perms.can_edit("is_designated_cox") {
         rower.is_designated_cox = IntBool::new(typed.is_designated_cox);
     }
+
+    // Raw metrics — parse lbs→kg and inches→metres.
+    rower.weight_kg = input
+        .weight_lbs
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|lbs| lbs / 2.20462);
+    rower.height_m = input
+        .height_in
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| s.parse::<f64>().ok())
+        .map(|inches| inches * 0.0254);
 
     let saved = tenant
         .db
@@ -275,6 +293,7 @@ pub(crate) struct RowerDetail {
     pub(crate) seat_affinities: Vec<SeatAffinity>,
     pub(crate) pair_affinities: Vec<PairAffinity>,
     pub(crate) other_rowers: Vec<Rower>,
+    pub(crate) erg_tests: Vec<lineup_db::erg_test::ErgTest>,
 }
 
 pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, ErrorResponse> {
@@ -291,12 +310,14 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
                 .filter(|r| r.id != id)
                 .collect();
             other_rowers.sort_by(|a, b| a.name.cmp(&b.name));
+            let erg_tests = lineup_db::erg_test::ErgTest::list_for_rower(conn, id)?;
             Ok(Some(RowerDetail {
                 rower,
                 email,
                 seat_affinities,
                 pair_affinities,
                 other_rowers,
+                erg_tests,
             }))
         })
         .await
@@ -537,4 +558,119 @@ fn validate_weight(weight: i32) -> Result<AffinityWeight, String> {
         ));
     }
     AffinityWeight::try_new(weight).ok_or_else(|| format!("invalid weight: {weight}"))
+}
+
+// ---- Erg test CRUD ---------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ErgTestInput {
+    distance_m: i32,
+    time: String,
+    #[serde(default)]
+    rowed_at: Option<String>,
+}
+
+/// Parse "M:SS.dd" → centiseconds.
+fn parse_erg_time(s: &str) -> Option<i32> {
+    let (mins_str, rest) = s.split_once(':')?;
+    let (secs_str, frac_str) = rest.split_once('.')?;
+    let mins: i32 = mins_str.parse().ok()?;
+    let secs: i32 = secs_str.parse().ok()?;
+    let frac: i32 = if frac_str.len() == 1 {
+        frac_str.parse::<i32>().ok()? * 10
+    } else {
+        frac_str.parse().ok()?
+    };
+    Some(mins * 6000 + secs * 100 + frac)
+}
+
+/// `POST /rowers/{id}/erg-test` — add a new erg test entry.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn erg_test_add_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<RowerId>,
+    Form(input): Form<ErgTestInput>,
+) -> Result<Html<String>, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+
+    let time_cs = parse_erg_time(&input.time)
+        .ok_or_else(|| crate::handlers::bad_request("Invalid time format. Use M:SS.dd"))?;
+
+    let rowed_at = input
+        .rowed_at
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+    let now = chrono::Utc::now().naive_utc();
+    tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::erg_test::ErgTest::create(
+                conn,
+                lineup_db::erg_test::NewErgTest {
+                    rower_id: id,
+                    distance_m: input.distance_m,
+                    time_cs,
+                    rowed_at,
+                    created_at: now,
+                },
+            )
+        })
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "erg_test.add",
+        "rower",
+        &id.to_string(),
+        Some(
+            serde_json::json!({
+                "distance_m": input.distance_m,
+                "time_cs": time_cs,
+            })
+            .to_string(),
+        ),
+    );
+
+    erg_section_response(&tenant.db, id).await
+}
+
+/// `DELETE /rowers/{id}/erg-test/{test_id}` — delete an erg test entry.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn erg_test_delete_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path((id, test_id)): Path<(RowerId, i32)>,
+) -> Result<Html<String>, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+
+    tenant
+        .db
+        .with_conn(move |conn| lineup_db::erg_test::ErgTest::delete(conn, test_id))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "erg_test.delete",
+        "rower",
+        &id.to_string(),
+        Some(serde_json::json!({"test_id": test_id}).to_string()),
+    );
+
+    erg_section_response(&tenant.db, id).await
+}
+
+async fn erg_section_response(db: &Db, id: RowerId) -> Result<Html<String>, ErrorResponse> {
+    let rower = load(db, id).await?;
+    let tests = db
+        .with_conn(move |conn| lineup_db::erg_test::ErgTest::list_for_rower(conn, id))
+        .await
+        .map_err(internal_error)?;
+    Ok(Html(
+        templates::rowers::erg_test_section_markup(&rower, &tests, true).into_string(),
+    ))
 }

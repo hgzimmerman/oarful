@@ -6,9 +6,10 @@
 mod detail;
 
 pub(crate) use detail::{
-    attributes_handler, detail_handler, edit_attributes_handler, load_detail,
-    pair_affinity_delete_handler, pair_affinity_upsert_handler, seat_affinity_delete_handler,
-    seat_affinity_upsert_handler, toggle_active_handler, update_handler, RowerDetail,
+    attributes_handler, detail_handler, edit_attributes_handler, erg_test_add_handler,
+    erg_test_delete_handler, load_detail, pair_affinity_delete_handler,
+    pair_affinity_upsert_handler, seat_affinity_delete_handler, seat_affinity_upsert_handler,
+    toggle_active_handler, update_handler, RowerDetail,
 };
 
 use axum::{extract::State, response::Html, Extension};

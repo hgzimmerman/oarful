@@ -246,6 +246,11 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/rowers/{id}/pair-affinity/delete",
             post(rowers::pair_affinity_delete_handler),
         )
+        .route("/rowers/{id}/erg-test", post(rowers::erg_test_add_handler))
+        .route(
+            "/rowers/{id}/erg-test/{test_id}",
+            delete(rowers::erg_test_delete_handler),
+        )
         .route("/users/invite", post(users::invite_handler))
         .route(
             "/users/{id}/resend-invite",

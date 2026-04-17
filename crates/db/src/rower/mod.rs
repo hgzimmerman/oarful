@@ -10,7 +10,6 @@ use crate::types::IntBool;
     Debug,
     Clone,
     PartialEq,
-    Eq,
     serde::Serialize,
     serde::Deserialize,
     diesel::Queryable,
@@ -42,6 +41,10 @@ pub struct Rower {
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Body weight in kilograms. Displayed as lbs in the UI.
+    pub weight_kg: Option<f64>,
+    /// Height in metres. Displayed as feet/inches in the UI.
+    pub height_m: Option<f64>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]

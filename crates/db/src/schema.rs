@@ -19,6 +19,19 @@ diesel::table! {
         active -> Integer,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        weight_kg -> Nullable<Double>,
+        height_m -> Nullable<Double>,
+    }
+}
+
+diesel::table! {
+    erg_test (id) {
+        id -> Integer,
+        rower_id -> Integer,
+        distance_m -> Integer,
+        time_cs -> Integer,
+        rowed_at -> Nullable<Date>,
+        created_at -> Timestamp,
     }
 }
 
@@ -254,6 +267,7 @@ diesel::table! {
 diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(sync_source -> team (team_id));
 diesel::joinable!(solver_profile -> team (team_id));
+diesel::joinable!(erg_test -> rower (rower_id));
 diesel::joinable!(rower_seat_affinity -> rower (rower_id));
 diesel::joinable!(app_user -> rower (rower_id));
 diesel::joinable!(user_role -> app_user (user_id));
@@ -275,6 +289,7 @@ diesel::joinable!(lineup_seat -> rower (rower_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
+    erg_test,
     rower,
     boat,
     rower_seat_affinity,

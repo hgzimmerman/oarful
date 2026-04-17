@@ -222,6 +222,7 @@ pub(crate) fn detail_content(
         }
         div class="px-8 py-6 max-w-4xl mx-auto space-y-6" {
             (attribute_section(r, None, &perms))
+            (erg_test_section(r, &detail.erg_tests, perms.can_edit_affinities))
             (seat_affinities_section(detail, None, perms.can_edit_affinities))
             (pair_affinities_section(detail, None, perms.can_edit_affinities))
 
@@ -291,6 +292,17 @@ pub(crate) fn attribute_section(
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Sweep bias", &r.sweep_bias.to_string()))
                 (kv("Active", if r.active.as_bool() { "yes" } else { "no" }))
+            }
+            // Raw metrics (when present)
+            @if r.weight_kg.is_some() || r.height_m.is_some() {
+                dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
+                    @if let Some(kg) = r.weight_kg {
+                        (kv("Weight (actual)", &format!("{:.0} lbs", lineup_db::erg_test::kg_to_lbs(kg))))
+                    }
+                    @if let Some(m) = r.height_m {
+                        (kv("Height (actual)", &lineup_db::erg_test::metres_to_ft_in(m)))
+                    }
+                }
             }
         }
     }
@@ -442,8 +454,133 @@ pub(crate) fn attribute_edit_section(
                     }
                 }
             }
+            // Raw metrics
+            div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight (lbs)" }
+                    @let weight_lbs = r.weight_kg.map(|kg| format!("{:.1}", lineup_db::erg_test::kg_to_lbs(kg))).unwrap_or_default();
+                    input type="number" name="weight_lbs" step="0.1" min="0"
+                          value=(weight_lbs)
+                          placeholder="e.g. 165"
+                          class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                    p class="text-[10px] text-slate-400 mt-0.5" { "Stored in kg, displayed in lbs." }
+                }
+                div {
+                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height (inches)" }
+                    @let height_in = r.height_m.map(|m| format!("{:.1}", m * 39.3701)).unwrap_or_default();
+                    input type="number" name="height_in" step="0.5" min="0"
+                          value=(height_in)
+                          placeholder="e.g. 71"
+                          class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                    p class="text-[10px] text-slate-400 mt-0.5" { "Stored in metres, displayed in feet/inches." }
+                }
+            }
         }
     }
+}
+
+/// Erg test log section — displays recent tests and a form to add new ones.
+fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit: bool) -> Markup {
+    use lineup_db::erg_test::{format_distance, format_time_cs};
+
+    html! {
+        section #erg-tests class="bg-white rounded-lg shadow p-6" {
+            div class="flex items-start justify-between mb-4" {
+                h2 class="text-lg font-bold text-slate-800" { "Erg tests" }
+            }
+
+            @if tests.is_empty() {
+                p class="text-sm text-slate-400 italic" { "No erg tests recorded." }
+            } @else {
+                div class="overflow-auto" {
+                    table class="w-full text-sm" {
+                        thead {
+                            tr class="text-xs text-slate-500 uppercase tracking-wide" {
+                                th class="text-left py-1 px-2" { "Distance" }
+                                th class="text-left py-1 px-2" { "Time" }
+                                th class="text-left py-1 px-2" { "Split /500m" }
+                                th class="text-left py-1 px-2" { "Date" }
+                                @if can_edit {
+                                    th class="py-1 px-2" {}
+                                }
+                            }
+                        }
+                        tbody {
+                            @for test in tests {
+                                @let split_cs = (test.time_cs as f64 / (test.distance_m as f64 / 500.0)) as i32;
+                                tr class="border-t border-slate-100" {
+                                    td class="py-1.5 px-2 font-medium" { (format_distance(test.distance_m)) }
+                                    td class="py-1.5 px-2" { (format_time_cs(test.time_cs)) }
+                                    td class="py-1.5 px-2 text-slate-500" { (format_time_cs(split_cs)) }
+                                    td class="py-1.5 px-2 text-slate-500" {
+                                        @if let Some(d) = test.rowed_at {
+                                            (d.format("%b %-d, %Y"))
+                                        } @else {
+                                            "—"
+                                        }
+                                    }
+                                    @if can_edit {
+                                        td class="py-1.5 px-2 text-right" {
+                                            button type="button"
+                                                   hx-delete={"/rowers/" (r.id) "/erg-test/" (test.id)}
+                                                   hx-target="#erg-tests"
+                                                   hx-swap="outerHTML"
+                                                   class="text-xs text-red-500 hover:text-red-700" {
+                                                "×"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @if can_edit {
+                form class="mt-4 flex flex-wrap items-end gap-2"
+                     hx-post={"/rowers/" (r.id) "/erg-test"}
+                     hx-target="#erg-tests"
+                     hx-swap="outerHTML" {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Distance (m)" }
+                        select name="distance_m"
+                               class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
+                            option value="2000" { "2000m" }
+                            option value="5000" { "5000m" }
+                            option value="6000" { "6000m" }
+                            option value="1000" { "1000m" }
+                        }
+                    }
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Time (M:SS.dd)" }
+                        input type="text" name="time" required
+                              placeholder="7:03.50"
+                              pattern="[0-9]+:[0-5][0-9]\\.[0-9]{1,2}"
+                              class="border border-slate-300 rounded px-2 py-1 text-xs w-24 focus:border-slate-500 focus:outline-none";
+                    }
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Date rowed" }
+                        input type="date" name="rowed_at"
+                              class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                    }
+                    button type="submit"
+                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded" {
+                        "Add"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Standalone erg test section re-render (for HTMX swap after add/delete).
+pub(crate) fn erg_test_section_markup(
+    r: &Rower,
+    tests: &[lineup_db::erg_test::ErgTest],
+    can_edit: bool,
+) -> Markup {
+    erg_test_section(r, tests, can_edit)
 }
 
 fn kv(label: &str, value: &str) -> Markup {

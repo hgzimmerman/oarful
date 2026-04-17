@@ -80,6 +80,8 @@ fn rower(
         active: IntBool::TRUE,
         created_at: now,
         updated_at: now,
+        weight_kg: None,
+        height_m: None,
     }
 }
 
