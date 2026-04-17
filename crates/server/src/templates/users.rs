@@ -193,8 +193,7 @@ pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Ma
 
 /// Standalone password-set form for accepting an invite (no navbar —
 /// user isn't authenticated yet).
-pub(crate) fn accept_form(token: &str, error: Option<&str>) -> Markup {
-    let action = format!("/invite/{token}");
+pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {

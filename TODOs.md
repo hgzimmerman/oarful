@@ -196,14 +196,13 @@ can resume without re-deriving context.
   emails (magic login, password reset) still work. Reminder/lineup
   handlers return a user-facing message; invite handlers silently
   skip the email but still create the invite record.
+- **Invite URL with tenant slug** — new invite URLs use
+  `/invite/{slug}/{token}` for direct tenant resolution. Old
+  `/invite/{token}` still works (scans all tenants as fallback).
 
 ## Open work
 
 ### Quick wins
-
-#### Invite URL with tenant slug
-
-Include tenant slug in invite URLs for cleaner routing.
 
 #### Webmaster email — remaining work
 
@@ -430,8 +429,7 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Invite URL with tenant slug** — cleaner invite routing.
-3. **Stale lineup notification (coach-side)** — nav badge or toast.
-4. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
-5. **Per-team roles** — design + migration.
-6. **Stripe payment integration** — convert trials to paid tenants.
+1. **Stale lineup notification (coach-side)** — nav badge or toast.
+2. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
+3. **Per-team roles** — design + migration.
+4. **Stripe payment integration** — convert trials to paid tenants.

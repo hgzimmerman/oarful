@@ -133,7 +133,7 @@ pub(crate) async fn invite_handler(
 
     match result {
         Ok(new_user_id) => {
-            let invite_path = format!("/invite/{token}");
+            let invite_path = format!("/invite/{}/{token}", tenant.config.tenant_slug);
             let invite_url = mailer.full_url(&invite_path);
 
             // Best-effort delivery — failure is logged but doesn't
@@ -216,7 +216,7 @@ pub(crate) async fn resend_invite_handler(
         .await
         .map_err(super::internal_error)?;
 
-    let invite_path = format!("/invite/{token}");
+    let invite_path = format!("/invite/{}/{token}", tenant.config.tenant_slug);
     let invite_url = mailer.full_url(&invite_path);
     if tenant.config.can_send_email() {
         if let Err(err) = mailer
@@ -280,7 +280,7 @@ pub(crate) async fn accept_page(
         ));
     }
     Ok(Html(
-        templates::users::accept_form(&token, None).into_string(),
+        templates::users::accept_form(&format!("/invite/{token}"), None).into_string(),
     ))
 }
 
@@ -299,14 +299,21 @@ pub(crate) async fn accept_handler(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     if input.password.len() < 8 {
         return Ok(Html(
-            templates::users::accept_form(&token, Some("Password must be at least 8 characters."))
-                .into_string(),
+            templates::users::accept_form(
+                &format!("/invite/{token}"),
+                Some("Password must be at least 8 characters."),
+            )
+            .into_string(),
         )
         .into_response());
     }
     if input.password != input.password_confirm {
         return Ok(Html(
-            templates::users::accept_form(&token, Some("Passwords do not match.")).into_string(),
+            templates::users::accept_form(
+                &format!("/invite/{token}"),
+                Some("Passwords do not match."),
+            )
+            .into_string(),
         )
         .into_response());
     }
@@ -330,6 +337,102 @@ pub(crate) async fn accept_handler(
     let result = db
         .with_conn(move |conn| {
             // Look up and consume the invite.
+            let invite: Option<(UserId, chrono::NaiveDateTime)> = user_invite::table
+                .filter(user_invite::token_hash.eq(&token_for_db))
+                .select((user_invite::user_id, user_invite::expires_at))
+                .first(conn)
+                .optional()?;
+
+            let Some((user_id, expires)) = invite else {
+                return Ok(false);
+            };
+            if expires < Utc::now().naive_utc() {
+                return Ok(false);
+            }
+
+            AppUser::set_password_and_activate(conn, user_id, &hash)?;
+
+            diesel::delete(user_invite::table.filter(user_invite::token_hash.eq(&token_for_db)))
+                .execute(conn)?;
+
+            Ok(true)
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    if !result {
+        return Ok(Html(
+            templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
+        )
+        .into_response());
+    }
+
+    Ok(Redirect::to("/login").into_response())
+}
+
+// =====================================================================
+// Slug-prefixed invite routes
+// =====================================================================
+
+/// `GET /invite/{slug}/{token}` — password-set form (resolves tenant by slug).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn accept_page_with_slug(
+    State(tdb): State<TenantDb>,
+    Path((slug, token)): Path<(String, String)>,
+) -> Result<Html<String>, ErrorResponse> {
+    let Ok((_tid, db, _config)) = tdb.tenant_db_by_slug(&slug).await else {
+        return Ok(Html(
+            templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
+        ));
+    };
+    if !validate_invite(&db, &token).await? {
+        return Ok(Html(
+            templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
+        ));
+    }
+    Ok(Html(
+        templates::users::accept_form(&format!("/invite/{slug}/{token}"), None).into_string(),
+    ))
+}
+
+/// `POST /invite/{slug}/{token}` — set password + activate (resolves tenant by slug).
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn accept_handler_with_slug(
+    State(tdb): State<TenantDb>,
+    Path((slug, token)): Path<(String, String)>,
+    Form(input): Form<AcceptInput>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let action = format!("/invite/{slug}/{token}");
+    if input.password.len() < 8 {
+        return Ok(Html(
+            templates::users::accept_form(&action, Some("Password must be at least 8 characters."))
+                .into_string(),
+        )
+        .into_response());
+    }
+    if input.password != input.password_confirm {
+        return Ok(Html(
+            templates::users::accept_form(&action, Some("Passwords do not match.")).into_string(),
+        )
+        .into_response());
+    }
+
+    let password = input.password.clone();
+    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+        .await
+        .map_err(super::internal_error)?
+        .map_err(super::internal_error)?;
+
+    let Ok((_tid, db, _config)) = tdb.tenant_db_by_slug(&slug).await else {
+        return Ok(Html(
+            templates::auth::login_page(Some("Invite link is invalid or expired.")).into_string(),
+        )
+        .into_response());
+    };
+
+    let token_for_db = token.clone();
+    let result = db
+        .with_conn(move |conn| {
             let invite: Option<(UserId, chrono::NaiveDateTime)> = user_invite::table
                 .filter(user_invite::token_hash.eq(&token_for_db))
                 .select((user_invite::user_id, user_invite::expires_at))

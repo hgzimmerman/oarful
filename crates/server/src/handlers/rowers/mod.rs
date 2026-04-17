@@ -126,7 +126,7 @@ pub(crate) async fn batch_invite_handler(
 
     if tenant.config.can_send_email() {
         for (email, name, token) in &invited {
-            let invite_path = format!("/invite/{token}");
+            let invite_path = format!("/invite/{}/{token}", tenant.config.tenant_slug);
             let invite_url = mailer.full_url(&invite_path);
             if let Err(err) = mailer.mailer.send_invite(email, name, &invite_url).await {
                 tracing::warn!(?err, %email, "batch invite: mailer failed");

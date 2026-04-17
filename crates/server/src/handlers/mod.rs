@@ -55,6 +55,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/invite/{token}",
             get(users::accept_page).post(users::accept_handler),
         )
+        .route(
+            "/invite/{slug}/{token}",
+            get(users::accept_page_with_slug).post(users::accept_handler_with_slug),
+        )
         .route("/auth/magic/{slug}/{token}", get(auth::magic_link_handler))
         .route("/auth/su/{token}", get(auth::superuser_magic_link_handler))
         .route("/demo", post(demo::create_demo_handler))
