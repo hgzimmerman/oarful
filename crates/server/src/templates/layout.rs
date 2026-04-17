@@ -194,7 +194,9 @@ fn nav_link_with_badge(href: &str, label: &str, show_badge: bool) -> Markup {
                 @if show_badge {
                     span hx-get="/nav/stale-badge"
                          hx-trigger="load"
-                         hx-swap="innerHTML" {}
+                         hx-swap="innerHTML"
+                         hx-push-url="false"
+                         hx-target="this" {}
                 }
             }
         }
