@@ -149,6 +149,11 @@ pub fn derive_strength(split_cs: f64, t: &TeamThreshold) -> Strength {
 
 /// Batch-recalculate categorical buckets for all rowers on a team that
 /// have raw values. Returns the number of rowers updated.
+///
+/// **Known limitation:** categorical fields (weight_class, height,
+/// strength) are global on the rower, but thresholds are per-team. If
+/// a rower belongs to multiple teams with different thresholds, the
+/// last team to save thresholds determines that rower's categories.
 pub fn batch_derive(
     conn: &mut SqliteConnection,
     team_id: TeamId,

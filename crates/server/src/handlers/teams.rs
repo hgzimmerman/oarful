@@ -655,6 +655,8 @@ pub(crate) async fn threshold_save_handler(
             let all = TeamThreshold::for_team(conn, id)?;
             let team = Team::get(conn, id)?;
             let erg_dist = team.and_then(|t| t.erg_threshold_distance_m);
+            // Note: batch_derive writes global rower fields from per-team
+            // thresholds. Multi-team rowers get last-save-wins semantics.
             team_threshold::batch_derive(conn, id, &all, erg_dist)
         })
         .await
