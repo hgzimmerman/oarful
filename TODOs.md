@@ -185,15 +185,14 @@ can resume without re-deriving context.
   swap per cell. Touch-guard script suppresses clicks during swipe
   scrolling (>10px movement threshold). Audit trail records
   `"set_by": "coach"`.
+- **Practice time in emails** — reminder and lineup emails now show
+  the practice start time alongside the date (e.g. "Monday — 2026-04-21
+  at 6:30 AM"). Threaded through `ReminderRecipient`, `EmailLineupSummary`,
+  `Mailer` trait, and email templates.
 
 ## Open work
 
 ### Quick wins
-
-#### Practice time in reminder and lineup emails
-
-Reminder and lineup emails currently only show the date. Include
-the practice start time so rowers know when to show up.
 
 #### Gate backup restore behind billing status
 
@@ -441,8 +440,7 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Practice time in emails** — quick win, immediate user value.
-2. **Gate backup restore + email restrictions** — billing guard rails.
+1. **Gate backup restore + email restrictions** — billing guard rails.
 3. **Stale lineup notification (coach-side)** — nav badge or toast.
 4. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
 5. **Per-team roles** — design + migration.

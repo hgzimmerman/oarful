@@ -2,7 +2,7 @@
 //! notifications. These are standalone HTML documents (not wrapped
 //! in the app's layout) suitable for email delivery.
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use maud::{html, Markup, DOCTYPE};
 
 use crate::mailer::EmailLineupSummary;
@@ -117,7 +117,7 @@ pub(crate) fn magic_login_email(
 pub(crate) fn reminder_email(
     to_name: &str,
     team_name: &str,
-    dates: &[NaiveDate],
+    dates: &[(NaiveDate, Option<NaiveTime>)],
     magic_url: &str,
     unsubscribe_url: &str,
     unsubscribe_all_url: &str,
@@ -132,11 +132,16 @@ pub(crate) fn reminder_email(
                     "Hi " (to_name) ", your coach needs your availability for the following dates:"
                 }
                 div {
-                    @for date in dates {
+                    @for (date, time) in dates {
                         div class="date-item" {
                             strong { (date.format("%A")) }
                             " — "
                             (date)
+                            @if let Some(t) = time {
+                                span style="color: #64748b;" {
+                                    " at " (t.format("%-I:%M %p"))
+                                }
+                            }
                         }
                     }
                 }
@@ -178,6 +183,9 @@ pub(crate) fn lineup_email(
                     div style="margin-bottom: 20px;" {
                         div class="subheader" {
                             (summary.date.format("%A")) " — " (summary.date)
+                            @if let Some(t) = summary.time {
+                                " at " (t.format("%-I:%M %p"))
+                            }
                         }
                         @for boat in &summary.boats {
                             div class="boat-card" {

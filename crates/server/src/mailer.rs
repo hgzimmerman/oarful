@@ -4,7 +4,7 @@
 //! setups use [`LogMailer`] which just prints the content.
 
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 
 /// A boat's lineup for email rendering — boat name + ordered seat list.
 #[derive(Debug, Clone)]
@@ -24,6 +24,7 @@ pub struct EmailSeat {
 #[derive(Debug, Clone)]
 pub struct EmailLineupSummary {
     pub date: NaiveDate,
+    pub time: Option<NaiveTime>,
     pub boats: Vec<EmailBoatLineup>,
     /// Rowers who were benched (not placed in any boat).
     pub benched: Vec<String>,
@@ -51,7 +52,7 @@ pub trait Mailer: Send + Sync {
         to_email: &str,
         to_name: &str,
         team_name: &str,
-        dates: &[NaiveDate],
+        dates: &[(NaiveDate, Option<NaiveTime>)],
         magic_url: &str,
         unsubscribe_url: &str,
         unsubscribe_all_url: &str,
@@ -106,7 +107,7 @@ pub enum MailMessage {
         to_email: String,
         to_name: String,
         team_name: String,
-        dates: Vec<NaiveDate>,
+        dates: Vec<(NaiveDate, Option<NaiveTime>)>,
         magic_url: String,
         unsubscribe_url: String,
         unsubscribe_all_url: String,
@@ -177,7 +178,7 @@ impl Mailer for ChannelMailer {
         to_email: &str,
         to_name: &str,
         team_name: &str,
-        dates: &[NaiveDate],
+        dates: &[(NaiveDate, Option<NaiveTime>)],
         magic_url: &str,
         unsubscribe_url: &str,
         unsubscribe_all_url: &str,
@@ -271,12 +272,12 @@ impl Mailer for LogMailer {
         to_email: &str,
         to_name: &str,
         team_name: &str,
-        dates: &[NaiveDate],
+        dates: &[(NaiveDate, Option<NaiveTime>)],
         magic_url: &str,
         unsubscribe_url: &str,
         unsubscribe_all_url: &str,
     ) -> Result<()> {
-        let date_list: Vec<String> = dates.iter().map(|d| d.to_string()).collect();
+        let date_list: Vec<String> = dates.iter().map(|(d, _)| d.to_string()).collect();
         let html = crate::templates::email::reminder_email(
             to_name,
             team_name,

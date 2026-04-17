@@ -274,6 +274,7 @@ pub(crate) async fn send_lineups_handler(
 
                 summaries.push(EmailLineupSummary {
                     date: *date,
+                    time: practice.time,
                     boats,
                     benched: benched_names,
                 });

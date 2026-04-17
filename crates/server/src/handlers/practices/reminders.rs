@@ -26,7 +26,7 @@ struct ReminderRecipient {
     user_id: lineup_db::app_user::UserId,
     email: String,
     name: String,
-    dates: Vec<NaiveDate>,
+    dates: Vec<(NaiveDate, Option<chrono::NaiveTime>)>,
 }
 
 /// Gather non-respondent users for the given practices (or all pending
@@ -75,7 +75,7 @@ fn gather_reminder_recipients(
             let responses = Availability::map_for_practice(conn, practice.id)?;
             if !responses.contains_key(rower_id) {
                 if !EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)? {
-                    missing.push(practice.date);
+                    missing.push((practice.date, practice.time));
                 }
             }
         }
@@ -123,7 +123,7 @@ pub(crate) async fn reminder_preview_handler(
         .iter()
         .map(|r| templates::practices::ReminderRecipientPreview {
             name: r.name.clone(),
-            dates: r.dates.clone(),
+            dates: r.dates.iter().map(|(d, _)| *d).collect(),
         })
         .collect();
 
@@ -167,7 +167,7 @@ pub(crate) async fn send_reminders_handler(
             let now = Utc::now().naive_utc();
             let mut dates_sent: HashSet<NaiveDate> = HashSet::new();
             for r in &result {
-                for date in &r.dates {
+                for (date, _time) in &r.dates {
                     if dates_sent.insert(*date) {
                         EmailLog::record(
                             conn,
@@ -178,7 +178,7 @@ pub(crate) async fn send_reminders_handler(
                                 sent_at: now,
                                 recipient_count: result
                                     .iter()
-                                    .filter(|r2| r2.dates.contains(date))
+                                    .filter(|r2| r2.dates.iter().any(|(d, _)| d == date))
                                     .count()
                                     as i32,
                                 sent_by_user_id: sender_id,
@@ -198,7 +198,7 @@ pub(crate) async fn send_reminders_handler(
     let mut sent_names: Vec<String> = Vec::new();
     for r in &recipients {
         // Magic link expires end-of-day of the last relevant date.
-        let last_date = r.dates.iter().max().copied().unwrap();
+        let last_date = r.dates.iter().map(|(d, _)| *d).max().unwrap();
         let expires_at = last_date.and_hms_opt(23, 59, 59).unwrap();
 
         let created = create_magic_link(r.user_id, "/my/availability", expires_at, Some(team_id));
