@@ -53,6 +53,8 @@ pub trait Mailer: Send + Sync {
         team_name: &str,
         dates: &[NaiveDate],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()>;
 
     /// Send a magic-link login email. Each entry in `clubs` is a
@@ -77,6 +79,8 @@ pub trait Mailer: Send + Sync {
         team_name: &str,
         lineups: &[EmailLineupSummary],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()>;
 }
 
@@ -94,6 +98,8 @@ pub enum MailMessage {
         team_name: String,
         dates: Vec<NaiveDate>,
         magic_url: String,
+        unsubscribe_url: String,
+        unsubscribe_all_url: String,
     },
     MagicLogin {
         to_email: String,
@@ -106,6 +112,8 @@ pub enum MailMessage {
         team_name: String,
         lineups: Vec<EmailLineupSummary>,
         magic_url: String,
+        unsubscribe_url: String,
+        unsubscribe_all_url: String,
     },
 }
 
@@ -156,6 +164,8 @@ impl Mailer for ChannelMailer {
         team_name: &str,
         dates: &[NaiveDate],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()> {
         let _ = self.tx.send(MailMessage::Reminder {
             to_email: to_email.to_string(),
@@ -163,6 +173,8 @@ impl Mailer for ChannelMailer {
             team_name: team_name.to_string(),
             dates: dates.to_vec(),
             magic_url: magic_url.to_string(),
+            unsubscribe_url: unsubscribe_url.to_string(),
+            unsubscribe_all_url: unsubscribe_all_url.to_string(),
         });
         Ok(())
     }
@@ -174,6 +186,8 @@ impl Mailer for ChannelMailer {
         team_name: &str,
         lineups: &[EmailLineupSummary],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()> {
         let _ = self.tx.send(MailMessage::Lineup {
             to_email: to_email.to_string(),
@@ -181,6 +195,8 @@ impl Mailer for ChannelMailer {
             team_name: team_name.to_string(),
             lineups: lineups.to_vec(),
             magic_url: magic_url.to_string(),
+            unsubscribe_url: unsubscribe_url.to_string(),
+            unsubscribe_all_url: unsubscribe_all_url.to_string(),
         });
         Ok(())
     }
@@ -228,15 +244,25 @@ impl Mailer for LogMailer {
         team_name: &str,
         dates: &[NaiveDate],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()> {
         let date_list: Vec<String> = dates.iter().map(|d| d.to_string()).collect();
-        let html = crate::templates::email::reminder_email(to_name, team_name, dates, magic_url)
-            .into_string();
+        let html = crate::templates::email::reminder_email(
+            to_name,
+            team_name,
+            dates,
+            magic_url,
+            unsubscribe_url,
+            unsubscribe_all_url,
+        )
+        .into_string();
         tracing::info!(
             to_email,
             to_name,
             team_name,
             ?date_list,
+            unsubscribe_url,
             "availability reminder (LogMailer — no email sent)"
         );
         tracing::trace!(html, "reminder email HTML");
@@ -250,15 +276,25 @@ impl Mailer for LogMailer {
         team_name: &str,
         lineups: &[EmailLineupSummary],
         magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()> {
         let dates: Vec<String> = lineups.iter().map(|l| l.date.to_string()).collect();
-        let html = crate::templates::email::lineup_email(to_name, team_name, lineups, magic_url)
-            .into_string();
+        let html = crate::templates::email::lineup_email(
+            to_name,
+            team_name,
+            lineups,
+            magic_url,
+            unsubscribe_url,
+            unsubscribe_all_url,
+        )
+        .into_string();
         tracing::info!(
             to_email,
             to_name,
             team_name,
             ?dates,
+            unsubscribe_url,
             "lineup notification (LogMailer — no email sent)"
         );
         tracing::trace!(html, "lineup email HTML");

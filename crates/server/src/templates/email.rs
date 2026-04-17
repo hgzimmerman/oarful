@@ -9,7 +9,14 @@ use crate::mailer::EmailLineupSummary;
 
 /// Inline styles shared across email templates. Email clients don't
 /// support external stylesheets so everything must be inlined.
-fn email_wrapper(subject: &str, body: Markup) -> Markup {
+/// Unsubscribe footer links for reminder/lineup emails. `None` for
+/// transactional emails (invites, magic login) that don't need opt-out.
+struct UnsubFooter<'a> {
+    unsub_url: &'a str,
+    unsub_all_url: &'a str,
+}
+
+fn email_wrapper(subject: &str, body: Markup, unsub: Option<UnsubFooter<'_>>) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -45,6 +52,17 @@ fn email_wrapper(subject: &str, body: Markup) -> Markup {
                     (body)
                     div class="footer" {
                         p { "Sent by Lineup Generator" }
+                        @if let Some(ref unsub) = unsub {
+                            p {
+                                a href=(unsub.unsub_url) style="color: #94a3b8; text-decoration: underline;" {
+                                    "Unsubscribe from these emails"
+                                }
+                                " · "
+                                a href=(unsub.unsub_all_url) style="color: #94a3b8; text-decoration: underline;" {
+                                    "Unsubscribe from all emails"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -90,6 +108,7 @@ pub(crate) fn magic_login_email(
                 }
             }
         },
+        None,
     )
 }
 
@@ -100,6 +119,8 @@ pub(crate) fn reminder_email(
     team_name: &str,
     dates: &[NaiveDate],
     magic_url: &str,
+    unsubscribe_url: &str,
+    unsubscribe_all_url: &str,
 ) -> Markup {
     let subject = format!("{team_name} — availability needed");
     email_wrapper(
@@ -126,6 +147,10 @@ pub(crate) fn reminder_email(
                 }
             }
         },
+        Some(UnsubFooter {
+            unsub_url: unsubscribe_url,
+            unsub_all_url: unsubscribe_all_url,
+        }),
     )
 }
 
@@ -136,6 +161,8 @@ pub(crate) fn lineup_email(
     team_name: &str,
     lineups: &[EmailLineupSummary],
     magic_url: &str,
+    unsubscribe_url: &str,
+    unsubscribe_all_url: &str,
 ) -> Markup {
     let dates: Vec<String> = lineups.iter().map(|l| l.date.to_string()).collect();
     let subject = format!("{team_name} — lineups posted for {}", dates.join(", "));
@@ -177,5 +204,9 @@ pub(crate) fn lineup_email(
                 }
             }
         },
+        Some(UnsubFooter {
+            unsub_url: unsubscribe_url,
+            unsub_all_url: unsubscribe_all_url,
+        }),
     )
 }

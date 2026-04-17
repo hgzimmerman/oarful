@@ -21,4 +21,5 @@ pub(crate) mod solve;
 pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod teams;
+pub(crate) mod unsubscribe;
 pub(crate) mod users;

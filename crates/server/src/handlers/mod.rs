@@ -33,6 +33,7 @@ pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod team_hub;
 pub(crate) mod teams;
+pub(crate) mod unsubscribe;
 pub(crate) mod users;
 
 /// Compose the full route table. Called from [`crate::build_router`] so
@@ -60,6 +61,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route(
             "/demo/resume",
             get(demo::resume_demo_handler).post(demo::resume_demo_handler),
+        )
+        .route(
+            "/unsubscribe/{slug}/{user_id}/{email_type}/{signature}",
+            get(unsubscribe::unsubscribe_handler).post(unsubscribe::unsubscribe_post_handler),
         )
         .with_state(state.clone());
 

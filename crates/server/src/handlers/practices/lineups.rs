@@ -14,9 +14,11 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
 use crate::extract::HtmlForm;
+use crate::jwt::JwtKeys;
 use crate::magic_link::create_magic_link;
 use crate::mailer::{EmailBoatLineup, EmailLineupSummary, EmailSeat};
 use crate::state::{MailerCtx, TenantContext};
+use crate::unsubscribe;
 use crate::{
     handlers::{internal_error, ErrorResponse},
     templates,
@@ -173,6 +175,7 @@ fn gather_lineup_recipients(
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn send_lineups_handler(
     State(mailer_ctx): State<MailerCtx>,
+    State(jwt_keys): State<JwtKeys>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendLineupsInput>,
@@ -361,9 +364,31 @@ pub(crate) async fn send_lineups_handler(
                 "/auth/magic/{}/{raw_token}",
                 tenant.config.tenant_slug
             ));
+            let unsub_url = unsubscribe::url(
+                &mailer_ctx,
+                &tenant.config.tenant_slug,
+                *user_id,
+                unsubscribe::EmailType::Lineups,
+                &jwt_keys,
+            );
+            let unsub_all_url = unsubscribe::url(
+                &mailer_ctx,
+                &tenant.config.tenant_slug,
+                *user_id,
+                unsubscribe::EmailType::All,
+                &jwt_keys,
+            );
             if let Err(err) = mailer_ctx
                 .mailer
-                .send_lineup(&email, &name, &team_name, &summaries, &magic_url)
+                .send_lineup(
+                    &email,
+                    &name,
+                    &team_name,
+                    &summaries,
+                    &magic_url,
+                    &unsub_url,
+                    &unsub_all_url,
+                )
                 .await
             {
                 tracing::warn!(?err, %email, "failed to send lineup");

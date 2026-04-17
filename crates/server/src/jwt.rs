@@ -98,6 +98,8 @@ impl Claims {
 pub(crate) struct JwtKeys {
     encoding: Arc<EncodingKey>,
     decoding: Arc<DecodingKey>,
+    /// Raw secret bytes, used for HMAC signing of unsubscribe tokens.
+    secret: Arc<Vec<u8>>,
 }
 
 impl JwtKeys {
@@ -105,7 +107,13 @@ impl JwtKeys {
         Self {
             encoding: Arc::new(EncodingKey::from_secret(secret)),
             decoding: Arc::new(DecodingKey::from_secret(secret)),
+            secret: Arc::new(secret.to_vec()),
         }
+    }
+
+    /// Raw secret bytes for HMAC signing (e.g. unsubscribe tokens).
+    pub(crate) fn secret_bytes(&self) -> &[u8] {
+        &self.secret
     }
 
     /// Issue a new token for the given user.

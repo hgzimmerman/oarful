@@ -17,6 +17,7 @@ pub(crate) mod request_id;
 pub(crate) mod state;
 pub(crate) mod templates;
 pub(crate) mod tenant_cache;
+pub(crate) mod unsubscribe;
 
 pub(crate) use state::AppState;
 
