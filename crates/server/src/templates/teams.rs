@@ -489,7 +489,21 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
     },
     pct(v) { return ((v - this.rMin) / (this.rMax - this.rMin) * 100); },
     valFromPct(p) { return this.rMin + p / 100 * (this.rMax - this.rMin); },
-    fmt(v) { return v.toFixed(1); },
+    fmt(v) {
+      if (metric === 'strength') {
+        var ts = Math.round(v * 100);
+        var m = Math.floor(ts / 6000);
+        var s = Math.floor((ts % 6000) / 100);
+        var cs = ts % 100;
+        return m + ':' + String(s).padStart(2,'0') + '.' + String(cs).padStart(2,'0');
+      }
+      if (metric === 'height') {
+        var ft = Math.floor(v / 12);
+        var inch = Math.round(v % 12);
+        return ft + "'" + inch + '"';
+      }
+      return v.toFixed(1) + (metric === 'weight' ? ' lbs' : '');
+    },
     barStyle(bar) {
       if (!this.bars.length) return 'display:none';
       var maxC = Math.max(...this.bars.map(b=>b.count), 1);
