@@ -5,7 +5,11 @@ use maud::{html, Markup};
 use crate::tenant_cache::TenantConfig;
 use lineup_master_db::tenant::BillingStatus;
 
-pub(crate) fn suspended_page(tenant_name: &str, config: &TenantConfig) -> Markup {
+pub(crate) fn suspended_page(
+    tenant_name: &str,
+    config: &TenantConfig,
+    webmaster_email: &str,
+) -> Markup {
     let (title, message) = match config.billing_status {
         BillingStatus::Trial => (
             "Your free trial has expired",
@@ -42,7 +46,7 @@ pub(crate) fn suspended_page(tenant_name: &str, config: &TenantConfig) -> Markup
                     }
 
                     div class="space-y-3" {
-                        a href="mailto:support@oarful.com"
+                        a href={"mailto:" (webmaster_email)}
                           class="block w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition text-sm" {
                             "Contact us"
                         }

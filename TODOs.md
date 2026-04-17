@@ -170,6 +170,16 @@ can resume without re-deriving context.
   billing middleware (expired/suspended → "renew" page), AGPL source
   link footer (SOURCE_URL env var). `grandfathered` billing status
   for permanently free early-adopter tenants. `set-billing` CLI command.
+- **Default availability assumption** — per-team `assume_available`
+  toggle on team settings. Rowers with no response treated as available
+  when enabled. Propagated through `DbSnapshot`, solver, editor, and
+  history stale-detection.
+- **Unsubscribe links in emails** — HMAC-signed stateless tokens in
+  reminder/lineup email footers. Per-type and unsubscribe-all links.
+  GET confirmation page + POST for RFC 8058 `List-Unsubscribe-Post`.
+- **Password reset flow** — "Forgot password?" on login page sends a
+  1-hour magic link to `/reset-password`. Dedicated email template,
+  new-password form, redirect to login with success banner. E2e tested.
 
 ## Open work
 
@@ -192,16 +202,6 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### Default availability assumption
-
-Team-level toggle controlling how unfilled availability slots are
-interpreted: "assume unavailable" (current behaviour — no response
-means excluded from lineups) vs "assume available" (no response
-means included). Stored as a flag on the `team` table (e.g.
-`assume_available INTEGER NOT NULL DEFAULT 0`). Affects the
-availability query when building the solver's eligible rower pool.
-Exposed on the team settings UI as a toggle.
-
 #### Email restrictions for trial tenants
 
 Disable outbound email (reminders, lineup notifications, invites)
@@ -213,13 +213,6 @@ via a counter in the master DB. Bulk actions (e.g. reminders to
 the full roster) should be allowed to exceed the cap rather than
 partially sending.
 
-#### Unsubscribe links in emails
-
-All outbound emails need a one-click unsubscribe link per CAN-SPAM
-/ GDPR. Should toggle the existing per-user email preference flags
-(`wants_reminders`, `wants_lineups`) without requiring login. Use
-a signed token in the URL to authenticate the unsubscribe action.
-
 #### Gate backup restore behind billing status
 
 The backup import/restore flow should be disabled for trial
@@ -230,12 +223,6 @@ data. Allow for active, grandfathered, and paid tenants only.
 
 Reminder and lineup emails currently only show the date. Include
 the practice start time so rowers know when to show up.
-
-#### Password reset flow
-
-"Forgot password" link on the login page. Sends a magic link that
-lands on a password-reset form instead of logging in directly.
-Reuses the existing magic link infrastructure.
 
 #### Coach-editable availability
 
@@ -312,12 +299,12 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
-#### Webmaster email
+#### Webmaster email — partially shipped
 
-Configurable via `WEBMASTER_EMAIL` env var. Used as the `From`
-address for outbound emails, `mailto:` on the billing suspended
-page, and in a hidden `<meta name="author">` tag. Avoids
-hardcoding `support@oarful.com` in templates.
+`WEBMASTER_EMAIL` env var now drives the `mailto:` link on the
+billing suspended page. Remaining: use it as the `From` address
+for outbound emails (requires production mailer integration) and
+in a `<meta name="author">` tag.
 
 #### Pricing on landing page
 
@@ -451,6 +438,7 @@ Start with push-only; bidirectional can follow if there's demand.
 ## Suggested next moves
 
 1. **Stale lineup notification (coach-side)** — nav badge or toast.
-2. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes + threshold config.
-3. **Per-team roles** — design + migration.
-4. **Stripe payment integration** — convert trials to paid tenants.
+2. **Email restrictions for trial tenants** — prevent spam abuse.
+3. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes + threshold config.
+4. **Per-team roles** — design + migration.
+5. **Stripe payment integration** — convert trials to paid tenants.

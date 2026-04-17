@@ -831,8 +831,12 @@ pub(crate) async fn require_auth(
         let path = req.uri().path().to_string();
         if path != "/logout" && !path.starts_with("/my") && path != "/reset-password" {
             return Html(
-                crate::templates::billing::suspended_page(&config.tenant_name, &config)
-                    .into_string(),
+                crate::templates::billing::suspended_page(
+                    &config.tenant_name,
+                    &config,
+                    &state.webmaster_email,
+                )
+                .into_string(),
             )
             .into_response();
         }

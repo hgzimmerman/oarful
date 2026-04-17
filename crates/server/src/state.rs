@@ -40,6 +40,9 @@ pub(crate) struct AppState {
     pub(crate) data_dir: String,
     /// Email address of the global superuser (from `SUPERUSER_EMAIL`).
     pub(crate) superuser_email: Option<String>,
+    /// Contact email for support/billing pages (from `WEBMASTER_EMAIL`).
+    /// Falls back to `support@oarful.com` if not set.
+    pub(crate) webmaster_email: String,
 }
 
 // ── Sub-states extractable via FromRef ──────────────────────────
@@ -270,6 +273,12 @@ impl AppState {
             tracing::info!(%email, "superuser configured");
         }
 
+        let webmaster_email = std::env::var("WEBMASTER_EMAIL")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "support@oarful.com".to_string());
+
         Ok(Self {
             master_db,
             tenant_cache,
@@ -281,6 +290,7 @@ impl AppState {
             origin,
             data_dir: data_dir.to_string(),
             superuser_email,
+            webmaster_email,
         })
     }
 
