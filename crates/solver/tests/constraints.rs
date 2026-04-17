@@ -146,6 +146,7 @@ fn snapshot(rowers: Vec<Rower>, boats: Vec<Boat>) -> DbSnapshot {
         .collect();
     DbSnapshot {
         date: test_date(),
+        assume_available: false,
         rowers,
         availability,
         boats,

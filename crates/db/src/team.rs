@@ -154,6 +154,8 @@ pub struct Team {
     pub archived: IntBool,
     /// Bitmask of default practice weekdays (Mon=bit0 … Sun=bit6).
     pub default_practice_days: Option<PracticeDays>,
+    /// When true, rowers who haven't responded are treated as available.
+    pub assume_available: IntBool,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.

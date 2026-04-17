@@ -88,7 +88,7 @@ pub(crate) fn detail_content(
                 .availability
                 .get(rid)
                 .map(|s| s.is_available_for_sweep())
-                .unwrap_or(false)
+                .unwrap_or(snapshot.assume_available)
         })
         .collect();
     let has_stale = !stale_rowers.is_empty();

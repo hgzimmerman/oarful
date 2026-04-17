@@ -54,6 +54,10 @@ pub(crate) async fn editor_handler(
 
             for op in &overlapping {
                 let other_team = lineup_db::team::Team::get(conn, op.team_id)?;
+                let other_assume = other_team
+                    .as_ref()
+                    .map(|t| t.assume_available.as_bool())
+                    .unwrap_or(false);
                 let team_name = other_team.map(|t| t.name.clone()).unwrap_or_default();
 
                 // Find committed lineups for this overlapping practice — boats in use.
@@ -83,7 +87,7 @@ pub(crate) async fn editor_handler(
                     if other_avail
                         .get(rid)
                         .map(|s| s.is_available_for_sweep())
-                        .unwrap_or(false)
+                        .unwrap_or(other_assume)
                     {
                         if let Some(rower) = lineup_db::rower::Rower::get(conn, *rid)? {
                             if rower.active.as_bool() {
@@ -235,7 +239,7 @@ pub(crate) async fn editor_handler(
                 .availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
-                .unwrap_or(false)
+                .unwrap_or(snapshot.assume_available)
         })
         .collect();
 

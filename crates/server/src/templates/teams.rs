@@ -184,6 +184,21 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
                     }
                 }
                 div {
+                    label class="flex items-center gap-3 cursor-pointer" {
+                        input type="checkbox" name="assume_available" value="1"
+                              checked[team.assume_available.as_bool()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        div {
+                            div class="text-sm font-semibold text-slate-700" {
+                                "Assume available by default"
+                            }
+                            p class="text-xs text-slate-500" {
+                                "When on, rowers who haven't responded are included in lineups. When off (default), no response means excluded."
+                            }
+                        }
+                    }
+                }
+                div {
                     label class="block text-sm font-semibold text-slate-700 mb-2" {
                         "Default practice days"
                     }

@@ -134,7 +134,7 @@ pub(crate) async fn stream_handler(
                 .availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
-                .unwrap_or(false)
+                .unwrap_or(snapshot.assume_available)
         })
         .map(|r| r.id)
         .collect();

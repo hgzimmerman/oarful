@@ -182,6 +182,8 @@ pub(crate) struct TeamUpdateInput {
     day_sat: Option<String>,
     #[serde(default)]
     day_sun: Option<String>,
+    #[serde(default)]
+    assume_available: Option<String>,
 }
 
 /// `POST /teams/{id}` — update team config (PD only).
@@ -236,6 +238,11 @@ pub(crate) async fn update_handler(
     } else {
         Some(lineup_db::team::PracticeDays::from_weekdays(&days))
     };
+    let assume_avail: i32 = if input.assume_available.is_some() {
+        1
+    } else {
+        0
+    };
     tenant
         .db
         .with_conn(move |conn| {
@@ -248,6 +255,7 @@ pub(crate) async fn update_handler(
                     team::default_practice_time.eq(practice_time),
                     team::default_practice_duration_minutes.eq(practice_duration),
                     team::default_practice_days.eq(practice_days),
+                    team::assume_available.eq(assume_avail),
                 ))
                 .execute(conn)
         })

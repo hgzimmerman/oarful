@@ -111,6 +111,7 @@ diesel::table! {
         default_practice_duration_minutes -> Nullable<Integer>,
         archived -> Integer,
         default_practice_days -> Nullable<Integer>,
+        assume_available -> Integer,
     }
 }
 

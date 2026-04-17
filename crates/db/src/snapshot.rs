@@ -7,7 +7,7 @@ use crate::pair_affinity::PairAffinity;
 use crate::practice::Practice;
 use crate::rower::{types::RowerId, Rower};
 use crate::seat_affinity::SeatAffinity;
-use crate::team::TeamMembership;
+use crate::team::{Team, TeamMembership};
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
@@ -21,8 +21,12 @@ pub const RECENT_LINEUP_WINDOW: i64 = 4;
 pub struct DbSnapshot {
     pub date: NaiveDate,
     pub rowers: Vec<Rower>,
+    /// When true, rowers who haven't responded are treated as available.
+    /// Loaded from the team's `assume_available` flag.
+    pub assume_available: bool,
     /// Availability status for each rower that explicitly responded. Rowers
-    /// not in this map are treated as "unset" (effectively `No` by default).
+    /// not in this map are treated as "unset" — interpreted as available or
+    /// unavailable depending on [`assume_available`].
     pub availability: HashMap<RowerId, AvailabilityStatus>,
     /// All in-service boats (sweep + scull). The solver uses `sweep_bias`
     /// on each rower to determine eligibility for sweep vs scull boats.
@@ -67,8 +71,13 @@ impl DbSnapshot {
             .filter(|r| team_rower_ids.contains(&r.id))
             .collect();
 
+        let assume_available = Team::get(conn, team_id)?
+            .map(|t| t.assume_available.as_bool())
+            .unwrap_or(false);
+
         Ok(Self {
             date: practice.date,
+            assume_available,
             availability: Availability::map_for_practice(conn, practice.id)?,
             boats: Boat::list_in_service(conn)?,
             last_coxed: Rower::last_coxed_dates(conn)?,
@@ -87,7 +96,7 @@ impl DbSnapshot {
             self.availability
                 .get(&r.id)
                 .map(|s| s.is_available_for_sweep())
-                .unwrap_or(false)
+                .unwrap_or(self.assume_available)
         })
     }
 }

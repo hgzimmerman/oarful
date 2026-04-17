@@ -110,6 +110,7 @@ fn run_repeated(
         .collect::<HashMap<_, _>>();
     let snapshot = DbSnapshot {
         date,
+        assume_available: false,
         rowers,
         availability,
         boats: fleet.to_vec(),
@@ -187,6 +188,7 @@ fn run_one_with_label(
 
     let snapshot = DbSnapshot {
         date,
+        assume_available: false,
         rowers,
         availability,
         boats: fleet.to_vec(),

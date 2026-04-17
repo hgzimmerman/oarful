@@ -34,6 +34,10 @@ pub(crate) async fn list_handler(
             let practices = Practice::list_committed(conn, team_id)?;
             let pids: Vec<PracticeId> = practices.iter().map(|p| p.id).collect();
 
+            let assume_available = lineup_db::team::Team::get(conn, team_id)?
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
+
             // For each committed practice, check if any placed rower is no
             // longer available — that makes the lineup "stale".
             let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
@@ -46,7 +50,7 @@ pub(crate) async fn list_handler(
                         !avail
                             .get(&(*rid, **pid))
                             .map(|s| s.is_available_for_sweep())
-                            .unwrap_or(false)
+                            .unwrap_or(assume_available)
                     })
                 })
                 .map(|(pid, _)| *pid)
