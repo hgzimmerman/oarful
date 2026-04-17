@@ -466,9 +466,9 @@ fn threshold_slider_with_distance(
                 }
             }
             div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
-                span { "Low/Mid: " span "x-text"="fmt(v1)" {} }
-                span { "Mid/High: " span "x-text"="fmt(v2)" {} }
-                span { "High/Very: " span "x-text"="fmt(v3)" {} }
+                span { "Strong/Very: " span "x-text"="fmt(v1)" {} }
+                span { "Inter/Strong: " span "x-text"="fmt(v2)" {} }
+                span { "Weak/Inter: " span "x-text"="fmt(v3)" {} }
             }
             div "x-ref"="result" {}
         }
@@ -560,7 +560,11 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
       }
     },
     save() {
-      var body = {metric: metric, low_mid: this.v1, mid_high: this.v2, high_very: this.v3};
+      // For descending metrics, v1 (leftmost/fastest) = high_very boundary,
+      // v3 (rightmost/slowest) = low_mid boundary. Swap for storage.
+      var body = desc
+        ? {metric: metric, low_mid: this.v3, mid_high: this.v2, high_very: this.v1}
+        : {metric: metric, low_mid: this.v1, mid_high: this.v2, high_very: this.v3};
       if (this.ergDist) body.erg_distance_m = parseInt(this.ergDist);
       fetch(saveUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
         .then(r=>r.text()).then(html=>{this.$refs.result.innerHTML=html; setTimeout(()=>{this.$refs.result.innerHTML=''},3000)})
