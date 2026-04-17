@@ -46,8 +46,9 @@ pub(crate) async fn edit_attributes_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let rower = load(&tenant.db, id).await?;
+    let locked = locked_bucket_fields_for_rower(&tenant, &jar, &rower).await?;
     Ok(Html(
-        templates::rowers::attribute_edit_section(&rower, None, &perms).into_string(),
+        templates::rowers::attribute_edit_section(&rower, None, &perms, &locked).into_string(),
     ))
 }
 
@@ -85,8 +86,10 @@ pub(crate) async fn update_handler(
     let typed = match parsed {
         Ok(typed) => typed,
         Err(msg) => {
+            let locked = locked_bucket_fields_for_rower(&tenant, &jar, &rower).await?;
             return Ok(Html(
-                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms).into_string(),
+                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms, &locked)
+                    .into_string(),
             ));
         }
     };
@@ -218,6 +221,58 @@ fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
         can_cox: input.can_cox.is_some(),
         sweep_bias: input.sweep_bias,
         is_designated_cox: input.is_designated_cox.is_some(),
+    })
+}
+
+/// Compute which bucket fields are locked (auto-derived from raw values + thresholds).
+pub(crate) async fn locked_bucket_fields_for_rower(
+    tenant: &TenantContext,
+    jar: &CookieJar,
+    rower: &Rower,
+) -> Result<templates::rowers::LockedBuckets, ErrorResponse> {
+    let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
+    let thresholds = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team_threshold::TeamThreshold::for_team(conn, team_id))
+        .await
+        .map_err(internal_error)?;
+
+    let has_weight_t = thresholds
+        .iter()
+        .any(|t| t.metric == lineup_db::team_threshold::METRIC_WEIGHT);
+    let has_height_t = thresholds
+        .iter()
+        .any(|t| t.metric == lineup_db::team_threshold::METRIC_HEIGHT);
+    let has_strength_t = thresholds
+        .iter()
+        .any(|t| t.metric == lineup_db::team_threshold::METRIC_STRENGTH);
+
+    // Strength is locked if the rower has an erg test at the team's threshold distance.
+    let strength_locked = if has_strength_t {
+        let rid = rower.id;
+        let team = tenant
+            .db
+            .with_conn(move |conn| lineup_db::team::Team::get(conn, team_id))
+            .await
+            .map_err(internal_error)?;
+        if let Some(dist) = team.and_then(|t| t.erg_threshold_distance_m) {
+            let tests = tenant
+                .db
+                .with_conn(move |conn| lineup_db::erg_test::ErgTest::list_for_rower(conn, rid))
+                .await
+                .map_err(internal_error)?;
+            tests.iter().any(|t| t.distance_m == dist)
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    Ok(templates::rowers::LockedBuckets {
+        weight: rower.weight_kg.is_some() && has_weight_t,
+        height: rower.height_m.is_some() && has_height_t,
+        strength: strength_locked,
     })
 }
 

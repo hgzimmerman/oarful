@@ -11,6 +11,15 @@ use lineup_db::rower::{
 };
 use lineup_db::team::SelfEditLevel;
 
+/// Which categorical bucket fields are locked because they're auto-derived
+/// from raw values + team thresholds.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct LockedBuckets {
+    pub(crate) weight: bool,
+    pub(crate) height: bool,
+    pub(crate) strength: bool,
+}
+
 /// Controls what the current user can do on this rower's detail page.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DetailPermissions {
@@ -314,6 +323,7 @@ pub(crate) fn attribute_edit_section(
     r: &Rower,
     error: Option<&str>,
     perms: &DetailPermissions,
+    locked: &LockedBuckets,
 ) -> Markup {
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
@@ -346,7 +356,18 @@ pub(crate) fn attribute_edit_section(
             }
             div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
                 // Weight class
-                @if perms.can_edit_field("weight_class") {
+                @if locked.weight {
+                    div class="opacity-60" {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                        div class="text-xs text-slate-500 italic" { (r.weight_class) " (auto)" }
+                    }
+                    input type="hidden" name="weight_class" value=(match r.weight_class {
+                        RowerWeightClass::Light => "Light",
+                        RowerWeightClass::Medium => "Medium",
+                        RowerWeightClass::Heavy => "Heavy",
+                        RowerWeightClass::VeryHeavy => "VeryHeavy",
+                    });
+                } @else if perms.can_edit_field("weight_class") {
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
                         (enum_select("weight_class", &[
@@ -386,7 +407,18 @@ pub(crate) fn attribute_edit_section(
                     });
                 }
                 // Strength
-                @if perms.can_edit_field("strength") {
+                @if locked.strength {
+                    div class="opacity-60" {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                        div class="text-xs text-slate-500 italic" { (r.strength) " (auto)" }
+                    }
+                    input type="hidden" name="strength" value=(match r.strength {
+                        Strength::Weak => "Weak",
+                        Strength::Intermediate => "Intermediate",
+                        Strength::Strong => "Strong",
+                        Strength::VeryStrong => "VeryStrong",
+                    });
+                } @else if perms.can_edit_field("strength") {
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
                         (enum_select("strength", &[
@@ -406,7 +438,18 @@ pub(crate) fn attribute_edit_section(
                     });
                 }
                 // Height
-                @if perms.can_edit_field("height") {
+                @if locked.height {
+                    div class="opacity-60" {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                        div class="text-xs text-slate-500 italic" { (r.height) " (auto)" }
+                    }
+                    input type="hidden" name="height" value=(match r.height {
+                        Height::Short => "Short",
+                        Height::Medium => "Medium",
+                        Height::Tall => "Tall",
+                        Height::VeryTall => "VeryTall",
+                    });
+                } @else if perms.can_edit_field("height") {
                     div {
                         label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
                         (enum_select("height", &[

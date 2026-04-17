@@ -231,17 +231,13 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### Raw rower metrics — remaining polish
+#### Raw rower metrics — fully shipped
 
-Phase 1 (raw fields + display) and Phase 2 (threshold config +
-auto-bucketing + slider UI) both shipped. VeryHeavy weight class
-added. Remaining:
-
-- **Field locking:** Grey out categorical bucket dropdowns on the
-  rower edit form when the rower has a raw value and the team has
-  thresholds configured. Currently the auto-bucketing overrides on
-  threshold save, but the dropdown is still editable (a coach could
-  manually set a value that gets overwritten next threshold save).
+Phase 1 (raw fields + display), Phase 2 (threshold config +
+auto-bucketing + slider UI), VeryHeavy weight class, and field
+locking all shipped. Categorical dropdowns are greyed out with
+"(auto)" label when a rower has raw values and the team has
+thresholds configured.
 
 #### Rower self-service guard rails (field locking)
 

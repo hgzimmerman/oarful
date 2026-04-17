@@ -114,8 +114,11 @@ pub(crate) async fn profile_update_handler(
     let parsed = match parse_profile(&input) {
         Ok(p) => p,
         Err(msg) => {
+            let locked =
+                super::rowers::locked_bucket_fields_for_rower(&tenant, &jar, &rower).await?;
             return Ok(Html(
-                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms).into_string(),
+                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms, &locked)
+                    .into_string(),
             ));
         }
     };
