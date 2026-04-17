@@ -353,6 +353,7 @@ pub(crate) fn attribute_edit_section(
                             ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
                             ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
                             ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
+                            ("VeryHeavy", "Very heavy", RowerWeightClass::VeryHeavy == r.weight_class),
                         ]))
                     }
                 } @else {
@@ -361,6 +362,7 @@ pub(crate) fn attribute_edit_section(
                         RowerWeightClass::Light => "Light",
                         RowerWeightClass::Medium => "Medium",
                         RowerWeightClass::Heavy => "Heavy",
+                        RowerWeightClass::VeryHeavy => "VeryHeavy",
                     });
                 }
                 // Form (skill)

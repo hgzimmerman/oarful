@@ -188,6 +188,7 @@ fn parse_profile(input: &ProfileInput) -> Result<ParsedProfile, String> {
         "Light" => RowerWeightClass::Light,
         "Medium" => RowerWeightClass::Medium,
         "Heavy" => RowerWeightClass::Heavy,
+        "VeryHeavy" => RowerWeightClass::VeryHeavy,
         other => return Err(format!("invalid weight class: {other}")),
     };
     let skill = match input.skill.as_str() {

@@ -37,9 +37,7 @@ impl std::str::FromStr for RowerId {
     }
 }
 
-/// Rower weight class. Intentionally coarser than `boat::types::WeightClass`
-/// (no `Tubby` bucket) — individual rowers don't map onto the fourth boat
-/// bucket cleanly.
+/// Rower weight class. Four tiers matching the 3-caret threshold UI.
 #[derive(
     Clone,
     Copy,
@@ -57,6 +55,7 @@ pub enum RowerWeightClass {
     Light,
     Medium,
     Heavy,
+    VeryHeavy,
 }
 
 impl RowerWeightClass {
@@ -68,6 +67,7 @@ impl RowerWeightClass {
             Self::Light => 1,
             Self::Medium => 2,
             Self::Heavy => 3,
+            Self::VeryHeavy => 4,
         }
     }
 }
@@ -79,6 +79,7 @@ impl RowerWeightClass {
             Self::Light => "Lt",
             Self::Medium => "Md",
             Self::Heavy => "Hv",
+            Self::VeryHeavy => "VH",
         }
     }
 }
@@ -89,6 +90,7 @@ impl std::fmt::Display for RowerWeightClass {
             Self::Light => "Lightweight",
             Self::Medium => "Middleweight",
             Self::Heavy => "Heavyweight",
+            Self::VeryHeavy => "Very heavy",
         })
     }
 }
