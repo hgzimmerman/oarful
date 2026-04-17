@@ -310,11 +310,11 @@ fn threshold_section(
     let (s1, s2, s3) = st
         .map(|t| (t.low_mid / 100.0, t.mid_high / 100.0, t.high_very / 100.0))
         .filter(|(a, _, c)| {
-            // Sanity check: values should be in the slider range (80-140 sec).
+            // Sanity check: values should be in the slider range (80-150 sec).
             // If not, the data is stale (pre-unit-conversion). Use defaults.
             *a >= 50.0 && *c >= 50.0
         })
-        .unwrap_or((120.0, 110.0, 100.0));
+        .unwrap_or((125.0, 115.0, 105.0));
 
     html! {
         section class="bg-white rounded-lg shadow p-6 space-y-2" {
@@ -342,7 +342,7 @@ fn threshold_section(
             @let erg_dist = team.erg_threshold_distance_m.unwrap_or(2000);
             (threshold_slider_with_distance(team_id, erg_dist,
                 &["Weak", "Intermediate", "Strong", "Very strong"],
-                80.0, 140.0, s1, s2, s3))
+                90.0, 150.0, s1, s2, s3))
         }
     }
 }
