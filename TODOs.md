@@ -188,6 +188,41 @@ can resume without re-deriving context.
 
 ## Open work
 
+### Quick wins
+
+#### Practice time in reminder and lineup emails
+
+Reminder and lineup emails currently only show the date. Include
+the practice start time so rowers know when to show up.
+
+#### Gate backup restore behind billing status
+
+The backup import/restore flow should be disabled for trial
+tenants. Prevents free trials from being used to clone production
+data. Allow for active, grandfathered, and paid tenants only.
+
+#### Email restrictions for trial tenants
+
+Disable outbound email (reminders, lineup notifications, invites)
+for trial tenants to prevent spam abuse. Trial users can still use
+the app fully but emails go nowhere (or show a "upgrade to send
+emails" message in the UI). As a secondary safeguard, add a daily
+email cap per tenant (e.g. 300/day for paid, 0 for trial) tracked
+via a counter in the master DB. Bulk actions (e.g. reminders to
+the full roster) should be allowed to exceed the cap rather than
+partially sending.
+
+#### Invite URL with tenant slug
+
+Include tenant slug in invite URLs for cleaner routing.
+
+#### Webmaster email — remaining work
+
+`WEBMASTER_EMAIL` env var drives the `mailto:` link on the billing
+suspended page (shipped). Remaining: use it as the `From` address
+for outbound emails (requires production mailer integration) and
+in a `<meta name="author">` tag.
+
 ### Coach features
 
 #### Stale lineup notification — coach-facing
@@ -207,28 +242,6 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### Email restrictions for trial tenants
-
-Disable outbound email (reminders, lineup notifications, invites)
-for trial tenants to prevent spam abuse. Trial users can still use
-the app fully but emails go nowhere (or show a "upgrade to send
-emails" message in the UI). As a secondary safeguard, add a daily
-email cap per tenant (e.g. 300/day for paid, 0 for trial) tracked
-via a counter in the master DB. Bulk actions (e.g. reminders to
-the full roster) should be allowed to exceed the cap rather than
-partially sending.
-
-#### Gate backup restore behind billing status
-
-The backup import/restore flow should be disabled for trial
-tenants. Prevents free trials from being used to clone production
-data. Allow for active, grandfathered, and paid tenants only.
-
-#### Practice time in reminder and lineup emails
-
-Reminder and lineup emails currently only show the date. Include
-the practice start time so rowers know when to show up.
-
 #### Boat usage matrix CSV export
 
 A second CSV export from the fleet page: boat name × date matrix
@@ -236,8 +249,6 @@ where each cell is the number of times that boat was used on that
 date (derived from committed lineups, grouped by practice start
 time). Complements the existing summary CSV which shows aggregate
 usage stats.
-
-### Coach features (continued)
 
 #### Raw rower metrics + team-defined bucketing
 
@@ -270,20 +281,15 @@ bucket. Team settings page gets threshold config per metric. Auto-
 derive buckets on save when raw values are present and thresholds
 are configured.
 
-### Parked
+#### Rower self-service guard rails (field locking)
 
-#### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
+Under-specified. Mostly addressed by existing `SelfEditLevel`
+system. May be fully resolved by raw rower metrics (auto-derived
+buckets remove the ability to game categorical fields).
 
-Pre-solve diagnostics shipped. The deeper relaxation-pass work
-(re-solve with each hard constraint disabled to identify the
-culprit) remains parked pending a Pumpkin API dive.
+### Architecture / platform
 
-## Follow-ups not yet tracked as tasks
-
-- **Invite URL with tenant slug**
-- **Rower self-service guard rails** (field locking)
-
-### Per-team roles
+#### Per-team roles
 
 Currently roles are global per user. Real-world scenario: a PD
 rows on the morning team and coaches the afternoon team.
@@ -296,19 +302,7 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
-#### Webmaster email — partially shipped
-
-`WEBMASTER_EMAIL` env var now drives the `mailto:` link on the
-billing suspended page. Remaining: use it as the `From` address
-for outbound emails (requires production mailer integration) and
-in a `<meta name="author">` tag.
-
-#### Pricing on landing page
-
-Add pricing to the landing page once Stripe is wired up. Starting
-at $150/year. State it plainly, frame as annual not monthly.
-
-### Stripe payment integration
+#### Stripe payment integration
 
 Wire up a payment processor to gate tenant creation or convert
 trials to paid. `billing_status` and `trial_expires_at` already
@@ -316,13 +310,20 @@ exist on the tenant table. Needs `stripe_customer_id` on tenant,
 a checkout/portal flow, and webhook handling for subscription
 lifecycle events.
 
-### CI/CD
+#### Pricing on landing page
+
+Add pricing to the landing page once Stripe is wired up. Starting
+at $150/year. State it plainly, frame as annual not monthly.
+
+#### CI/CD
 
 Build/test/lint pipelines for this repo (GitHub Actions or
 similar). Deployment pipelines (k3s/k8s rollout) live in the
 separate private infra repo.
 
-### Regatta lineup generator (long-term)
+### Long-term / parked
+
+#### Regatta lineup generator
 
 A significantly more complex solver mode for race-day scheduling.
 Unlike practice lineups (one set of boats, one time slot), regattas
@@ -404,7 +405,7 @@ approach: assign rowers to races first, then schedule boats).
 Very large scope — park until practice lineups are mature and
 there's real demand from clubs doing regattas.
 
-### HTMX 4.0 SSE migration
+#### HTMX 4.0 SSE migration
 
 When HTMX 4.0 stabilizes (expected mid-2026), migrate the streaming
 alternatives from `htmx-ext-sse` to native fetch streaming. HTMX 4.0
@@ -414,7 +415,7 @@ and `sse-connect`/`sse-swap` in favor of native HTMX streaming
 attributes. Also enables POST-based SSE (currently requires GET).
 This would let us remove `htmx-ext-sse.js` from the public assets.
 
-### Discord integration (long-term)
+#### Discord integration
 
 Low priority — don't start until most other work is done.
 
@@ -432,10 +433,17 @@ token. Significantly more work and a heavier dependency.
 
 Start with push-only; bidirectional can follow if there's demand.
 
+#### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
+
+Pre-solve diagnostics shipped. The deeper relaxation-pass work
+(re-solve with each hard constraint disabled to identify the
+culprit) remains parked pending a Pumpkin API dive.
+
 ## Suggested next moves
 
-1. **Stale lineup notification (coach-side)** — nav badge or toast.
-2. **Email restrictions for trial tenants** — prevent spam abuse.
-3. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes + threshold config.
-4. **Per-team roles** — design + migration.
-5. **Stripe payment integration** — convert trials to paid tenants.
+1. **Practice time in emails** — quick win, immediate user value.
+2. **Gate backup restore + email restrictions** — billing guard rails.
+3. **Stale lineup notification (coach-side)** — nav badge or toast.
+4. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
+5. **Per-team roles** — design + migration.
+6. **Stripe payment integration** — convert trials to paid tenants.
