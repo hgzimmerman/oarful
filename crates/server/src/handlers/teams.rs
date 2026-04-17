@@ -637,6 +637,7 @@ pub(crate) async fn histogram_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let metric = q.metric.clone();
+    let q_dist = q.dist;
     let bins = tenant
         .db
         .with_conn(move |conn| {
@@ -659,8 +660,12 @@ pub(crate) async fn histogram_handler(
                     .filter_map(|r| r.height_m.map(|m| m * 39.3701))
                     .collect(),
                 "strength" => {
-                    let team = Team::get(conn, id)?;
-                    let dist = team.and_then(|t| t.erg_threshold_distance_m);
+                    let dist = q_dist.or_else(|| {
+                        Team::get(conn, id)
+                            .ok()
+                            .flatten()
+                            .and_then(|t| t.erg_threshold_distance_m)
+                    });
                     if let Some(dist) = dist {
                         let mut splits = Vec::new();
                         for r in &rowers {
@@ -689,6 +694,8 @@ pub(crate) async fn histogram_handler(
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct HistogramQuery {
     metric: String,
+    #[serde(default)]
+    dist: Option<i32>,
 }
 
 #[derive(Debug, serde::Serialize)]

@@ -285,7 +285,8 @@ fn threshold_section(team: &Team) -> Markup {
                 &["Short", "Medium", "Tall", "Very tall"],
                 60.0, 80.0, 66.0, 70.0, 74.0))
 
-            (threshold_slider(team_id, "strength", "Erg split (sec/500m)",
+            @let erg_dist = team.erg_threshold_distance_m.unwrap_or(2000);
+            (threshold_slider_with_distance(team_id, erg_dist,
                 &["Weak", "Intermediate", "Strong", "Very strong"],
                 80.0, 140.0, 120.0, 110.0, 100.0))
         }
@@ -385,6 +386,95 @@ fn threshold_slider(
     }
 }
 
+/// Strength slider variant with an erg distance selector.
+fn threshold_slider_with_distance(
+    team_id: TeamId,
+    erg_dist: i32,
+    bucket_labels: &[&str; 4],
+    range_min: f64,
+    range_max: f64,
+    default_low: f64,
+    default_mid: f64,
+    default_high: f64,
+) -> Markup {
+    let save_url = format!("/teams/{team_id}/thresholds");
+    let hist_url_base = format!("/teams/{team_id}/histogram?metric=strength");
+    // Reverse labels for descending metric.
+    let labels = format!(
+        "['{}','{}','{}','{}']",
+        bucket_labels[3], bucket_labels[2], bucket_labels[1], bucket_labels[0]
+    );
+
+    html! {
+        div class="mb-6"
+            "x-data"=(PreEscaped(format!(
+                "{{ ...thresholdSlider('strength', '{save_url}', '{hist_url_base}', {range_min}, {range_max}, {default_low}, {default_mid}, {default_high}, {labels}, true), ergDist: {erg_dist} }}"
+            )))
+            "x-init"=(PreEscaped(format!(
+                "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
+            ))) {
+            div class="flex items-center justify-between mb-1" {
+                div class="flex items-center gap-2" {
+                    span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Erg split (sec/500m)" }
+                    select "x-model"="ergDist"
+                           "@change"=(PreEscaped(format!(
+                               "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
+                           )))
+                           class="border border-slate-300 rounded px-2 py-0.5 text-xs focus:border-slate-500 focus:outline-none" {
+                        option value="1000" selected[erg_dist == 1000] { "1k" }
+                        option value="2000" selected[erg_dist == 2000] { "2k" }
+                        option value="5000" selected[erg_dist == 5000] { "5k" }
+                        option value="6000" selected[erg_dist == 6000] { "6k" }
+                    }
+                }
+                button type="button" "@click"="save()"
+                       class="text-xs font-semibold text-emerald-600 hover:text-emerald-800" {
+                    "Save"
+                }
+            }
+            // Slider track
+            div class="relative h-24 bg-slate-100 rounded select-none touch-none"
+                "x-ref"="track"
+                "@mousedown"="startDrag($event)"
+                "@touchstart.passive"="startDrag($event)" {
+                template "x-for"="bar in bars" {
+                    div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
+                        ":style"="barStyle(bar)" {}
+                }
+                div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
+                    div class="bg-blue-100/60" ":style"="'width:'+pct(v1)+'%'" {}
+                    div class="bg-green-100/60" ":style"="'width:'+(pct(v2)-pct(v1))+'%'" {}
+                    div class="bg-yellow-100/60" ":style"="'width:'+(pct(v3)-pct(v2))+'%'" {}
+                    div class="bg-red-100/60" ":style"="'width:'+(100-pct(v3))+'%'" {}
+                }
+                template "x-for"="(v, i) in [v1, v2, v3]" {
+                    div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
+                        ":style"="'left:'+pct(v)+'%'"
+                        ":data-caret"="i" {}
+                }
+                template "x-for"="(v, i) in [v1, v2, v3]" {
+                    div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
+                        ":style"="'left:'+pct(v)+'%'"
+                        ":data-caret"="i" {}
+                }
+            }
+            div class="flex text-[10px] text-slate-500 mt-1" {
+                template "x-for"="(lbl, i) in labels" {
+                    div class="text-center truncate" ":style"="zoneStyle(i)" {
+                        span "x-text"="lbl" {}
+                    }
+                }
+            }
+            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
+                span { "Low/Mid: " span "x-text"="fmt(v1)" {} }
+                span { "Mid/High: " span "x-text"="fmt(v2)" {} }
+                span { "High/Very: " span "x-text"="fmt(v3)" {} }
+            }
+            div "x-ref"="result" {}
+        }
+    }
+}
+
 fn threshold_slider_script() -> Markup {
     html! {
         script {
@@ -457,6 +547,7 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
     },
     save() {
       var body = {metric: metric, low_mid: this.v1, mid_high: this.v2, high_very: this.v3};
+      if (this.ergDist) body.erg_distance_m = parseInt(this.ergDist);
       fetch(saveUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)})
         .then(r=>r.text()).then(html=>{this.$refs.result.innerHTML=html; setTimeout(()=>{this.$refs.result.innerHTML=''},3000)})
         .catch(()=>{this.$refs.result.innerHTML='<div class="text-sm text-red-600 mt-2">Save failed.</div>'});
