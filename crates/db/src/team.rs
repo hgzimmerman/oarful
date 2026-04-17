@@ -156,6 +156,9 @@ pub struct Team {
     pub default_practice_days: Option<PracticeDays>,
     /// When true, rowers who haven't responded are treated as available.
     pub assume_available: IntBool,
+    /// Which erg test distance (metres) the team uses for strength
+    /// bucketing. None = not configured.
+    pub erg_threshold_distance_m: Option<i32>,
 }
 
 /// What a non-coach member is allowed to edit on their own profile.

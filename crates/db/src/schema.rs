@@ -125,6 +125,17 @@ diesel::table! {
         archived -> Integer,
         default_practice_days -> Nullable<Integer>,
         assume_available -> Integer,
+        erg_threshold_distance_m -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    team_threshold (team_id, metric) {
+        team_id -> Integer,
+        metric -> Text,
+        low_mid -> Double,
+        mid_high -> Double,
+        high_very -> Double,
     }
 }
 
@@ -265,6 +276,7 @@ diesel::table! {
 }
 
 diesel::joinable!(audit_log -> app_user (user_id));
+diesel::joinable!(team_threshold -> team (team_id));
 diesel::joinable!(sync_source -> team (team_id));
 diesel::joinable!(solver_profile -> team (team_id));
 diesel::joinable!(erg_test -> rower (rower_id));
@@ -298,6 +310,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     team_membership,
     team_coach,
     team_boat_default,
+    team_threshold,
     practice,
     availability,
     lineup,

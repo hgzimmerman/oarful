@@ -268,6 +268,11 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/teams/{id}/toggle-archive",
             post(teams::toggle_archive_handler),
         )
+        .route(
+            "/teams/{id}/thresholds",
+            post(teams::threshold_save_handler),
+        )
+        .route("/teams/{id}/histogram", get(teams::histogram_handler))
         .route("/teams/selector", get(teams::selector_handler))
         // My pages
         .route("/my", get(my::index_handler))

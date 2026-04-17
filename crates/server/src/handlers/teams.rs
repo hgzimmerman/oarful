@@ -543,3 +543,186 @@ pub(crate) async fn toggle_archive_handler(
         &tenant,
     ))
 }
+
+// =====================================================================
+// Threshold config (PD only)
+// =====================================================================
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct ThresholdInput {
+    metric: String,
+    low_mid: f64,
+    mid_high: f64,
+    high_very: f64,
+    #[serde(default)]
+    erg_distance_m: Option<i32>,
+}
+
+/// `POST /teams/{id}/thresholds` — save thresholds + batch recalculate.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn threshold_save_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<TeamId>,
+    axum::Json(input): axum::Json<ThresholdInput>,
+) -> Result<Html<String>, ErrorResponse> {
+    use lineup_db::team_threshold::{self, TeamThreshold};
+
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let metric = input.metric.clone();
+    if ![
+        team_threshold::METRIC_WEIGHT,
+        team_threshold::METRIC_HEIGHT,
+        team_threshold::METRIC_STRENGTH,
+    ]
+    .contains(&metric.as_str())
+    {
+        return Err(bad_request("Invalid metric."));
+    }
+    if input.low_mid >= input.mid_high || input.mid_high >= input.high_very {
+        return Err(bad_request("Thresholds must be in ascending order."));
+    }
+
+    let row = TeamThreshold {
+        team_id: id,
+        metric: metric.clone(),
+        low_mid: input.low_mid,
+        mid_high: input.mid_high,
+        high_very: input.high_very,
+    };
+    let erg_distance = input.erg_distance_m;
+
+    let updated = tenant
+        .db
+        .with_conn(move |conn| {
+            TeamThreshold::upsert(conn, &row)?;
+            if metric == team_threshold::METRIC_STRENGTH {
+                if let Some(dist) = erg_distance {
+                    use diesel::prelude::*;
+                    use lineup_db::schema::team;
+                    diesel::update(team::table.find(id))
+                        .set(team::erg_threshold_distance_m.eq(Some(dist)))
+                        .execute(conn)?;
+                }
+            }
+            let all = TeamThreshold::for_team(conn, id)?;
+            let team = Team::get(conn, id)?;
+            let erg_dist = team.and_then(|t| t.erg_threshold_distance_m);
+            team_threshold::batch_derive(conn, id, &all, erg_dist)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "team.threshold.update",
+        "team",
+        &id.to_string(),
+        Some(serde_json::json!({"metric": input.metric, "rowers_updated": updated}).to_string()),
+    );
+
+    Ok(Html(format!(
+        r#"<div class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 mt-2">{updated} rower(s) updated.</div>"#
+    )))
+}
+
+/// `GET /teams/{id}/histogram?metric=weight` — histogram data for slider.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn histogram_handler(
+    Extension(tenant): Extension<TenantContext>,
+    Path(id): Path<TeamId>,
+    axum::extract::Query(q): axum::extract::Query<HistogramQuery>,
+) -> Result<axum::Json<Vec<HistogramBin>>, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+
+    let metric = q.metric.clone();
+    let bins = tenant
+        .db
+        .with_conn(move |conn| {
+            use diesel::prelude::*;
+            use lineup_db::rower::Rower;
+            let rower_ids = TeamMembership::rower_ids_for_team(conn, id)?;
+            let rowers: Vec<Rower> = lineup_db::schema::rower::table
+                .filter(lineup_db::schema::rower::id.eq_any(&rower_ids))
+                .filter(lineup_db::schema::rower::active.eq(1))
+                .select(Rower::as_select())
+                .get_results(conn)?;
+
+            let values: Vec<f64> = match metric.as_str() {
+                "weight" => rowers
+                    .iter()
+                    .filter_map(|r| r.weight_kg.map(lineup_db::erg_test::kg_to_lbs))
+                    .collect(),
+                "height" => rowers
+                    .iter()
+                    .filter_map(|r| r.height_m.map(|m| m * 39.3701))
+                    .collect(),
+                "strength" => {
+                    let team = Team::get(conn, id)?;
+                    let dist = team.and_then(|t| t.erg_threshold_distance_m);
+                    if let Some(dist) = dist {
+                        let mut splits = Vec::new();
+                        for r in &rowers {
+                            let tests = lineup_db::erg_test::ErgTest::list_for_rower(conn, r.id)?;
+                            if let Some(t) = tests.iter().find(|t| t.distance_m == dist) {
+                                splits.push(
+                                    (t.time_cs as f64) / (t.distance_m as f64 / 500.0) / 100.0,
+                                );
+                            }
+                        }
+                        splits
+                    } else {
+                        Vec::new()
+                    }
+                }
+                _ => Vec::new(),
+            };
+            Ok(build_histogram(&values, &metric))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(axum::Json(bins))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct HistogramQuery {
+    metric: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct HistogramBin {
+    pub min: f64,
+    pub max: f64,
+    pub count: usize,
+}
+
+fn build_histogram(values: &[f64], metric: &str) -> Vec<HistogramBin> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    let bin_width: f64 = match metric {
+        "weight" => 5.0,
+        "height" => 2.0,
+        "strength" => 2.0,
+        _ => 5.0,
+    };
+    let min_val = values.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max_val = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let bin_start = (min_val / bin_width).floor() * bin_width;
+    let bin_end = ((max_val / bin_width).ceil() + 1.0) * bin_width;
+    let mut bins = Vec::new();
+    let mut edge = bin_start;
+    while edge < bin_end {
+        let next = edge + bin_width;
+        let count = values.iter().filter(|&&v| v >= edge && v < next).count();
+        bins.push(HistogramBin {
+            min: edge,
+            max: next,
+            count,
+        });
+        edge = next;
+    }
+    bins
+}

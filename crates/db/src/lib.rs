@@ -24,6 +24,7 @@ pub mod solver_profile;
 pub mod state;
 pub mod sync_source;
 pub mod team;
+pub mod team_threshold;
 pub mod test_support;
 pub mod types;
 

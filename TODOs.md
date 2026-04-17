@@ -231,32 +231,17 @@ side: the coach should know without checking the history page.
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
 
-#### Raw rower metrics — Phase 2: threshold config + auto-bucketing
+#### Raw rower metrics — remaining polish
 
-Phase 1 shipped (raw `weight_kg`, `height_m` on rower + `erg_test`
-log table). Remaining for Phase 2:
+Phase 1 (raw fields + display) and Phase 2 (threshold config +
+auto-bucketing + slider UI) both shipped. VeryHeavy weight class
+added. Remaining:
 
-Weight class needs a 4th category: `VeryHeavy` (all categorical
-enums should have 4 tiers to match the 3-caret threshold UI).
-When a raw value is present, the corresponding categorical bucket
-field should be locked (greyed out) — auto-derived from thresholds.
-
-**Threshold config + auto-bucketing.** Teams define their
-own threshold mappings from raw values to categorical buckets:
-- Weight: Lightweight/Middleweight/Heavyweight/VeryHeavy (from `weight_kg`)
-- Height: Short/Medium/Tall/VeryTall (from `height_m`)
-- Strength: Weak/Intermediate/Strong/VeryStrong (from `erg_2k_cs`)
-- Skill/Form: stays as a manual coach-set enum (not quantifiable)
-
-3 threshold values per metric split the range into 4 buckets.
-On threshold save, batch-recalculate all rowers with raw values.
-
-**Threshold config UI:** A segmented slider with 3 draggable
-carets splitting 4 labeled zones. Overlaid on a histogram of
-actual rower values (grouped by ~5 lbs / ~2 inches / ~2 split
-seconds). Coaches drag boundaries and see rowers shift between
-buckets in real time. One slider per metric on the team settings
-page. Coach+ only.
+- **Field locking:** Grey out categorical bucket dropdowns on the
+  rower edit form when the rower has a raw value and the team has
+  thresholds configured. Currently the auto-bucketing overrides on
+  threshold save, but the dropdown is still editable (a coach could
+  manually set a value that gets overwritten next threshold save).
 
 #### Rower self-service guard rails (field locking)
 
