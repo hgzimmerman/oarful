@@ -189,16 +189,12 @@ can resume without re-deriving context.
   the practice start time alongside the date (e.g. "Monday — 2026-04-21
   at 6:30 AM"). Threaded through `ReminderRecipient`, `EmailLineupSummary`,
   `Mailer` trait, and email templates.
+- **Gate backup restore behind billing status** — trial tenants
+  blocked from restore. Active and grandfathered allowed.
 
 ## Open work
 
 ### Quick wins
-
-#### Gate backup restore behind billing status
-
-The backup import/restore flow should be disabled for trial
-tenants. Prevents free trials from being used to clone production
-data. Allow for active, grandfathered, and paid tenants only.
 
 #### Email restrictions for trial tenants
 
