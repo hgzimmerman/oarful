@@ -118,7 +118,13 @@ pub(crate) async fn create_handler(
     );
 
     // Redirect to the new team's detail page.
-    let content = templates::teams::detail_content(&team);
+    let team_id = team.id;
+    let thresholds = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team_threshold::TeamThreshold::for_team(conn, team_id))
+        .await
+        .map_err(internal_error)?;
+    let content = templates::teams::detail_content(&team, &thresholds);
     Ok(super::maybe_page_authed(
         &format!("Team · {}", team.name),
         content,
@@ -151,7 +157,12 @@ pub(crate) async fn detail_handler(
         .await
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
-    let content = templates::teams::detail_content(&team);
+    let thresholds = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team_threshold::TeamThreshold::for_team(conn, id))
+        .await
+        .map_err(internal_error)?;
+    let content = templates::teams::detail_content(&team, &thresholds);
     Ok(super::maybe_page_authed(
         &format!("Team · {}", team.name),
         content,
@@ -278,7 +289,12 @@ pub(crate) async fn update_handler(
         .await
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
-    let content = templates::teams::detail_content(&team);
+    let thresholds = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team_threshold::TeamThreshold::for_team(conn, id))
+        .await
+        .map_err(internal_error)?;
+    let content = templates::teams::detail_content(&team, &thresholds);
     Ok(super::maybe_page_authed(
         &format!("Team · {}", team.name),
         content,
@@ -535,7 +551,12 @@ pub(crate) async fn toggle_archive_handler(
         .await
         .map_err(internal_error)?
         .ok_or_else(|| not_found("Team not found."))?;
-    let content = templates::teams::detail_content(&team);
+    let thresholds = tenant
+        .db
+        .with_conn(move |conn| lineup_db::team_threshold::TeamThreshold::for_team(conn, id))
+        .await
+        .map_err(internal_error)?;
+    let content = templates::teams::detail_content(&team, &thresholds);
     Ok(super::maybe_page_authed(
         &format!("Team · {}", team.name),
         content,
@@ -579,16 +600,42 @@ pub(crate) async fn threshold_save_handler(
     {
         return Err(bad_request("Invalid metric."));
     }
-    if input.low_mid >= input.mid_high || input.mid_high >= input.high_very {
-        return Err(bad_request("Thresholds must be in ascending order."));
+    // Strength thresholds are stored descending (low_mid=slow > high_very=fast).
+    let valid_order = if metric == lineup_db::team_threshold::METRIC_STRENGTH {
+        input.low_mid > input.mid_high && input.mid_high > input.high_very
+    } else {
+        input.low_mid < input.mid_high && input.mid_high < input.high_very
+    };
+    if !valid_order {
+        return Err(bad_request("Invalid threshold order."));
     }
+
+    // Convert display units to storage units.
+    let (low_mid, mid_high, high_very) = match metric.as_str() {
+        "weight" => (
+            input.low_mid / 2.20462, // lbs → kg
+            input.mid_high / 2.20462,
+            input.high_very / 2.20462,
+        ),
+        "height" => (
+            input.low_mid * 0.0254, // inches → metres
+            input.mid_high * 0.0254,
+            input.high_very * 0.0254,
+        ),
+        "strength" => (
+            input.low_mid * 100.0, // seconds → centiseconds
+            input.mid_high * 100.0,
+            input.high_very * 100.0,
+        ),
+        _ => (input.low_mid, input.mid_high, input.high_very),
+    };
 
     let row = TeamThreshold {
         team_id: id,
         metric: metric.clone(),
-        low_mid: input.low_mid,
-        mid_high: input.mid_high,
-        high_very: input.high_very,
+        low_mid,
+        mid_high,
+        high_very,
     };
     let erg_distance = input.erg_distance_m;
 

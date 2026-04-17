@@ -110,7 +110,10 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
     }
 }
 
-pub(crate) fn detail_content(team: &Team) -> Markup {
+pub(crate) fn detail_content(
+    team: &Team,
+    thresholds: &[lineup_db::team_threshold::TeamThreshold],
+) -> Markup {
     let action = format!("/teams/{}", team.id);
     html! {
         (page_header(&team.name, Some("Team settings")))
@@ -233,7 +236,7 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
 
             // Threshold config section
             (threshold_slider_script())
-            (threshold_section(team))
+            (threshold_section(team, thresholds))
 
             // Archive / unarchive section
             section class="border-t border-red-200 pt-4" {
@@ -267,8 +270,53 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
 // Threshold config — segmented slider with histogram overlay
 // =====================================================================
 
-fn threshold_section(team: &Team) -> Markup {
+fn threshold_section(
+    team: &Team,
+    thresholds: &[lineup_db::team_threshold::TeamThreshold],
+) -> Markup {
+    use lineup_db::team_threshold::{METRIC_HEIGHT, METRIC_STRENGTH, METRIC_WEIGHT};
     let team_id = team.id;
+
+    let wt = thresholds.iter().find(|t| t.metric == METRIC_WEIGHT);
+    let ht = thresholds.iter().find(|t| t.metric == METRIC_HEIGHT);
+    let st = thresholds.iter().find(|t| t.metric == METRIC_STRENGTH);
+
+    // Weight: stored in kg, display in lbs. Convert thresholds.
+    let (w1, w2, w3) = wt
+        .map(|t| {
+            (
+                lineup_db::erg_test::kg_to_lbs(t.low_mid),
+                lineup_db::erg_test::kg_to_lbs(t.mid_high),
+                lineup_db::erg_test::kg_to_lbs(t.high_very),
+            )
+        })
+        .unwrap_or((150.0, 175.0, 200.0));
+
+    // Height: stored in metres, display in inches.
+    let (h1, h2, h3) = ht
+        .map(|t| {
+            (
+                t.low_mid * 39.3701,
+                t.mid_high * 39.3701,
+                t.high_very * 39.3701,
+            )
+        })
+        .unwrap_or((66.0, 70.0, 74.0));
+
+    // Strength: stored as split in cs/500m, display in seconds/500m.
+    // Stored descending-semantically: low_mid = slow boundary, high_very = fast boundary.
+    // For the slider (weak left, strong right = high sec left, low sec right),
+    // we reverse the axis, so v1 (leftmost) = largest value (slowest), v3 = smallest (fastest).
+    let (s1, s2, s3) = st
+        .map(|t| {
+            (
+                t.low_mid / 100.0, // slowest boundary (leftmost)
+                t.mid_high / 100.0,
+                t.high_very / 100.0, // fastest boundary (rightmost)
+            )
+        })
+        .unwrap_or((120.0, 110.0, 100.0));
+
     html! {
         section class="border-t border-slate-200 pt-4 mt-4" {
             h3 class="text-sm font-semibold text-slate-700 mb-3" { "Rower bucketing thresholds" }
@@ -279,16 +327,16 @@ fn threshold_section(team: &Team) -> Markup {
 
             (threshold_slider(team_id, "weight", "Weight (lbs)",
                 &["Lightweight", "Middleweight", "Heavyweight", "Very heavy"],
-                130.0, 230.0, 150.0, 175.0, 200.0))
+                130.0, 230.0, w1, w2, w3))
 
             (threshold_slider(team_id, "height", "Height (inches)",
                 &["Short", "Medium", "Tall", "Very tall"],
-                60.0, 80.0, 66.0, 70.0, 74.0))
+                60.0, 80.0, h1, h2, h3))
 
             @let erg_dist = team.erg_threshold_distance_m.unwrap_or(2000);
             (threshold_slider_with_distance(team_id, erg_dist,
                 &["Weak", "Intermediate", "Strong", "Very strong"],
-                80.0, 140.0, 120.0, 110.0, 100.0))
+                80.0, 140.0, s1, s2, s3))
         }
     }
 }
@@ -309,18 +357,10 @@ fn threshold_slider(
     // For strength, the slider is inverted (lower split = stronger),
     // so bucket labels read right-to-left visually.
     let is_descending = metric == "strength";
-    let labels = if is_descending {
-        // Reverse for display: left=slow(weak), right=fast(strong)
-        format!(
-            "['{}','{}','{}','{}']",
-            bucket_labels[3], bucket_labels[2], bucket_labels[1], bucket_labels[0]
-        )
-    } else {
-        format!(
-            "['{}','{}','{}','{}']",
-            bucket_labels[0], bucket_labels[1], bucket_labels[2], bucket_labels[3]
-        )
-    };
+    let labels = format!(
+        "['{}','{}','{}','{}']",
+        bucket_labels[0], bucket_labels[1], bucket_labels[2], bucket_labels[3]
+    );
 
     html! {
         div class="mb-6"
@@ -348,10 +388,10 @@ fn threshold_slider(
                 }
                 // Colored zone backgrounds
                 div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
-                    div class="bg-blue-100/60" ":style"="'width:'+pct(v1)+'%'" {}
-                    div class="bg-green-100/60" ":style"="'width:'+(pct(v2)-pct(v1))+'%'" {}
-                    div class="bg-yellow-100/60" ":style"="'width:'+(pct(v3)-pct(v2))+'%'" {}
-                    div class="bg-red-100/60" ":style"="'width:'+(100-pct(v3))+'%'" {}
+                    div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
+                    div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
+                    div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
+                    div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
                 }
                 // Caret lines
                 template "x-for"="(v, i) in [v1, v2, v3]" {
@@ -399,10 +439,9 @@ fn threshold_slider_with_distance(
 ) -> Markup {
     let save_url = format!("/teams/{team_id}/thresholds");
     let hist_url_base = format!("/teams/{team_id}/histogram?metric=strength");
-    // Reverse labels for descending metric.
     let labels = format!(
         "['{}','{}','{}','{}']",
-        bucket_labels[3], bucket_labels[2], bucket_labels[1], bucket_labels[0]
+        bucket_labels[0], bucket_labels[1], bucket_labels[2], bucket_labels[3]
     );
 
     html! {
@@ -442,10 +481,10 @@ fn threshold_slider_with_distance(
                         ":style"="barStyle(bar)" {}
                 }
                 div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
-                    div class="bg-blue-100/60" ":style"="'width:'+pct(v1)+'%'" {}
-                    div class="bg-green-100/60" ":style"="'width:'+(pct(v2)-pct(v1))+'%'" {}
-                    div class="bg-yellow-100/60" ":style"="'width:'+(pct(v3)-pct(v2))+'%'" {}
-                    div class="bg-red-100/60" ":style"="'width:'+(100-pct(v3))+'%'" {}
+                    div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
+                    div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
+                    div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
+                    div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
                 }
                 template "x-for"="(v, i) in [v1, v2, v3]" {
                     div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
@@ -466,9 +505,9 @@ fn threshold_slider_with_distance(
                 }
             }
             div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
-                span { "Strong/Very: " span "x-text"="fmt(v1)" {} }
-                span { "Inter/Strong: " span "x-text"="fmt(v2)" {} }
                 span { "Weak/Inter: " span "x-text"="fmt(v3)" {} }
+                span { "Inter/Strong: " span "x-text"="fmt(v2)" {} }
+                span { "Strong/Very: " span "x-text"="fmt(v1)" {} }
             }
             div "x-ref"="result" {}
         }
@@ -487,8 +526,14 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
     init() {
       fetch(histUrl).then(r=>r.json()).then(d=>{this.bars=d}).catch(()=>{});
     },
-    pct(v) { return ((v - this.rMin) / (this.rMax - this.rMin) * 100); },
-    valFromPct(p) { return this.rMin + p / 100 * (this.rMax - this.rMin); },
+    pct(v) {
+      var p = (v - this.rMin) / (this.rMax - this.rMin) * 100;
+      return desc ? (100 - p) : p;
+    },
+    valFromPct(p) {
+      var pp = desc ? (100 - p) : p;
+      return this.rMin + pp / 100 * (this.rMax - this.rMin);
+    },
     fmt(v) {
       if (metric === 'strength') {
         var ts = Math.round(v * 100);
@@ -514,7 +559,9 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
     },
     zoneStyle(i) {
       var pts = [this.rMin, this.v1, this.v2, this.v3, this.rMax];
-      var w = this.pct(pts[i+1]) - this.pct(pts[i]);
+      var pcts = pts.map(v => this.pct(v));
+      pcts.sort((a,b) => a - b);
+      var w = pcts[i+1] - pcts[i];
       return 'width:'+w+'%';
     },
     startDrag(e) {
