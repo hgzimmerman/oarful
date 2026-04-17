@@ -133,6 +133,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(rowers::batch_invite_handler),
         )
         .route(
+            "/team/attendance/toggle",
+            post(team_hub::attendance_toggle_handler),
+        )
+        .route(
             "/team/sync",
             get(team_hub::sync_handler).post(sync::sync_handler),
         )

@@ -22,6 +22,22 @@ impl Availability {
         Ok(())
     }
 
+    /// Remove a rower's availability record for a practice (revert to "no response").
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn delete(
+        conn: &mut SqliteConnection,
+        rower_id: RowerId,
+        practice_id: PracticeId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::delete(
+            availability::table
+                .filter(availability::rower_id.eq(rower_id))
+                .filter(availability::practice_id.eq(practice_id)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
+
     /// All availability records for a single practice.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn list_for_practice(

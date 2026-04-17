@@ -115,7 +115,7 @@ pub(crate) struct AttendanceQuery {
     pub(crate) show_past: Option<String>,
 }
 
-async fn attendance_content(
+pub(crate) async fn attendance_content(
     jar: &CookieJar,
     tenant: &TenantContext,
     query: &AttendanceQuery,
@@ -158,48 +158,23 @@ async fn attendance_content(
         .await
         .map_err(handlers::internal_error)?;
 
-    // Extract dates for the template (it still expects dates for column headers).
-    let dates: Vec<chrono::NaiveDate> = practices.iter().map(|p| p.date).collect();
-    // Convert the (RowerId, PracticeId) map to (RowerId, NaiveDate) for template compatibility.
-    // NOTE: This is a simplification — if multiple practices share the same date,
-    // the last one wins. The template will need updating for full practice-id support.
-    let date_avail: std::collections::HashMap<
-        (lineup_db::rower::types::RowerId, chrono::NaiveDate),
-        lineup_db::availability::types::AvailabilityStatus,
-    > = avail_map
-        .into_iter()
-        .filter_map(|((rid, pid), status)| {
-            practices
-                .iter()
-                .find(|p| p.id == pid)
-                .map(|p| ((rid, p.date), status))
-        })
-        .collect();
-    let committed_dates: std::collections::HashSet<chrono::NaiveDate> = committed_ids
+    let columns: Vec<crate::templates::attendance::PracticeColumn> = practices
         .iter()
-        .filter_map(|pid| practices.iter().find(|p| p.id == *pid).map(|p| p.date))
-        .collect();
-    let committed_practice_ids: std::collections::HashMap<
-        chrono::NaiveDate,
-        lineup_db::practice::PracticeId,
-    > = committed_ids
-        .iter()
-        .filter_map(|pid| {
-            practices
-                .iter()
-                .find(|p| p.id == *pid)
-                .map(|p| (p.date, p.id))
+        .map(|p| crate::templates::attendance::PracticeColumn {
+            id: p.id,
+            date: p.date,
+            committed: committed_ids.contains(&p.id),
         })
         .collect();
 
+    let is_coach = tenant
+        .claims
+        .role()
+        .unwrap_or(Role::Member)
+        .at_least(Role::Coach);
+
     Ok(crate::templates::attendance::grid_content(
-        &rowers,
-        &dates,
-        &date_avail,
-        &committed_dates,
-        &committed_practice_ids,
-        show_past,
-        today,
+        &rowers, &columns, &avail_map, show_past, today, is_coach,
     ))
 }
 
@@ -207,4 +182,85 @@ async fn attendance_content(
 /// as opposed to `#content` (navbar navigation).
 fn is_tab_swap(headers: &HeaderMap) -> bool {
     headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TARGET)
+}
+
+// =====================================================================
+// Attendance toggle (Coach+ inline edit)
+// =====================================================================
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct AttendanceToggleInput {
+    rower_id: lineup_db::rower::types::RowerId,
+    practice_id: lineup_db::practice::PracticeId,
+    status: String,
+}
+
+/// `POST /team/attendance/toggle` — cycle a single availability cell.
+///
+/// Returns the replacement `<td>` element for HTMX `outerHTML` swap.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn attendance_toggle_handler(
+    Extension(tenant): Extension<TenantContext>,
+    axum::Json(input): axum::Json<AttendanceToggleInput>,
+) -> Result<Html<String>, ErrorResponse> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+
+    let rower_id = input.rower_id;
+    let practice_id = input.practice_id;
+
+    use lineup_db::availability::types::AvailabilityStatus;
+    use lineup_db::availability::{Availability, NewAvailability};
+
+    let new_status: Option<AvailabilityStatus> = match input.status.as_str() {
+        "Yes" => Some(AvailabilityStatus::Yes),
+        "No" => Some(AvailabilityStatus::No),
+        "clear" => None,
+        _ => return Err(handlers::bad_request("Invalid status.")),
+    };
+
+    tenant
+        .db
+        .with_conn(move |conn| match new_status {
+            Some(status) => Availability::upsert(
+                conn,
+                NewAvailability {
+                    rower_id,
+                    practice_id,
+                    status,
+                },
+            ),
+            None => Availability::delete(conn, rower_id, practice_id),
+        })
+        .await
+        .map_err(handlers::internal_error)?;
+
+    let status_str = match &new_status {
+        Some(s) => s.to_string(),
+        None => "clear".to_string(),
+    };
+    crate::audit::record(
+        &tenant.db,
+        Some(tenant.claims.user_id().as_int()),
+        "availability.update",
+        "availability",
+        &format!("{rower_id}:{practice_id}"),
+        Some(
+            serde_json::json!({
+                "status": status_str,
+                "practice_id": practice_id.as_int(),
+                "set_by": "coach"
+            })
+            .to_string(),
+        ),
+    );
+
+    // Return the replacement cell.
+    Ok(Html(
+        crate::templates::attendance::editable_status_cell_markup(
+            new_status.as_ref(),
+            rower_id,
+            practice_id,
+        )
+        .into_string(),
+    ))
 }

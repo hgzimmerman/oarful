@@ -180,6 +180,11 @@ can resume without re-deriving context.
 - **Password reset flow** — "Forgot password?" on login page sends a
   1-hour magic link to `/reset-password`. Dedicated email template,
   new-password form, redirect to login with success banner. E2e tested.
+- **Coach-editable availability** — attendance grid cells are now
+  tap-to-cycle (Yes → No → clear) for Coach+. HTMX `outerHTML`
+  swap per cell. Touch-guard script suppresses clicks during swipe
+  scrolling (>10px movement threshold). Audit trail records
+  `"set_by": "coach"`.
 
 ## Open work
 
@@ -223,14 +228,6 @@ data. Allow for active, grandfathered, and paid tenants only.
 
 Reminder and lineup emails currently only show the date. Include
 the practice start time so rowers know when to show up.
-
-#### Coach-editable availability
-
-Allow coaches to set availability on behalf of rowers. Useful for
-teams where attendance is the norm and members just text the coach
-when they can't make it — avoids spamming the whole roster with
-availability requests when most people will be there. Coach+ role
-gate on the availability edit action.
 
 #### Boat usage matrix CSV export
 
