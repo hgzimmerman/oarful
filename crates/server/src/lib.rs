@@ -19,7 +19,7 @@ pub(crate) mod templates;
 pub(crate) mod tenant_cache;
 pub(crate) mod unsubscribe;
 
-pub(crate) use state::AppState;
+pub use state::AppState;
 
 /// Build the full application router.
 ///
@@ -30,7 +30,7 @@ pub fn build_router(
     data_dir: &str,
     public_dir: &str,
     mailer: std::sync::Arc<dyn mailer::Mailer>,
-) -> anyhow::Result<Router> {
+) -> anyhow::Result<(Router, AppState)> {
     let state = AppState::new(master_conn_str, data_dir, mailer)?;
 
     // Run demo cleanup at startup, then periodically.
@@ -70,7 +70,8 @@ pub fn build_router(
         }
     });
 
-    Ok(handlers::create_router(state)
+    let router = handlers::create_router(state.clone())
         .fallback_service(ServeDir::new(public_dir))
-        .layer(axum::middleware::from_fn(request_id::request_tracing)))
+        .layer(axum::middleware::from_fn(request_id::request_tracing));
+    Ok((router, state))
 }

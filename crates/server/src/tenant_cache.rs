@@ -95,6 +95,20 @@ impl TenantCache {
         self.tenants.lock().unwrap().remove(&tenant_id);
     }
 
+    /// Refresh tenant config from the master DB without dropping DB
+    /// connections. Returns true if any tenants were refreshed.
+    pub(crate) async fn refresh_configs(&self, master_db: &MasterDb) {
+        let ids: Vec<TenantId> = self.tenants.lock().unwrap().keys().copied().collect();
+        for id in ids {
+            if let Ok(Some(tenant)) = master_db.with_conn(move |conn| Tenant::get(conn, id)).await {
+                let new_config = TenantConfig::from_tenant(&tenant);
+                if let Some(cached) = self.tenants.lock().unwrap().get_mut(&id) {
+                    cached.config = new_config;
+                }
+            }
+        }
+    }
+
     /// Get the Db and config for a tenant, opening it on first access.
     /// Returns an error if the tenant doesn't exist in the master DB or
     /// the SQLite file can't be opened.

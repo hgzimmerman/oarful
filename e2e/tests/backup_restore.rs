@@ -15,8 +15,7 @@ fn http_client() -> reqwest::Client {
         .unwrap()
 }
 
-/// Create a demo tenant and return the auth cookie header value.
-/// The demo endpoint issues a JWT and sets a cookie.
+/// Create a demo tenant and return the final URL (should be /practices).
 async fn setup_demo(base: &str, client: &reqwest::Client) -> String {
     let resp = client.post(format!("{base}/demo")).send().await.unwrap();
     assert!(
@@ -26,14 +25,26 @@ async fn setup_demo(base: &str, client: &reqwest::Client) -> String {
         "demo creation should succeed, got {}",
         resp.status()
     );
-    // The cookie store handles the JWT cookie automatically.
-    // Return the final URL to confirm we landed on /practices.
     let url = resp.url().to_string();
     assert!(
         url.contains("/practices"),
         "should redirect to practices, got {url}"
     );
     url
+}
+
+/// Upgrade the demo tenant to "grandfathered" billing so restore is
+/// allowed (demo/trial tenants are blocked by default). Updates the
+/// master DB directly and refreshes the server's cached config.
+async fn upgrade_to_paid(instance: &TestInstance) {
+    use diesel::prelude::*;
+    use diesel::Connection;
+    let mut conn = diesel::SqliteConnection::establish(&instance.master_db_path()).unwrap();
+    diesel::sql_query("UPDATE tenant SET billing_status = 'grandfathered'")
+        .execute(&mut conn)
+        .unwrap();
+    drop(conn);
+    instance.refresh_tenant_configs().await;
 }
 
 #[tokio::test]
@@ -92,8 +103,8 @@ async fn restore_rejects_missing_account() {
     let instance = TestInstance::start().await;
     let base = instance.base_url();
     let client = http_client();
-
     setup_demo(&base, &client).await;
+    upgrade_to_paid(&instance).await;
 
     // Create a minimal SQLite database that has NO app_user matching
     // the demo user (demo@localhost). We'll create one with a different email.
@@ -153,8 +164,8 @@ async fn restore_warns_on_credential_mismatch() {
     let instance = TestInstance::start().await;
     let base = instance.base_url();
     let client = http_client();
-
     setup_demo(&base, &client).await;
+    upgrade_to_paid(&instance).await;
 
     // Export the current DB, then modify the password hash.
     let temp_db = instance
@@ -222,8 +233,8 @@ async fn export_then_restore_preserves_data() {
     let instance = TestInstance::start().await;
     let base = instance.base_url();
     let client = http_client();
-
     setup_demo(&base, &client).await;
+    upgrade_to_paid(&instance).await;
 
     // Verify we have rowers by checking the roster page.
     let roster = client

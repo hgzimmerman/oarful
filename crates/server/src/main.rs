@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
 
     let mailer: std::sync::Arc<dyn lineup_server::mailer::Mailer> =
         std::sync::Arc::new(lineup_server::mailer::LogMailer);
-    let app = lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)?;
+    let (app, _state) = lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)?;
     let host: std::net::IpAddr = std::env::var("HOST")
         .ok()
         .and_then(|h| h.parse().ok())

@@ -20,7 +20,7 @@ use crate::mailer::Mailer;
 use crate::tenant_cache::{TenantCache, TenantConfig};
 
 #[derive(Clone)]
-pub(crate) struct AppState {
+pub struct AppState {
     pub(crate) master_db: MasterDb,
     pub(crate) tenant_cache: Arc<TenantCache>,
     /// The default tenant's ID, used for backward compat and startup
@@ -43,6 +43,15 @@ pub(crate) struct AppState {
     /// Contact email for support/billing pages (from `WEBMASTER_EMAIL`).
     /// Falls back to `support@oarful.com` if not set.
     pub(crate) webmaster_email: String,
+}
+
+impl AppState {
+    /// Refresh all cached tenant configs from the master DB without
+    /// dropping DB connections. Call after modifying tenant records
+    /// (e.g. billing status) to make the server pick up the changes.
+    pub async fn refresh_tenant_configs(&self) {
+        self.tenant_cache.refresh_configs(&self.master_db).await;
+    }
 }
 
 // ── Sub-states extractable via FromRef ──────────────────────────
@@ -116,8 +125,9 @@ impl TenantDb {
             .await
     }
 
-    /// Evict a tenant from the connection cache.
-    pub(crate) fn evict_tenant(&self, tenant_id: TenantId) {
+    /// Evict a tenant from the connection cache. The next request for
+    /// this tenant will re-read its config from the master DB.
+    pub fn evict_tenant(&self, tenant_id: TenantId) {
         self.tenant_cache.remove(tenant_id);
     }
 

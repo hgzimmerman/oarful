@@ -38,6 +38,7 @@ pub struct TestInstance {
     app_port: u16,
     driver_port: u16,
     temp_dir: PathBuf,
+    app_state: lineup_server::AppState,
 }
 
 impl TestInstance {
@@ -77,8 +78,9 @@ impl TestInstance {
             .into_owned();
 
         // Start the Axum server in-process.
-        let router = lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)
-            .expect("should build router");
+        let (router, app_state) =
+            lineup_server::build_router(&master_db, &data_dir, &public_dir, mailer)
+                .expect("should build router");
 
         let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{app_port}"))
             .await
@@ -134,6 +136,7 @@ impl TestInstance {
             app_port,
             driver_port,
             temp_dir,
+            app_state,
         }
     }
 
@@ -189,6 +192,22 @@ impl TestInstance {
 
     pub fn base_url(&self) -> String {
         format!("http://localhost:{}", self.app_port)
+    }
+
+    /// Path to the master (tenant registry) SQLite database.
+    /// Useful for tests that need to modify tenant billing status.
+    pub fn master_db_path(&self) -> String {
+        self.temp_dir
+            .join("master.db")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// Refresh all cached tenant configs from the master DB without
+    /// dropping DB connections. Call after modifying tenant records
+    /// (e.g. billing status) so the server picks up the changes.
+    pub async fn refresh_tenant_configs(&self) {
+        self.app_state.refresh_tenant_configs().await;
     }
 }
 
