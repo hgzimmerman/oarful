@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     routing::{delete, get, post},
-    Form, Router,
+    Extension, Form, Router,
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
@@ -16,7 +16,10 @@ use serde::Deserialize;
 
 use axum::extract::Query;
 
-use crate::{state::AppState, templates};
+use crate::{
+    state::{AppState, TenantContext},
+    templates,
+};
 
 pub(crate) mod admin;
 pub(crate) mod audit;
@@ -274,6 +277,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/teams/{id}/histogram", get(teams::histogram_handler))
         .route("/teams/selector", get(teams::selector_handler))
+        .route("/nav/stale-badge", get(stale_badge_handler))
         // My pages
         .route("/my", get(my::index_handler))
         .route(
@@ -431,6 +435,76 @@ pub(crate) async fn switch_team_handler(
             .http_only(true),
     );
     (jar, Redirect::to("/practices"))
+}
+
+/// `GET /nav/stale-badge` — returns a small count badge if any upcoming
+/// committed lineups have availability changes, or empty HTML otherwise.
+/// Called via `hx-trigger="load"` from the navbar Practices link.
+#[tracing::instrument(level = "debug", skip_all, err)]
+async fn stale_badge_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<Html<String>, ErrorResponse> {
+    use lineup_db::{
+        app_user::Role, availability::Availability, lineup::Lineup, practice::Practice, team::Team,
+    };
+
+    let role = tenant.claims.role().unwrap_or(Role::Member);
+    if !role.at_least(Role::Coach) {
+        return Ok(Html(String::new()));
+    }
+
+    let team_id = active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let today = chrono::Utc::now().date_naive();
+
+    let stale_count: usize = tenant
+        .db
+        .with_conn(move |conn| {
+            let assume_available = Team::get(conn, team_id)?
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
+
+            // Upcoming committed practices only.
+            let practices: Vec<Practice> = Practice::list_committed(conn, team_id)?
+                .into_iter()
+                .filter(|p| p.date >= today)
+                .collect();
+            if practices.is_empty() {
+                return Ok(0usize);
+            }
+
+            let pids: Vec<_> = practices.iter().map(|p| p.id).collect();
+            let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
+            let avail = Availability::map_for_practices(conn, &pids)?;
+
+            let count = committed_rowers
+                .iter()
+                .filter(|(pid, rower_ids)| {
+                    rower_ids.iter().any(|rid| {
+                        !avail
+                            .get(&(*rid, **pid))
+                            .map(|s| s.is_available_for_sweep())
+                            .unwrap_or(assume_available)
+                    })
+                })
+                .count();
+            Ok(count)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    if stale_count == 0 {
+        return Ok(Html(String::new()));
+    }
+
+    Ok(Html(
+        maud::html! {
+            span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold leading-none text-white bg-amber-500 rounded-full" {
+                (stale_count)
+            }
+        }
+        .into_string(),
+    ))
 }
 
 #[derive(Debug, Deserialize)]

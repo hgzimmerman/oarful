@@ -111,7 +111,7 @@ fn navbar(role: Option<Role>) -> Markup {
 
                 // Desktop nav links (hidden on mobile)
                 ul class="hidden lg:flex items-center space-x-4" {
-                    (nav_link("/practices", "Practices"))
+                    (nav_link_with_badge("/practices", "Practices", is_coach))
                     @if is_coach {
                         (nav_link("/team", "Team"))
                     }
@@ -145,7 +145,7 @@ fn navbar(role: Option<Role>) -> Markup {
                x-show="open"
                x-cloak
                "@click"="open = false" {
-                (nav_link("/practices", "Practices"))
+                (nav_link_with_badge("/practices", "Practices", is_coach))
                 @if is_coach {
                     (nav_link("/team", "Team"))
                 }
@@ -176,6 +176,27 @@ fn nav_link(href: &str, label: &str) -> Markup {
               hx-target="#content"
               hx-push-url="true"
               { (label) }
+        }
+    }
+}
+
+fn nav_link_with_badge(href: &str, label: &str, show_badge: bool) -> Markup {
+    html! {
+        li {
+            a href=(href)
+              class="px-3 py-2 rounded hover:bg-white/10 transition cursor-pointer inline-flex items-center"
+              data-nav=(href)
+              hx-get=(href)
+              hx-target="#content"
+              hx-push-url="true"
+            {
+                (label)
+                @if show_badge {
+                    span hx-get="/nav/stale-badge"
+                         hx-trigger="load"
+                         hx-swap="innerHTML" {}
+                }
+            }
         }
     }
 }

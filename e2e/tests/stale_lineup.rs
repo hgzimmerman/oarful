@@ -1,5 +1,6 @@
 use fantoccini::Locator;
 use lineup_e2e::{MailMessage, TestInstance};
+use reqwest::StatusCode;
 
 /// A rower in a committed lineup changes their availability to "No".
 /// Verify the amber warning banner appears linking to the affected
@@ -127,4 +128,111 @@ async fn availability_change_warns_about_committed_lineup() {
     );
 
     client.close().await.unwrap();
+}
+
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .unwrap()
+}
+
+async fn setup_demo(base: &str, client: &reqwest::Client) {
+    let resp = client.post(format!("{base}/demo")).send().await.unwrap();
+    assert!(
+        resp.url().to_string().contains("/practices"),
+        "should redirect to practices after demo creation"
+    );
+}
+
+/// The demo fixture seeds committed lineups for Monday where all placed
+/// rowers are available. The nav badge should start empty, then show a
+/// count after we flip a committed rower's availability to "No".
+#[tokio::test]
+async fn nav_stale_badge_reflects_availability_changes() {
+    let instance = TestInstance::start().await;
+    let base = instance.base_url();
+    let client = http_client();
+    setup_demo(&base, &client).await;
+
+    // Badge should be empty — all committed rowers are available.
+    let resp = client
+        .get(format!("{base}/nav/stale-badge"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.is_empty(),
+        "badge should be empty when no lineups are stale, got: {body}"
+    );
+
+    // Get committed practice IDs from the history page.
+    let history_html = client
+        .get(format!("{base}/history"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    let history_id = history_html
+        .split("href=\"/history/")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .expect("expected at least one committed practice on history page");
+    let practice_id: i32 = history_id.parse().expect("practice id should be numeric");
+
+    // Get a rower ID from the committed lineup via the no-show checkbox
+    // values on the history detail page: name="no_show" value="{rower_id}".
+    let detail_html = client
+        .get(format!("{base}/history/{practice_id}"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    let rower_id: i32 = detail_html
+        .split("name=\"no_show\" value=\"")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .and_then(|s| s.parse().ok())
+        .expect("expected a no-show checkbox with rower id in history detail");
+
+    // Flip that rower's availability to "No" via the coach attendance toggle.
+    let toggle_resp = client
+        .post(format!("{base}/team/attendance/toggle"))
+        .json(&serde_json::json!({
+            "rower_id": rower_id,
+            "practice_id": practice_id,
+            "status": "No"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        toggle_resp.status().is_success(),
+        "attendance toggle should succeed, got {}",
+        toggle_resp.status()
+    );
+
+    // Badge should now show a count.
+    let resp = client
+        .get(format!("{base}/nav/stale-badge"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body = resp.text().await.unwrap();
+    assert!(
+        !body.is_empty(),
+        "badge should be non-empty after making a committed lineup stale"
+    );
+    assert!(
+        body.contains("bg-amber-500"),
+        "badge should have amber styling, got: {body}"
+    );
 }

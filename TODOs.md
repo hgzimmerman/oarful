@@ -202,6 +202,9 @@ can resume without re-deriving context.
 - **Boat usage matrix CSV export** — `GET /boats/usage-matrix.csv`
   exports a boat × date matrix (1 = used, empty = not used) from
   committed lineups. "Usage matrix" button on fleet page (PD+).
+- **Stale lineup nav badge (coach-side)** — amber count badge on
+  Practices nav link when upcoming committed lineups have availability
+  changes. `GET /nav/stale-badge` endpoint, HTMX on-load pattern.
 - **Raw rower metrics (Phase 1)** — `weight_kg` (float) and
   `height_m` (float) on rower table, displayed as lbs and
   feet/inches. `erg_test` table with `(rower_id, distance_m,
@@ -217,16 +220,13 @@ can resume without re-deriving context.
 #### Stale lineup notification — coach-facing
 
 Rower-side detection shipped (warning on the availability page when
-a change affects a committed lineup). What's missing is the coach
-side: the coach should know without checking the history page.
+a change affects a committed lineup). Nav badge shipped: amber count
+badge on the Practices nav link for Coach+ when any upcoming
+committed lineup has availability changes. Derived at query time via
+`GET /nav/stale-badge` (HTMX on-load, same pattern as team
+selector). No migration, no stored state — badge clears naturally
+when the coach fixes the lineup.
 
-- **Nav badge:** a small dot or count on the history/practices nav
-  item when any committed lineup has become stale since the coach
-  last viewed it. Requires tracking "last seen" per coach or a
-  simple `stale_since` timestamp on the lineup.
-- **Toast on next page load:** when the coach loads any page, check
-  for stale lineups and show a dismissable banner ("1 committed
-  lineup has availability changes").
 - **Email to coach:** optional — send an email when a rower changes
   availability for a committed lineup. Gated by an opt-in flag on
   the coach's account (avoid spam for frequent changes).
@@ -399,7 +399,6 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Stale lineup notification (coach-side)** — nav badge or toast.
-2. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
-3. **Per-team roles** — design + migration.
-4. **Stripe payment integration** — convert trials to paid tenants.
+1. **Stale lineup email (coach-side)** — opt-in email when availability changes affect a committed lineup.
+2. **Per-team roles** — design + migration.
+3. **Stripe payment integration** — convert trials to paid tenants.

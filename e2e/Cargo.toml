@@ -11,6 +11,6 @@ serde_json = "1"
 libc = "0.2"
 chrono.workspace = true
 axum.workspace = true
-reqwest = { workspace = true, features = ["cookies", "multipart"] }
+reqwest = { workspace = true, features = ["cookies", "multipart", "json"] }
 diesel.workspace = true
 lineup_server = { path = "../crates/server" }
