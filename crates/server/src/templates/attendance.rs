@@ -2,7 +2,7 @@
 //! and practice dates as columns. Color-coded: green = present,
 //! red = absent, white = no response.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use lineup_db::availability::types::AvailabilityStatus;
