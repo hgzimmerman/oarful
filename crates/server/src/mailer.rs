@@ -82,6 +82,16 @@ pub trait Mailer: Send + Sync {
         unsubscribe_url: &str,
         unsubscribe_all_url: &str,
     ) -> Result<()>;
+
+    /// Send a password-reset email. `clubs` is a list of
+    /// `(club_name, reset_url)` pairs (one per tenant the email
+    /// belongs to).
+    async fn send_password_reset(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()>;
 }
 
 /// A captured email message for test assertions.
@@ -114,6 +124,11 @@ pub enum MailMessage {
         magic_url: String,
         unsubscribe_url: String,
         unsubscribe_all_url: String,
+    },
+    PasswordReset {
+        to_email: String,
+        to_name: String,
+        clubs: Vec<(String, String)>,
     },
 }
 
@@ -197,6 +212,20 @@ impl Mailer for ChannelMailer {
             magic_url: magic_url.to_string(),
             unsubscribe_url: unsubscribe_url.to_string(),
             unsubscribe_all_url: unsubscribe_all_url.to_string(),
+        });
+        Ok(())
+    }
+
+    async fn send_password_reset(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::PasswordReset {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            clubs: clubs.to_vec(),
         });
         Ok(())
     }
@@ -298,6 +327,24 @@ impl Mailer for LogMailer {
             "lineup notification (LogMailer — no email sent)"
         );
         tracing::trace!(html, "lineup email HTML");
+        Ok(())
+    }
+
+    async fn send_password_reset(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        clubs: &[(String, String)],
+    ) -> Result<()> {
+        let club_names: Vec<&str> = clubs.iter().map(|(name, _)| name.as_str()).collect();
+        let html = crate::templates::email::password_reset_email(to_name, clubs).into_string();
+        tracing::info!(
+            to_email,
+            to_name,
+            ?club_names,
+            "password reset link (LogMailer — no email sent)"
+        );
+        tracing::trace!(html, "password reset email HTML");
         Ok(())
     }
 }

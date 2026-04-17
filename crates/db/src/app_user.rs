@@ -187,6 +187,22 @@ impl AppUser {
         Ok(())
     }
 
+    /// Update only the password hash (user is already active).
+    pub fn set_password(
+        conn: &mut SqliteConnection,
+        id: UserId,
+        hash: &str,
+    ) -> Result<(), diesel::result::Error> {
+        let now = chrono::Utc::now().naive_utc();
+        diesel::update(app_user::table.find(id))
+            .set((
+                app_user::password_hash.eq(hash),
+                app_user::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+        Ok(())
+    }
+
     pub fn role(
         conn: &mut SqliteConnection,
         user_id: UserId,

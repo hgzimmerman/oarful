@@ -210,3 +210,45 @@ pub(crate) fn lineup_email(
         }),
     )
 }
+
+/// Password-reset email. Same structure as magic login but with
+/// "Reset your password" copy and a 1-hour expiry note.
+pub(crate) fn password_reset_email(
+    to_name: &str,
+    clubs: &[(String, String)], // (club_name, reset_url)
+) -> Markup {
+    let subject = "Reset your password".to_string();
+    email_wrapper(
+        &subject,
+        html! {
+            div class="card" {
+                div class="header" { "Reset your password" }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", click below to reset your password:"
+                }
+                @if clubs.len() == 1 {
+                    div style="text-align: center;" {
+                        a href=(&clubs[0].1) class="btn" {
+                            "Reset password for " (&clubs[0].0)
+                        }
+                    }
+                } @else {
+                    p style="font-size: 13px; color: #64748b; margin-bottom: 12px;" {
+                        "Your email is associated with multiple clubs. Choose one:"
+                    }
+                    @for (name, url) in clubs {
+                        div style="margin-bottom: 8px;" {
+                            a href=(url) class="btn" style="display: block; text-align: center;" {
+                                "Reset password for " (name)
+                            }
+                        }
+                    }
+                }
+                p style="font-size: 12px; color: #94a3b8; margin-top: 16px;" {
+                    "This link expires in 1 hour. If you didn't request a password reset, ignore this email."
+                }
+            }
+        },
+        None,
+    )
+}

@@ -59,17 +59,21 @@ fn success_banner(msg: &str) -> Markup {
 /// Step 1: email-only form. `prefill_email` comes from the long-lived
 /// `known_user` cookie.
 pub(crate) fn login_page(error: Option<&str>) -> Markup {
-    login_email_step(error, None, false)
+    login_email_step(error, None, false, None)
 }
 
 pub(crate) fn login_email_step(
     error: Option<&str>,
     prefill_email: Option<&str>,
     has_demo_cookie: bool,
+    success: Option<&str>,
 ) -> Markup {
     auth_shell(
         "Login",
         html! {
+            @if let Some(msg) = success {
+                (success_banner(msg))
+            }
             @if let Some(msg) = error {
                 (error_banner(msg))
             }
@@ -140,6 +144,12 @@ pub(crate) fn login_password_step(
                     label for="password" class="block text-sm font-semibold text-slate-700 mb-1" { "Password" }
                     input id="password" name="password" type="password" required autofocus
                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    div class="mt-1 text-right" {
+                        a href={"/forgot-password?email=" (email)}
+                          class="text-xs text-slate-500 hover:text-slate-700" {
+                            "Forgot password?"
+                        }
+                    }
                 }
                 button type="submit"
                        class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
@@ -198,6 +208,91 @@ pub(crate) fn login_club_picker(
                 }
                 a href="/login" class="inline-block mt-2 text-sm text-slate-500 hover:text-slate-700" {
                     "Back"
+                }
+            }
+        },
+    )
+}
+
+/// Forgot-password page: email input + "Send reset link" button.
+pub(crate) fn forgot_password_page(prefill_email: Option<&str>) -> Markup {
+    auth_shell(
+        "Forgot password",
+        html! {
+            form method="post" action="/forgot-password"
+                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                div class="text-sm text-slate-600 mb-2" {
+                    "Enter your email and we'll send you a link to reset your password."
+                }
+                div {
+                    label for="email" class="block text-sm font-semibold text-slate-700 mb-1" { "Email" }
+                    input id="email" name="email" type="email" required autofocus
+                          value=[prefill_email]
+                          class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                button type="submit"
+                       class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
+                    "Send reset link"
+                }
+            }
+            div class="mt-4 text-center" {
+                a href="/login" class="text-sm text-slate-500 hover:text-slate-700" {
+                    "Back to sign in"
+                }
+            }
+        },
+    )
+}
+
+/// Confirmation after sending a password-reset email.
+pub(crate) fn forgot_password_sent(email: &str) -> Markup {
+    auth_shell(
+        "Check your email",
+        html! {
+            (success_banner("Password reset link sent! Check your inbox."))
+            div class="bg-white rounded-lg shadow p-6 text-center space-y-3" {
+                p class="text-sm text-slate-600" {
+                    "We sent a password reset link to "
+                    strong { (email) }
+                    ". Click the link to set a new password."
+                }
+                p class="text-xs text-slate-400" {
+                    "The link expires in 1 hour."
+                }
+                a href="/login" class="inline-block mt-2 text-sm text-slate-500 hover:text-slate-700" {
+                    "Back to sign in"
+                }
+            }
+        },
+    )
+}
+
+/// Password-reset form (user is authenticated via magic link).
+pub(crate) fn reset_password_form(error: Option<&str>) -> Markup {
+    auth_shell(
+        "Reset password",
+        html! {
+            @if let Some(msg) = error {
+                (error_banner(msg))
+            }
+            form method="post" action="/reset-password"
+                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                div class="header text-lg font-bold text-slate-800 mb-2" { "Set a new password" }
+                div {
+                    label for="password" class="block text-sm font-semibold text-slate-700 mb-1" { "New password" }
+                    input id="password" name="password" type="password" required autofocus
+                          minlength="8"
+                          class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                div {
+                    label for="password_confirm" class="block text-sm font-semibold text-slate-700 mb-1" { "Confirm password" }
+                    input id="password_confirm" name="password_confirm" type="password" required
+                          minlength="8"
+                          class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                }
+                button type="submit"
+                       class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
+                    "Update password"
                 }
             }
         },

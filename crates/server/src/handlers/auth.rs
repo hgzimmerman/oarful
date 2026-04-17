@@ -11,7 +11,7 @@ use axum::{
     extract::{Path, Request, State},
     middleware::Next,
     response::{Html, IntoResponse, Redirect, Response},
-    Form,
+    Extension, Form,
 };
 use axum_extra::extract::CookieJar;
 use lineup_db::app_user::{AppUser, Role, UserStatus};
@@ -41,11 +41,28 @@ const KNOWN_USER_MAX_AGE: time::Duration = time::Duration::days(365);
 // Step 1: Email form
 // =====================================================================
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct LoginPageQuery {
+    #[serde(default)]
+    reset: Option<String>,
+}
+
 /// `GET /login` — render the email form (step 1).
-pub(crate) async fn login_page(jar: CookieJar) -> Html<String> {
+pub(crate) async fn login_page(
+    jar: CookieJar,
+    axum::extract::Query(query): axum::extract::Query<LoginPageQuery>,
+) -> Html<String> {
     let prefill = jar.get(KNOWN_USER_COOKIE).map(|c| c.value().to_string());
     let has_demo = jar.get(super::demo::DEMO_SLUG_COOKIE).is_some();
-    Html(templates::auth::login_email_step(None, prefill.as_deref(), has_demo).into_string())
+    let success = if query.reset.is_some() {
+        Some("Password updated. Sign in with your new password.")
+    } else {
+        None
+    };
+    Html(
+        templates::auth::login_email_step(None, prefill.as_deref(), has_demo, success)
+            .into_string(),
+    )
 }
 
 // =====================================================================
@@ -71,7 +88,7 @@ pub(crate) async fn email_step_handler(
     let email = input.email.trim().to_lowercase();
     if email.is_empty() {
         return Html(
-            templates::auth::login_email_step(Some("Email is required."), None, false)
+            templates::auth::login_email_step(Some("Email is required."), None, false, None)
                 .into_string(),
         )
         .into_response();
@@ -610,6 +627,170 @@ pub(crate) async fn logout_handler(jar: CookieJar) -> impl IntoResponse {
 }
 
 // =====================================================================
+// Forgot / Reset password
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ForgotPasswordQuery {
+    #[serde(default)]
+    email: Option<String>,
+}
+
+/// `GET /forgot-password` — render the "enter your email" form.
+pub(crate) async fn forgot_password_page(
+    axum::extract::Query(query): axum::extract::Query<ForgotPasswordQuery>,
+) -> Html<String> {
+    Html(templates::auth::forgot_password_page(query.email.as_deref()).into_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ForgotPasswordInput {
+    email: String,
+}
+
+/// `POST /forgot-password` — send a password-reset magic link.
+///
+/// Always shows the "sent" confirmation regardless of whether the email
+/// exists, to avoid leaking account existence.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn forgot_password_handler(
+    State(state): State<AppState>,
+    Form(input): Form<ForgotPasswordInput>,
+) -> Result<Html<String>, super::ErrorResponse> {
+    let email = input.email.trim().to_lowercase();
+
+    let tenants = state
+        .master_db
+        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .await
+        .map_err(super::internal_error)?;
+
+    struct MatchedTenant {
+        user: AppUser,
+        tenant_id: TenantId,
+        tenant_slug: String,
+        tenant_name: String,
+    }
+
+    let mut matches = Vec::new();
+    for t in &tenants {
+        let Ok((db, _config)) = state.tenant_db(t.id).await else {
+            continue;
+        };
+        let email_clone = email.clone();
+        let user = db
+            .with_conn(move |conn| AppUser::find_by_email(conn, &email_clone))
+            .await
+            .map_err(super::internal_error)?;
+        if let Some(u) = user {
+            if u.parsed_status() == Some(UserStatus::Active) {
+                matches.push(MatchedTenant {
+                    user: u,
+                    tenant_id: t.id,
+                    tenant_slug: t.slug.clone(),
+                    tenant_name: t.name.clone(),
+                });
+            }
+        }
+    }
+
+    if !matches.is_empty() {
+        // 1-hour expiry for password reset links.
+        let expires_at =
+            (chrono::Utc::now() + chrono::TimeDelta::try_hours(1).unwrap()).naive_utc();
+
+        let mut clubs: Vec<(String, String)> = Vec::new();
+        let user_name = matches[0].user.name.clone();
+
+        for m in &matches {
+            let created = crate::magic_link::create_magic_link(
+                m.user.id,
+                "/reset-password",
+                expires_at,
+                None,
+            );
+            let raw_token = created.raw_token.clone();
+            let row = created.row;
+
+            let (db, _config) = state
+                .tenant_db(m.tenant_id)
+                .await
+                .map_err(super::internal_error)?;
+            db.with_conn(move |conn| MagicLink::create(conn, row))
+                .await
+                .map_err(super::internal_error)?;
+
+            let url = state.full_url(&format!("/auth/magic/{}/{raw_token}", m.tenant_slug));
+            clubs.push((m.tenant_name.clone(), url));
+        }
+
+        if let Err(err) = state
+            .mailer
+            .send_password_reset(&email, &user_name, &clubs)
+            .await
+        {
+            tracing::warn!(?err, %email, "failed to send password reset email");
+        }
+    } else {
+        tracing::debug!(%email, "password reset requested for unknown/inactive email");
+    }
+
+    Ok(Html(
+        templates::auth::forgot_password_sent(&email).into_string(),
+    ))
+}
+
+/// `GET /reset-password` — render the new-password form. Protected route.
+pub(crate) async fn reset_password_page() -> Html<String> {
+    Html(templates::auth::reset_password_form(None).into_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ResetPasswordInput {
+    password: String,
+    password_confirm: String,
+}
+
+/// `POST /reset-password` — set a new password. Protected route.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn reset_password_handler(
+    Extension(tenant): Extension<crate::state::TenantContext>,
+    jar: CookieJar,
+    Form(input): Form<ResetPasswordInput>,
+) -> Result<impl IntoResponse, super::ErrorResponse> {
+    if input.password.len() < 8 {
+        return Ok(Html(
+            templates::auth::reset_password_form(Some("Password must be at least 8 characters."))
+                .into_string(),
+        )
+        .into_response());
+    }
+    if input.password != input.password_confirm {
+        return Ok(Html(
+            templates::auth::reset_password_form(Some("Passwords do not match.")).into_string(),
+        )
+        .into_response());
+    }
+
+    let password = input.password.clone();
+    let hash = tokio::task::spawn_blocking(move || bcrypt::hash(password, bcrypt::DEFAULT_COST))
+        .await
+        .map_err(super::internal_error)?
+        .map_err(super::internal_error)?;
+
+    let user_id = tenant.claims.user_id();
+    tenant
+        .db
+        .with_conn(move |conn| AppUser::set_password(conn, user_id, &hash))
+        .await
+        .map_err(super::internal_error)?;
+
+    // Clear JWT so user must re-login with new password.
+    let jar = jar.remove(axum_extra::extract::cookie::Cookie::build(TOKEN_COOKIE).path("/"));
+    Ok((jar, Redirect::to("/login?reset=1")).into_response())
+}
+
+// =====================================================================
 // Auth middleware
 // =====================================================================
 
@@ -648,7 +829,7 @@ pub(crate) async fn require_auth(
     // so users can still manage their account.
     if !config.is_billing_ok() {
         let path = req.uri().path().to_string();
-        if path != "/logout" && !path.starts_with("/my") {
+        if path != "/logout" && !path.starts_with("/my") && path != "/reset-password" {
             return Html(
                 crate::templates::billing::suspended_page(&config.tenant_name, &config)
                     .into_string(),

@@ -63,6 +63,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(demo::resume_demo_handler).post(demo::resume_demo_handler),
         )
         .route(
+            "/forgot-password",
+            get(auth::forgot_password_page).post(auth::forgot_password_handler),
+        )
+        .route(
             "/unsubscribe/{slug}/{user_id}/{email_type}/{signature}",
             get(unsubscribe::unsubscribe_handler).post(unsubscribe::unsubscribe_post_handler),
         )
@@ -261,6 +265,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route(
             "/my/email-preferences",
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
+        )
+        .route(
+            "/reset-password",
+            get(auth::reset_password_page).post(auth::reset_password_handler),
         )
         .route("/switch-team", post(switch_team_handler))
         .route("/confirm", get(confirm_handler))
