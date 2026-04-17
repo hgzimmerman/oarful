@@ -204,13 +204,6 @@ can resume without re-deriving context.
 
 ### Quick wins
 
-#### Webmaster email — remaining work
-
-`WEBMASTER_EMAIL` env var drives the `mailto:` link on the billing
-suspended page (shipped). Remaining: use it as the `From` address
-for outbound emails (requires production mailer integration) and
-in a `<meta name="author">` tag.
-
 ### Coach features
 
 #### Stale lineup notification — coach-facing
