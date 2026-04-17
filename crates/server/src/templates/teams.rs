@@ -308,12 +308,11 @@ fn threshold_section(
     // For the slider (weak left, strong right = high sec left, low sec right),
     // we reverse the axis, so v1 (leftmost) = largest value (slowest), v3 = smallest (fastest).
     let (s1, s2, s3) = st
-        .map(|t| {
-            (
-                t.low_mid / 100.0, // slowest boundary (leftmost)
-                t.mid_high / 100.0,
-                t.high_very / 100.0, // fastest boundary (rightmost)
-            )
+        .map(|t| (t.low_mid / 100.0, t.mid_high / 100.0, t.high_very / 100.0))
+        .filter(|(a, _, c)| {
+            // Sanity check: values should be in the slider range (80-140 sec).
+            // If not, the data is stale (pre-unit-conversion). Use defaults.
+            *a >= 50.0 && *c >= 50.0
         })
         .unwrap_or((120.0, 110.0, 100.0));
 
@@ -519,11 +518,16 @@ fn threshold_slider_script() -> Markup {
         script {
             (PreEscaped(r#"
 window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dMid, dHigh, labels, desc) { return {
-    v1: dLow, v2: dMid, v3: dHigh,
+    v1: Math.max(rMin, Math.min(rMax, dLow)),
+    v2: Math.max(rMin, Math.min(rMax, dMid)),
+    v3: Math.max(rMin, Math.min(rMax, dHigh)),
     rMin, rMax, labels,
     bars: [],
     dragging: null,
     init() {
+      // Ensure v1 < v2 < v3 after clamping.
+      var vs = [this.v1, this.v2, this.v3].sort((a,b) => a - b);
+      this.v1 = vs[0]; this.v2 = vs[1]; this.v3 = vs[2];
       fetch(histUrl).then(r=>r.json()).then(d=>{this.bars=d}).catch(()=>{});
     },
     pct(v) {
@@ -552,8 +556,9 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
     barStyle(bar) {
       if (!this.bars.length) return 'display:none';
       var maxC = Math.max(...this.bars.map(b=>b.count), 1);
-      var left = this.pct(bar.min);
-      var w = this.pct(bar.max) - left;
+      var p1 = this.pct(bar.min), p2 = this.pct(bar.max);
+      var left = Math.min(p1, p2);
+      var w = Math.abs(p2 - p1);
       var h = bar.count / maxC * 80;
       return 'left:'+left+'%;width:'+w+'%;height:'+h+'%;opacity:0.5';
     },
