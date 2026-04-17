@@ -94,3 +94,37 @@ async fn generate_and_commit_lineup() {
 
     client.close().await.unwrap();
 }
+
+/// Verify the demo fixture solves with default knobs (5s budget,
+/// strict fill) — this is what a new user sees on first Generate click.
+#[tokio::test]
+async fn demo_solves_with_default_knobs() {
+    let instance = TestInstance::start().await;
+    let client = instance.connect().await;
+
+    let source = client.source().await.unwrap();
+    let solve_path = source
+        .split("href=\"/solve/")
+        .nth(1)
+        .and_then(|s| s.split('"').next())
+        .map(|id| format!("/solve/{id}"))
+        .expect("expected a /solve/ link");
+
+    // Default knobs: 5s budget, partial=0 (strict)
+    let url = format!(
+        "{}{}{}generate=1",
+        instance.base_url(),
+        solve_path,
+        if solve_path.contains('?') { "&" } else { "?" }
+    );
+    client.goto(&url).await.unwrap();
+
+    client
+        .wait()
+        .at_most(std::time::Duration::from_secs(20))
+        .for_element(Locator::Css("[data-editor-boat]"))
+        .await
+        .expect("demo should solve with default knobs (5s budget, strict fill)");
+
+    client.close().await.unwrap();
+}
