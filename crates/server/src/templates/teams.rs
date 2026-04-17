@@ -317,8 +317,15 @@ fn threshold_section(
         .unwrap_or((120.0, 110.0, 100.0));
 
     html! {
-        section class="border-t border-slate-200 pt-4 mt-4" {
-            h3 class="text-sm font-semibold text-slate-700 mb-3" { "Rower attribute thresholds" }
+        section class="bg-white rounded-lg shadow p-6 space-y-2" {
+            div class="flex items-center justify-between mb-1" {
+                h3 class="text-sm font-semibold text-slate-700" { "Rower attribute thresholds" }
+                button type="button"
+                       onclick="window.dispatchEvent(new CustomEvent('save-thresholds'))"
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                    "Save"
+                }
+            }
             p class="text-xs text-slate-500 mb-4" {
                 "Drag the markers to set where each category starts and ends. "
                 "Rowers with recorded values will be automatically categorized on save."
@@ -328,7 +335,7 @@ fn threshold_section(
                 &["Lightweight", "Middleweight", "Heavyweight", "Very heavy"],
                 130.0, 230.0, w1, w2, w3))
 
-            (threshold_slider(team_id, "height", "Height (inches)",
+            (threshold_slider(team_id, "height", "Height (ft, in)",
                 &["Short", "Medium", "Tall", "Very tall"],
                 60.0, 80.0, h1, h2, h3))
 
@@ -366,55 +373,57 @@ fn threshold_slider(
             "x-data"=(PreEscaped(format!(
                 "thresholdSlider('{metric}', '{save_url}', '{hist_url}', {range_min}, {range_max}, {default_low}, {default_mid}, {default_high}, {labels}, {is_descending})"
             ))) {
-            div class="flex items-center justify-between mb-1" {
+            div class="mb-1" {
                 span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { (label) }
-                div class="flex items-center gap-2" {
-                    button type="button" "@click"="save()"
-                           class="text-xs font-semibold text-emerald-600 hover:text-emerald-800" {
-                        "Save"
+            }
+            // Slider track with y-axis + histogram + carets
+            div class="flex items-end" {
+                // Y-axis labels
+                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-slate-400 text-right w-6 shrink-0" {
+                    span "x-text"="maxCount() || ''" {}
+                    span "x-text"="maxCount() > 2 ? Math.round(maxCount()/2) : ''" {}
+                    span "x-show"="maxCount() > 0" { "0" }
+                }
+                div class="relative h-24 bg-slate-100 rounded select-none touch-none flex-1"
+                    "x-ref"="track"
+                    "@mousedown"="startDrag($event)"
+                    "@touchstart.passive"="startDrag($event)" {
+                    // Histogram bars (rendered from fetched data)
+                    template "x-for"="bar in bars" {
+                        div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
+                            ":style"="barStyle(bar)" {}
+                    }
+                    // Colored zone backgrounds
+                    div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
+                        div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
+                        div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
+                        div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
+                        div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
+                    }
+                    // Caret lines
+                    template "x-for"="(v, i) in [v1, v2, v3]" {
+                        div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
+                            ":style"="'left:'+pct(v)+'%'"
+                            ":data-caret"="i" {}
+                    }
+                    // Caret handles (larger touch targets)
+                    template "x-for"="(v, i) in [v1, v2, v3]" {
+                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
+                            ":style"="'left:'+pct(v)+'%'"
+                            ":data-caret"="i" {}
                     }
                 }
             }
-            // Slider track with histogram + carets
-            div class="relative h-24 bg-slate-100 rounded select-none touch-none"
-                "x-ref"="track"
-                "@mousedown"="startDrag($event)"
-                "@touchstart.passive"="startDrag($event)" {
-                // Histogram bars (rendered from fetched data)
-                template "x-for"="bar in bars" {
-                    div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
-                        ":style"="barStyle(bar)" {}
-                }
-                // Colored zone backgrounds
-                div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
-                    div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
-                    div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
-                    div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
-                    div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
-                }
-                // Caret lines
-                template "x-for"="(v, i) in [v1, v2, v3]" {
-                    div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
-                        ":style"="'left:'+pct(v)+'%'"
-                        ":data-caret"="i" {}
-                }
-                // Caret handles (larger touch targets)
-                template "x-for"="(v, i) in [v1, v2, v3]" {
-                    div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
-                        ":style"="'left:'+pct(v)+'%'"
-                        ":data-caret"="i" {}
-                }
-            }
-            // Bucket labels
-            div class="flex text-[10px] text-slate-500 mt-1" {
+            // Bucket labels with live counts
+            div class="flex text-[10px] text-slate-500 mt-1 ml-6" {
                 template "x-for"="(lbl, i) in labels" {
                     div class="text-center truncate" ":style"="zoneStyle(i)" {
-                        span "x-text"="lbl" {}
+                        span "x-text"="lbl + ' (' + zoneCount(i) + ')'" {}
                     }
                 }
             }
             // Value readout
-            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
+            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5 ml-6" {
                 span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v1)" {} }
                 span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
                 span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v3)" {} }
@@ -451,59 +460,60 @@ fn threshold_slider_with_distance(
             "x-init"=(PreEscaped(format!(
                 "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
             ))) {
-            div class="flex items-center justify-between mb-1" {
-                div class="flex items-center gap-2" {
-                    span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Erg split (sec/500m)" }
-                    select "x-model"="ergDist"
-                           "@change"=(PreEscaped(format!(
-                               "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
-                           )))
-                           class="border border-slate-300 rounded px-2 py-0.5 text-xs focus:border-slate-500 focus:outline-none" {
-                        option value="1000" selected[erg_dist == 1000] { "1k" }
-                        option value="2000" selected[erg_dist == 2000] { "2k" }
-                        option value="5000" selected[erg_dist == 5000] { "5k" }
-                        option value="6000" selected[erg_dist == 6000] { "6k" }
+            div class="flex items-center gap-2 mb-1" {
+                span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Erg split (sec/500m)" }
+                select "x-model"="ergDist"
+                       "@change"=(PreEscaped(format!(
+                           "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
+                       )))
+                       class="border border-slate-300 rounded px-2 py-0.5 text-xs focus:border-slate-500 focus:outline-none" {
+                    option value="1000" selected[erg_dist == 1000] { "1k" }
+                    option value="2000" selected[erg_dist == 2000] { "2k" }
+                    option value="5000" selected[erg_dist == 5000] { "5k" }
+                    option value="6000" selected[erg_dist == 6000] { "6k" }
+                }
+            }
+            // Slider track with y-axis
+            div class="flex items-end" {
+                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-slate-400 text-right w-6 shrink-0" {
+                    span "x-text"="maxCount() || ''" {}
+                    span "x-text"="maxCount() > 2 ? Math.round(maxCount()/2) : ''" {}
+                    span "x-show"="maxCount() > 0" { "0" }
+                }
+                div class="relative h-24 bg-slate-100 rounded select-none touch-none flex-1"
+                    "x-ref"="track"
+                    "@mousedown"="startDrag($event)"
+                    "@touchstart.passive"="startDrag($event)" {
+                    template "x-for"="bar in bars" {
+                        div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
+                            ":style"="barStyle(bar)" {}
+                    }
+                    div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
+                        div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
+                        div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
+                        div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
+                        div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
+                    }
+                    template "x-for"="(v, i) in [v1, v2, v3]" {
+                        div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
+                            ":style"="'left:'+pct(v)+'%'"
+                            ":data-caret"="i" {}
+                    }
+                    template "x-for"="(v, i) in [v1, v2, v3]" {
+                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
+                            ":style"="'left:'+pct(v)+'%'"
+                            ":data-caret"="i" {}
                     }
                 }
-                button type="button" "@click"="save()"
-                       class="text-xs font-semibold text-emerald-600 hover:text-emerald-800" {
-                    "Save"
-                }
             }
-            // Slider track
-            div class="relative h-24 bg-slate-100 rounded select-none touch-none"
-                "x-ref"="track"
-                "@mousedown"="startDrag($event)"
-                "@touchstart.passive"="startDrag($event)" {
-                template "x-for"="bar in bars" {
-                    div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
-                        ":style"="barStyle(bar)" {}
-                }
-                div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
-                    div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
-                    div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
-                    div class="bg-yellow-100/60" ":style"="zoneStyle(2)" {}
-                    div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
-                }
-                template "x-for"="(v, i) in [v1, v2, v3]" {
-                    div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
-                        ":style"="'left:'+pct(v)+'%'"
-                        ":data-caret"="i" {}
-                }
-                template "x-for"="(v, i) in [v1, v2, v3]" {
-                    div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
-                        ":style"="'left:'+pct(v)+'%'"
-                        ":data-caret"="i" {}
-                }
-            }
-            div class="flex text-[10px] text-slate-500 mt-1" {
+            div class="flex text-[10px] text-slate-500 mt-1 ml-6" {
                 template "x-for"="(lbl, i) in labels" {
                     div class="text-center truncate" ":style"="zoneStyle(i)" {
-                        span "x-text"="lbl" {}
+                        span "x-text"="lbl + ' (' + zoneCount(i) + ')'" {}
                     }
                 }
             }
-            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
+            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5 ml-6" {
                 span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v3)" {} }
                 span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
                 span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v1)" {} }
@@ -529,6 +539,8 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
       var vs = [this.v1, this.v2, this.v3].sort((a,b) => a - b);
       this.v1 = vs[0]; this.v2 = vs[1]; this.v3 = vs[2];
       fetch(histUrl).then(r=>r.json()).then(d=>{this.bars=d}).catch(()=>{});
+      var self = this;
+      window.addEventListener('save-thresholds', function() { self.save(); });
     },
     pct(v) {
       var p = (v - this.rMin) / (this.rMax - this.rMin) * 100;
@@ -568,6 +580,23 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
       pcts.sort((a,b) => a - b);
       var w = pcts[i+1] - pcts[i];
       return 'width:'+w+'%';
+    },
+    zoneCount(i) {
+      var pts = [this.rMin, this.v1, this.v2, this.v3, this.rMax];
+      var self = this;
+      pts.sort((a,b) => self.pct(a) - self.pct(b));
+      var lo = Math.min(pts[i], pts[i+1]), hi = Math.max(pts[i], pts[i+1]);
+      var total = 0;
+      for (var b of this.bars) {
+        var overlap = Math.max(0, Math.min(b.max, hi) - Math.max(b.min, lo));
+        var barW = b.max - b.min;
+        if (barW > 0) total += b.count * (overlap / barW);
+      }
+      return Math.round(total);
+    },
+    maxCount() {
+      if (!this.bars.length) return 0;
+      return Math.max(...this.bars.map(b => b.count));
     },
     startDrag(e) {
       var rect = this.$refs.track.getBoundingClientRect();
