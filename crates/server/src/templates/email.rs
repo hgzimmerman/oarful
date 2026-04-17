@@ -51,7 +51,7 @@ fn email_wrapper(subject: &str, body: Markup, unsub: Option<UnsubFooter<'_>>) ->
                 div class="container" {
                     (body)
                     div class="footer" {
-                        p { "Sent by Lineup Generator" }
+                        p { "Sent by Oarful" }
                         @if let Some(ref unsub) = unsub {
                             p {
                                 a href=(unsub.unsub_url) style="color: #94a3b8; text-decoration: underline;" {
@@ -76,7 +76,7 @@ pub(crate) fn magic_login_email(
     to_name: &str,
     clubs: &[(String, String)], // (club_name, magic_url)
 ) -> Markup {
-    let subject = "Sign in to Lineup Generator".to_string();
+    let subject = "Sign in to Oarful".to_string();
     email_wrapper(
         &subject,
         html! {

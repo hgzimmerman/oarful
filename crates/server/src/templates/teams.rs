@@ -182,7 +182,7 @@ pub(crate) fn detail_content(
                               placeholder="e.g. 90"
                               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                         p class="text-xs text-slate-500 mt-1" {
-                            "Used for cross-team overlap detection."
+                            "Used to detect double-booked practices across teams."
                         }
                     }
                 }
@@ -318,10 +318,10 @@ fn threshold_section(
 
     html! {
         section class="border-t border-slate-200 pt-4 mt-4" {
-            h3 class="text-sm font-semibold text-slate-700 mb-3" { "Rower bucketing thresholds" }
+            h3 class="text-sm font-semibold text-slate-700 mb-3" { "Rower attribute thresholds" }
             p class="text-xs text-slate-500 mb-4" {
-                "Drag the carets to define boundaries between categorical buckets. "
-                "Rowers with raw metric values will be auto-bucketed on save."
+                "Drag the markers to set where each category starts and ends. "
+                "Rowers with recorded values will be automatically categorized on save."
             }
 
             (threshold_slider(team_id, "weight", "Weight (lbs)",
@@ -415,9 +415,9 @@ fn threshold_slider(
             }
             // Value readout
             div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
-                span { "Low/Mid: " span "x-text"="fmt(v1)" {} }
-                span { "Mid/High: " span "x-text"="fmt(v2)" {} }
-                span { "High/Very: " span "x-text"="fmt(v3)" {} }
+                span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v1)" {} }
+                span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
+                span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v3)" {} }
             }
             // Result toast
             div "x-ref"="result" {}
@@ -504,9 +504,9 @@ fn threshold_slider_with_distance(
                 }
             }
             div class="flex gap-4 text-[10px] text-slate-400 mt-0.5" {
-                span { "Weak/Inter: " span "x-text"="fmt(v3)" {} }
-                span { "Inter/Strong: " span "x-text"="fmt(v2)" {} }
-                span { "Strong/Very: " span "x-text"="fmt(v1)" {} }
+                span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v3)" {} }
+                span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
+                span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v1)" {} }
             }
             div "x-ref"="result" {}
         }
@@ -770,7 +770,7 @@ fn fleet_matrix_inner(
             }
             p class="text-sm text-slate-500 mb-4" {
                 "Select which boats are pre-selected in the generation pool for each team. "
-                "Single-team tenants default to all boats if none are selected."
+                "Single-team clubs default to all boats if none are selected."
             }
             @if teams.is_empty() {
                 div class="text-slate-500 italic" { "No teams. Create teams first." }

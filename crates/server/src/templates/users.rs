@@ -200,13 +200,13 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { "Set password · Lineup Generator" }
+                title { "Set password · Oarful" }
                 script src="/tailwindcss.js" {}
             }
             body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
                     div class="text-center mb-8" {
-                        h1 class="text-2xl font-bold text-slate-800" { "Lineup Generator" }
+                        h1 class="text-2xl font-bold text-slate-800" { "Oarful" }
                         p class="text-sm text-slate-500 mt-1" { "Set your password to activate your account" }
                     }
 
