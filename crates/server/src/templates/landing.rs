@@ -38,7 +38,7 @@ pub(crate) fn landing_page() -> Markup {
                             "Rowing lineup tool"
                         }
                         p class="mt-4 text-lg text-slate-600 max-w-lg mx-auto" {
-                            "Collect availability, generate lineups with a constraint solver, "
+                            "Collect availability, generate lineups, "
                             "edit them by hand, send them out."
                         }
                         div class="mt-8 flex flex-col sm:flex-row items-start justify-center gap-8" {
@@ -66,7 +66,7 @@ pub(crate) fn landing_page() -> Markup {
                         h2 class="text-lg font-semibold text-slate-800 mb-4" { "What it does" }
                         div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 text-base text-slate-600" {
                             (bullet("Rowers or their coaches set availability and get lineup emails; no more spreadsheets"))
-                            (bullet("Constraint solver accounts for seat, side, and pair preferences, coarse height, weight, and skill matching, and weight-class boat eligibility"))
+                            (bullet("Lineup generator accounts for seat, side, and pair preferences, height, weight, and skill matching, and weight-class boat eligibility"))
                             (bullet("Lineup editor for manual adjustments, or skip the solver and build lineups manually"))
                             (bullet("Multiple teams per club with boat sharing and double-booking detection"))
                             (bullet("Handle no-shows without redoing lineups from scratch"))

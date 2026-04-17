@@ -58,7 +58,7 @@ pub(super) fn knobs_form(
                                 span #knob-metrics class="text-xs text-slate-400" {
                                     "· " (elapsed_label)
                                     @if let Some(obj) = result.objective {
-                                        " · obj " (obj)
+                                        " · score " (obj)
                                     }
                                 }
                             }
@@ -192,7 +192,7 @@ pub(super) fn knobs_form(
                                 (knobs.budget) "s"
                             }
                         }
-                        p class="text-xs text-slate-500 mt-1" { "Per-alternative solve cap" }
+                        p class="text-xs text-slate-500 mt-1" { "Time budget per alternative" }
                     }
 
                     // Novelty — slider 0-5
@@ -436,7 +436,7 @@ pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
         SolveStatus::Timeout => html! {
             div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
                 strong { "No result." }
-                " Solver timed out without finding any valid lineup. Try increasing the time budget or relaxing constraints."
+                " Ran out of time without finding a valid lineup. Try increasing the time budget or relaxing constraints."
             }
         },
     }

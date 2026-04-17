@@ -16,7 +16,7 @@ use super::solve::{seat_badge, seat_label, side_indicator};
 
 pub(crate) fn list_content(practices: &[Practice], stale_ids: &HashSet<PracticeId>) -> Markup {
     html! {
-        (page_header("Committed practices", Some("Lineups that have been committed to the database.")))
+        (page_header("Committed practices", Some("Lineups that have been saved and sent out.")))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto" {
             @if practices.is_empty() {
                 (empty_state("No practices committed yet."))
