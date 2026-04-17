@@ -493,18 +493,9 @@ fn demo_rowers() -> Vec<NewRower> {
             r
         },
         // Extra rowers to give the solver slack — the greedy fleet
-        // selection picks 23 seats across 3 boats, so having ~27
+        // selection picks 23 seats across 3 boats, so having 25
         // available rowers avoids a zero-margin assignment.
         NewRower::sweep("Zara", Medium, Sk::Intermediate, St::Strong, H::Tall, Port),
         NewRower::sweep("Leo", Heavy, Sk::Expert, St::Strong, H::Tall, Starboard),
-        NewRower::sweep(
-            "Iris",
-            Medium,
-            Sk::Intermediate,
-            St::Intermediate,
-            H::Medium,
-            Either,
-        ),
-        NewRower::sweep("Noah", Medium, Sk::Expert, St::Strong, H::Medium, Port),
     ]
 }
