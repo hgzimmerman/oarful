@@ -232,8 +232,8 @@ pub(crate) fn detail_content(team: &Team) -> Markup {
             }
 
             // Threshold config section
-            (threshold_section(team))
             (threshold_slider_script())
+            (threshold_section(team))
 
             // Archive / unarchive section
             section class="border-t border-red-200 pt-4" {
@@ -389,8 +389,7 @@ fn threshold_slider_script() -> Markup {
     html! {
         script {
             (PreEscaped(r#"
-document.addEventListener('alpine:init', () => {
-  Alpine.data('thresholdSlider', (metric, saveUrl, histUrl, rMin, rMax, dLow, dMid, dHigh, labels, desc) => ({
+window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dMid, dHigh, labels, desc) { return {
     v1: dLow, v2: dMid, v3: dHigh,
     rMin, rMax, labels,
     bars: [],
@@ -462,8 +461,7 @@ document.addEventListener('alpine:init', () => {
         .then(r=>r.text()).then(html=>{this.$refs.result.innerHTML=html; setTimeout(()=>{this.$refs.result.innerHTML=''},3000)})
         .catch(()=>{this.$refs.result.innerHTML='<div class="text-sm text-red-600 mt-2">Save failed.</div>'});
     }
-  }));
-});
+  }; };
 "#))
         }
     }
