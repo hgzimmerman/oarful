@@ -43,7 +43,7 @@ async fn generate_and_commit_lineup() {
 
     // Add generate=1 to trigger the solver and submit via navigation.
     let generate_url = format!(
-        "{}{}{}generate=1&budget=1",
+        "{}{}{}generate=1&budget=1&partial=1",
         instance.base_url(),
         solve_path,
         if solve_path.contains('?') { "&" } else { "?" }

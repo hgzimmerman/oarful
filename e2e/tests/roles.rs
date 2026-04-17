@@ -1,15 +1,17 @@
 use fantoccini::Locator;
-use lineup_e2e::{MailMessage, TestInstance};
+use lineup_e2e::TestInstance;
 
 /// Invite a member user, accept the invite to set a password, log in
 /// as them, and verify they see only member-level nav items (no Team
 /// or Admin links).
 #[tokio::test]
 async fn member_sees_restricted_nav() {
-    let (instance, mut mail_rx) = TestInstance::start_with_mail().await;
+    let instance = TestInstance::start().await;
     let client = instance.connect().await;
 
     // As PD: create a member invite via POST /users/invite.
+    // The response page shows the invite link regardless of whether
+    // the email was sent (demo tenants skip email delivery).
     client
         .execute(
             &format!(
@@ -33,21 +35,18 @@ async fn member_sees_restricted_nav() {
         .await
         .unwrap();
 
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
-    // Capture the invite email from the ChannelMailer.
-    let msg = tokio::time::timeout(std::time::Duration::from_secs(5), mail_rx.recv())
-        .await
-        .expect("should receive invite mail within 5s")
-        .expect("mail channel should not be closed");
+    // Extract the invite URL from the response page.
+    let source = client.source().await.unwrap();
+    let invite_url = source
+        .split("/invite/")
+        .nth(1)
+        .and_then(|s| s.split('<').next())
+        .map(|path| format!("/invite/{path}"))
+        .expect("expected invite URL on the result page");
 
-    let invite_url = match msg {
-        MailMessage::Invite { invite_url, .. } => invite_url,
-        other => panic!("expected Invite email, got {other:?}"),
-    };
-
-    // The invite URL is a relative path like /invite/{token}.
-    // Navigate to it to see the password-set form.
+    // Navigate to the invite URL to see the password-set form.
     client
         .goto(&format!("{}{}", instance.base_url(), invite_url))
         .await

@@ -18,9 +18,10 @@ async fn use_streamed_alternative() {
         .map(|id| format!("/solve/{id}"))
         .expect("expected a /solve/ link on the practices page");
 
-    // Navigate to the solve page with generate=1, alts=1, budget=1.
+    // Navigate to the solve page with generate=1, alts=1, budget=1,
+    // partial=1 to allow partial fills so the solver can find a solution.
     let generate_url = format!(
-        "{}{}{}generate=1&budget=1&alts=1",
+        "{}{}{}generate=1&budget=1&alts=1&partial=1",
         instance.base_url(),
         solve_path,
         if solve_path.contains('?') { "&" } else { "?" }

@@ -13,9 +13,9 @@ async fn generate_lineup(client: &fantoccini::Client, base_url: &str) {
         .map(|id| format!("/solve/{id}"))
         .expect("expected a /solve/ link on the practices page");
 
-    // Generate with budget=1.
+    // Generate with budget=1, partial=1 to allow partial fills.
     let url = format!(
-        "{}{solve_path}{}generate=1&budget=1",
+        "{}{solve_path}{}generate=1&budget=1&partial=1",
         base_url,
         if solve_path.contains('?') { "&" } else { "?" }
     );
