@@ -138,12 +138,15 @@ pub(crate) async fn invite_handler(
 
             // Best-effort delivery — failure is logged but doesn't
             // block the invite (the UI still shows the link).
-            if let Err(err) = mailer
-                .mailer
-                .send_invite(&email_for_mailer, &name_for_mailer, &invite_url)
-                .await
-            {
-                tracing::warn!(?err, %email_for_mailer, "mailer failed to send invite");
+            // Trial tenants: skip email silently.
+            if tenant.config.can_send_email() {
+                if let Err(err) = mailer
+                    .mailer
+                    .send_invite(&email_for_mailer, &name_for_mailer, &invite_url)
+                    .await
+                {
+                    tracing::warn!(?err, %email_for_mailer, "mailer failed to send invite");
+                }
             }
 
             crate::audit::record(
@@ -215,12 +218,14 @@ pub(crate) async fn resend_invite_handler(
 
     let invite_path = format!("/invite/{token}");
     let invite_url = mailer.full_url(&invite_path);
-    if let Err(err) = mailer
-        .mailer
-        .send_invite(&user.email, &user.name, &invite_url)
-        .await
-    {
-        tracing::warn!(?err, email = %user.email, "mailer failed to resend invite");
+    if tenant.config.can_send_email() {
+        if let Err(err) = mailer
+            .mailer
+            .send_invite(&user.email, &user.name, &invite_url)
+            .await
+        {
+            tracing::warn!(?err, email = %user.email, "mailer failed to resend invite");
+        }
     }
 
     crate::audit::record(

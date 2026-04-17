@@ -191,21 +191,15 @@ can resume without re-deriving context.
   `Mailer` trait, and email templates.
 - **Gate backup restore behind billing status** — trial tenants
   blocked from restore. Active and grandfathered allowed.
+- **Email restrictions for trial tenants** — trial/demo tenants
+  cannot send outbound email (reminders, lineups, invites). Auth
+  emails (magic login, password reset) still work. Reminder/lineup
+  handlers return a user-facing message; invite handlers silently
+  skip the email but still create the invite record.
 
 ## Open work
 
 ### Quick wins
-
-#### Email restrictions for trial tenants
-
-Disable outbound email (reminders, lineup notifications, invites)
-for trial tenants to prevent spam abuse. Trial users can still use
-the app fully but emails go nowhere (or show a "upgrade to send
-emails" message in the UI). As a secondary safeguard, add a daily
-email cap per tenant (e.g. 300/day for paid, 0 for trial) tracked
-via a counter in the master DB. Bulk actions (e.g. reminders to
-the full roster) should be allowed to exceed the cap rather than
-partially sending.
 
 #### Invite URL with tenant slug
 
@@ -436,7 +430,7 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Gate backup restore + email restrictions** — billing guard rails.
+1. **Invite URL with tenant slug** — cleaner invite routing.
 3. **Stale lineup notification (coach-side)** — nav badge or toast.
 4. **Raw rower metrics + team-defined bucketing** — weight/erg newtypes.
 5. **Per-team roles** — design + migration.

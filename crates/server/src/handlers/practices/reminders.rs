@@ -147,6 +147,14 @@ pub(crate) async fn send_reminders_handler(
     HtmlForm(input): HtmlForm<SendRemindersInput>,
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    if !tenant.config.can_send_email() {
+        return Ok(Html(
+            templates::practices::send_result(
+                "Email is not available during the free trial. Share availability links manually.",
+            )
+            .into_string(),
+        ));
+    }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
     let sender_id = tenant.claims.user_id();

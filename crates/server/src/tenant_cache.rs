@@ -38,6 +38,15 @@ impl TenantConfig {
         }
     }
 
+    /// Whether this tenant can send outbound emails (reminders, lineups,
+    /// invites). Trial and demo tenants cannot.
+    pub(crate) fn can_send_email(&self) -> bool {
+        matches!(
+            self.billing_status,
+            BillingStatus::Active | BillingStatus::Grandfathered
+        )
+    }
+
     /// Whether this tenant has an active billing relationship.
     pub(crate) fn is_billing_ok(&self) -> bool {
         if self.is_demo {
