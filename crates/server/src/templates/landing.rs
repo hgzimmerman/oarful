@@ -2,7 +2,7 @@
 
 use maud::{html, Markup, DOCTYPE};
 
-pub(crate) fn landing_page() -> Markup {
+pub(crate) fn landing_page(signup_disabled: bool) -> Markup {
     let source_url = std::env::var("SOURCE_URL")
         .unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string());
 
@@ -24,9 +24,11 @@ pub(crate) fn landing_page() -> Markup {
                           class="text-sm text-slate-600 hover:text-slate-800 transition" {
                             "Sign in"
                         }
-                        a href="/signup"
-                          class="text-sm font-semibold bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-900 transition" {
-                            "Get started"
+                        @if !signup_disabled {
+                            a href="/signup"
+                              class="text-sm font-semibold bg-slate-800 text-white px-4 py-2 rounded hover:bg-slate-900 transition" {
+                                "Get started"
+                            }
                         }
                     }
                 }
@@ -42,12 +44,14 @@ pub(crate) fn landing_page() -> Markup {
                             "edit them by hand, send them out."
                         }
                         div class="mt-8 flex flex-col sm:flex-row items-start justify-center gap-8" {
-                            div class="text-center" {
-                                a href="/signup"
-                                  class="block bg-slate-800 text-white font-semibold px-8 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
-                                    "Get started free"
+                            @if !signup_disabled {
+                                div class="text-center" {
+                                    a href="/signup"
+                                      class="block bg-slate-800 text-white font-semibold px-8 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
+                                        "Get started free"
+                                    }
+                                    p class="mt-2 text-xs text-slate-400" { "30-day trial, no credit card" }
                                 }
-                                p class="mt-2 text-xs text-slate-400" { "30-day trial, no credit card" }
                             }
                             div class="text-center" {
                                 form method="post" action="/demo" {
@@ -75,13 +79,15 @@ pub(crate) fn landing_page() -> Markup {
                     }
 
                     // Second CTA
-                    div class="mt-16 text-center" {
-                        a href="/signup"
-                          class="bg-slate-800 text-white font-semibold px-6 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
-                            "Get started free"
-                        }
-                        p class="mt-2 text-xs text-slate-400" {
-                            "30-day trial, no credit card"
+                    @if !signup_disabled {
+                        div class="mt-16 text-center" {
+                            a href="/signup"
+                              class="bg-slate-800 text-white font-semibold px-6 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
+                                "Get started free"
+                            }
+                            p class="mt-2 text-xs text-slate-400" {
+                                "30-day trial, no credit card"
+                            }
                         }
                     }
                 }

@@ -84,6 +84,39 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
     }
 }
 
+/// Rendered when `SIGNUP_DISABLED=1` — tells visitors signup is closed.
+pub(crate) fn signup_closed_page() -> Markup {
+    html! {
+        (DOCTYPE)
+        html lang="en" {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { "Signup closed · Oarful" }
+                link rel="stylesheet" href="/tailwind.css";
+            }
+            body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
+                div class="w-full max-w-sm text-center" {
+                    h1 class="text-2xl font-bold text-slate-800" { "Oarful" }
+                    p class="mt-4 text-slate-600" {
+                        "Signup is currently closed."
+                    }
+                    p class="mt-2 text-sm text-slate-500" {
+                        "If you already have an account, you can "
+                        a href="/login" class="text-slate-700 hover:text-slate-900 font-medium" { "sign in" }
+                        "."
+                    }
+                    p class="mt-2 text-sm text-slate-500" {
+                        "Or "
+                        a href="/" class="text-slate-700 hover:text-slate-900 font-medium" { "try the demo" }
+                        " to see how it works."
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Prefill values for re-rendering the form after validation errors.
 pub(crate) struct SignupPrefill {
     pub club_name: String,

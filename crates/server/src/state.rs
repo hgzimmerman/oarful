@@ -43,6 +43,9 @@ pub struct AppState {
     /// Contact email for support/billing pages (from `WEBMASTER_EMAIL`).
     /// Falls back to `support@oarful.com` if not set.
     pub(crate) webmaster_email: String,
+    /// When true, public signup is disabled. Existing accounts and demo
+    /// still work. Set via `SIGNUP_DISABLED=1`.
+    pub(crate) signup_disabled: bool,
 }
 
 impl AppState {
@@ -289,6 +292,14 @@ impl AppState {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "support@oarful.com".to_string());
 
+        let signup_disabled = std::env::var("SIGNUP_DISABLED")
+            .ok()
+            .map(|s| matches!(s.trim(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+        if signup_disabled {
+            tracing::info!("public signup is disabled");
+        }
+
         Ok(Self {
             master_db,
             tenant_cache,
@@ -301,6 +312,7 @@ impl AppState {
             data_dir: data_dir.to_string(),
             superuser_email,
             webmaster_email,
+            signup_disabled,
         })
     }
 

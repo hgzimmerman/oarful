@@ -40,6 +40,42 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
         html! {
             h1 class="text-2xl font-bold text-slate-800 mb-6" { "Tenants" }
 
+            // Create tenant form
+            details class="mb-8 bg-white rounded-lg shadow" {
+                summary class="px-4 py-3 cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900" {
+                    "Create grandfathered tenant"
+                }
+                form method="post" action="/su/create-tenant"
+                     class="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-4" {
+                    div {
+                        label for="club_name" class="block text-sm font-medium text-slate-700 mb-1" { "Club name" }
+                        input id="club_name" name="club_name" type="text" required
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    }
+                    div {
+                        label for="admin_name" class="block text-sm font-medium text-slate-700 mb-1" { "Admin name" }
+                        input id="admin_name" name="admin_name" type="text" required
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    }
+                    div {
+                        label for="admin_email" class="block text-sm font-medium text-slate-700 mb-1" { "Admin email" }
+                        input id="admin_email" name="admin_email" type="email" required
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    }
+                    div {
+                        label for="admin_password" class="block text-sm font-medium text-slate-700 mb-1" { "Password" }
+                        input id="admin_password" name="admin_password" type="password" required minlength="8"
+                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                    }
+                    div class="sm:col-span-2" {
+                        button type="submit"
+                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold text-sm px-4 py-2 rounded shadow transition" {
+                            "Create tenant"
+                        }
+                    }
+                }
+            }
+
             div class="bg-white rounded-lg shadow overflow-x-auto" {
                 table class="w-full text-sm" {
                     thead class="bg-slate-50 border-b border-slate-200" {

@@ -7,8 +7,10 @@ use axum::{
     Form,
 };
 use axum_extra::extract::CookieJar;
-use lineup_db::team::Team;
-use lineup_master_db::tenant::{BillingStatus, Tenant, TenantId};
+use chrono::Utc;
+use lineup_db::app_user::{AppUser, NewAppUser, Role};
+use lineup_db::team::{NewTeam, Team};
+use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant, TenantId};
 use serde::Deserialize;
 
 use crate::state::AppState;
@@ -214,4 +216,133 @@ pub(crate) async fn exit_handler(
         .remove(axum_extra::extract::cookie::Cookie::build(SU_TOKEN_COOKIE).path("/"));
 
     Ok((jar, Redirect::to("/su")))
+}
+
+// =====================================================================
+// Create grandfathered tenant
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct CreateTenantInput {
+    club_name: String,
+    admin_name: String,
+    admin_email: String,
+    admin_password: String,
+}
+
+/// `POST /su/create-tenant` — create a new tenant with grandfathered billing.
+#[tracing::instrument(level = "info", skip_all, err)]
+pub(crate) async fn create_tenant_handler(
+    State(state): State<AppState>,
+    Form(input): Form<CreateTenantInput>,
+) -> Result<impl IntoResponse, super::ErrorResponse> {
+    let club_name = input.club_name.trim().to_string();
+    if club_name.is_empty() || club_name.len() > 100 {
+        return Err(super::bad_request(
+            "Club name is required (max 100 characters).",
+        ));
+    }
+    let admin_name = input.admin_name.trim().to_string();
+    if admin_name.is_empty() {
+        return Err(super::bad_request("Admin name is required."));
+    }
+    let email = input.admin_email.trim().to_lowercase();
+    if !email.contains('@') || !email.contains('.') {
+        return Err(super::bad_request("Invalid email address."));
+    }
+    let password = input.admin_password;
+    if password.len() < 8 {
+        return Err(super::bad_request(
+            "Password must be at least 8 characters.",
+        ));
+    }
+
+    // Generate unique slug.
+    let base_slug = super::signup::slugify(&club_name);
+    if base_slug.is_empty() {
+        return Err(super::bad_request(
+            "Club name must contain at least one letter or number.",
+        ));
+    }
+    let slug = {
+        let mut candidate = base_slug.clone();
+        let mut i = 1u32;
+        loop {
+            let c = candidate.clone();
+            let exists = state
+                .master_db
+                .with_conn(move |conn| Tenant::find_by_slug(conn, &c))
+                .await
+                .map_err(super::internal_error)?;
+            if exists.is_none() {
+                break candidate;
+            }
+            i += 1;
+            candidate = format!("{base_slug}-{i}");
+        }
+    };
+
+    let now = Utc::now().naive_utc();
+    let db_path = format!("{}/tenants/{slug}.db", state.data_dir);
+
+    // Create tenant in master DB as grandfathered.
+    let slug_clone = slug.clone();
+    let db_path_clone = db_path.clone();
+    let club_name_clone = club_name.clone();
+    let tenant = state
+        .master_db
+        .with_conn(move |conn| {
+            Tenant::create(
+                conn,
+                NewTenant {
+                    name: club_name_clone,
+                    slug: slug_clone,
+                    db_path: db_path_clone,
+                    created_at: now,
+                    billing_status: "grandfathered".to_string(),
+                    trial_expires_at: None,
+                },
+            )
+        })
+        .await
+        .map_err(super::internal_error)?;
+
+    // Open the tenant DB (runs migrations on the fresh file).
+    let (db, _config) = state
+        .tenant_db(tenant.id)
+        .await
+        .map_err(super::internal_error)?;
+
+    // Create team + PD user inside the tenant DB.
+    db.with_conn(move |conn| {
+        let _team = Team::create(
+            conn,
+            NewTeam {
+                name: club_name,
+                created_at: now,
+            },
+        )?;
+
+        let hash = bcrypt::hash(&password, bcrypt::DEFAULT_COST)
+            .map_err(|e| diesel::result::Error::QueryBuilderError(Box::new(e)))?;
+
+        let user = AppUser::create(
+            conn,
+            NewAppUser {
+                email,
+                password_hash: Some(hash),
+                name: admin_name,
+                status: "active".to_string(),
+                created_at: now,
+                updated_at: now,
+            },
+        )?;
+        AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
+        Ok(())
+    })
+    .await
+    .map_err(super::internal_error)?;
+
+    // Redirect back to the dashboard.
+    Ok(Redirect::to("/su"))
 }

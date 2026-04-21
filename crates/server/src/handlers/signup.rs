@@ -26,8 +26,11 @@ pub(crate) struct SignupInput {
     pub password_confirm: String,
 }
 
-/// `GET /signup` — render the registration form.
-pub(crate) async fn signup_page() -> Html<String> {
+/// `GET /signup` — render the registration form (or "closed" page).
+pub(crate) async fn signup_page(State(state): State<AppState>) -> impl IntoResponse {
+    if state.signup_disabled {
+        return Html(templates::signup::signup_closed_page().into_string());
+    }
     Html(templates::signup::signup_page(None, &SignupPrefill::default()).into_string())
 }
 
@@ -38,6 +41,10 @@ pub(crate) async fn signup_handler(
     jar: CookieJar,
     Form(input): Form<SignupInput>,
 ) -> Result<impl IntoResponse, super::ErrorResponse> {
+    if state.signup_disabled {
+        return Err(super::bad_request("Signup is currently closed."));
+    }
+
     let prefill = SignupPrefill {
         club_name: input.club_name.clone(),
         name: input.name.clone(),
@@ -218,7 +225,7 @@ fn form_error(msg: &str, prefill: &SignupPrefill) -> axum::response::Response {
 }
 
 /// Convert a club name into a URL-safe slug.
-fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     name.to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })

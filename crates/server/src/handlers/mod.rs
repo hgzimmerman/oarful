@@ -83,6 +83,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
     let su_routes = Router::new()
         .route("/su", get(superuser::index_handler))
         .route("/su/billing/{id}", post(superuser::billing_handler))
+        .route("/su/create-tenant", post(superuser::create_tenant_handler))
         .route("/su/impersonate/{id}", post(superuser::impersonate_handler))
         .route("/su/exit", post(superuser::exit_handler))
         .layer(axum::middleware::from_fn_with_state(
@@ -319,7 +320,7 @@ async fn landing_handler(
             return Redirect::to("/practices").into_response();
         }
     }
-    Html(templates::landing::landing_page().into_string()).into_response()
+    Html(templates::landing::landing_page(state.signup_disabled).into_string()).into_response()
 }
 
 pub(crate) fn maybe_page_authed(
