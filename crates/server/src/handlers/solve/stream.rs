@@ -68,38 +68,28 @@ pub(crate) async fn stream_handler(
     let mut request = knobs.to_request(date, &snapshot, baselines);
     request.config = config;
     let mut solver_locks = knobs.parse_locks();
-    for entry in &knobs.pin {
-        let parts: Vec<&str> = entry.splitn(3, ':').collect();
-        if parts.len() == 3 {
-            if let (Ok(rid), Ok(bid), Ok(seat)) =
-                (parts[0].parse(), parts[1].parse(), parts[2].parse())
-            {
-                solver_locks.push(lineup_solver::SeatLock {
-                    rower_id: rid,
-                    boat_id: bid,
-                    seat,
-                });
-            }
-        }
+    for t in &knobs.pin {
+        solver_locks.push(lineup_solver::SeatLock {
+            rower_id: t.rower_id,
+            boat_id: t.boat_id,
+            seat: t.seat.as_int(),
+        });
     }
     request.locks = solver_locks;
 
     // Display flags for rendering SSE event payloads.
-    let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> = knobs
-        .pin
-        .iter()
-        .filter_map(|e| e.splitn(3, ':').next()?.parse().ok())
-        .collect();
+    let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
+        knobs.pin.iter().map(|t| t.rower_id).collect();
 
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
-        locked_seats: SolveKnobs::parse_triples(&knobs.lock),
+        locked_seats: SolveKnobs::triples_to_set(&knobs.lock),
         pinned_seats: std::collections::HashSet::new(),
         was_pinned_seats: std::collections::HashSet::new(),
         pinned_boats: std::collections::HashSet::new(),
-        was_pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_was_pin),
-        locked_boats: SolveKnobs::parse_boat_ids(&knobs.boat_lock),
+        was_pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_was_pin),
+        locked_boats: SolveKnobs::boat_id_set(&knobs.boat_lock),
         boats_in_use_by: std::collections::HashMap::new(),
     };
 
@@ -155,7 +145,11 @@ pub(crate) async fn stream_handler(
                         .collect();
                     let mut response_knobs = knobs_clone.clone();
                     response_knobs.was_pin = was_pinned_seats.iter()
-                        .map(|(rid, bid, seat)| format!("{rid}:{bid}:{seat}"))
+                        .map(|(rid, bid, seat)| SeatTriple {
+                            rower_id: *rid,
+                            boat_id: *bid,
+                            seat: lineup_db::lineup::SeatPosition::new(*seat),
+                        })
                         .collect();
                     response_knobs.pin = vec![];
                     response_knobs.boat_was_pin = knobs_clone.boat_pin.clone();

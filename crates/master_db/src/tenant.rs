@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
 #[DbValueStyle = "snake_case"]
+#[serde(rename_all = "snake_case")]
 pub enum BillingStatus {
     Trial,
     Active,

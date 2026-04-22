@@ -353,7 +353,7 @@ fn edit_lineup_js(
         for s in &c.seats {
             seat_params.push(format!(
                 "seat={}:{}:{}",
-                boat_id, s.seat_position, s.rower_id
+                s.rower_id, boat_id, s.seat_position
             ));
         }
     }

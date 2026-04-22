@@ -70,7 +70,7 @@ pub(crate) async fn index_handler(
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct BillingInput {
-    status: String,
+    status: BillingStatus,
 }
 
 /// `POST /su/billing/{id}` — update a tenant's billing status.
@@ -81,7 +81,7 @@ pub(crate) async fn billing_handler(
     Form(input): Form<BillingInput>,
 ) -> Result<Html<String>, super::ErrorResponse> {
     let tenant_id = TenantId::new(id);
-    let status = BillingStatus::from_str(&input.status);
+    let status = input.status;
 
     state
         .master_db

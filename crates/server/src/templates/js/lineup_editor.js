@@ -10,7 +10,7 @@ function lineupEditor() {
             root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
                 if (el.dataset.rower) {
-                    params.push('seat=' + el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower);
+                    params.push('seat=' + el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
                 }
             });
             root.querySelectorAll('[data-editor-boat]').forEach(function(card) {

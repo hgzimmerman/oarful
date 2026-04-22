@@ -185,7 +185,7 @@ pub(crate) async fn detail_handler(
 #[derive(Debug, Deserialize)]
 pub(crate) struct TeamUpdateInput {
     name: String,
-    self_edit_level: String,
+    self_edit_level: SelfEditLevel,
     #[serde(default)]
     default_practice_time: Option<String>,
     #[serde(default)]
@@ -218,7 +218,7 @@ pub(crate) async fn update_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let name = input.name.trim().to_string();
-    let level = input.self_edit_level.clone();
+    let level = input.self_edit_level;
     if name.is_empty() {
         return Err(bad_request("Invalid request."));
     }
@@ -274,7 +274,7 @@ pub(crate) async fn update_handler(
             diesel::update(team::table.find(id))
                 .set((
                     team::name.eq(&name),
-                    team::self_edit_level.eq(SelfEditLevel::from_str(&level)),
+                    team::self_edit_level.eq(level),
                     team::default_practice_time.eq(practice_time),
                     team::default_practice_duration_minutes.eq(practice_duration),
                     team::default_practice_days.eq(practice_days),

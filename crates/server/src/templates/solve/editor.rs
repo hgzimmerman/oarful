@@ -228,7 +228,7 @@ pub(crate) fn lineup_editor(
     editor: &EditorData,
     flags: &DisplayFlags,
     unavailable: &[&Rower],
-    walkon_ids: &[String],
+    walkon_ids: &[lineup_db::rower::types::RowerId],
     other_team_rowers: &[OtherTeamRower],
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{practice_id}");
@@ -327,17 +327,15 @@ pub(crate) fn lineup_editor(
             // Walk-on + Rower pool
             div class="pt-4 border-t border-slate-200 text-sm space-y-2" {
                 // Walk-on: add unavailable rowers to the pool.
-                @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id.as_int().to_string()));
+                @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id));
                 @if has_addable || !walkon_ids.is_empty() {
                     div class="flex items-center gap-2 flex-wrap mb-2" {
                         @if !walkon_ids.is_empty() {
                             span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Walk-ons:" }
-                            @for id_str in walkon_ids {
-                                @if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-                                    @let name = snapshot.rowers.iter().find(|r| r.id == id).map(|r| r.name.as_str()).unwrap_or("?");
-                                    span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
-                                        (name)
-                                    }
+                            @for id in walkon_ids {
+                                @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.name.as_str()).unwrap_or("?");
+                                span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
+                                    (name)
                                 }
                             }
                         }
@@ -356,7 +354,7 @@ pub(crate) fn lineup_editor(
                                 select name="walkon"
                                        class="border border-slate-300 rounded px-2 py-1.5 text-sm focus:border-slate-500 focus:outline-none" {
                                     @for r in unavailable {
-                                        @if !walkon_ids.contains(&r.id.as_int().to_string()) {
+                                        @if !walkon_ids.contains(&r.id) {
                                             option value=(r.id) { (r.name) }
                                         }
                                     }

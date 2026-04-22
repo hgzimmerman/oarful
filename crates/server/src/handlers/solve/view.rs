@@ -117,12 +117,12 @@ pub(crate) async fn view_handler(
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
-        locked_seats: SolveKnobs::parse_triples(&knobs.lock),
-        pinned_seats: SolveKnobs::parse_triples(&knobs.pin),
-        was_pinned_seats: SolveKnobs::parse_triples(&knobs.was_pin),
-        pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_pin),
-        was_pinned_boats: SolveKnobs::parse_boat_ids(&knobs.boat_was_pin),
-        locked_boats: SolveKnobs::parse_boat_ids(&knobs.boat_lock),
+        locked_seats: SolveKnobs::triples_to_set(&knobs.lock),
+        pinned_seats: SolveKnobs::triples_to_set(&knobs.pin),
+        was_pinned_seats: SolveKnobs::triples_to_set(&knobs.was_pin),
+        pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_pin),
+        was_pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_was_pin),
+        locked_boats: SolveKnobs::boat_id_set(&knobs.boat_lock),
         boats_in_use_by: std::collections::HashMap::new(),
     };
     let content = templates::solve::landing_content(

@@ -244,30 +244,13 @@ pub(crate) fn landing_content(
     // pre-populate the editor with those placements.
     let editor = if !knobs.seat.is_empty() {
         let mut placements: HashMap<BoatId, HashMap<i32, RowerId>> = HashMap::new();
-        for entry in &knobs.seat {
-            let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() != 3 {
-                continue;
-            }
-            let Ok(boat_id) = parts[0].parse::<BoatId>() else {
-                continue;
-            };
-            let Ok(seat) = parts[1].parse::<i32>() else {
-                continue;
-            };
-            let Ok(rower_id) = parts[2].parse::<RowerId>() else {
-                continue;
-            };
+        for t in &knobs.seat {
             placements
-                .entry(boat_id)
+                .entry(t.boat_id)
                 .or_default()
-                .insert(seat, rower_id);
+                .insert(t.seat.as_int(), t.rower_id);
         }
-        let active_boats: HashSet<BoatId> = knobs
-            .boat
-            .iter()
-            .filter_map(|s| s.parse::<BoatId>().ok())
-            .collect();
+        let active_boats: HashSet<BoatId> = knobs.boat.iter().copied().collect();
         EditorData::from_placements(snapshot, &placements, &active_boats)
     } else {
         EditorData::empty(snapshot, default_boats)

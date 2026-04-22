@@ -109,110 +109,69 @@ pub(crate) async fn editor_handler(
         .collect();
 
     // Apply walk-on overrides.
-    for id_str in &params.walkon {
-        if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-            snapshot
-                .availability
-                .insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
-        }
+    for &id in &params.walkon {
+        snapshot
+            .availability
+            .insert(id, lineup_db::availability::types::AvailabilityStatus::Yes);
     }
 
     // Apply no-shows — remove from availability so they don't appear in pool.
-    for id_str in &params.no_show {
-        if let Ok(id) = id_str.parse::<lineup_db::rower::types::RowerId>() {
-            snapshot
-                .availability
-                .insert(id, lineup_db::availability::types::AvailabilityStatus::No);
-        }
+    for &id in &params.no_show {
+        snapshot
+            .availability
+            .insert(id, lineup_db::availability::types::AvailabilityStatus::No);
     }
 
-    // Parse seat placements: "boat_id:seat_pos:rower_id"
+    // Parse seat placements from typed SeatTriples.
     let mut placements: std::collections::HashMap<
         BoatId,
         std::collections::HashMap<i32, lineup_db::rower::types::RowerId>,
     > = std::collections::HashMap::new();
-    for entry in &params.seat {
-        let parts: Vec<&str> = entry.splitn(3, ':').collect();
-        if parts.len() != 3 {
-            continue;
-        }
-        let Ok(boat_id) = parts[0].parse::<BoatId>() else {
-            continue;
-        };
-        let Ok(seat) = parts[1].parse::<i32>() else {
-            continue;
-        };
-        let Ok(rower_id) = parts[2].parse::<lineup_db::rower::types::RowerId>() else {
-            continue;
-        };
+    for t in &params.seat {
         placements
-            .entry(boat_id)
+            .entry(t.boat_id)
             .or_default()
-            .insert(seat, rower_id);
+            .insert(t.seat.as_int(), t.rower_id);
     }
 
     // Parse active boats.
-    let mut active_boats: std::collections::HashSet<BoatId> = params
-        .boat
-        .iter()
-        .filter_map(|s| s.parse::<BoatId>().ok())
-        .collect();
+    let mut active_boats: std::collections::HashSet<BoatId> = params.boat.iter().copied().collect();
 
     // Handle boat-to-boat transfer: move rowers from source to dest
     // with seat-position mapping, then deactivate source.
     if let Some(ref transfer) = params.transfer {
-        let parts: Vec<&str> = transfer.splitn(2, ':').collect();
-        if parts.len() == 2 {
-            if let (Ok(src_id), Ok(dst_id)) =
-                (parts[0].parse::<BoatId>(), parts[1].parse::<BoatId>())
-            {
-                let src_boat = snapshot.boats.iter().find(|b| b.id == src_id);
-                let dst_boat = snapshot.boats.iter().find(|b| b.id == dst_id);
-                if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
-                    let src_seats = placements.remove(&src_id).unwrap_or_default();
-                    let dst_seats = placements.remove(&dst_id).unwrap_or_default();
-                    let dst_is_populated = !dst_seats.is_empty();
+        let src_id = transfer.source;
+        let dst_id = transfer.dest;
+        let src_boat = snapshot.boats.iter().find(|b| b.id == src_id);
+        let dst_boat = snapshot.boats.iter().find(|b| b.id == dst_id);
+        if let (Some(src), Some(dst)) = (src_boat, dst_boat) {
+            let src_seats = placements.remove(&src_id).unwrap_or_default();
+            let dst_seats = placements.remove(&dst_id).unwrap_or_default();
+            let dst_is_populated = !dst_seats.is_empty();
 
-                    // Map src rowers → dst boat.
-                    let new_dst = map_transfer_seats(&src_seats, src, dst);
+            // Map src rowers -> dst boat.
+            let new_dst = map_transfer_seats(&src_seats, src, dst);
 
-                    if dst_is_populated {
-                        // Live→live: also map dst rowers → src boat (bidirectional swap).
-                        let new_src = map_transfer_seats(&dst_seats, dst, src);
-                        placements.insert(src_id, new_src);
-                        // Both boats stay active.
-                        active_boats.insert(dst_id);
-                    } else {
-                        // Source boat is deactivated.
-                        active_boats.remove(&src_id);
-                        active_boats.insert(dst_id);
-                    }
-
-                    placements.insert(dst_id, new_dst);
-                }
+            if dst_is_populated {
+                // Live->live: also map dst rowers -> src boat (bidirectional swap).
+                let new_src = map_transfer_seats(&dst_seats, dst, src);
+                placements.insert(src_id, new_src);
+                // Both boats stay active.
+                active_boats.insert(dst_id);
+            } else {
+                // Source boat is deactivated.
+                active_boats.remove(&src_id);
+                active_boats.insert(dst_id);
             }
+
+            placements.insert(dst_id, new_dst);
         }
     }
 
     // Parse locks for display.
-    let locked_seats: std::collections::HashSet<(lineup_db::rower::types::RowerId, BoatId, i32)> =
-        params
-            .lock
-            .iter()
-            .filter_map(|entry| {
-                let parts: Vec<&str> = entry.splitn(3, ':').collect();
-                if parts.len() != 3 {
-                    return None;
-                }
-                let rower_id = parts[0].parse().ok()?;
-                let boat_id = parts[1].parse().ok()?;
-                let seat = parts[2].parse().ok()?;
-                Some((rower_id, boat_id, seat))
-            })
-            .collect();
-
-    let pinned_seats = SolveKnobs::parse_triples(&params.pin);
-    let was_pinned_seats = SolveKnobs::parse_triples(&params.was_pin);
+    let locked_seats = SolveKnobs::triples_to_set(&params.lock);
+    let pinned_seats = SolveKnobs::triples_to_set(&params.pin);
+    let was_pinned_seats = SolveKnobs::triples_to_set(&params.was_pin);
 
     let editor =
         templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
@@ -222,9 +181,9 @@ pub(crate) async fn editor_handler(
         locked_seats,
         pinned_seats,
         was_pinned_seats,
-        pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_pin),
-        was_pinned_boats: SolveKnobs::parse_boat_ids(&params.boat_was_pin),
-        locked_boats: SolveKnobs::parse_boat_ids(&params.boat_lock),
+        pinned_boats: SolveKnobs::boat_id_set(&params.boat_pin),
+        was_pinned_boats: SolveKnobs::boat_id_set(&params.boat_was_pin),
+        locked_boats: SolveKnobs::boat_id_set(&params.boat_lock),
         boats_in_use_by: boats_in_use,
     };
 

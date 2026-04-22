@@ -55,11 +55,11 @@ pub(crate) async fn edit_attributes_handler(
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct RowerEditInput {
-    pub(crate) weight_class: String,
-    pub(crate) skill: String,
-    pub(crate) strength: String,
-    pub(crate) height: String,
-    pub(crate) side: String,
+    pub(crate) weight_class: RowerWeightClass,
+    pub(crate) skill: Skill,
+    pub(crate) strength: Strength,
+    pub(crate) height: Height,
+    pub(crate) side: Side,
     pub(crate) side_strength: i32,
     #[serde(default)]
     pub(crate) can_cox: Option<String>,
@@ -83,44 +83,32 @@ pub(crate) async fn update_handler(
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let mut rower = load(&tenant.db, id).await?;
 
-    let parsed = parse_input(&input);
-    let typed = match parsed {
-        Ok(typed) => typed,
-        Err(msg) => {
-            let locked = locked_bucket_fields_for_rower(&tenant, &jar, &rower).await?;
-            return Ok(Html(
-                templates::rowers::attribute_edit_section(&rower, Some(&msg), &perms, &locked)
-                    .into_string(),
-            ));
-        }
-    };
-
     if perms.can_edit("weight_class") {
-        rower.weight_class = typed.weight_class;
+        rower.weight_class = input.weight_class;
     }
     if perms.can_edit("skill") {
-        rower.skill = typed.skill;
+        rower.skill = input.skill;
     }
     if perms.can_edit("strength") {
-        rower.strength = typed.strength;
+        rower.strength = input.strength;
     }
     if perms.can_edit("height") {
-        rower.height = typed.height;
+        rower.height = input.height;
     }
     if perms.can_edit("side") {
-        rower.side = typed.side;
+        rower.side = input.side;
     }
     if perms.can_edit("side_strength") {
-        rower.side_strength = typed.side_strength;
+        rower.side_strength = SideStrength::new(input.side_strength);
     }
     if perms.can_edit("can_cox") {
-        rower.can_cox = IntBool::new(typed.can_cox);
+        rower.can_cox = IntBool::new(input.can_cox.is_some());
     }
     if perms.can_edit("sweep_bias") {
-        rower.sweep_bias = SweepBias::new(typed.sweep_bias);
+        rower.sweep_bias = SweepBias::new(input.sweep_bias);
     }
     if perms.can_edit("is_designated_cox") {
-        rower.is_designated_cox = IntBool::new(typed.is_designated_cox);
+        rower.is_designated_cox = IntBool::new(input.is_designated_cox.is_some());
     }
 
     // Raw metrics — parse lbs→kg and inches→metres.
@@ -155,74 +143,6 @@ pub(crate) async fn update_handler(
     Ok(Html(
         templates::rowers::attribute_section(&saved, None, &perms).into_string(),
     ))
-}
-
-struct ParsedEdit {
-    weight_class: RowerWeightClass,
-    skill: Skill,
-    strength: Strength,
-    height: Height,
-    side: Side,
-    side_strength: SideStrength,
-    can_cox: bool,
-    sweep_bias: i32,
-    is_designated_cox: bool,
-}
-
-fn parse_input(input: &RowerEditInput) -> Result<ParsedEdit, String> {
-    let weight_class = match input.weight_class.as_str() {
-        "Light" => RowerWeightClass::Light,
-        "Medium" => RowerWeightClass::Medium,
-        "Heavy" => RowerWeightClass::Heavy,
-        "VeryHeavy" => RowerWeightClass::VeryHeavy,
-        other => return Err(format!("invalid weight class: {other}")),
-    };
-    let skill = match input.skill.as_str() {
-        "Novice" => Skill::Novice,
-        "Intermediate" => Skill::Intermediate,
-        "Master" => Skill::Master,
-        "Expert" => Skill::Expert,
-        other => return Err(format!("invalid skill: {other}")),
-    };
-    let strength = match input.strength.as_str() {
-        "Weak" => Strength::Weak,
-        "Intermediate" => Strength::Intermediate,
-        "Strong" => Strength::Strong,
-        "VeryStrong" => Strength::VeryStrong,
-        other => return Err(format!("invalid strength: {other}")),
-    };
-    let height = match input.height.as_str() {
-        "Short" => Height::Short,
-        "Medium" => Height::Medium,
-        "Tall" => Height::Tall,
-        "VeryTall" => Height::VeryTall,
-        other => return Err(format!("invalid height: {other}")),
-    };
-    let side = match input.side.as_str() {
-        "Port" => Side::Port,
-        "Starboard" => Side::Starboard,
-        "Either" => Side::Either,
-        other => return Err(format!("invalid side: {other}")),
-    };
-    if !(0..=5).contains(&input.side_strength) {
-        return Err(format!(
-            "side strength must be between 0 and 5, got {}",
-            input.side_strength
-        ));
-    }
-    let side_strength = SideStrength::new(input.side_strength);
-
-    Ok(ParsedEdit {
-        weight_class,
-        skill,
-        strength,
-        height,
-        side,
-        side_strength,
-        can_cox: input.can_cox.is_some(),
-        sweep_bias: input.sweep_bias,
-        is_designated_cox: input.is_designated_cox.is_some(),
-    })
 }
 
 /// Compute which bucket fields are locked (auto-derived from raw values + thresholds).
@@ -385,13 +305,13 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SeatAffinityInput {
-    pub(crate) zone: String,
+    pub(crate) zone: SeatZone,
     pub(crate) weight: i32,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SeatAffinityDelete {
-    pub(crate) zone: String,
+    pub(crate) zone: SeatZone,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -405,17 +325,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
         Ok(w) => w,
         Err(msg) => return seat_section_with_error(&tenant.db, id, &msg).await,
     };
-    let zone = match SeatZone::from_str_opt(&input.zone) {
-        Some(z) => z,
-        None => {
-            return seat_section_with_error(
-                &tenant.db,
-                id,
-                &format!("invalid zone: {}", input.zone),
-            )
-            .await
-        }
-    };
+    let zone = input.zone;
     tenant
         .db
         .with_conn(move |conn| SeatAffinity::upsert(conn, id, zone, weight))
@@ -439,10 +349,7 @@ pub(crate) async fn seat_affinity_delete_handler(
     Form(input): Form<SeatAffinityDelete>,
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
-    let zone = match SeatZone::from_str_opt(&input.zone) {
-        Some(z) => z,
-        None => return seat_section_with_error(&tenant.db, id, "invalid zone").await,
-    };
+    let zone = input.zone;
     tenant
         .db
         .with_conn(move |conn| SeatAffinity::delete(conn, id, zone))
@@ -454,7 +361,7 @@ pub(crate) async fn seat_affinity_delete_handler(
         "rower.seat_affinity.delete",
         "rower",
         &id.to_string(),
-        Some(serde_json::json!({"zone": input.zone}).to_string()),
+        Some(serde_json::json!({"zone": zone}).to_string()),
     );
     seat_section_response(&tenant.db, id).await
 }

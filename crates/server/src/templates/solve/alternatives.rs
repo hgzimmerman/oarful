@@ -66,13 +66,13 @@ pub(crate) fn alternative_block(
     let used: Vec<&ProposedLineup> = alt.lineups.iter().filter(|l| l.used).collect();
 
     // Build a promote URL that loads this alternative into the editor.
-    // Uses seat=boat:seat:rower + boat=id params — no pins/locks.
+    // Uses seat=rower:boat:seat + boat=id params — no pins/locks.
     let promote_url = {
         let mut params = Vec::new();
         for lineup in &used {
             params.push(format!("boat={}", lineup.boat_id));
             for (seat, rower_id) in &lineup.seats {
-                params.push(format!("seat={}:{}:{}", lineup.boat_id, seat, rower_id));
+                params.push(format!("seat={}:{}:{}", rower_id, lineup.boat_id, seat));
             }
         }
         format!("/solve/{}?{}", practice_id, params.join("&"))

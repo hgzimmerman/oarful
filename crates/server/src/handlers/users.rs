@@ -67,7 +67,7 @@ pub(crate) async fn users_content(tenant: &TenantContext) -> Result<maud::Markup
 pub(crate) struct InviteInput {
     pub(crate) email: String,
     pub(crate) name: String,
-    pub(crate) role: String,
+    pub(crate) role: Role,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -86,7 +86,7 @@ pub(crate) async fn invite_handler(
         return Ok(super::maybe_page_authed("Invite", content, hx, &tenant));
     }
 
-    let role = Role::from_str(&input.role).unwrap_or(Role::Member);
+    let role = input.role;
     let token = generate_token();
     let token_for_db = token.clone();
     let email_for_mailer = email.clone();
