@@ -143,8 +143,7 @@ pub struct Team {
     pub name: String,
     pub created_at: NaiveDateTime,
     /// Controls what members can self-edit on their profile.
-    /// "low" | "medium" | "high". Default "low".
-    pub self_edit_level: String,
+    pub self_edit_level: SelfEditLevel,
     /// Default time of day for new practices. None = not set.
     pub default_practice_time: Option<NaiveTime>,
     /// Default practice duration in minutes. None = not set.
@@ -162,7 +161,8 @@ pub struct Team {
 }
 
 /// What a non-coach member is allowed to edit on their own profile.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
+#[DbValueStyle = "snake_case"]
 pub enum SelfEditLevel {
     /// Side, designated cox, can scull only.
     Low,
@@ -172,7 +172,21 @@ pub enum SelfEditLevel {
     High,
 }
 
+impl std::fmt::Display for SelfEditLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 impl SelfEditLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
     pub fn from_str(s: &str) -> Self {
         match s {
             "high" => Self::High,

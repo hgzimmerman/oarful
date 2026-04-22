@@ -318,7 +318,7 @@ async fn resolve_perms(
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
         .map_err(internal_error)?
-        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .map(|t| t.self_edit_level)
         .unwrap_or(SelfEditLevel::Low);
     Ok(templates::rowers::DetailPermissions::member(level))
 }

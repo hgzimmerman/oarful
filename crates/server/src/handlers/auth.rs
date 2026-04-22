@@ -188,7 +188,7 @@ pub(crate) async fn login_handler(
     // Verify password against the first match. The password is
     // per-tenant but typically identical for the same email.
     let first = &matches[0];
-    if first.user.parsed_status() != Some(UserStatus::Active) {
+    if first.user.status != UserStatus::Active {
         return Ok(Html(
             templates::auth::login_password_step(
                 &email,
@@ -422,7 +422,7 @@ pub(crate) async fn magic_login_handler(
             .await
             .map_err(super::internal_error)?;
         if let Some(u) = user {
-            if u.parsed_status() == Some(UserStatus::Active) {
+            if u.status == UserStatus::Active {
                 matches.push(MatchedTenant {
                     user: u,
                     tenant_id: t.id,
@@ -546,7 +546,7 @@ pub(crate) async fn magic_link_handler(
         .await
         .map_err(super::internal_error)?;
 
-    if user.parsed_status() != Some(UserStatus::Active) {
+    if user.status != UserStatus::Active {
         return Ok(Html(
             templates::auth::login_page(Some("Account is not active. Check your invite email."))
                 .into_string(),
@@ -683,7 +683,7 @@ pub(crate) async fn forgot_password_handler(
             .await
             .map_err(super::internal_error)?;
         if let Some(u) = user {
-            if u.parsed_status() == Some(UserStatus::Active) {
+            if u.status == UserStatus::Active {
                 matches.push(MatchedTenant {
                     user: u,
                     tenant_id: t.id,

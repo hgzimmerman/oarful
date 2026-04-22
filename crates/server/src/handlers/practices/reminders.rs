@@ -60,9 +60,7 @@ fn gather_reminder_recipients(
     > = HashMap::new();
     for r in &all_rowers {
         if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
-            if user.wants_reminders()
-                && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
-            {
+            if user.wants_reminders() && user.status == lineup_db::app_user::UserStatus::Active {
                 rower_users.insert(r.id, (user.id, user.email.clone(), r.name.clone()));
             }
         }

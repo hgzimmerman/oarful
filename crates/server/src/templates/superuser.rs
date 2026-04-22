@@ -102,7 +102,7 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
 /// Single tenant row — used for initial render and HTMX swap after
 /// billing update.
 pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
-    let status = tenant.billing_status();
+    let status = tenant.billing_status;
     let row_id = format!("tenant-{}", tenant.id);
     let is_demo = tenant.is_demo();
 

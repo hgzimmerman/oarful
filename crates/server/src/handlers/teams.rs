@@ -10,7 +10,7 @@ use lineup_db::boat::types::BoatId;
 use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
 use lineup_db::rower::Rower;
-use lineup_db::team::{Team, TeamBoatDefault, TeamId, TeamMembership};
+use lineup_db::team::{SelfEditLevel, Team, TeamBoatDefault, TeamId, TeamMembership};
 use serde::Deserialize;
 
 use crate::{
@@ -262,7 +262,7 @@ pub(crate) async fn update_handler(
             diesel::update(team::table.find(id))
                 .set((
                     team::name.eq(&name),
-                    team::self_edit_level.eq(&level),
+                    team::self_edit_level.eq(SelfEditLevel::from_str(&level)),
                     team::default_practice_time.eq(practice_time),
                     team::default_practice_duration_minutes.eq(practice_duration),
                     team::default_practice_days.eq(practice_days),

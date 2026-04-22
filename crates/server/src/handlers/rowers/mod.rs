@@ -51,9 +51,7 @@ pub(crate) async fn roster_content(
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
                 .filter(|r| match AppUser::find_by_rower_id(conn, r.id) {
-                    Ok(Some(u)) => {
-                        u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled)
-                    }
+                    Ok(Some(u)) => u.status != lineup_db::app_user::UserStatus::Disabled,
                     _ => true,
                 })
                 .collect();
@@ -108,7 +106,7 @@ pub(crate) async fn batch_invite_handler(
 
             for r in &team_rowers {
                 if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
-                    if user.status == "active" {
+                    if user.status == lineup_db::app_user::UserStatus::Active {
                         continue;
                     }
                     skipped_existing += 1;
@@ -180,9 +178,7 @@ pub(crate) async fn batch_invite_handler(
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
                 .filter(|r| match AppUser::find_by_rower_id(conn, r.id) {
-                    Ok(Some(u)) => {
-                        u.parsed_status() != Some(lineup_db::app_user::UserStatus::Disabled)
-                    }
+                    Ok(Some(u)) => u.status != lineup_db::app_user::UserStatus::Disabled,
                     _ => true,
                 })
                 .map(|r| RosterRow {

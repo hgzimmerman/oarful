@@ -37,10 +37,12 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 /// The `diesel::table!` macro looks for `DbEnum` mappings under
 /// `crate::sql_types::*` by convention.
 pub mod sql_types {
+    pub use super::app_user::{RoleMapping, UserStatusMapping};
     pub use super::availability::types::AvailabilityStatusMapping;
     pub use super::boat::types::{CoxPositionMapping, WeightClassMapping};
     pub use super::rower::types::{
         HeightMapping, RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
     };
     pub use super::seat_affinity::SeatZoneMapping;
+    pub use super::team::SelfEditLevelMapping;
 }

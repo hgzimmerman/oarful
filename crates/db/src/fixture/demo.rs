@@ -1,6 +1,6 @@
 //! Demo fixture: 24 rowers, 6 boats, 3 practices with committed lineups.
 
-use crate::app_user::{AppUser, NewAppUser, Role};
+use crate::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
 use crate::boat::types::{CoxPosition, WeightClass as BoatWeightClass};
 use crate::boat::{Boat, NewBoat};
@@ -244,7 +244,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
                 email: email.to_string(),
                 password_hash: None,
                 name: rower_names[idx].clone(),
-                status: "active".to_string(),
+                status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
             },
@@ -260,7 +260,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
             email: "demo@localhost".to_string(),
             password_hash: None,
             name: "Demo Coach".to_string(),
-            status: "active".to_string(),
+            status: UserStatus::Active,
             created_at: now,
             updated_at: now,
         },

@@ -8,7 +8,7 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
-use lineup_db::app_user::{AppUser, NewAppUser, Role};
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use lineup_db::team::{NewTeam, Team};
 use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant, TenantId};
 use serde::Deserialize;
@@ -135,8 +135,8 @@ pub(crate) async fn impersonate_handler(
             // Try PD first, then any active user.
             let pd = user_role::table
                 .inner_join(app_user::table.on(app_user::id.eq(user_role::user_id)))
-                .filter(user_role::role.eq("ProgramDirector"))
-                .filter(app_user::status.eq("active"))
+                .filter(user_role::role.eq(Role::ProgramDirector))
+                .filter(app_user::status.eq(UserStatus::Active))
                 .select(app_user::id)
                 .first::<i32>(conn)
                 .optional()?;
@@ -146,7 +146,7 @@ pub(crate) async fn impersonate_handler(
                 None => {
                     // Fall back to any active user.
                     let any = app_user::table
-                        .filter(app_user::status.eq("active"))
+                        .filter(app_user::status.eq(UserStatus::Active))
                         .select(app_user::id)
                         .first::<i32>(conn)?;
                     lineup_db::app_user::UserId::new(any)
@@ -299,7 +299,7 @@ pub(crate) async fn create_tenant_handler(
                     slug: slug_clone,
                     db_path: db_path_clone,
                     created_at: now,
-                    billing_status: "grandfathered".to_string(),
+                    billing_status: BillingStatus::Grandfathered,
                     trial_expires_at: None,
                 },
             )
@@ -332,7 +332,7 @@ pub(crate) async fn create_tenant_handler(
                 email,
                 password_hash: Some(hash),
                 name: admin_name,
-                status: "active".to_string(),
+                status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
             },

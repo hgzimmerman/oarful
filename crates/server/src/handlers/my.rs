@@ -84,7 +84,7 @@ async fn profile_content(
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
         .map_err(internal_error)?
-        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .map(|t| t.self_edit_level)
         .unwrap_or(SelfEditLevel::Low);
     let perms = templates::rowers::DetailPermissions::member(level);
     Ok(templates::rowers::detail_content(&detail, perms, true))
@@ -105,7 +105,7 @@ pub(crate) async fn profile_update_handler(
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
         .map_err(internal_error)?
-        .map(|t| SelfEditLevel::from_str(&t.self_edit_level))
+        .map(|t| t.self_edit_level)
         .unwrap_or(SelfEditLevel::Low);
     let perms = templates::rowers::DetailPermissions::member(level);
 

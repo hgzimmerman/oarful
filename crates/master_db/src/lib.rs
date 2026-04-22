@@ -9,6 +9,11 @@ pub mod schema;
 pub mod state;
 pub mod tenant;
 
+/// Re-export of the diesel sql_type glue the generated schema references.
+pub mod sql_types {
+    pub use super::tenant::BillingStatusMapping;
+}
+
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");

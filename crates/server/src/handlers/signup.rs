@@ -7,9 +7,9 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
-use lineup_db::app_user::{AppUser, NewAppUser, Role};
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use lineup_db::team::{NewTeam, Team};
-use lineup_master_db::tenant::{NewTenant, Tenant};
+use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant};
 use serde::Deserialize;
 
 use crate::{state::AppState, templates, templates::signup::SignupPrefill};
@@ -151,7 +151,7 @@ pub(crate) async fn signup_handler(
                     slug: slug_clone,
                     db_path: db_path_clone,
                     created_at: now,
-                    billing_status: "trial".to_string(),
+                    billing_status: BillingStatus::Trial,
                     trial_expires_at: Some(trial_expires),
                 },
             )
@@ -186,7 +186,7 @@ pub(crate) async fn signup_handler(
                     email,
                     password_hash: Some(hash),
                     name: admin_name,
-                    status: "active".to_string(),
+                    status: UserStatus::Active,
                     created_at: now,
                     updated_at: now,
                 },

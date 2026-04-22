@@ -50,7 +50,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Datelike, NaiveDate, Utc};
 use diesel::SqliteConnection;
-use lineup_db::app_user::{AppUser, NewAppUser, Role};
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::availability::{Availability, NewAvailability};
 use lineup_db::rower::types::{Side, SweepBias};
@@ -337,7 +337,7 @@ fn sync_row(
                     email: email.to_string(),
                     password_hash: None,
                     name: display_name.clone(),
-                    status: "active".to_string(),
+                    status: UserStatus::Active,
                     created_at: now,
                     updated_at: now,
                 },
@@ -737,7 +737,7 @@ mod tests {
                 email: "alice@example.com".into(),
                 password_hash: None,
                 name: "Alice Smith".into(),
-                status: "active".into(),
+                status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
             },

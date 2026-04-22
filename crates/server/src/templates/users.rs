@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use lineup_db::app_user::{AppUser, Role, UserId};
+use lineup_db::app_user::{AppUser, Role, UserId, UserStatus};
 use lineup_db::rower::types::RowerId;
 use maud::{html, Markup, DOCTYPE};
 
@@ -106,18 +106,17 @@ pub(crate) fn user_row(
             td class="px-4 py-2 text-slate-600" { (u.email) }
             td class="px-4 py-2 text-slate-600" { (role_label) }
             td class="px-4 py-2" {
-                @let badge_class = match u.status.as_str() {
-                    "active" => "bg-emerald-100 text-emerald-800",
-                    "invited" => "bg-amber-100 text-amber-800",
-                    "disabled" => "bg-slate-200 text-slate-600",
-                    _ => "bg-slate-100 text-slate-600",
+                @let badge_class = match u.status {
+                    UserStatus::Active => "bg-emerald-100 text-emerald-800",
+                    UserStatus::Invited => "bg-amber-100 text-amber-800",
+                    UserStatus::Disabled => "bg-slate-200 text-slate-600",
                 };
                 span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
                     (u.status)
                 }
             }
             td class="px-4 py-2 text-right space-x-2" {
-                @if u.status == "invited" {
+                @if u.status == UserStatus::Invited {
                     form method="post"
                          action={"/users/" (u.id) "/resend-invite"}
                          hx-post={"/users/" (u.id) "/resend-invite"}
@@ -130,7 +129,7 @@ pub(crate) fn user_row(
                         }
                     }
                 }
-                @if u.status == "active" {
+                @if u.status == UserStatus::Active {
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}
@@ -143,7 +142,7 @@ pub(crate) fn user_row(
                         }
                     }
                 }
-                @if u.status == "disabled" {
+                @if u.status == UserStatus::Disabled {
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}

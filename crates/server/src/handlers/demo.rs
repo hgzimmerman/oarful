@@ -10,7 +10,7 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
 use lineup_db::app_user::{AppUser, Role};
-use lineup_master_db::tenant::{NewTenant, Tenant};
+use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant};
 
 use crate::state::AppState;
 
@@ -60,7 +60,7 @@ pub(crate) async fn create_demo_handler(
                     slug: slug_clone,
                     db_path: db_path_clone,
                     created_at: now,
-                    billing_status: "trial".to_string(),
+                    billing_status: BillingStatus::Trial,
                     trial_expires_at: Some(expires),
                 },
             )

@@ -16,7 +16,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use std::collections::HashMap;
 
-use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow};
+use lineup_db::app_user::{AppUser, NewAppUser, Role, UserId, UserRoleRow, UserStatus};
 use lineup_db::schema::{app_user, user_invite, user_role};
 use serde::Deserialize;
 
@@ -42,10 +42,8 @@ pub(crate) async fn users_content(tenant: &TenantContext) -> Result<maud::Markup
             let role_rows: Vec<UserRoleRow> = user_role::table
                 .select(UserRoleRow::as_select())
                 .get_results(conn)?;
-            let roles: HashMap<UserId, Role> = role_rows
-                .into_iter()
-                .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
-                .collect();
+            let roles: HashMap<UserId, Role> =
+                role_rows.into_iter().map(|r| (r.user_id, r.role)).collect();
             let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = users
                 .iter()
                 .filter_map(|u| u.rower_id.map(|rid| (u.id, rid)))
@@ -109,7 +107,7 @@ pub(crate) async fn invite_handler(
                     email,
                     password_hash: None,
                     name,
-                    status: "invited".to_string(),
+                    status: UserStatus::Invited,
                     created_at: now,
                     updated_at: now,
                 },
@@ -193,7 +191,7 @@ pub(crate) async fn resend_invite_handler(
         .with_conn(move |conn| {
             let user =
                 AppUser::get(conn, user_id)?.ok_or_else(|| diesel::result::Error::NotFound)?;
-            if user.status != "invited" {
+            if user.status != UserStatus::Invited {
                 return Err(diesel::result::Error::NotFound);
             }
 
@@ -538,11 +536,11 @@ pub(crate) async fn toggle_status_handler(
         .db
         .with_conn(move |conn| {
             let user = AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound)?;
-            let new_status = match user.parsed_status() {
-                Some(lineup_db::app_user::UserStatus::Active) => {
+            let new_status = match user.status {
+                lineup_db::app_user::UserStatus::Active => {
                     lineup_db::app_user::UserStatus::Disabled
                 }
-                Some(lineup_db::app_user::UserStatus::Disabled) => {
+                lineup_db::app_user::UserStatus::Disabled => {
                     lineup_db::app_user::UserStatus::Active
                 }
                 _ => return Ok((user, HashMap::new(), HashMap::new())),
@@ -552,10 +550,8 @@ pub(crate) async fn toggle_status_handler(
             let role_rows: Vec<UserRoleRow> = user_role::table
                 .select(UserRoleRow::as_select())
                 .get_results(conn)?;
-            let roles: HashMap<UserId, Role> = role_rows
-                .into_iter()
-                .filter_map(|r| Role::from_str(&r.role).map(|role| (r.user_id, role)))
-                .collect();
+            let roles: HashMap<UserId, Role> =
+                role_rows.into_iter().map(|r| (r.user_id, r.role)).collect();
             let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = vec![user.clone()]
                 .iter()
                 .filter_map(|u| u.rower_id.map(|rid| (u.id, rid)))

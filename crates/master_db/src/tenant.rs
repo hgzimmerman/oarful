@@ -7,7 +7,8 @@ use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
+#[DbValueStyle = "snake_case"]
 pub enum BillingStatus {
     Trial,
     Active,
@@ -104,8 +105,8 @@ pub struct Tenant {
     /// Whether email addresses are visible to members on the roster
     /// and rower detail pages. `0` = Coach+ only (default), `1` = visible.
     pub emails_visible: i32,
-    /// Billing status: trial, active, suspended, cancelled.
-    pub billing_status: String,
+    /// Billing status.
+    pub billing_status: BillingStatus,
     /// When the trial period expires. `None` means no expiry (legacy
     /// tenants or manually activated).
     pub trial_expires_at: Option<NaiveDateTime>,
@@ -118,7 +119,7 @@ pub struct NewTenant {
     pub slug: String,
     pub db_path: String,
     pub created_at: NaiveDateTime,
-    pub billing_status: String,
+    pub billing_status: BillingStatus,
     pub trial_expires_at: Option<NaiveDateTime>,
 }
 
@@ -139,10 +140,6 @@ impl Tenant {
         self.demo_expires_at.is_some()
     }
 
-    pub fn billing_status(&self) -> BillingStatus {
-        BillingStatus::from_str(&self.billing_status)
-    }
-
     /// Whether the tenant has an active billing relationship (not
     /// expired trial, not suspended/cancelled). Demo tenants are
     /// always considered active (they have their own expiry logic).
@@ -150,7 +147,7 @@ impl Tenant {
         if self.is_demo() {
             return true;
         }
-        match self.billing_status() {
+        match self.billing_status {
             BillingStatus::Active | BillingStatus::Grandfathered => true,
             BillingStatus::Trial => self
                 .trial_expires_at
@@ -214,7 +211,7 @@ impl Tenant {
     ) -> Result<(), diesel::result::Error> {
         diesel::update(tenant::table.find(id))
             .set((
-                tenant::billing_status.eq(status.as_str()),
+                tenant::billing_status.eq(status),
                 // Clear trial expiry when moving to a non-trial status.
                 tenant::trial_expires_at.eq::<Option<NaiveDateTime>>(None),
             ))

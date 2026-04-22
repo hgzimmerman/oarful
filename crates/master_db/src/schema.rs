@@ -1,4 +1,7 @@
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     tenant (id) {
         id -> Integer,
         name -> Text,
@@ -9,7 +12,7 @@ diesel::table! {
         force_cox_stern -> Integer,
         demo_expires_at -> Nullable<Timestamp>,
         emails_visible -> Integer,
-        billing_status -> Text,
+        billing_status -> BillingStatusMapping,
         trial_expires_at -> Nullable<Timestamp>,
     }
 }

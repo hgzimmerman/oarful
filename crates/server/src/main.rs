@@ -169,7 +169,7 @@ async fn cmd_import(args: &[String]) -> Result<()> {
                         slug: "default".to_string(),
                         db_path: dest_for_closure,
                         created_at: now,
-                        billing_status: "active".to_string(),
+                        billing_status: lineup_master_db::tenant::BillingStatus::Active,
                         trial_expires_at: None,
                     },
                 )?;
@@ -224,7 +224,7 @@ async fn cmd_seed() -> Result<()> {
                         slug: "default".to_string(),
                         db_path: db_path_for_closure,
                         created_at: now,
-                        billing_status: "active".to_string(),
+                        billing_status: lineup_master_db::tenant::BillingStatus::Active,
                         trial_expires_at: None,
                     },
                 )?;
@@ -277,7 +277,7 @@ fn cmd_set_billing(args: &[String]) -> Result<()> {
         anyhow::bail!("No tenant with slug '{slug}' found.");
     };
 
-    let old = tenant.billing_status;
+    let old = tenant.billing_status.as_str();
     lineup_master_db::tenant::Tenant::set_billing_status(&mut conn, tenant.id, status)?;
     println!(
         "Updated '{}' (slug={slug}): {old} → {}",

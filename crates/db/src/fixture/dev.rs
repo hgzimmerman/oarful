@@ -1,6 +1,6 @@
 //! Dev fixture: 14 rowers, 3 boats, 1 practice — used by baseline tests.
 
-use crate::app_user::{AppUser, NewAppUser, Role};
+use crate::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
 use crate::boat::types::{CoxPosition, WeightClass as BoatWeightClass};
 use crate::boat::{Boat, NewBoat};
@@ -57,7 +57,7 @@ pub fn seed_fleet_only(conn: &mut SqliteConnection) -> Result<(), diesel::result
                 email: "coach@test.com".to_string(),
                 password_hash: Some(hash.to_string()),
                 name: "Dev Coach".to_string(),
-                status: "active".to_string(),
+                status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
             },
@@ -162,7 +162,7 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             email: "coach@test.com".to_string(),
             password_hash: Some(hash.to_string()),
             name: "Dev Coach".to_string(),
-            status: "active".to_string(),
+            status: UserStatus::Active,
             created_at: now,
             updated_at: now,
         },

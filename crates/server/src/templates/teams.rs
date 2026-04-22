@@ -6,7 +6,7 @@ use lineup_db::boat::types::BoatId;
 use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
 use lineup_db::rower::Rower;
-use lineup_db::team::{PracticeDays, Team, TeamId};
+use lineup_db::team::{PracticeDays, SelfEditLevel, Team, TeamId};
 use maud::{html, Markup, PreEscaped};
 
 use super::layout::page_header;
@@ -144,13 +144,13 @@ pub(crate) fn detail_content(
                     }
                     select id="self_edit_level" name="self_edit_level"
                            class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
-                        option value="low" selected[team.self_edit_level == "low"] {
+                        option value="low" selected[team.self_edit_level == SelfEditLevel::Low] {
                             "Low — side, cox, scull only"
                         }
-                        option value="medium" selected[team.self_edit_level == "medium"] {
+                        option value="medium" selected[team.self_edit_level == SelfEditLevel::Medium] {
                             "Medium — + height"
                         }
-                        option value="high" selected[team.self_edit_level == "high"] {
+                        option value="high" selected[team.self_edit_level == SelfEditLevel::High] {
                             "High — all attributes (except active)"
                         }
                     }

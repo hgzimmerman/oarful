@@ -40,11 +40,18 @@ impl std::fmt::Display for UserId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
+#[DbValueStyle = "snake_case"]
 pub enum UserStatus {
     Invited,
     Active,
     Disabled,
+}
+
+impl std::fmt::Display for UserStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 impl UserStatus {
@@ -66,7 +73,8 @@ impl UserStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
+#[DbValueStyle = "PascalCase"]
 pub enum Role {
     Member,
     Coach,
@@ -112,7 +120,7 @@ pub struct AppUser {
     pub email: String,
     pub password_hash: Option<String>,
     pub name: String,
-    pub status: String,
+    pub status: UserStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub opt_in_reminders: i32,
@@ -126,7 +134,7 @@ pub struct NewAppUser {
     pub email: String,
     pub password_hash: Option<String>,
     pub name: String,
-    pub status: String,
+    pub status: UserStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -135,7 +143,7 @@ pub struct NewAppUser {
 #[diesel(table_name = crate::schema::user_role)]
 pub struct UserRoleRow {
     pub user_id: UserId,
-    pub role: String,
+    pub role: Role,
 }
 
 impl AppUser {
@@ -180,7 +188,7 @@ impl AppUser {
         diesel::update(app_user::table.find(id))
             .set((
                 app_user::password_hash.eq(hash),
-                app_user::status.eq("active"),
+                app_user::status.eq(UserStatus::Active),
                 app_user::updated_at.eq(now),
             ))
             .execute(conn)?;
@@ -212,7 +220,7 @@ impl AppUser {
             .select(UserRoleRow::as_select())
             .first(conn)
             .optional()?;
-        Ok(row.and_then(|r| Role::from_str(&r.role)))
+        Ok(row.map(|r| r.role))
     }
 
     pub fn set_role(
@@ -221,13 +229,10 @@ impl AppUser {
         role: Role,
     ) -> Result<(), diesel::result::Error> {
         diesel::insert_into(user_role::table)
-            .values(UserRoleRow {
-                user_id,
-                role: role.as_str().to_string(),
-            })
+            .values(UserRoleRow { user_id, role })
             .on_conflict(user_role::user_id)
             .do_update()
-            .set(user_role::role.eq(role.as_str()))
+            .set(user_role::role.eq(role))
             .execute(conn)?;
         Ok(())
     }
@@ -239,13 +244,9 @@ impl AppUser {
     ) -> Result<(), diesel::result::Error> {
         use crate::schema::app_user;
         diesel::update(app_user::table.find(user_id))
-            .set(app_user::status.eq(status.as_str()))
+            .set(app_user::status.eq(status))
             .execute(conn)?;
         Ok(())
-    }
-
-    pub fn parsed_status(&self) -> Option<UserStatus> {
-        UserStatus::from_str(&self.status)
     }
 
     /// Whether this user has opted in to availability reminder emails.

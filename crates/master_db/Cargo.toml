@@ -11,6 +11,7 @@ serde.workspace = true
 tracing.workspace = true
 
 diesel.workspace = true
+diesel-derive-enum.workspace = true
 diesel-derive-newtype.workspace = true
 diesel_migrations.workspace = true
 deadpool-diesel.workspace = true

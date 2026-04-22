@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use lineup_db::state::Db;
 use lineup_master_db::state::MasterDb;
-use lineup_master_db::tenant::{NewTenant, Tenant, TenantId};
+use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant, TenantId};
 use tokio::sync::Semaphore;
 
 use crate::jwt::{Claims, JwtKeys};
@@ -379,7 +379,7 @@ fn ensure_default_tenant(master_conn_str: &str, tenant_db_path: &str) -> anyhow:
             slug: "default".to_string(),
             db_path: tenant_db_path.to_string(),
             created_at: now,
-            billing_status: "active".to_string(),
+            billing_status: BillingStatus::Active,
             trial_expires_at: None,
         },
     )?;

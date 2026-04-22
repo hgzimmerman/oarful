@@ -32,7 +32,7 @@ impl TenantConfig {
             emails_visible: t.are_emails_visible(),
             tenant_name: t.name.clone(),
             tenant_slug: t.slug.clone(),
-            billing_status: t.billing_status(),
+            billing_status: t.billing_status,
             trial_expires_at: t.trial_expires_at,
             is_demo: t.is_demo(),
         }

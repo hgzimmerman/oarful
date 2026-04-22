@@ -160,9 +160,7 @@ fn gather_lineup_recipients(
     for rid in &recipient_rower_ids {
         if let Some(r) = rower_map.get(rid) {
             if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
-                if user.wants_lineups()
-                    && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
-                {
+                if user.wants_lineups() && user.status == lineup_db::app_user::UserStatus::Active {
                     recipients.push((user.id, user.email.clone(), r.name.clone()));
                 }
             }
@@ -316,7 +314,7 @@ pub(crate) async fn send_lineups_handler(
                 if let Some(r) = rower_map.get(rid) {
                     if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
                         if user.wants_lineups()
-                            && user.parsed_status() == Some(lineup_db::app_user::UserStatus::Active)
+                            && user.status == lineup_db::app_user::UserStatus::Active
                         {
                             recipients.push((user.id, user.email.clone(), r.name.clone()));
                         }

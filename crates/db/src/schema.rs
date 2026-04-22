@@ -36,12 +36,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     app_user (id) {
         id -> Integer,
         email -> Text,
         password_hash -> Nullable<Text>,
         name -> Text,
-        status -> Text,
+        status -> UserStatusMapping,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         opt_in_reminders -> Integer,
@@ -51,9 +54,12 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     user_role (user_id) {
         user_id -> Integer,
-        role -> Text,
+        role -> RoleMapping,
     }
 }
 
@@ -115,11 +121,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     team (id) {
         id -> Integer,
         name -> Text,
         created_at -> Timestamp,
-        self_edit_level -> Text,
+        self_edit_level -> SelfEditLevelMapping,
         default_practice_time -> Nullable<Time>,
         default_practice_duration_minutes -> Nullable<Integer>,
         archived -> Integer,
