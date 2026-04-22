@@ -171,7 +171,7 @@ pub(crate) async fn save_profile_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "solver_profile.save",
         "solver_profile",
         &audit_name,
@@ -290,7 +290,7 @@ pub(crate) async fn delete_profile_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "solver_profile.delete",
         "solver_profile",
         &profile_name,

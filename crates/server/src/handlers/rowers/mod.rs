@@ -140,7 +140,7 @@ pub(crate) async fn batch_invite_handler(
     });
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "invite.batch",
         "team",
         &team_id.to_string(),

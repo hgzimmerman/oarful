@@ -778,7 +778,10 @@ pub(crate) async fn reset_password_handler(
         .map_err(super::internal_error)?
         .map_err(super::internal_error)?;
 
-    let user_id = tenant.claims.user_id();
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     tenant
         .db
         .with_conn(move |conn| AppUser::set_password(conn, user_id, &hash))

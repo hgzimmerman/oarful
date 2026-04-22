@@ -32,7 +32,7 @@ pub(crate) async fn selector_handler(
     let is_pd = role.at_least(Role::ProgramDirector);
     let is_coach = role.at_least(Role::Coach);
 
-    let user_id = tenant.claims.user_id().as_int();
+    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
     let teams = tenant
         .db
         .with_conn(move |conn| {
@@ -110,7 +110,7 @@ pub(crate) async fn create_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "team.create",
         "team",
         &team.id.to_string(),
@@ -275,7 +275,7 @@ pub(crate) async fn update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "team.update",
         "team",
         &id.to_string(),
@@ -353,7 +353,7 @@ pub(crate) async fn roster_matrix_save_handler(
         })
         .collect();
 
-    let user_id = tenant.claims.user_id().as_int();
+    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
     let (added, removed) = tenant
         .db
         .with_conn(move |conn| {
@@ -452,7 +452,7 @@ pub(crate) async fn fleet_matrix_save_handler(
         })
         .collect();
 
-    let user_id = tenant.claims.user_id().as_int();
+    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
     let (added, removed) = tenant
         .db
         .with_conn(move |conn| {
@@ -533,7 +533,7 @@ pub(crate) async fn toggle_archive_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         if new_archived {
             "team.archive"
         } else {
@@ -664,7 +664,7 @@ pub(crate) async fn threshold_save_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "team.threshold.update",
         "team",
         &id.to_string(),

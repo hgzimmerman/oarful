@@ -105,7 +105,7 @@ pub(crate) async fn billing_handler(
     ))
 }
 
-/// `POST /su/impersonate/{id}` — enter a tenant as PD.
+/// `POST /su/impersonate/{id}` — view a tenant as PD (synthetic identity).
 #[tracing::instrument(level = "info", skip_all, err)]
 pub(crate) async fn impersonate_handler(
     State(state): State<AppState>,
@@ -120,53 +120,27 @@ pub(crate) async fn impersonate_handler(
         .map(|c| c.value().to_string())
         .ok_or_else(|| super::bad_request("No session."))?;
 
-    // Open the tenant DB.
+    // Open the tenant DB to find the first team.
     let (db, _config) = state
         .tenant_db(tenant_id)
         .await
         .map_err(super::internal_error)?;
 
-    // Find a PD user to impersonate, falling back to any active user.
-    let (user_id, team_id) = db
+    let team_id = db
         .with_conn(move |conn| {
-            use diesel::prelude::*;
-            use lineup_db::schema::{app_user, user_role};
-
-            // Try PD first, then any active user.
-            let pd = user_role::table
-                .inner_join(app_user::table.on(app_user::id.eq(user_role::user_id)))
-                .filter(user_role::role.eq(Role::ProgramDirector))
-                .filter(app_user::status.eq(UserStatus::Active))
-                .select(app_user::id)
-                .first::<i32>(conn)
-                .optional()?;
-
-            let user_id = match pd {
-                Some(id) => lineup_db::app_user::UserId::new(id),
-                None => {
-                    // Fall back to any active user.
-                    let any = app_user::table
-                        .filter(app_user::status.eq(UserStatus::Active))
-                        .select(app_user::id)
-                        .first::<i32>(conn)?;
-                    lineup_db::app_user::UserId::new(any)
-                }
-            };
-
             let team = Team::first(conn)?;
-            let team_id = team
+            Ok(team
                 .map(|t| t.id)
-                .unwrap_or(lineup_db::team::TeamId::new(1));
-
-            Ok((user_id, team_id))
+                .unwrap_or(lineup_db::team::TeamId::new(1)))
         })
         .await
         .map_err(super::internal_error)?;
 
-    // Issue an impersonation JWT (superuser flag preserved).
+    // Issue a tenant-view JWT with synthetic user_id=0 and PD role.
+    // No real user account is hijacked.
     let jwt = state
         .jwt_keys
-        .issue_superuser_impersonation(user_id, tenant_id, team_id)
+        .issue_superuser_tenant_view(tenant_id, team_id)
         .map_err(super::internal_error)?;
 
     let jwt_cookie = axum_extra::extract::cookie::Cookie::build((super::auth::TOKEN_COOKIE, jwt))

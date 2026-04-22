@@ -149,7 +149,7 @@ pub(crate) async fn invite_handler(
 
             crate::audit::record(
                 &tenant.db,
-                Some(tenant.claims.user_id().as_int()),
+                tenant.claims.audit_user_id(),
                 "invite.create",
                 "user",
                 &new_user_id.to_string(),
@@ -228,7 +228,7 @@ pub(crate) async fn resend_invite_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "invite.resend",
         "user",
         &user_id.to_string(),
@@ -563,7 +563,7 @@ pub(crate) async fn toggle_status_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "user.toggle_status",
         "user",
         &user_id.to_string(),

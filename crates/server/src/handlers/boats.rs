@@ -261,7 +261,7 @@ pub(crate) async fn create_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "boat.create",
         "boat",
         &boat.id.to_string(),
@@ -354,7 +354,7 @@ pub(crate) async fn update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "boat.update",
         "boat",
         &id.to_string(),

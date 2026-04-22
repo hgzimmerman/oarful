@@ -240,7 +240,7 @@ pub(crate) async fn attendance_toggle_handler(
     };
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "availability.update",
         "availability",
         &format!("{rower_id}:{practice_id}"),

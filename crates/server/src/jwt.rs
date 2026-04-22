@@ -15,23 +15,32 @@ use std::sync::Arc;
 /// JWT lifetime in seconds (24 hours).
 const TOKEN_LIFETIME_SECS: u64 = 86400;
 
+/// Who the token belongs to: a real tenant user or the global superuser.
+/// Serializes as `{"identity": "user", "id": 42}` or `{"identity": "superuser"}`,
+/// flattened into the JWT claims object.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "identity", content = "id")]
+pub(crate) enum Identity {
+    #[serde(rename = "user")]
+    User(i32),
+    #[serde(rename = "superuser")]
+    Superuser,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Claims {
-    /// User ID within the tenant DB.
-    sub: i32,
-    /// Which tenant (club) this token is for.
+    /// Who this token belongs to.
+    sub: Identity,
+    /// Which tenant (club) this token is for (0 for pure superuser).
     tenant_id: i32,
-    /// Tenant-wide role: "Member", "Coach", "ProgramDirector".
+    /// Tenant-wide role: "Member", "Coach", "ProgramDirector", "Superuser".
     role: String,
-    /// Which team the user is currently viewing.
+    /// Which team the user is currently viewing (0 for pure superuser).
     active_team_id: i32,
     /// Expiry (Unix timestamp).
     exp: u64,
     /// Issued at (Unix timestamp).
     iat: u64,
-    /// True for global admin tokens (no tenant context).
-    #[serde(default)]
-    is_superuser: bool,
 }
 
 impl Claims {
@@ -46,18 +55,30 @@ impl Claims {
             .unwrap()
             .as_secs();
         Self {
-            sub: user_id.as_int(),
+            sub: Identity::User(user_id.as_int()),
             tenant_id: tenant_id.as_int(),
             role: role.as_str().to_string(),
             active_team_id: active_team_id.as_int(),
             exp: now + TOKEN_LIFETIME_SECS,
             iat: now,
-            is_superuser: false,
         }
     }
 
-    pub(crate) fn user_id(&self) -> UserId {
-        UserId::new(self.sub)
+    /// The real user ID within the tenant DB, or `None` for superuser.
+    pub(crate) fn user_id(&self) -> Option<UserId> {
+        match self.sub {
+            Identity::User(id) => Some(UserId::new(id)),
+            Identity::Superuser => None,
+        }
+    }
+
+    /// Shorthand for audit logging: returns `Some(user_id)` as `i32`
+    /// for real users, `None` for superuser sessions.
+    pub(crate) fn audit_user_id(&self) -> Option<i32> {
+        match self.sub {
+            Identity::User(id) => Some(id),
+            Identity::Superuser => None,
+        }
     }
 
     pub(crate) fn tenant_id(&self) -> TenantId {
@@ -73,7 +94,7 @@ impl Claims {
     }
 
     pub(crate) fn is_superuser(&self) -> bool {
-        self.is_superuser
+        matches!(self.sub, Identity::Superuser)
     }
 
     fn new_superuser(lifetime_secs: u64) -> Self {
@@ -82,13 +103,12 @@ impl Claims {
             .unwrap()
             .as_secs();
         Self {
-            sub: 0,
+            sub: Identity::Superuser,
             tenant_id: 0,
             role: "Superuser".to_string(),
             active_team_id: 0,
             exp: now + lifetime_secs,
             iat: now,
-            is_superuser: true,
         }
     }
 }
@@ -158,15 +178,25 @@ impl JwtKeys {
         jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
     }
 
-    /// Issue a superuser impersonation token for a specific tenant.
-    pub(crate) fn issue_superuser_impersonation(
+    /// Issue a superuser tenant-view token. The superuser gets PD-level
+    /// access without taking over a real user's identity.
+    pub(crate) fn issue_superuser_tenant_view(
         &self,
-        user_id: UserId,
         tenant_id: TenantId,
         active_team_id: TeamId,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        let mut claims = Claims::new(user_id, tenant_id, Role::ProgramDirector, active_team_id);
-        claims.is_superuser = true;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = Claims {
+            sub: Identity::Superuser,
+            tenant_id: tenant_id.as_int(),
+            role: Role::ProgramDirector.as_str().to_string(),
+            active_team_id: active_team_id.as_int(),
+            exp: now + TOKEN_LIFETIME_SECS,
+            iat: now,
+        };
         jsonwebtoken::encode(&Header::default(), &claims, &self.encoding)
     }
 

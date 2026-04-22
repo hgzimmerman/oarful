@@ -151,7 +151,7 @@ pub(crate) async fn profile_update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.update",
         "rower",
         &saved.id.to_string(),
@@ -364,7 +364,7 @@ pub(crate) async fn availability_update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "availability.update",
         "availability",
         &format!("{rower_id}:{practice_id}"),
@@ -475,7 +475,10 @@ pub(crate) async fn email_prefs_handler(
 }
 
 async fn email_prefs_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
-    let user_id = tenant.claims.user_id();
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     let user = tenant
         .db
         .with_conn(move |conn| AppUser::get(conn, user_id)?.ok_or(diesel::result::Error::NotFound))
@@ -498,7 +501,10 @@ pub(crate) async fn email_prefs_update_handler(
     hx: HxRequest,
     Form(input): Form<EmailPrefsInput>,
 ) -> Result<Html<String>, ErrorResponse> {
-    let user_id = tenant.claims.user_id();
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     let reminders = input.opt_in_reminders.is_some();
     let lineups = input.opt_in_lineups.is_some();
 
@@ -510,7 +516,7 @@ pub(crate) async fn email_prefs_update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "email_prefs.update",
         "user",
         &user_id.to_string(),
@@ -540,7 +546,10 @@ pub(crate) async fn email_prefs_update_handler(
 /// Try to load the rower linked to the authenticated user. Returns
 /// None if the user has no linked rower record.
 async fn try_load_my_rower(tenant: &TenantContext) -> Result<Option<Rower>, ErrorResponse> {
-    let user_id = tenant.claims.user_id();
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     tenant
         .db
         .with_conn(move |conn| {

@@ -136,7 +136,7 @@ pub(crate) async fn notes_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "practice.notes.update",
         "practice",
         &practice_id.to_string(),

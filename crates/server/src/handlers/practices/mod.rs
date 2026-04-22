@@ -237,7 +237,7 @@ pub(crate) async fn create_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "practice.create",
         "practice",
         &date.to_string(),
@@ -270,7 +270,7 @@ pub(crate) async fn cancel_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "practice.cancel",
         "practice",
         &practice_id.to_string(),

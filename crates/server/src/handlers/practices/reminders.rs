@@ -155,7 +155,10 @@ pub(crate) async fn send_reminders_handler(
     }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
-    let sender_id = tenant.claims.user_id();
+    let sender_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::super::bad_request("Not available in superuser view."))?;
     let team_name = tenant.config.tenant_name.clone();
     let pids: Vec<PracticeId> = input
         .practice_ids
@@ -259,7 +262,7 @@ pub(crate) async fn send_reminders_handler(
     if sent_count > 0 {
         crate::audit::record(
             &tenant.db,
-            Some(tenant.claims.user_id().as_int()),
+            tenant.claims.audit_user_id(),
             "practices.send_reminders",
             "practice",
             &format!("{sent_count} recipients"),

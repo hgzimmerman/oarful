@@ -91,7 +91,7 @@ pub(crate) async fn commit_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "lineup.commit",
         "practice",
         &practice_id.to_string(),
@@ -158,7 +158,7 @@ pub(crate) async fn commit_lineup_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "lineup.commit",
         "practice",
         &practice_id.to_string(),

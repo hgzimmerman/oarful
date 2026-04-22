@@ -144,7 +144,7 @@ pub(crate) async fn update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.update",
         "rower",
         &saved.id.to_string(),
@@ -297,7 +297,10 @@ async fn resolve_perms(
     if is_coach {
         return Ok(templates::rowers::DetailPermissions::coach());
     }
-    let uid = tenant.claims.user_id();
+    let uid = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::super::bad_request("Not available in superuser view."))?;
     let owns_rower = tenant
         .db
         .with_conn(move |conn| {
@@ -423,7 +426,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
         .map_err(internal_error)?;
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.seat_affinity.update",
         "rower",
         &id.to_string(),
@@ -450,7 +453,7 @@ pub(crate) async fn seat_affinity_delete_handler(
         .map_err(internal_error)?;
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.seat_affinity.delete",
         "rower",
         &id.to_string(),
@@ -513,7 +516,7 @@ pub(crate) async fn pair_affinity_upsert_handler(
         .map_err(internal_error)?;
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.pair_affinity.update",
         "rower",
         &id.to_string(),
@@ -540,7 +543,7 @@ pub(crate) async fn pair_affinity_delete_handler(
         .map_err(internal_error)?;
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "rower.pair_affinity.delete",
         "rower",
         &id.to_string(),
@@ -588,7 +591,7 @@ pub(crate) async fn toggle_active_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         if new_active {
             "rower.reactivate"
         } else {
@@ -678,7 +681,7 @@ pub(crate) async fn erg_test_add_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "erg_test.add",
         "rower",
         &id.to_string(),
@@ -710,7 +713,7 @@ pub(crate) async fn erg_test_delete_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "erg_test.delete",
         "rower",
         &id.to_string(),

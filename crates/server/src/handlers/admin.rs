@@ -382,7 +382,7 @@ pub(crate) async fn settings_update_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(tenant.claims.user_id().as_int()),
+        tenant.claims.audit_user_id(),
         "tenant.settings.update",
         "tenant",
         &tenant_id.to_string(),
@@ -527,7 +527,10 @@ pub(crate) async fn restore_handler(
         .map_err(internal_error)?;
 
     // Look up current user's email.
-    let user_id = tenant.claims.user_id();
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     let current_user = tenant
         .db
         .with_conn(move |conn| AppUser::get(conn, user_id))

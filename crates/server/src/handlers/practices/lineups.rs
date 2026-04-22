@@ -186,7 +186,10 @@ pub(crate) async fn send_lineups_handler(
         ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let sender_id = tenant.claims.user_id();
+    let sender_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| super::super::bad_request("Not available in superuser view."))?;
     let team_name = tenant.config.tenant_name.clone();
     let scope_all = input.scope == "all";
 
@@ -408,7 +411,7 @@ pub(crate) async fn send_lineups_handler(
         let date_strs: Vec<String> = summaries.iter().map(|s| s.date.to_string()).collect();
         crate::audit::record(
             &tenant.db,
-            Some(tenant.claims.user_id().as_int()),
+            tenant.claims.audit_user_id(),
             "practices.send_lineups",
             "practice",
             &date_strs.join(","),

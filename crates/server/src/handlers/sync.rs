@@ -216,7 +216,7 @@ pub(crate) async fn sync_handler(
                 .await;
             crate::audit::record(
                 &tenant.db,
-                Some(tenant.claims.user_id().as_int()),
+                tenant.claims.audit_user_id(),
                 "sync.import",
                 "sync_source",
                 "google_sheet",
