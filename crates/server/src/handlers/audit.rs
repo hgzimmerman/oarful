@@ -4,6 +4,7 @@ use crate::handlers::ErrorResponse;
 use axum::{response::Html, Extension};
 use lineup_db::app_user::{AppUser, Role, UserId};
 use lineup_db::audit_log::{AuditFilter, AuditLog};
+use lineup_db::types::{AuditAction, AuditResourceId, AuditResourceType};
 use serde::Deserialize;
 
 use crate::handlers::internal_error;
@@ -35,9 +36,21 @@ pub(crate) async fn audit_content(
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
         user_id: query.user_id.filter(|&id| id > 0).map(UserId::new),
-        action: query.action.clone().filter(|s| !s.is_empty()),
-        resource_type: query.resource_type.clone().filter(|s| !s.is_empty()),
-        resource_id: query.resource_id.clone().filter(|s| !s.is_empty()),
+        action: query
+            .action
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditAction::new),
+        resource_type: query
+            .resource_type
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditResourceType::new),
+        resource_id: query
+            .resource_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditResourceId::new),
     };
 
     let (entries, actions, user_map) = tenant
@@ -78,9 +91,21 @@ pub(crate) async fn rows_handler(
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
         user_id: query.user_id.filter(|&id| id > 0).map(UserId::new),
-        action: query.action.clone().filter(|s| !s.is_empty()),
-        resource_type: query.resource_type.clone().filter(|s| !s.is_empty()),
-        resource_id: query.resource_id.clone().filter(|s| !s.is_empty()),
+        action: query
+            .action
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditAction::new),
+        resource_type: query
+            .resource_type
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditResourceType::new),
+        resource_id: query
+            .resource_id
+            .clone()
+            .filter(|s| !s.is_empty())
+            .map(AuditResourceId::new),
     };
 
     let (entries, user_map) = tenant

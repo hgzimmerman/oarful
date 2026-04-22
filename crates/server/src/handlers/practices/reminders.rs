@@ -8,6 +8,7 @@ use lineup_db::availability::Availability;
 use lineup_db::email_log::{EmailLog, NewEmailLog};
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
+use lineup_db::types::EmailLogType;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
@@ -72,7 +73,12 @@ fn gather_reminder_recipients(
         for practice in &pending {
             let responses = Availability::map_for_practice(conn, practice.id)?;
             if !responses.contains_key(rower_id) {
-                if !EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)? {
+                if !EmailLog::already_sent_today(
+                    conn,
+                    team_id,
+                    &EmailLogType::new("reminder"),
+                    practice.date,
+                )? {
                     missing.push((practice.date, practice.time));
                 }
             }
@@ -182,7 +188,7 @@ pub(crate) async fn send_reminders_handler(
                             conn,
                             NewEmailLog {
                                 team_id,
-                                email_type: "reminder".to_string(),
+                                email_type: EmailLogType::new("reminder"),
                                 practice_date: *date,
                                 sent_at: now,
                                 recipient_count: result

@@ -3,6 +3,7 @@
 
 use crate::app_user::UserId;
 use crate::schema::audit_log;
+use crate::types::{AuditAction, AuditResourceId, AuditResourceType};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -51,9 +52,9 @@ pub struct AuditLog {
     pub id: AuditLogId,
     pub timestamp: NaiveDateTime,
     pub user_id: Option<UserId>,
-    pub action: String,
-    pub resource_type: String,
-    pub resource_id: String,
+    pub action: AuditAction,
+    pub resource_type: AuditResourceType,
+    pub resource_id: AuditResourceId,
     pub detail: Option<String>,
 }
 
@@ -62,9 +63,9 @@ pub struct AuditLog {
 pub struct NewAuditEntry {
     pub timestamp: NaiveDateTime,
     pub user_id: Option<UserId>,
-    pub action: String,
-    pub resource_type: String,
-    pub resource_id: String,
+    pub action: AuditAction,
+    pub resource_type: AuditResourceType,
+    pub resource_id: AuditResourceId,
     pub detail: Option<String>,
 }
 
@@ -74,9 +75,9 @@ pub struct AuditFilter {
     pub user_id: Option<UserId>,
     /// If true, only show entries with user_id IS NULL (system actions).
     pub system_only: bool,
-    pub action: Option<String>,
-    pub resource_type: Option<String>,
-    pub resource_id: Option<String>,
+    pub action: Option<AuditAction>,
+    pub resource_type: Option<AuditResourceType>,
+    pub resource_id: Option<AuditResourceId>,
 }
 
 impl AuditLog {
@@ -124,7 +125,7 @@ impl AuditLog {
     /// Distinct action values currently in the log.
     pub fn distinct_actions(
         conn: &mut SqliteConnection,
-    ) -> Result<Vec<String>, diesel::result::Error> {
+    ) -> Result<Vec<AuditAction>, diesel::result::Error> {
         audit_log::table
             .select(audit_log::action)
             .distinct()

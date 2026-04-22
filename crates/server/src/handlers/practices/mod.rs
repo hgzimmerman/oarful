@@ -25,6 +25,7 @@ use lineup_db::email_log::EmailLog;
 use lineup_db::lineup::Lineup;
 use lineup_db::practice::{Practice, PracticeId};
 use lineup_db::rower::Rower;
+use lineup_db::types::EmailLogType;
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -127,8 +128,12 @@ async fn planning_tab_content(
                     .iter()
                     .filter(|r| !avail_map.contains_key(&r.id))
                     .count();
-                let already_sent =
-                    EmailLog::already_sent_today(conn, team_id, "reminder", practice.date)?;
+                let already_sent = EmailLog::already_sent_today(
+                    conn,
+                    team_id,
+                    &EmailLogType::new("reminder"),
+                    practice.date,
+                )?;
 
                 rows.push(templates::practices::PracticeRow {
                     practice_id: practice.id,
@@ -308,8 +313,12 @@ async fn committed_tab_content(
                 if lineups.is_empty() {
                     continue;
                 }
-                let already_sent =
-                    EmailLog::already_sent_today(conn, team_id, "lineup", practice.date)?;
+                let already_sent = EmailLog::already_sent_today(
+                    conn,
+                    team_id,
+                    &EmailLogType::new("lineup"),
+                    practice.date,
+                )?;
 
                 rows.push(templates::practices::PracticeRow {
                     practice_id: practice.id,

@@ -4,13 +4,14 @@ use std::collections::HashMap;
 
 use lineup_db::app_user::UserId;
 use lineup_db::audit_log::AuditLog;
+use lineup_db::types::AuditAction;
 use maud::{html, Markup};
 
 use crate::handlers::audit::{AuditQuery, PAGE_SIZE};
 
 pub(crate) fn list_content(
     entries: &[AuditLog],
-    actions: &[String],
+    actions: &[AuditAction],
     user_map: &HashMap<UserId, String>,
     query: &AuditQuery,
     offset: i64,
@@ -102,7 +103,7 @@ fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Ma
                     }
                 }
                 td class="px-4 py-2" {
-                    (action_badge(&entry.action))
+                    (action_badge(entry.action.as_str()))
                 }
                 td class="px-4 py-2 text-xs font-mono text-slate-600" {
                     (entry.resource_type) "/" (entry.resource_id)
@@ -138,7 +139,7 @@ fn action_badge(action: &str) -> Markup {
 }
 
 fn filter_bar(
-    actions: &[String],
+    actions: &[AuditAction],
     user_map: &HashMap<UserId, String>,
     query: &AuditQuery,
 ) -> Markup {

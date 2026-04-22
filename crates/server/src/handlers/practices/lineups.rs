@@ -10,6 +10,7 @@ use lineup_db::email_log::{EmailLog, NewEmailLog};
 use lineup_db::lineup::Lineup;
 use lineup_db::practice::Practice;
 use lineup_db::rower::Rower;
+use lineup_db::types::EmailLogType;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
@@ -109,7 +110,7 @@ fn gather_lineup_recipients(
     let mut valid_dates = Vec::new();
 
     for date in dates {
-        if EmailLog::already_sent_today(conn, team_id, "lineup", *date)? {
+        if EmailLog::already_sent_today(conn, team_id, &EmailLogType::new("lineup"), *date)? {
             continue;
         }
         let practice = match Practice::find_by_date(conn, team_id, *date)? {
@@ -222,7 +223,8 @@ pub(crate) async fn send_lineups_handler(
             let mut benched_rower_ids: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
 
             for date in &dates {
-                if EmailLog::already_sent_today(conn, team_id, "lineup", *date)? {
+                if EmailLog::already_sent_today(conn, team_id, &EmailLogType::new("lineup"), *date)?
+                {
                     continue;
                 }
 
@@ -332,7 +334,7 @@ pub(crate) async fn send_lineups_handler(
                     conn,
                     NewEmailLog {
                         team_id,
-                        email_type: "lineup".to_string(),
+                        email_type: EmailLogType::new("lineup"),
                         practice_date: summary.date,
                         sent_at: now,
                         recipient_count: recipients.len() as i32,

@@ -4,6 +4,7 @@
 use crate::app_user::UserId;
 use crate::schema::email_log;
 use crate::team::TeamId;
+use crate::types::EmailLogType;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -51,7 +52,7 @@ impl std::str::FromStr for EmailLogId {
 pub struct EmailLog {
     pub id: EmailLogId,
     pub team_id: TeamId,
-    pub email_type: String,
+    pub email_type: EmailLogType,
     pub practice_date: NaiveDate,
     pub sent_at: NaiveDateTime,
     pub recipient_count: i32,
@@ -62,7 +63,7 @@ pub struct EmailLog {
 #[diesel(table_name = email_log)]
 pub struct NewEmailLog {
     pub team_id: TeamId,
-    pub email_type: String,
+    pub email_type: EmailLogType,
     pub practice_date: NaiveDate,
     pub sent_at: NaiveDateTime,
     pub recipient_count: i32,
@@ -75,7 +76,7 @@ impl EmailLog {
     pub fn already_sent_today(
         conn: &mut SqliteConnection,
         team_id: TeamId,
-        email_type_val: &str,
+        email_type_val: &EmailLogType,
         practice_date: NaiveDate,
     ) -> Result<bool, diesel::result::Error> {
         let today = chrono::Utc::now().date_naive();

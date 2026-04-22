@@ -6,7 +6,7 @@
 
 use crate::schema::sync_source;
 use crate::team::TeamId;
-use crate::types::DurationMinutes;
+use crate::types::{DurationMinutes, SyncSourceType};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
@@ -30,7 +30,7 @@ pub struct SyncSourceId(i32);
 pub struct SyncSource {
     pub id: SyncSourceId,
     pub team_id: TeamId,
-    pub source_type: String,
+    pub source_type: SyncSourceType,
     pub config: String,
     pub last_synced_at: Option<NaiveDateTime>,
     pub last_error: Option<String>,
@@ -42,7 +42,7 @@ pub struct SyncSource {
 #[diesel(table_name = sync_source)]
 pub struct NewSyncSource {
     pub team_id: TeamId,
-    pub source_type: String,
+    pub source_type: SyncSourceType,
     pub config: String,
     pub poll_interval_minutes: Option<DurationMinutes>,
 }
@@ -64,7 +64,7 @@ impl SyncSource {
     pub fn find_by_type(
         conn: &mut SqliteConnection,
         team_id: TeamId,
-        source_type: &str,
+        source_type: &SyncSourceType,
     ) -> Result<Option<SyncSource>, diesel::result::Error> {
         sync_source::table
             .filter(sync_source::team_id.eq(team_id))
@@ -79,7 +79,7 @@ impl SyncSource {
     pub fn upsert(
         conn: &mut SqliteConnection,
         team_id: TeamId,
-        source_type: &str,
+        source_type: &SyncSourceType,
         config: &str,
         poll_interval_minutes: Option<DurationMinutes>,
     ) -> Result<(), diesel::result::Error> {
@@ -95,7 +95,7 @@ impl SyncSource {
             diesel::insert_into(sync_source::table)
                 .values(NewSyncSource {
                     team_id,
-                    source_type: source_type.to_string(),
+                    source_type: source_type.clone(),
                     config: config.to_string(),
                     poll_interval_minutes,
                 })

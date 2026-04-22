@@ -160,6 +160,58 @@ impl std::fmt::Display for HeightM {
     }
 }
 
+// ── String newtypes ──────────────────────────────────────────────
+
+macro_rules! string_newtype {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        #[derive(
+            Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash,
+            Serialize, Deserialize,
+            diesel_derive_newtype::DieselNewType,
+        )]
+        pub struct $name(String);
+
+        impl $name {
+            pub fn new(s: impl Into<String>) -> Self {
+                Self(s.into())
+            }
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(&self.0)
+            }
+        }
+    };
+}
+
+string_newtype!(
+    /// What happened: "boat.create", "rower.update", "lineup.commit", etc.
+    AuditAction
+);
+string_newtype!(
+    /// Which entity kind was affected: "boat", "rower", "practice", etc.
+    AuditResourceType
+);
+string_newtype!(
+    /// Which specific entity (typically the stringified primary key).
+    AuditResourceId
+);
+string_newtype!(
+    /// Email blast type stored in the rate-limiting log: "reminder", "lineup".
+    EmailLogType
+);
+string_newtype!(
+    /// Sync integration kind: "google_sheet".
+    SyncSourceType
+);
+
+// ── Numeric newtypes ─────────────────────────────────────────────
+
 /// Signed weight for coach-facing affinity tables (`pair_affinity`,
 /// `rower_seat_affinity`). Semantics:
 ///

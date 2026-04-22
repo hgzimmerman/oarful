@@ -3,6 +3,7 @@
 use lineup_db::app_user::UserId;
 use lineup_db::audit_log::{AuditLog, NewAuditEntry};
 use lineup_db::state::Db;
+use lineup_db::types::{AuditAction, AuditResourceId, AuditResourceType};
 
 /// Fire-and-forget audit log write. Spawns a background task so the
 /// handler response is never blocked by audit I/O. Failures are logged
@@ -19,9 +20,9 @@ pub(crate) fn record(
     let entry = NewAuditEntry {
         timestamp: chrono::Utc::now().naive_utc(),
         user_id,
-        action: action.to_string(),
-        resource_type: resource_type.to_string(),
-        resource_id: resource_id.to_string(),
+        action: AuditAction::new(action),
+        resource_type: AuditResourceType::new(resource_type),
+        resource_id: AuditResourceId::new(resource_id),
         detail,
     };
     tokio::spawn(async move {

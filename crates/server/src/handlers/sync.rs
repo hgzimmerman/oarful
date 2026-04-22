@@ -31,6 +31,7 @@ where
 }
 
 use lineup_db::app_user::Role;
+use lineup_db::types::SyncSourceType;
 
 use crate::{
     handlers::{internal_error, ErrorResponse},
@@ -82,7 +83,11 @@ pub(crate) async fn sync_content(
     let saved = tenant
         .db
         .with_conn(move |conn| {
-            lineup_db::sync_source::SyncSource::find_by_type(conn, team_id, "google_sheet")
+            lineup_db::sync_source::SyncSource::find_by_type(
+                conn,
+                team_id,
+                &SyncSourceType::new("google_sheet"),
+            )
         })
         .await
         .map_err(internal_error)?;
@@ -199,7 +204,7 @@ pub(crate) async fn sync_handler(
                     lineup_db::sync_source::SyncSource::upsert(
                         conn,
                         team_id,
-                        "google_sheet",
+                        &SyncSourceType::new("google_sheet"),
                         &config_json,
                         poll_minutes,
                     )?;
@@ -207,7 +212,7 @@ pub(crate) async fn sync_handler(
                     if let Some(src) = lineup_db::sync_source::SyncSource::find_by_type(
                         conn,
                         team_id,
-                        "google_sheet",
+                        &SyncSourceType::new("google_sheet"),
                     )? {
                         lineup_db::sync_source::SyncSource::mark_synced(conn, src.id)?;
                     }
