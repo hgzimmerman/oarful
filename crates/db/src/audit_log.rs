@@ -1,17 +1,56 @@
 //! Audit log — records who changed what and when. Entries older than
 //! the retention window are periodically pruned.
 
+use crate::app_user::UserId;
 use crate::schema::audit_log;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct AuditLogId(i32);
+
+impl AuditLogId {
+    pub fn new(id: i32) -> Self {
+        Self(id)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for AuditLogId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for AuditLogId {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
 
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = audit_log)]
 pub struct AuditLog {
-    pub id: i32,
+    pub id: AuditLogId,
     pub timestamp: NaiveDateTime,
-    pub user_id: Option<i32>,
+    pub user_id: Option<UserId>,
     pub action: String,
     pub resource_type: String,
     pub resource_id: String,
@@ -22,7 +61,7 @@ pub struct AuditLog {
 #[diesel(table_name = audit_log)]
 pub struct NewAuditEntry {
     pub timestamp: NaiveDateTime,
-    pub user_id: Option<i32>,
+    pub user_id: Option<UserId>,
     pub action: String,
     pub resource_type: String,
     pub resource_id: String,
@@ -32,7 +71,7 @@ pub struct NewAuditEntry {
 /// Filter criteria for querying the audit log.
 #[derive(Debug, Default)]
 pub struct AuditFilter {
-    pub user_id: Option<i32>,
+    pub user_id: Option<UserId>,
     /// If true, only show entries with user_id IS NULL (system actions).
     pub system_only: bool,
     pub action: Option<String>,
@@ -96,12 +135,12 @@ impl AuditLog {
     /// Distinct (user_id) values currently in the log (non-null only).
     pub fn distinct_user_ids(
         conn: &mut SqliteConnection,
-    ) -> Result<Vec<i32>, diesel::result::Error> {
+    ) -> Result<Vec<UserId>, diesel::result::Error> {
         audit_log::table
             .select(audit_log::user_id)
             .filter(audit_log::user_id.is_not_null())
             .distinct()
-            .get_results::<Option<i32>>(conn)
+            .get_results::<Option<UserId>>(conn)
             .map(|v| v.into_iter().flatten().collect())
     }
 

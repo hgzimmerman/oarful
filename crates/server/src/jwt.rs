@@ -74,11 +74,8 @@ impl Claims {
 
     /// Shorthand for audit logging: returns `Some(user_id)` as `i32`
     /// for real users, `None` for superuser sessions.
-    pub(crate) fn audit_user_id(&self) -> Option<i32> {
-        match self.sub {
-            Identity::User(id) => Some(id),
-            Identity::Superuser => None,
-        }
+    pub(crate) fn audit_user_id(&self) -> Option<UserId> {
+        self.user_id()
     }
 
     pub(crate) fn tenant_id(&self) -> TenantId {

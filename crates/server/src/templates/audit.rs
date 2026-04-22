@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use lineup_db::app_user::UserId;
 use lineup_db::audit_log::AuditLog;
 use maud::{html, Markup};
 
@@ -10,7 +11,7 @@ use crate::handlers::audit::{AuditQuery, PAGE_SIZE};
 pub(crate) fn list_content(
     entries: &[AuditLog],
     actions: &[String],
-    user_map: &HashMap<i32, String>,
+    user_map: &HashMap<UserId, String>,
     query: &AuditQuery,
     offset: i64,
     has_more: bool,
@@ -64,7 +65,7 @@ pub(crate) fn list_content(
 /// `beforeend` and the button replaces `#audit-load-more`.
 pub(crate) fn rows_and_load_more(
     entries: &[AuditLog],
-    user_map: &HashMap<i32, String>,
+    user_map: &HashMap<UserId, String>,
     query: &AuditQuery,
     offset: i64,
     has_more: bool,
@@ -82,7 +83,7 @@ pub(crate) fn rows_and_load_more(
     }
 }
 
-fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<i32, String>) -> Markup {
+fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Markup {
     html! {
         @for entry in entries {
             tr class="border-t border-slate-100 hover:bg-slate-50" {
@@ -136,13 +137,17 @@ fn action_badge(action: &str) -> Markup {
     }
 }
 
-fn filter_bar(actions: &[String], user_map: &HashMap<i32, String>, query: &AuditQuery) -> Markup {
+fn filter_bar(
+    actions: &[String],
+    user_map: &HashMap<UserId, String>,
+    query: &AuditQuery,
+) -> Markup {
     let sel_action = query.action.as_deref().unwrap_or("");
     let sel_user = query.user_id.map(|u| u.to_string()).unwrap_or_default();
     let sel_resource = query.resource_type.as_deref().unwrap_or("");
 
     // Collect sorted user list for dropdown
-    let mut users: Vec<(i32, &str)> = user_map
+    let mut users: Vec<(UserId, &str)> = user_map
         .iter()
         .map(|(id, name)| (*id, name.as_str()))
         .collect();

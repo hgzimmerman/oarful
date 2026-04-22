@@ -335,7 +335,7 @@ impl TeamMembership {
     /// All team IDs a coach (user) is assigned to.
     pub fn team_ids_for_coach(
         conn: &mut SqliteConnection,
-        user_id: i32,
+        user_id: crate::app_user::UserId,
     ) -> Result<Vec<TeamId>, diesel::result::Error> {
         use crate::schema::team_coach;
         team_coach::table

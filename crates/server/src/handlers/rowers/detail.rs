@@ -701,7 +701,7 @@ pub(crate) async fn erg_test_add_handler(
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn erg_test_delete_handler(
     Extension(tenant): Extension<TenantContext>,
-    Path((id, test_id)): Path<(RowerId, i32)>,
+    Path((id, test_id)): Path<(RowerId, lineup_db::erg_test::ErgTestId)>,
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
 

@@ -7,11 +7,49 @@ use crate::team::TeamId;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct EmailLogId(i32);
+
+impl EmailLogId {
+    pub fn new(id: i32) -> Self {
+        Self(id)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for EmailLogId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for EmailLogId {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
 
 #[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = email_log)]
 pub struct EmailLog {
-    pub id: i32,
+    pub id: EmailLogId,
     pub team_id: TeamId,
     pub email_type: String,
     pub practice_date: NaiveDate,

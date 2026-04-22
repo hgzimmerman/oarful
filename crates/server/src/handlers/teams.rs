@@ -32,7 +32,7 @@ pub(crate) async fn selector_handler(
     let is_pd = role.at_least(Role::ProgramDirector);
     let is_coach = role.at_least(Role::Coach);
 
-    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
+    let user_id = tenant.claims.user_id();
     let teams = tenant
         .db
         .with_conn(move |conn| {
@@ -41,25 +41,36 @@ pub(crate) async fn selector_handler(
                 Team::list_all(conn)
             } else if is_coach {
                 // Coaches see active teams they're assigned to.
-                let team_ids = lineup_db::team::TeamMembership::team_ids_for_coach(conn, user_id)?;
-                let active = Team::list_active(conn)?;
-                Ok(active
-                    .into_iter()
-                    .filter(|t| team_ids.contains(&t.id))
-                    .collect())
-            } else {
-                // Members see active teams their rower is in.
-                use lineup_db::app_user::AppUser;
-                let user = AppUser::get(conn, lineup_db::app_user::UserId::new(user_id))?;
-                if let Some(rid) = user.and_then(|u| u.rower_id) {
-                    let team_ids = lineup_db::team::TeamMembership::team_ids_for_rower(conn, rid)?;
+                if let Some(uid) = user_id {
+                    let team_ids = lineup_db::team::TeamMembership::team_ids_for_coach(conn, uid)?;
                     let active = Team::list_active(conn)?;
                     Ok(active
                         .into_iter()
                         .filter(|t| team_ids.contains(&t.id))
                         .collect())
                 } else {
-                    // No linked rower — fall back to active (shouldn't normally happen).
+                    // Superuser viewing as coach — show all active teams.
+                    Team::list_active(conn)
+                }
+            } else {
+                // Members see active teams their rower is in.
+                use lineup_db::app_user::AppUser;
+                if let Some(uid) = user_id {
+                    let user = AppUser::get(conn, uid)?;
+                    if let Some(rid) = user.and_then(|u| u.rower_id) {
+                        let team_ids =
+                            lineup_db::team::TeamMembership::team_ids_for_rower(conn, rid)?;
+                        let active = Team::list_active(conn)?;
+                        Ok(active
+                            .into_iter()
+                            .filter(|t| team_ids.contains(&t.id))
+                            .collect())
+                    } else {
+                        // No linked rower — fall back to active.
+                        Team::list_active(conn)
+                    }
+                } else {
+                    // Superuser — fall back to active.
                     Team::list_active(conn)
                 }
             }
@@ -353,7 +364,6 @@ pub(crate) async fn roster_matrix_save_handler(
         })
         .collect();
 
-    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
     let (added, removed) = tenant
         .db
         .with_conn(move |conn| {
@@ -378,7 +388,7 @@ pub(crate) async fn roster_matrix_save_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(user_id),
+        tenant.claims.audit_user_id(),
         "team.roster.update",
         "roster",
         "all",
@@ -452,7 +462,6 @@ pub(crate) async fn fleet_matrix_save_handler(
         })
         .collect();
 
-    let user_id = tenant.claims.audit_user_id().unwrap_or(0);
     let (added, removed) = tenant
         .db
         .with_conn(move |conn| {
@@ -477,7 +486,7 @@ pub(crate) async fn fleet_matrix_save_handler(
 
     crate::audit::record(
         &tenant.db,
-        Some(user_id),
+        tenant.claims.audit_user_id(),
         "team.fleet.update",
         "fleet",
         "all",

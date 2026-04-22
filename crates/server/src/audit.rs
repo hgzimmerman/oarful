@@ -1,5 +1,6 @@
 //! Fire-and-forget audit log writes + periodic cleanup.
 
+use lineup_db::app_user::UserId;
 use lineup_db::audit_log::{AuditLog, NewAuditEntry};
 use lineup_db::state::Db;
 
@@ -8,7 +9,7 @@ use lineup_db::state::Db;
 /// but never propagated.
 pub(crate) fn record(
     db: &Db,
-    user_id: Option<i32>,
+    user_id: Option<UserId>,
     action: &str,
     resource_type: &str,
     resource_id: &str,

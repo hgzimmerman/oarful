@@ -9,11 +9,49 @@ use crate::schema::erg_test;
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct ErgTestId(i32);
+
+impl ErgTestId {
+    pub fn new(id: i32) -> Self {
+        Self(id)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for ErgTestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for ErgTestId {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
 
 #[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, diesel::Identifiable)]
 #[diesel(table_name = erg_test)]
 pub struct ErgTest {
-    pub id: i32,
+    pub id: ErgTestId,
     pub rower_id: RowerId,
     /// Test distance in metres (e.g. 2000, 5000, 6000, 1000).
     pub distance_m: i32,
@@ -60,7 +98,7 @@ impl ErgTest {
     }
 
     /// Delete an erg test entry by ID.
-    pub fn delete(conn: &mut SqliteConnection, id: i32) -> Result<(), diesel::result::Error> {
+    pub fn delete(conn: &mut SqliteConnection, id: ErgTestId) -> Result<(), diesel::result::Error> {
         diesel::delete(erg_test::table.find(id)).execute(conn)?;
         Ok(())
     }

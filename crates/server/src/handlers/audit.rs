@@ -34,7 +34,7 @@ pub(crate) async fn audit_content(
     let offset = query.offset.unwrap_or(0);
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
-        user_id: query.user_id.filter(|&id| id >= 0),
+        user_id: query.user_id.filter(|&id| id > 0).map(UserId::new),
         action: query.action.clone().filter(|s| !s.is_empty()),
         resource_type: query.resource_type.clone().filter(|s| !s.is_empty()),
         resource_id: query.resource_id.clone().filter(|s| !s.is_empty()),
@@ -48,7 +48,7 @@ pub(crate) async fn audit_content(
             let user_ids = AuditLog::distinct_user_ids(conn)?;
             let mut user_map = std::collections::HashMap::new();
             for uid in user_ids {
-                if let Some(user) = AppUser::get(conn, UserId::new(uid))? {
+                if let Some(user) = AppUser::get(conn, uid)? {
                     user_map.insert(uid, user.name);
                 }
             }
@@ -77,7 +77,7 @@ pub(crate) async fn rows_handler(
     let offset = query.offset.unwrap_or(0);
     let filter = AuditFilter {
         system_only: query.user_id == Some(-1),
-        user_id: query.user_id.filter(|&id| id >= 0),
+        user_id: query.user_id.filter(|&id| id > 0).map(UserId::new),
         action: query.action.clone().filter(|s| !s.is_empty()),
         resource_type: query.resource_type.clone().filter(|s| !s.is_empty()),
         resource_id: query.resource_id.clone().filter(|s| !s.is_empty()),
@@ -90,7 +90,7 @@ pub(crate) async fn rows_handler(
             let user_ids = AuditLog::distinct_user_ids(conn)?;
             let mut user_map = std::collections::HashMap::new();
             for uid in user_ids {
-                if let Some(user) = AppUser::get(conn, UserId::new(uid))? {
+                if let Some(user) = AppUser::get(conn, uid)? {
                     user_map.insert(uid, user.name);
                 }
             }
