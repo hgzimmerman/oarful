@@ -37,11 +37,7 @@ pub(crate) async fn fleet_content(tenant: &TenantContext) -> Result<maud::Markup
         .with_conn(|conn| Boat::list_all(conn))
         .await
         .map_err(internal_error)?;
-    let can_export = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::ProgramDirector);
+    let can_export = tenant.claims.role().at_least(Role::ProgramDirector);
     Ok(templates::boats::list_content(&boats, can_export))
 }
 
@@ -287,11 +283,7 @@ pub(crate) async fn detail_handler(
         })
         .await
         .map_err(internal_error)?;
-    let can_edit = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::ProgramDirector);
+    let can_edit = tenant.claims.role().at_least(Role::ProgramDirector);
     let content = templates::boats::detail_content(&boat, &usage, can_edit);
     Ok(super::maybe_page_authed(&boat.name, content, hx, &tenant))
 }

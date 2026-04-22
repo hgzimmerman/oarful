@@ -28,7 +28,7 @@ pub(crate) async fn selector_handler(
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, ErrorResponse> {
     let active = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let role = tenant.claims.role().unwrap_or(Role::Member);
+    let role = tenant.claims.role();
     let is_pd = role.at_least(Role::ProgramDirector);
     let is_coach = role.at_least(Role::Coach);
 

@@ -10,7 +10,7 @@ use maud::{html, Markup, DOCTYPE};
 
 use lineup_db::app_user::Role;
 
-pub(crate) fn page(title: &str, content: Markup, role: Option<Role>, is_superuser: bool) -> Markup {
+pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool) -> Markup {
     html! {
         (DOCTYPE)
         html lang="en" {
@@ -92,8 +92,8 @@ pub(crate) fn page(title: &str, content: Markup, role: Option<Role>, is_superuse
     }
 }
 
-fn navbar(role: Option<Role>) -> Markup {
-    let r = role.unwrap_or(Role::Member);
+fn navbar(role: Role) -> Markup {
+    let r = role;
     let is_coach = r.at_least(Role::Coach);
     let is_pd = r.at_least(Role::ProgramDirector);
 

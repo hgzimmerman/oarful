@@ -16,13 +16,12 @@ use std::sync::Arc;
 const TOKEN_LIFETIME_SECS: u64 = 86400;
 
 /// Who the token belongs to: a real tenant user or the global superuser.
-/// Serializes as `{"identity": "user", "id": 42}` or `{"identity": "superuser"}`,
-/// flattened into the JWT claims object.
+/// Serializes as `{"identity": "user", "id": 42}` or `{"identity": "superuser"}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "identity", content = "id")]
 pub(crate) enum Identity {
     #[serde(rename = "user")]
-    User(i32),
+    User(UserId),
     #[serde(rename = "superuser")]
     Superuser,
 }
@@ -31,12 +30,12 @@ pub(crate) enum Identity {
 pub(crate) struct Claims {
     /// Who this token belongs to.
     sub: Identity,
-    /// Which tenant (club) this token is for (0 for pure superuser).
-    tenant_id: i32,
-    /// Tenant-wide role: "Member", "Coach", "ProgramDirector", "Superuser".
-    role: String,
-    /// Which team the user is currently viewing (0 for pure superuser).
-    active_team_id: i32,
+    /// Which tenant (club) this token is for.
+    tenant_id: TenantId,
+    /// Tenant-wide role.
+    role: Role,
+    /// Which team the user is currently viewing.
+    active_team_id: TeamId,
     /// Expiry (Unix timestamp).
     exp: u64,
     /// Issued at (Unix timestamp).
@@ -50,15 +49,12 @@ impl Claims {
         role: Role,
         active_team_id: TeamId,
     ) -> Self {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
         Self {
-            sub: Identity::User(user_id.as_int()),
-            tenant_id: tenant_id.as_int(),
-            role: role.as_str().to_string(),
-            active_team_id: active_team_id.as_int(),
+            sub: Identity::User(user_id),
+            tenant_id,
+            role,
+            active_team_id,
             exp: now + TOKEN_LIFETIME_SECS,
             iat: now,
         }
@@ -67,27 +63,26 @@ impl Claims {
     /// The real user ID within the tenant DB, or `None` for superuser.
     pub(crate) fn user_id(&self) -> Option<UserId> {
         match self.sub {
-            Identity::User(id) => Some(UserId::new(id)),
+            Identity::User(id) => Some(id),
             Identity::Superuser => None,
         }
     }
 
-    /// Shorthand for audit logging: returns `Some(user_id)` as `i32`
-    /// for real users, `None` for superuser sessions.
+    /// Shorthand for audit logging — alias for `user_id()`.
     pub(crate) fn audit_user_id(&self) -> Option<UserId> {
         self.user_id()
     }
 
     pub(crate) fn tenant_id(&self) -> TenantId {
-        TenantId::new(self.tenant_id)
+        self.tenant_id
     }
 
     pub(crate) fn team_id(&self) -> TeamId {
-        TeamId::new(self.active_team_id)
+        self.active_team_id
     }
 
-    pub(crate) fn role(&self) -> Option<Role> {
-        Role::from_str(&self.role)
+    pub(crate) fn role(&self) -> Role {
+        self.role
     }
 
     pub(crate) fn is_superuser(&self) -> bool {
@@ -95,19 +90,23 @@ impl Claims {
     }
 
     fn new_superuser(lifetime_secs: u64) -> Self {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
         Self {
             sub: Identity::Superuser,
-            tenant_id: 0,
-            role: "Superuser".to_string(),
-            active_team_id: 0,
+            tenant_id: TenantId::new(0),
+            role: Role::ProgramDirector,
+            active_team_id: TeamId::new(0),
             exp: now + lifetime_secs,
             iat: now,
         }
     }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 /// Shared JWT signing/verification keys, built once at startup.
@@ -182,15 +181,12 @@ impl JwtKeys {
         tenant_id: TenantId,
         active_team_id: TeamId,
     ) -> Result<String, jsonwebtoken::errors::Error> {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
         let claims = Claims {
             sub: Identity::Superuser,
-            tenant_id: tenant_id.as_int(),
-            role: Role::ProgramDirector.as_str().to_string(),
-            active_team_id: active_team_id.as_int(),
+            tenant_id,
+            role: Role::ProgramDirector,
+            active_team_id,
             exp: now + TOKEN_LIFETIME_SECS,
             iat: now,
         };

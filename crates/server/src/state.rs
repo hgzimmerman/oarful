@@ -188,7 +188,6 @@ impl TenantContext {
             || self
                 .claims
                 .role()
-                .unwrap_or(lineup_db::app_user::Role::Member)
                 .at_least(lineup_db::app_user::Role::Coach)
     }
 
@@ -200,7 +199,6 @@ impl TenantContext {
             || self
                 .claims
                 .role()
-                .unwrap_or(lineup_db::app_user::Role::Member)
                 .at_least(lineup_db::app_user::Role::Coach)
     }
 }

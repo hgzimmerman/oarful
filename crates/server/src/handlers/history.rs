@@ -89,7 +89,6 @@ pub(crate) async fn detail_handler(
     let is_coach = tenant
         .claims
         .role()
-        .unwrap_or(lineup_db::app_user::Role::Member)
         .at_least(lineup_db::app_user::Role::Coach);
     let content = templates::history::detail_content(
         &snapshot,

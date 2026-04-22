@@ -167,11 +167,7 @@ pub(crate) async fn attendance_content(
         })
         .collect();
 
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
 
     Ok(crate::templates::attendance::grid_content(
         &rowers, &columns, &avail_map, show_past, today, is_coach,

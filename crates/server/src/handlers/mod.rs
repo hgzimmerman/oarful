@@ -450,7 +450,7 @@ async fn stale_badge_handler(
         app_user::Role, availability::Availability, lineup::Lineup, practice::Practice, team::Team,
     };
 
-    let role = tenant.claims.role().unwrap_or(Role::Member);
+    let role = tenant.claims.role();
     if !role.at_least(Role::Coach) {
         return Ok(Html(String::new()));
     }

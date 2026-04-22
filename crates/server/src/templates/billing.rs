@@ -3,6 +3,7 @@
 use maud::{html, Markup};
 
 use crate::tenant_cache::TenantConfig;
+use lineup_db::app_user::Role;
 use lineup_master_db::tenant::BillingStatus;
 
 pub(crate) fn suspended_page(
@@ -60,7 +61,7 @@ pub(crate) fn suspended_page(
                 }
             }
         },
-        None, // no role → minimal navbar
+        Role::Member, // minimal navbar for billing page
         false,
     )
 }

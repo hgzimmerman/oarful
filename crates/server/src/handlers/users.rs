@@ -513,7 +513,7 @@ pub(crate) fn require_at_least_role(
     claims: &crate::jwt::Claims,
     min: Role,
 ) -> Result<(), ErrorResponse> {
-    let role = claims.role().unwrap_or(Role::Member);
+    let role = claims.role();
     if role.at_least(min) {
         Ok(())
     } else {

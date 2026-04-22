@@ -46,11 +46,7 @@ pub(crate) async fn list_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
 
     let planning_content = planning_tab_content(&jar, &tenant).await?;
     let content = templates::practices::tabbed_page("planning", planning_content, is_coach);
@@ -70,11 +66,7 @@ pub(crate) async fn planning_handler(
             templates::practices::tab_content_swap("planning", content).into_string(),
         ));
     }
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
     let page = templates::practices::tabbed_page("planning", content, is_coach);
     Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
@@ -85,11 +77,7 @@ async fn planning_tab_content(
 ) -> Result<maud::Markup, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let today = Utc::now().date_naive();
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
 
     let (rows, default_time, default_duration, suggested_date) = tenant
         .db
@@ -293,11 +281,7 @@ pub(crate) async fn committed_handler(
             templates::practices::tab_content_swap("committed", content).into_string(),
         ));
     }
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
     let page = templates::practices::tabbed_page("committed", content, is_coach);
     Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
 }
@@ -307,11 +291,7 @@ async fn committed_tab_content(
     tenant: &TenantContext,
 ) -> Result<maud::Markup, ErrorResponse> {
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
 
     let rows = tenant
         .db

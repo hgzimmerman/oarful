@@ -289,11 +289,7 @@ async fn resolve_perms(
     jar: &CookieJar,
     rower_id: RowerId,
 ) -> Result<templates::rowers::DetailPermissions, ErrorResponse> {
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
     if is_coach {
         return Ok(templates::rowers::DetailPermissions::coach());
     }

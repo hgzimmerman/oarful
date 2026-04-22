@@ -35,11 +35,7 @@ pub(crate) async fn roster_content(
     tenant: &TenantContext,
 ) -> Result<maud::Markup, ErrorResponse> {
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
     let show_emails = tenant.show_emails();
     let rows = tenant
         .db
@@ -162,11 +158,7 @@ pub(crate) async fn batch_invite_handler(
     }
     let msg = parts.join(" ");
 
-    let is_coach = tenant
-        .claims
-        .role()
-        .unwrap_or(Role::Member)
-        .at_least(Role::Coach);
+    let is_coach = tenant.claims.role().at_least(Role::Coach);
     let show_emails = tenant.show_emails();
     let rows = tenant
         .db
