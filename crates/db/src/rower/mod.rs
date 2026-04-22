@@ -3,7 +3,7 @@ pub mod types;
 
 use types::{Height, RowerId, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias};
 
-use crate::types::IntBool;
+use crate::types::{HeightM, IntBool, WeightKg};
 
 /// A rower on the team.
 #[derive(
@@ -41,10 +41,10 @@ pub struct Rower {
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
-    /// Body weight in kilograms. Displayed as lbs in the UI.
-    pub weight_kg: Option<f64>,
-    /// Height in metres. Displayed as feet/inches in the UI.
-    pub height_m: Option<f64>,
+    /// Body weight in kilograms.
+    pub weight_kg: Option<WeightKg>,
+    /// Height in metres.
+    pub height_m: Option<HeightM>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]

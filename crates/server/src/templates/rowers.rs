@@ -305,11 +305,11 @@ pub(crate) fn attribute_section(
             // Raw metrics (when present)
             @if r.weight_kg.is_some() || r.height_m.is_some() {
                 dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
-                    @if let Some(kg) = r.weight_kg {
-                        (kv("Weight (actual)", &format!("{:.0} lbs", lineup_db::erg_test::kg_to_lbs(kg))))
+                    @if let Some(w) = r.weight_kg {
+                        (kv("Weight (actual)", &format!("{:.0} lbs", w.to_lbs())))
                     }
-                    @if let Some(m) = r.height_m {
-                        (kv("Height (actual)", &lineup_db::erg_test::metres_to_ft_in(m)))
+                    @if let Some(h) = r.height_m {
+                        (kv("Height (actual)", &h.to_ft_in()))
                     }
                 }
             }
@@ -503,7 +503,7 @@ pub(crate) fn attribute_edit_section(
             div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight (lbs)" }
-                    @let weight_lbs = r.weight_kg.map(|kg| format!("{:.1}", lineup_db::erg_test::kg_to_lbs(kg))).unwrap_or_default();
+                    @let weight_lbs = r.weight_kg.map(|w| format!("{:.1}", w.to_lbs())).unwrap_or_default();
                     input type="number" name="weight_lbs" step="0.1" min="0"
                           value=(weight_lbs)
                           placeholder="e.g. 165"
@@ -512,7 +512,7 @@ pub(crate) fn attribute_edit_section(
                 }
                 div {
                     label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height (inches)" }
-                    @let height_in = r.height_m.map(|m| format!("{:.1}", m * 39.3701)).unwrap_or_default();
+                    @let height_in = r.height_m.map(|h| format!("{:.1}", h.to_inches())).unwrap_or_default();
                     input type="number" name="height_in" step="0.5" min="0"
                           value=(height_in)
                           placeholder="e.g. 71"

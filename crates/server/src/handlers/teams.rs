@@ -712,11 +712,11 @@ pub(crate) async fn histogram_handler(
             let values: Vec<f64> = match metric.as_str() {
                 "weight" => rowers
                     .iter()
-                    .filter_map(|r| r.weight_kg.map(lineup_db::erg_test::kg_to_lbs))
+                    .filter_map(|r| r.weight_kg.map(|w| w.to_lbs()))
                     .collect(),
                 "height" => rowers
                     .iter()
-                    .filter_map(|r| r.height_m.map(|m| m * 39.3701))
+                    .filter_map(|r| r.height_m.map(|m| m.to_inches()))
                     .collect(),
                 "strength" => {
                     let dist = q_dist.or_else(|| {

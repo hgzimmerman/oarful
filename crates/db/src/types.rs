@@ -92,6 +92,74 @@ impl std::str::FromStr for DurationMinutes {
     }
 }
 
+/// Body weight in kilograms.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct WeightKg(f64);
+
+impl WeightKg {
+    pub fn new(kg: f64) -> Self {
+        Self(kg)
+    }
+    pub fn as_f64(self) -> f64 {
+        self.0
+    }
+    pub fn to_lbs(self) -> f64 {
+        self.0 * 2.20462
+    }
+}
+
+impl std::fmt::Display for WeightKg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.1}", self.0)
+    }
+}
+
+/// Height in metres.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct HeightM(f64);
+
+impl HeightM {
+    pub fn new(m: f64) -> Self {
+        Self(m)
+    }
+    pub fn as_f64(self) -> f64 {
+        self.0
+    }
+    pub fn to_inches(self) -> f64 {
+        self.0 * 39.3701
+    }
+    pub fn to_ft_in(self) -> String {
+        let total_inches = self.to_inches();
+        let feet = total_inches as i32 / 12;
+        let inches = (total_inches.round() as i32) % 12;
+        format!("{feet}'{inches}\"")
+    }
+}
+
+impl std::fmt::Display for HeightM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.2}", self.0)
+    }
+}
+
 /// Signed weight for coach-facing affinity tables (`pair_affinity`,
 /// `rower_seat_affinity`). Semantics:
 ///

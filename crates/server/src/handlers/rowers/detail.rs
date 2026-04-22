@@ -12,6 +12,7 @@ use lineup_db::rower::{
 use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
+use lineup_db::types::{HeightM, WeightKg};
 use serde::Deserialize;
 
 use lineup_db::app_user::{AppUser, Role};
@@ -128,13 +129,13 @@ pub(crate) async fn update_handler(
         .as_deref()
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<f64>().ok())
-        .map(|lbs| lbs / 2.20462);
+        .map(|lbs| WeightKg::new(lbs / 2.20462));
     rower.height_m = input
         .height_in
         .as_deref()
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<f64>().ok())
-        .map(|inches| inches * 0.0254);
+        .map(|inches| HeightM::new(inches * 0.0254));
 
     let saved = tenant
         .db

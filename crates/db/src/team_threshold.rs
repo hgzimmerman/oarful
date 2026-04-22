@@ -210,14 +210,14 @@ pub fn batch_derive(
         let mut new_s = r.strength;
 
         if let (Some(kg), Some(t)) = (r.weight_kg, weight_t) {
-            let derived = derive_weight_class(kg, t);
+            let derived = derive_weight_class(kg.as_f64(), t);
             if derived != r.weight_class {
                 new_wc = derived;
                 changed = true;
             }
         }
         if let (Some(m), Some(t)) = (r.height_m, height_t) {
-            let derived = derive_height(m, t);
+            let derived = derive_height(m.as_f64(), t);
             if derived != r.height {
                 new_h = derived;
                 changed = true;
