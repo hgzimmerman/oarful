@@ -2,7 +2,7 @@
 
 use crate::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
-use crate::boat::types::{CoxPosition, WeightClass as BoatWeightClass};
+use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass as BoatWeightClass};
 use crate::boat::{Boat, NewBoat};
 use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
@@ -177,9 +177,9 @@ fn toy_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Persephone".into(),
             weight_class: BoatWeightClass::Heavy,
-            seat_count: 8,
+            seat_count: SeatCount::new(8),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
@@ -188,9 +188,9 @@ fn toy_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Artemis".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 4,
+            seat_count: SeatCount::new(4),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
@@ -199,9 +199,9 @@ fn toy_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Hestia".into(),
             weight_class: BoatWeightClass::Light,
-            seat_count: 4,
+            seat_count: SeatCount::new(4),
             has_cox: IntBool::FALSE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Port,

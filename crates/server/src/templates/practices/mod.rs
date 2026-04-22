@@ -21,7 +21,7 @@ pub(crate) struct PracticeRow {
     pub(crate) practice_id: PracticeId,
     pub(crate) date: NaiveDate,
     pub(crate) time: Option<chrono::NaiveTime>,
-    pub(crate) duration_minutes: Option<i32>,
+    pub(crate) duration_minutes: Option<lineup_db::types::DurationMinutes>,
     pub(crate) yes_count: usize,
     pub(crate) total_responses: usize,
     pub(crate) cancelled: bool,
@@ -82,7 +82,7 @@ pub(crate) fn planning_content(
     is_coach: bool,
     today: chrono::NaiveDate,
     default_time: Option<chrono::NaiveTime>,
-    default_duration: Option<i32>,
+    default_duration: Option<lineup_db::types::DurationMinutes>,
     suggested_date: Option<chrono::NaiveDate>,
 ) -> Markup {
     let min_date = today.format("%Y-%m-%d").to_string();
@@ -94,7 +94,7 @@ pub(crate) fn planning_content(
         .unwrap_or_default();
     let end_time_value = match (default_time, default_duration) {
         (Some(t), Some(dur)) => {
-            let end = t + chrono::TimeDelta::minutes(dur as i64);
+            let end = t + chrono::TimeDelta::minutes(dur.as_int() as i64);
             end.format("%H:%M").to_string()
         }
         _ => String::new(),
@@ -243,7 +243,7 @@ fn planning_row_inner(
                 @if let Some(t) = row.time {
                     " \u{00b7} " (t.format("%-I:%M %p"))
                     @if let Some(dur) = row.duration_minutes {
-                        @let end = t + chrono::TimeDelta::minutes(dur as i64);
+                        @let end = t + chrono::TimeDelta::minutes(dur.as_int() as i64);
                         "\u{2013}" (end.format("%-I:%M %p"))
                     }
                 }
@@ -336,7 +336,7 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
                             span class="text-sm text-slate-500 ml-2" {
                                 (t.format("%-I:%M %p"))
                                 @if let Some(dur) = row.duration_minutes {
-                                    @let end = t + chrono::TimeDelta::minutes(dur as i64);
+                                    @let end = t + chrono::TimeDelta::minutes(dur.as_int() as i64);
                                     "\u{2013}" (end.format("%-I:%M %p"))
                                 }
                             }

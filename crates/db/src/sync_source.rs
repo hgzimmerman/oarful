@@ -6,6 +6,7 @@
 
 use crate::schema::sync_source;
 use crate::team::TeamId;
+use crate::types::DurationMinutes;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
@@ -34,7 +35,7 @@ pub struct SyncSource {
     pub last_synced_at: Option<NaiveDateTime>,
     pub last_error: Option<String>,
     pub created_at: NaiveDateTime,
-    pub poll_interval_minutes: Option<i32>,
+    pub poll_interval_minutes: Option<DurationMinutes>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -43,7 +44,7 @@ pub struct NewSyncSource {
     pub team_id: TeamId,
     pub source_type: String,
     pub config: String,
-    pub poll_interval_minutes: Option<i32>,
+    pub poll_interval_minutes: Option<DurationMinutes>,
 }
 
 impl SyncSource {
@@ -80,7 +81,7 @@ impl SyncSource {
         team_id: TeamId,
         source_type: &str,
         config: &str,
-        poll_interval_minutes: Option<i32>,
+        poll_interval_minutes: Option<DurationMinutes>,
     ) -> Result<(), diesel::result::Error> {
         if let Some(existing) = Self::find_by_type(conn, team_id, source_type)? {
             diesel::update(sync_source::table.find(existing.id))

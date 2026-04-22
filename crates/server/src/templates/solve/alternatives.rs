@@ -162,7 +162,7 @@ fn boat_card(
     flags: &DisplayFlags,
 ) -> Markup {
     let boat = snapshot.boats.iter().find(|b| b.id == lineup.boat_id);
-    let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
+    let seat_count = boat.map(|b| b.seat_count.as_int()).unwrap_or(0);
     let mut seats = lineup.seats.clone();
     let cox_at_top = cox_first(snapshot, lineup.boat_id, flags.force_cox_stern);
     sort_seats_for_display(&mut seats, cox_at_top);
@@ -199,7 +199,7 @@ fn seat_row(
     diff: Option<&SeatDiff>,
     flags: &DisplayFlags,
 ) -> Markup {
-    let sc = boat.map(|b| b.seat_count).unwrap_or(0);
+    let sc = boat.map(|b| b.seat_count.as_int()).unwrap_or(0);
     let label = seat_label(seat, sc);
     let is_changed = matches!(diff, Some(SeatDiff::Changed { .. }) | Some(SeatDiff::New));
     let row_class = if is_changed {

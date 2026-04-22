@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::{BoatId, CoxPosition, WeightClass};
+use types::{BoatId, CoxPosition, OarsPerSeat, SeatCount, WeightClass};
 
 use crate::rower::types::Side;
 use crate::types::IntBool;
@@ -34,9 +34,9 @@ pub struct Boat {
     pub id: BoatId,
     pub name: String,
     pub weight_class: WeightClass,
-    pub seat_count: i32,
+    pub seat_count: SeatCount,
     pub has_cox: IntBool,
-    pub oars_per_seat: i32,
+    pub oars_per_seat: OarsPerSeat,
     pub acquired_at: Option<chrono::NaiveDate>,
     pub manufactured_at: Option<chrono::NaiveDate>,
     pub relinquished_at: Option<chrono::NaiveDate>,
@@ -49,9 +49,9 @@ pub struct Boat {
 pub struct NewBoat {
     pub name: String,
     pub weight_class: WeightClass,
-    pub seat_count: i32,
+    pub seat_count: SeatCount,
     pub has_cox: IntBool,
-    pub oars_per_seat: i32,
+    pub oars_per_seat: OarsPerSeat,
     pub acquired_at: Option<chrono::NaiveDate>,
     pub manufactured_at: Option<chrono::NaiveDate>,
     pub stroke_side: Side,
@@ -62,7 +62,7 @@ impl Boat {
     /// True for sweep boats (one oar per seat). This project only generates
     /// lineups for sweep boats; sculling boats belong to the scullers team.
     pub fn is_sweep(&self) -> bool {
-        self.oars_per_seat == 1
+        self.oars_per_seat == OarsPerSeat::new(1)
     }
 
     pub fn in_service(&self) -> bool {
@@ -70,7 +70,7 @@ impl Boat {
     }
 
     pub fn is_scull(&self) -> bool {
-        self.oars_per_seat == 2
+        self.oars_per_seat == OarsPerSeat::new(2)
     }
 
     /// Which side of the boat a given seat sits on. Returns `None` for:
@@ -81,7 +81,8 @@ impl Boat {
     /// `seat_count`) sits on `stroke_side`; every seat one closer to the
     /// bow flips sides.
     pub fn seat_side(&self, seat: i32) -> Option<Side> {
-        if seat <= 0 || seat > self.seat_count {
+        let sc = self.seat_count.as_int();
+        if seat <= 0 || seat > sc {
             return None;
         }
         // Scull boats have no side distinction.
@@ -96,7 +97,7 @@ impl Boat {
             Side::Either => Side::Either,
         };
         // Distance from the stroke seat. Even distance => same side as stroke.
-        let distance_from_stroke = self.seat_count - seat;
+        let distance_from_stroke = sc - seat;
         Some(if distance_from_stroke % 2 == 0 {
             self.stroke_side
         } else {

@@ -14,7 +14,7 @@ use axum::{
 use axum_htmx::HxRequest;
 use chrono::NaiveDate;
 use lineup_db::boat::{
-    types::{BoatId, CoxPosition, WeightClass},
+    types::{BoatId, CoxPosition, OarsPerSeat, SeatCount, WeightClass},
     Boat, NewBoat,
 };
 use lineup_db::rower::types::Side;
@@ -246,9 +246,9 @@ pub(crate) async fn create_handler(
                 NewBoat {
                     name: parsed.name,
                     weight_class: parsed.weight_class,
-                    seat_count: parsed.seat_count,
+                    seat_count: SeatCount::new(parsed.seat_count),
                     has_cox: IntBool::new(parsed.has_cox),
-                    oars_per_seat: parsed.oars_per_seat,
+                    oars_per_seat: OarsPerSeat::new(parsed.oars_per_seat),
                     acquired_at: parsed.acquired_at,
                     manufactured_at: parsed.manufactured_at,
                     stroke_side: parsed.stroke_side,
@@ -338,9 +338,9 @@ pub(crate) async fn update_handler(
     let mut boat = load(&tenant.db, id).await?;
     boat.name = parsed.name;
     boat.weight_class = parsed.weight_class;
-    boat.seat_count = parsed.seat_count;
+    boat.seat_count = SeatCount::new(parsed.seat_count);
     boat.has_cox = IntBool::new(parsed.has_cox);
-    boat.oars_per_seat = parsed.oars_per_seat;
+    boat.oars_per_seat = OarsPerSeat::new(parsed.oars_per_seat);
     boat.acquired_at = parsed.acquired_at;
     boat.manufactured_at = parsed.manufactured_at;
     boat.relinquished_at = parsed.relinquished_at;
@@ -479,7 +479,11 @@ impl BoatFormData {
 
 /// Derive a display label from a boat's (seat_count, has_cox, oars_per_seat).
 fn boat_type_label(b: &Boat) -> String {
-    match (b.seat_count, b.has_cox.as_bool(), b.oars_per_seat) {
+    match (
+        b.seat_count.as_int(),
+        b.has_cox.as_bool(),
+        b.oars_per_seat.as_int(),
+    ) {
         (1, false, 2) => "Single".into(),
         (2, false, 2) => "Double".into(),
         (2, false, 1) => "Pair".into(),

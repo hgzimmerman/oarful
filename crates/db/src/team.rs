@@ -5,7 +5,7 @@
 use crate::boat::types::BoatId;
 use crate::rower::types::RowerId;
 use crate::schema::{team, team_boat_default, team_membership};
-use crate::types::IntBool;
+use crate::types::{DurationMinutes, IntBool};
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -147,7 +147,7 @@ pub struct Team {
     /// Default time of day for new practices. None = not set.
     pub default_practice_time: Option<NaiveTime>,
     /// Default practice duration in minutes. None = not set.
-    pub default_practice_duration_minutes: Option<i32>,
+    pub default_practice_duration_minutes: Option<DurationMinutes>,
     /// Soft-delete flag. Archived teams are hidden from operational
     /// views but preserved for historical lineups.
     pub archived: IntBool,

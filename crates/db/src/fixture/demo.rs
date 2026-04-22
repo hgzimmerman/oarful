@@ -2,9 +2,9 @@
 
 use crate::app_user::{AppUser, NewAppUser, Role, UserStatus};
 use crate::availability::{types::AvailabilityStatus, Availability, NewAvailability};
-use crate::boat::types::{CoxPosition, WeightClass as BoatWeightClass};
+use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass as BoatWeightClass};
 use crate::boat::{Boat, NewBoat};
-use crate::lineup::{CommitSeat, Lineup};
+use crate::lineup::{CommitSeat, Lineup, SeatPosition};
 use crate::pair_affinity::{NewPairAffinity, PairAffinity};
 use crate::practice::Practice;
 use crate::rower::types::{Height, RowerWeightClass, Side, Skill, Strength, SweepBias};
@@ -157,47 +157,47 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
     let athena_id = boat_ids[1];
     let athena_seats: Vec<CommitSeat> = vec![
         CommitSeat {
-            seat_position: 0,
+            seat_position: SeatPosition::new(0),
             rower_id: rower_ids[17],
             is_cox: true,
         },
         CommitSeat {
-            seat_position: 1,
+            seat_position: SeatPosition::new(1),
             rower_id: rower_ids[6],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 2,
+            seat_position: SeatPosition::new(2),
             rower_id: rower_ids[2],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 3,
+            seat_position: SeatPosition::new(3),
             rower_id: rower_ids[3],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 4,
+            seat_position: SeatPosition::new(4),
             rower_id: rower_ids[8],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 5,
+            seat_position: SeatPosition::new(5),
             rower_id: rower_ids[1],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 6,
+            seat_position: SeatPosition::new(6),
             rower_id: rower_ids[7],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 7,
+            seat_position: SeatPosition::new(7),
             rower_id: rower_ids[4],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 8,
+            seat_position: SeatPosition::new(8),
             rower_id: rower_ids[0],
             is_cox: false,
         },
@@ -207,27 +207,27 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
     let artemis_id = boat_ids[3];
     let artemis_seats: Vec<CommitSeat> = vec![
         CommitSeat {
-            seat_position: 0,
+            seat_position: SeatPosition::new(0),
             rower_id: rower_ids[25],
             is_cox: true,
         },
         CommitSeat {
-            seat_position: 1,
+            seat_position: SeatPosition::new(1),
             rower_id: rower_ids[14],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 2,
+            seat_position: SeatPosition::new(2),
             rower_id: rower_ids[20],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 3,
+            seat_position: SeatPosition::new(3),
             rower_id: rower_ids[22],
             is_cox: false,
         },
         CommitSeat {
-            seat_position: 4,
+            seat_position: SeatPosition::new(4),
             rower_id: rower_ids[13],
             is_cox: false,
         },
@@ -278,9 +278,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Titan".into(),
             weight_class: BoatWeightClass::Heavy,
-            seat_count: 8,
+            seat_count: SeatCount::new(8),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
@@ -289,9 +289,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Athena".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 8,
+            seat_count: SeatCount::new(8),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
@@ -300,9 +300,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Demeter".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 8,
+            seat_count: SeatCount::new(8),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Port,
@@ -311,9 +311,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Artemis".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 4,
+            seat_count: SeatCount::new(4),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Starboard,
@@ -322,9 +322,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Hestia".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 4,
+            seat_count: SeatCount::new(4),
             has_cox: IntBool::TRUE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Port,
@@ -333,9 +333,9 @@ fn demo_boats() -> Vec<NewBoat> {
         NewBoat {
             name: "Zephyr".into(),
             weight_class: BoatWeightClass::Medium,
-            seat_count: 2,
+            seat_count: SeatCount::new(2),
             has_cox: IntBool::FALSE,
-            oars_per_seat: 1,
+            oars_per_seat: OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             stroke_side: Side::Port,

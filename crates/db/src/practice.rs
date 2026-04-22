@@ -1,6 +1,6 @@
 use crate::schema::{lineup, practice};
 use crate::team::TeamId;
-use crate::types::IntBool;
+use crate::types::{DurationMinutes, IntBool};
 use chrono::{NaiveDate, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -67,7 +67,7 @@ pub struct Practice {
     pub cancelled: IntBool,
     /// Per-practice duration override. If None, falls back to the
     /// team's `default_practice_duration_minutes`.
-    pub duration_minutes: Option<i32>,
+    pub duration_minutes: Option<DurationMinutes>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -243,7 +243,10 @@ impl Practice {
 
     /// Effective duration in minutes: per-practice override, then
     /// team default, then None (unknown).
-    pub fn effective_duration(&self, team_default: Option<i32>) -> Option<i32> {
+    pub fn effective_duration(
+        &self,
+        team_default: Option<DurationMinutes>,
+    ) -> Option<DurationMinutes> {
         self.duration_minutes.or(team_default)
     }
 
@@ -251,11 +254,11 @@ impl Practice {
     /// Returns None if either time or duration is unknown.
     pub fn time_window(
         &self,
-        team_default_duration: Option<i32>,
+        team_default_duration: Option<DurationMinutes>,
     ) -> Option<(NaiveTime, NaiveTime)> {
         let start = self.time?;
         let dur = self.effective_duration(team_default_duration)?;
-        let end = start + chrono::TimeDelta::minutes(dur as i64);
+        let end = start + chrono::TimeDelta::minutes(dur.as_int() as i64);
         Some((start, end))
     }
 
@@ -266,7 +269,7 @@ impl Practice {
     pub fn find_overlapping(
         conn: &mut SqliteConnection,
         this: &Practice,
-        this_team_default_duration: Option<i32>,
+        this_team_default_duration: Option<DurationMinutes>,
     ) -> Result<Vec<Practice>, diesel::result::Error> {
         let Some((my_start, my_end)) = this.time_window(this_team_default_duration) else {
             return Ok(Vec::new());
@@ -283,7 +286,7 @@ impl Practice {
         // Filter to those with overlapping time windows. We need each
         // candidate's team default duration — load lazily per team.
         use std::collections::HashMap;
-        let mut team_defaults: HashMap<TeamId, Option<i32>> = HashMap::new();
+        let mut team_defaults: HashMap<TeamId, Option<DurationMinutes>> = HashMap::new();
         let mut overlapping = Vec::new();
         for p in candidates {
             let team_dur = match team_defaults.get(&p.team_id) {

@@ -99,7 +99,7 @@ pub(crate) async fn sync_content(
                     lineup_sheets::RowFilter::Sculling => "Sculling",
                 }
                 .to_string(),
-                poll_interval_minutes: s.poll_interval_minutes.map(|m| m as u32),
+                poll_interval_minutes: s.poll_interval_minutes.map(|m| m.as_int() as u32),
             })
     });
     Ok(templates::sync::form_content(
@@ -192,7 +192,7 @@ pub(crate) async fn sync_handler(
             let poll_minutes = input
                 .poll_interval_minutes
                 .filter(|&m| m > 0)
-                .map(|m| m as i32);
+                .map(|m| lineup_db::types::DurationMinutes::new(m as i32));
             let _ = tenant
                 .db
                 .with_conn(move |conn| {
@@ -287,7 +287,7 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
         let now = chrono::Utc::now().naive_utc();
         for src in sources {
             let interval_mins = match src.poll_interval_minutes {
-                Some(m) if m > 0 => m,
+                Some(m) if m.as_int() > 0 => m.as_int(),
                 _ => continue,
             };
 

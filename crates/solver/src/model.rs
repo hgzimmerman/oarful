@@ -418,7 +418,8 @@ impl<'a> ModelBuilder<'a> {
             .iter()
             .enumerate()
             .map(|(b_idx, boat)| {
-                let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+                let seats_total =
+                    boat.seat_count.as_int() + if boat.has_cox.as_bool() { 1 } else { 0 };
                 // Subtract the number of optional seats that can be
                 // left empty (capped by k and the boat's optional count).
                 let n_opt = optional_seats(boat).len() as i32;
@@ -457,7 +458,7 @@ impl<'a> ModelBuilder<'a> {
     /// zero; the hard wall still applies regardless.
     pub(crate) fn post_h5_s5_weight_class(&mut self) -> Result<()> {
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let n_rowing = boat.seat_count;
+            let n_rowing = boat.seat_count.as_int();
             if n_rowing == 0 {
                 continue;
             }
@@ -525,11 +526,12 @@ impl<'a> ModelBuilder<'a> {
 /// All seat positions on a boat, including the cox seat (0) for
 /// coxed boats and the rowing seats 1..=seat_count.
 pub(crate) fn seat_positions(boat: &Boat) -> Vec<i32> {
-    let mut seats = Vec::with_capacity((boat.seat_count + 1) as usize);
+    let sc = boat.seat_count.as_int();
+    let mut seats = Vec::with_capacity((sc + 1) as usize);
     if boat.has_cox.as_bool() {
         seats.push(0);
     }
-    for s in 1..=boat.seat_count {
+    for s in 1..=sc {
         seats.push(s);
     }
     seats
@@ -546,7 +548,7 @@ pub(crate) fn seat_positions(boat: &Boat) -> Vec<i32> {
 ///   missing seat is too unbalanced to be useful, and smaller boats
 ///   have no realistic partial-fill pattern.
 pub(crate) fn optional_seats(boat: &Boat) -> Vec<i32> {
-    match boat.seat_count {
+    match boat.seat_count.as_int() {
         8 => vec![3, 4],
         _ => vec![],
     }
@@ -584,7 +586,7 @@ pub(crate) fn rower_eligible_for_seat(rower: &Rower, boat: &Boat, seat: i32) -> 
     // H7: Novices cannot row in pair boats (seat_count=2, no cox).
     // A pair requires enough technical skill to balance and steer
     // without a coxswain — novices aren't there yet.
-    if boat.seat_count == 2 && !boat.has_cox.as_bool() && rower.skill == Skill::Novice {
+    if boat.seat_count.as_int() == 2 && !boat.has_cox.as_bool() && rower.skill == Skill::Novice {
         return false;
     }
     // Rowing seats: the rower's side must match the seat's side, UNLESS
@@ -662,7 +664,7 @@ pub(crate) fn build_seat_trait_map(
     let skip_optional = partial_fill.max_empty() > 0;
     let mut map: BTreeMap<(usize, i32), DomainId> = BTreeMap::new();
     for (b_idx, boat) in boats.iter().enumerate() {
-        let n_rowing = boat.seat_count;
+        let n_rowing = boat.seat_count.as_int();
         if n_rowing == 0 {
             continue;
         }

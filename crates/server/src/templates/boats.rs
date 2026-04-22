@@ -88,7 +88,7 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
 
 fn boat_row(b: &Boat) -> Markup {
     let type_label = crate::handlers::boats::type_label(b);
-    let rig = if b.oars_per_seat == 1 {
+    let rig = if b.oars_per_seat.as_int() == 1 {
         format!("{} rigged", b.stroke_side)
     } else {
         "sculling".into()
@@ -124,7 +124,7 @@ fn boat_row(b: &Boat) -> Markup {
 
 pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bool) -> Markup {
     let type_label = crate::handlers::boats::type_label(boat);
-    let rig = if boat.oars_per_seat == 1 {
+    let rig = if boat.oars_per_seat.as_int() == 1 {
         format!("{} rigged", boat.stroke_side)
     } else {
         "sculling".into()

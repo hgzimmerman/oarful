@@ -247,14 +247,14 @@ fn lineup_block_with_noshow(
         .find(|b| b.id == committed.lineup.boat_id);
     let boat_name = boat.map(|b| b.name.as_str()).unwrap_or("<unknown boat>");
     let cox_at_top = force_cox_stern || boat.map(|b| b.cox_position.cox_first()).unwrap_or(true);
-    let seat_count = boat.map(|b| b.seat_count).unwrap_or(0);
+    let seat_count = boat.map(|b| b.seat_count.as_int()).unwrap_or(0);
     let has_cox = boat.map(|b| b.has_cox.as_bool()).unwrap_or(false);
 
     // Build full seat list (all positions), mapping to Option<rower>.
     let seat_map: std::collections::HashMap<i32, &lineup_db::lineup::LineupSeatRow> = committed
         .seats
         .iter()
-        .map(|s| (s.seat_position, s))
+        .map(|s| (s.seat_position.as_int(), s))
         .collect();
     let mut all_positions: Vec<i32> = Vec::new();
     if has_cox {

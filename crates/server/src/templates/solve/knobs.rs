@@ -21,7 +21,7 @@ pub(super) fn knobs_form(
     snapshot: &DbSnapshot,
     solve_result: Option<&SolveResult>,
 ) -> Markup {
-    let has_eight = snapshot.boats.iter().any(|b| b.seat_count >= 8);
+    let has_eight = snapshot.boats.iter().any(|b| b.seat_count.as_int() >= 8);
     let button_label = if has_generated {
         "Re-generate"
     } else {

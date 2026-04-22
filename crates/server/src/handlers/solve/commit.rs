@@ -77,7 +77,7 @@ pub(crate) async fn commit_handler(
                     .seats
                     .iter()
                     .map(|(seat, rower_id)| CommitSeat {
-                        seat_position: *seat,
+                        seat_position: lineup_db::lineup::SeatPosition::new(*seat),
                         rower_id: *rower_id,
                         is_cox: *seat == 0,
                     })
@@ -130,7 +130,7 @@ pub(crate) async fn commit_lineup_handler(
             continue;
         };
         by_boat.entry(boat_id).or_default().push(CommitSeat {
-            seat_position: seat_pos,
+            seat_position: lineup_db::lineup::SeatPosition::new(seat_pos),
             rower_id,
             is_cox: seat_pos == 0,
         });

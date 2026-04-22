@@ -208,11 +208,11 @@ pub(crate) async fn create_handler(
                 .map_err(|_| bad_request("Invalid time format."))
         })
         .transpose()?;
-    let duration_minutes: Option<i32> = match (time, end_time) {
+    let duration_minutes: Option<lineup_db::types::DurationMinutes> = match (time, end_time) {
         (Some(start), Some(end)) => {
             let dur = end.signed_duration_since(start).num_minutes();
             if dur > 0 {
-                Some(dur as i32)
+                Some(lineup_db::types::DurationMinutes::new(dur as i32))
             } else {
                 None
             }

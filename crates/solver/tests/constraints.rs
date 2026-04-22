@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::boat::{
-    types::{BoatId, CoxPosition, WeightClass},
+    types::{BoatId, CoxPosition, OarsPerSeat, SeatCount, WeightClass},
     Boat,
 };
 use lineup_db::pair_affinity::PairAffinity;
@@ -109,9 +109,9 @@ fn four_boat(id: i32, name: &str) -> Boat {
         id: BoatId::new(id),
         name: name.into(),
         weight_class: WeightClass::Medium,
-        seat_count: 4,
+        seat_count: SeatCount::new(4),
         has_cox: IntBool::TRUE,
-        oars_per_seat: 1,
+        oars_per_seat: OarsPerSeat::new(1),
         acquired_at: None,
         manufactured_at: None,
         relinquished_at: None,
@@ -127,9 +127,9 @@ fn eight_boat(id: i32, name: &str) -> Boat {
         id: BoatId::new(id),
         name: name.into(),
         weight_class: WeightClass::Medium,
-        seat_count: 8,
+        seat_count: SeatCount::new(8),
         has_cox: IntBool::TRUE,
-        oars_per_seat: 1,
+        oars_per_seat: OarsPerSeat::new(1),
         acquired_at: None,
         manufactured_at: None,
         relinquished_at: None,

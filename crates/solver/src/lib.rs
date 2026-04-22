@@ -369,7 +369,11 @@ pub enum BoatClass {
 impl BoatClass {
     /// Classify a boat by its physical properties.
     pub fn from_boat(boat: &Boat) -> Self {
-        match (boat.seat_count, boat.has_cox.as_bool(), boat.oars_per_seat) {
+        match (
+            boat.seat_count.as_int(),
+            boat.has_cox.as_bool(),
+            boat.oars_per_seat.as_int(),
+        ) {
             (8, _, 1) => Self::Eight,
             (4, true, 1) => Self::CoxedFour,
             (4, false, 1) => Self::Four,
@@ -1107,7 +1111,7 @@ fn greedy_fleet_select<'a>(
     // boat.
     let top_n = candidates
         .iter()
-        .map(|b| b.seat_count as usize)
+        .map(|b| b.seat_count.as_int() as usize)
         .max()
         .unwrap_or(8);
     // Quality heuristic: skill + strength + power-to-weight bonus.
@@ -1151,8 +1155,8 @@ fn greedy_fleet_select<'a>(
         .count();
 
     candidates.sort_by(|a, b| {
-        let a_total = a.seat_count + if a.has_cox.as_bool() { 1 } else { 0 };
-        let b_total = b.seat_count + if b.has_cox.as_bool() { 1 } else { 0 };
+        let a_total = a.seat_count.as_int() + if a.has_cox.as_bool() { 1 } else { 0 };
+        let b_total = b.seat_count.as_int() + if b.has_cox.as_bool() { 1 } else { 0 };
         b_total.cmp(&a_total).then_with(|| {
             if heavy_strong_count >= 2 {
                 // Enough strong heavies — put the heavier boat first
@@ -1175,7 +1179,7 @@ fn greedy_fleet_select<'a>(
     let mut selected = Vec::new();
 
     for boat in &candidates {
-        let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+        let seats_total = boat.seat_count.as_int() + if boat.has_cox.as_bool() { 1 } else { 0 };
         let n_opt = optional_seats(boat).len() as i32;
         let can_skip = k.min(n_opt);
         let min_seats = seats_total - can_skip;
@@ -1264,7 +1268,7 @@ fn pre_solve_diagnostics(boats: &[&Boat], available: &[&Rower]) -> Vec<Diagnosti
     let smallest = boats
         .iter()
         .map(|b| {
-            let total = b.seat_count as usize + if b.has_cox.as_bool() { 1 } else { 0 };
+            let total = b.seat_count.as_int() as usize + if b.has_cox.as_bool() { 1 } else { 0 };
             (total, &b.name)
         })
         .min_by_key(|(seats, _)| *seats);

@@ -227,12 +227,13 @@ pub(crate) async fn update_handler(
         .as_deref()
         .filter(|s| !s.is_empty())
         .and_then(|s| chrono::NaiveTime::parse_from_str(s, "%H:%M").ok());
-    let practice_duration: Option<i32> = input
+    let practice_duration: Option<lineup_db::types::DurationMinutes> = input
         .default_practice_duration_minutes
         .as_deref()
         .filter(|s| !s.is_empty())
-        .and_then(|s| s.parse().ok())
-        .filter(|&m: &i32| m > 0);
+        .and_then(|s| s.parse::<i32>().ok())
+        .filter(|&m| m > 0)
+        .map(lineup_db::types::DurationMinutes::new);
     let mut days: Vec<chrono::Weekday> = Vec::new();
     if input.day_mon.is_some() {
         days.push(chrono::Weekday::Mon);

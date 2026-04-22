@@ -87,7 +87,7 @@ impl<'a> EditorData<'a> {
                 if has_cox {
                     seats.push((0, None));
                 }
-                for s in 1..=b.seat_count {
+                for s in 1..=b.seat_count.as_int() {
                     seats.push((s, None));
                 }
                 let active = if use_defaults {
@@ -138,7 +138,7 @@ impl<'a> EditorData<'a> {
                 if has_cox {
                     seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
                 }
-                for s in 1..=b.seat_count {
+                for s in 1..=b.seat_count.as_int() {
                     seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
                 }
                 EditorBoat {
@@ -183,7 +183,7 @@ impl<'a> EditorData<'a> {
                 if has_cox {
                     seats.push((0, seat_map.and_then(|m| m.get(&0).copied())));
                 }
-                for s in 1..=b.seat_count {
+                for s in 1..=b.seat_count.as_int() {
                     seats.push((s, seat_map.and_then(|m| m.get(&s).copied())));
                 }
                 EditorBoat {
@@ -516,7 +516,7 @@ pub(crate) fn lineup_editor(
 /// Render one boat card in the unified editor.
 fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags) -> Markup {
     let boat = eb.boat;
-    let seat_count = boat.seat_count;
+    let seat_count = boat.seat_count.as_int();
     let cox_at_top = cox_first(snapshot, boat.id, flags.force_cox_stern);
     let mut seats = eb.seats.clone();
     seats.sort_by_key(|(s, _)| {

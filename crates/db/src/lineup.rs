@@ -63,6 +63,45 @@ impl std::str::FromStr for LineupId {
     }
 }
 
+/// Typed seat position within a lineup. Position 0 is the cox seat on
+/// coxed boats; 1..=seat_count are the rowing seats (bow → stroke).
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct SeatPosition(i32);
+
+impl SeatPosition {
+    pub fn new(n: i32) -> Self {
+        Self(n)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for SeatPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for SeatPosition {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
+
 #[derive(
     Debug,
     Clone,
@@ -96,7 +135,7 @@ pub struct NewLineup {
 #[diesel(table_name = crate::schema::lineup_seat)]
 pub struct LineupSeatRow {
     pub lineup_id: LineupId,
-    pub seat_position: i32,
+    pub seat_position: SeatPosition,
     pub rower_id: RowerId,
     pub is_cox: IntBool,
 }
@@ -105,7 +144,7 @@ pub struct LineupSeatRow {
 #[diesel(table_name = crate::schema::lineup_seat)]
 pub struct NewLineupSeat {
     pub lineup_id: LineupId,
-    pub seat_position: i32,
+    pub seat_position: SeatPosition,
     pub rower_id: RowerId,
     pub is_cox: IntBool,
 }
@@ -115,7 +154,7 @@ pub struct NewLineupSeat {
 /// row types so `lineup_db` doesn't need to depend on `lineup_solver`.
 #[derive(Debug, Clone, Copy)]
 pub struct CommitSeat {
-    pub seat_position: i32,
+    pub seat_position: SeatPosition,
     pub rower_id: RowerId,
     pub is_cox: bool,
 }
@@ -134,7 +173,7 @@ pub struct CommittedLineup {
 pub struct RecentPlacement {
     pub practice_date: NaiveDate,
     pub boat_id: BoatId,
-    pub seat_position: i32,
+    pub seat_position: SeatPosition,
     pub rower_id: RowerId,
     pub is_cox: bool,
 }
@@ -251,7 +290,7 @@ impl Lineup {
         // Then: flatten across (practice, lineup, lineup_seat, boat) for
         // those dates only. We pull through boat join to get the BoatId
         // typed correctly from the lineup table itself.
-        let rows: Vec<(NaiveDate, BoatId, i32, RowerId, IntBool)> = practice::table
+        let rows: Vec<(NaiveDate, BoatId, SeatPosition, RowerId, IntBool)> = practice::table
             .inner_join(lineup::table.on(lineup::practice_id.eq(practice::id)))
             .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
             .inner_join(boat::table.on(boat::id.eq(lineup::boat_id)))

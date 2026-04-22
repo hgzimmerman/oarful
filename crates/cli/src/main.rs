@@ -236,7 +236,7 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
             Vec<ReferencePlacement>,
         > = BTreeMap::new();
         for p in &snapshot.recent_placements {
-            if p.is_cox || p.seat_position == 0 {
+            if p.is_cox || p.seat_position.as_int() == 0 {
                 continue;
             }
             groups
@@ -245,7 +245,7 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
                 .push(ReferencePlacement {
                     rower_id: p.rower_id,
                     boat_id: p.boat_id,
-                    seat: p.seat_position,
+                    seat: p.seat_position.as_int(),
                 });
         }
         groups
@@ -413,7 +413,7 @@ async fn commit_lineups(
                 .seats
                 .iter()
                 .map(|(seat, rower_id)| CommitSeat {
-                    seat_position: *seat,
+                    seat_position: lineup_db::lineup::SeatPosition::new(*seat),
                     rower_id: *rower_id,
                     is_cox: *seat == 0,
                 })

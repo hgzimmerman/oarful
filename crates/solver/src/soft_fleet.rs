@@ -40,7 +40,7 @@ impl<'a> ModelBuilder<'a> {
         }
         let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let seats_total = boat.seat_count + if boat.has_cox.as_bool() { 1 } else { 0 };
+            let seats_total = boat.seat_count.as_int() + if boat.has_cox.as_bool() { 1 } else { 0 };
             // Scale the base reward by the boat-class bias: (1 + bias).
             // A bias of 0 = normal reward; positive = prefer this class.
             let class = crate::BoatClass::from_boat(boat);
@@ -361,7 +361,7 @@ impl<'a> ModelBuilder<'a> {
                 }
                 // Find all x vars for this (rower, boat) and push
                 // penalty terms. Most rowers will have 0 or a few.
-                for s in 0..=(boat.seat_count) {
+                for s in 0..=(boat.seat_count.as_int()) {
                     if let Some(&var) = self.x.get(&(r_idx, b_idx, s)) {
                         self.obj_terms.push(var.scaled(penalty));
                         count += 1;
@@ -511,7 +511,7 @@ impl<'a> ModelBuilder<'a> {
 
         for (b_idx, boat) in boats.iter().enumerate() {
             // Only pair boats (2 rowing seats, no cox).
-            if boat.seat_count != 2 || boat.has_cox.as_bool() {
+            if boat.seat_count.as_int() != 2 || boat.has_cox.as_bool() {
                 continue;
             }
 
@@ -751,11 +751,11 @@ impl<'a> ModelBuilder<'a> {
 
                 for (b_idx, boat) in boats.iter().enumerate() {
                     // Collect x vars for rower A in this boat (any seat).
-                    let a_vars: Vec<DomainId> = (0..=boat.seat_count)
+                    let a_vars: Vec<DomainId> = (0..=boat.seat_count.as_int())
                         .filter(|&s| s == 0 && boat.has_cox.as_bool() || s >= 1)
                         .filter_map(|s| x.get(&(r_a, b_idx, s)).copied())
                         .collect();
-                    let b_vars: Vec<DomainId> = (0..=boat.seat_count)
+                    let b_vars: Vec<DomainId> = (0..=boat.seat_count.as_int())
                         .filter(|&s| s == 0 && boat.has_cox.as_bool() || s >= 1)
                         .filter_map(|s| x.get(&(r_b, b_idx, s)).copied())
                         .collect();

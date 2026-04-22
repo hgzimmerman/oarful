@@ -102,7 +102,7 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
         for (b_idx, boat) in boats.iter().enumerate() {
-            let n_rowing = boat.seat_count;
+            let n_rowing = boat.seat_count.as_int();
             if n_rowing == 0 {
                 continue;
             }
@@ -219,7 +219,7 @@ impl<'a> ModelBuilder<'a> {
             for (boat_idx, boat) in boats.iter().enumerate() {
                 // Iterate pair partitions: (1,2), (3,4), (5,6), (7,8) ...
                 let mut s_lo = 1;
-                while s_lo + 1 <= boat.seat_count {
+                while s_lo + 1 <= boat.seat_count.as_int() {
                     let s_hi = s_lo + 1;
 
                     // A_in_part and B_in_part: each a Vec of up to 2 x vars.
@@ -340,7 +340,7 @@ impl<'a> ModelBuilder<'a> {
                 None => continue,
             };
             for (b_idx, boat) in boats.iter().enumerate() {
-                for seat in aff.zone.seats_for(boat.seat_count) {
+                for seat in aff.zone.seats_for(boat.seat_count.as_int()) {
                     let key = (r_idx, b_idx, seat);
                     best.entry(key)
                         .and_modify(|w| *w = (*w).max(effective))
@@ -391,7 +391,7 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
         for (b_idx, boat) in boats.iter().enumerate() {
-            let n_rowing = boat.seat_count;
+            let n_rowing = boat.seat_count.as_int();
             if n_rowing < 2 {
                 continue;
             }
@@ -487,7 +487,7 @@ impl<'a> ModelBuilder<'a> {
             ..
         } = self;
         for (b_idx, boat) in boats.iter().enumerate() {
-            let n_rowing = boat.seat_count;
+            let n_rowing = boat.seat_count.as_int();
             if n_rowing < 2 {
                 continue;
             }
@@ -581,7 +581,7 @@ impl<'a> ModelBuilder<'a> {
         let mut count = 0usize;
         let w = self.cfg.end_pair_skill_weight;
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let n = boat.seat_count;
+            let n = boat.seat_count.as_int();
             if n < 2 {
                 continue;
             }
@@ -614,7 +614,7 @@ impl<'a> ModelBuilder<'a> {
         }
         let mut count = 0usize;
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            for seat in SeatZone::EngineRoom.seats_for(boat.seat_count) {
+            for seat in SeatZone::EngineRoom.seats_for(boat.seat_count.as_int()) {
                 if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat)) {
                     self.obj_terms
                         .push(s_var.scaled(-self.cfg.engine_room_strength_weight));
@@ -685,7 +685,7 @@ impl<'a> ModelBuilder<'a> {
                 if factor <= 0 {
                     continue;
                 }
-                for seat in 1..=boat.seat_count {
+                for seat in 1..=boat.seat_count.as_int() {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
                             let quality =
@@ -709,7 +709,7 @@ impl<'a> ModelBuilder<'a> {
                 if factor <= 0 {
                     continue;
                 }
-                for seat in 1..=boat.seat_count {
+                for seat in 1..=boat.seat_count.as_int() {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
                             let quality =
@@ -747,8 +747,11 @@ impl<'a> ModelBuilder<'a> {
         let w = self.cfg.boat_size_stacking_weight;
 
         for (b_idx, boat) in self.boats.iter().enumerate() {
-            let size_factor = (8i32).checked_div(boat.seat_count).unwrap_or(1).max(1);
-            for seat in 1..=boat.seat_count {
+            let size_factor = (8i32)
+                .checked_div(boat.seat_count.as_int())
+                .unwrap_or(1)
+                .max(1);
+            for seat in 1..=boat.seat_count.as_int() {
                 for (r_idx, rower) in self.available.iter().enumerate() {
                     if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
                         let quality = rower.skill.ordinal() + rower.strength.ordinal();

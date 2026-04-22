@@ -53,6 +53,45 @@ impl std::fmt::Display for IntBool {
     }
 }
 
+/// A duration expressed in minutes. Used for practice durations and
+/// sync poll intervals.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    diesel_derive_newtype::DieselNewType,
+)]
+pub struct DurationMinutes(i32);
+
+impl DurationMinutes {
+    pub fn new(n: i32) -> Self {
+        Self(n)
+    }
+    pub fn as_int(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::fmt::Display for DurationMinutes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl std::str::FromStr for DurationMinutes {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        i32::from_str(s).map(Self)
+    }
+}
+
 /// Signed weight for coach-facing affinity tables (`pair_affinity`,
 /// `rower_seat_affinity`). Semantics:
 ///

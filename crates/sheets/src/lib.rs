@@ -220,7 +220,7 @@ fn sync_row(
     team_id: lineup_db::team::TeamId,
     row_filter: RowFilter,
     default_time: Option<chrono::NaiveTime>,
-    default_duration: Option<i32>,
+    default_duration: Option<lineup_db::types::DurationMinutes>,
     conn: &mut SqliteConnection,
     summary: &mut SyncSummary,
 ) -> Result<()> {

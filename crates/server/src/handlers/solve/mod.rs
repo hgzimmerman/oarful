@@ -209,7 +209,7 @@ impl SolveKnobs {
                 Vec<ReferencePlacement>,
             > = BTreeMap::new();
             for p in &snapshot.recent_placements {
-                if p.is_cox || p.seat_position == 0 {
+                if p.is_cox || p.seat_position.as_int() == 0 {
                     continue;
                 }
                 groups
@@ -218,7 +218,7 @@ impl SolveKnobs {
                     .push(ReferencePlacement {
                         rower_id: p.rower_id,
                         boat_id: p.boat_id,
-                        seat: p.seat_position,
+                        seat: p.seat_position.as_int(),
                     });
             }
             for placements in groups.into_values() {
@@ -376,7 +376,7 @@ pub(super) async fn build_baselines(
                         c.seats.iter().map(|s| ReferencePlacement {
                             rower_id: s.rower_id,
                             boat_id: c.lineup.boat_id,
-                            seat: s.seat_position,
+                            seat: s.seat_position.as_int(),
                         })
                     })
                     .collect();
@@ -465,8 +465,8 @@ pub(super) fn map_transfer_seats(
 ) -> std::collections::HashMap<i32, lineup_db::rower::types::RowerId> {
     let mut result = std::collections::HashMap::new();
     let dst_has_cox = dst.has_cox.as_bool();
-    let dst_count = dst.seat_count;
-    let src_count = src.seat_count;
+    let dst_count = dst.seat_count.as_int();
+    let src_count = src.seat_count.as_int();
 
     // Cox → cox (if dest has cox).
     if dst_has_cox {
@@ -721,9 +721,9 @@ mod tests {
             id: BoatId::new(id),
             name: format!("Boat{id}"),
             weight_class: WeightClass::Medium,
-            seat_count: seats,
+            seat_count: lineup_db::boat::types::SeatCount::new(seats),
             has_cox: IntBool::new(has_cox),
-            oars_per_seat: 1,
+            oars_per_seat: lineup_db::boat::types::OarsPerSeat::new(1),
             acquired_at: None,
             manufactured_at: None,
             relinquished_at: None,
