@@ -1338,12 +1338,30 @@ fn build_model<'a>(
     // `m.wrong_side_by_rower` for S4 to consume. See
     // `ModelBuilder::create_variables` for the full eligibility
     // rules and per-rower aggregation rationale.
-    m.create_variables();
+    m.create_variables(&request.locks);
 
     // Seat locks — force specific (rower, boat, seat) placements.
     // Must run after create_variables so x vars exist, but before
     // other constraints so the locks are visible to propagation.
     lock_diags.extend(m.post_seat_locks(&request.locks)?);
+
+    // Symmetry breaking — order stroke-seat rower indices between
+    // structurally identical boats. Skip boats whose stroke seat
+    // has a lock (coach-specified assignment takes priority).
+    let locked_stroke_boats: std::collections::HashSet<usize> = request
+        .locks
+        .iter()
+        .filter_map(|l| {
+            let b_idx = m.boats.iter().position(|b| b.id == l.boat_id)?;
+            let stroke = m.boats[b_idx].seat_count.as_int();
+            if l.seat == stroke {
+                Some(b_idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+    m.post_symmetry_breaking(&locked_stroke_boats)?;
 
     // Required boats — force use[b] = 1 for boats the coach pinned/locked.
     for &required_bid in &request.required_boats {

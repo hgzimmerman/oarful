@@ -105,13 +105,45 @@ impl<'a> ModelBuilder<'a> {
     /// wrong-side candidate into `wrong_side_by_rower` for S4
     /// aggregation to consume.
     ///
+    /// `locks` is passed so the cox pre-filter can exempt any
+    /// non-designated cox that is locked into a cox seat.
+    ///
     /// This must run before any constraint block that reads `self.x`.
-    pub(crate) fn create_variables(&mut self) {
+    pub(crate) fn create_variables(&mut self, locks: &[SeatLock]) {
         let mut total_considered: usize = 0;
         let mut rejected_eligibility: usize = 0;
         let mut rejected_sweep_bias: usize = 0;
+        let mut rejected_cox_filter: usize = 0;
         let mut created: usize = 0;
         let mut wrong_side_count: usize = 0;
+
+        // Cox pre-filtering: when there are enough designated coxswains
+        // for every coxed boat, don't create x[r, b, 0] variables for
+        // non-designated can_cox rowers. This dramatically shrinks the
+        // search space since most rowers can_cox but rarely do.
+        let coxed_boat_count = self.boats.iter().filter(|b| b.has_cox.as_bool()).count();
+        let designated_cox_count = self
+            .available
+            .iter()
+            .filter(|r| r.is_designated_cox.as_bool())
+            .count();
+        let cox_restricted = designated_cox_count >= coxed_boat_count && coxed_boat_count > 0;
+
+        // Rowers locked into cox seats must stay eligible even when
+        // cox_restricted is true.
+        let locked_cox_rower_ids: std::collections::HashSet<_> = locks
+            .iter()
+            .filter(|l| l.seat == 0)
+            .map(|l| l.rower_id)
+            .collect();
+
+        if cox_restricted {
+            tracing::debug!(
+                designated_cox_count,
+                coxed_boat_count,
+                "cox pre-filter: restricting cox seats to designated coxswains"
+            );
+        }
 
         for (b_idx, boat) in self.boats.iter().enumerate() {
             for seat in seat_positions(boat) {
@@ -119,6 +151,17 @@ impl<'a> ModelBuilder<'a> {
                     total_considered += 1;
                     if !rower_eligible_for_seat(rower, boat, seat) {
                         rejected_eligibility += 1;
+                        continue;
+                    }
+                    // Cox pre-filter: skip non-designated coxes when we
+                    // have enough designated ones (unless this rower is
+                    // locked into a cox seat).
+                    if seat == 0
+                        && cox_restricted
+                        && !rower.is_designated_cox.as_bool()
+                        && !locked_cox_rower_ids.contains(&rower.id)
+                    {
+                        rejected_cox_filter += 1;
                         continue;
                     }
                     // Sweep-bias hard gate: SWEEP_HARD rowers cannot
@@ -153,6 +196,7 @@ impl<'a> ModelBuilder<'a> {
             created,
             rejected_eligibility,
             rejected_sweep_bias,
+            rejected_cox_filter,
             wrong_side = wrong_side_count,
             "eligibility: x variables created"
         );
@@ -340,6 +384,109 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("posting seat-lock use=1: {e:?}"))?;
         }
         Ok(diags)
+    }
+
+    /// Symmetry breaking between structurally identical boats.
+    ///
+    /// When two boats share (seat_count, has_cox, oars_per_seat,
+    /// stroke_side, weight_class), any solution where rowers swap
+    /// between them is functionally identical. We break this by
+    /// ordering the stroke-seat rower index:
+    ///
+    ///   `stroke_id[a] <= stroke_id[b]`
+    ///
+    /// where `stroke_id[b] = Σ_r (r_idx + 1) · x[r, b, stroke]`.
+    /// When fielded, this is the 1-based rower index; when unused, 0.
+    /// This naturally handles unused boats: `0 <= anything`.
+    ///
+    /// `locked_stroke_boats` contains boat indices that have a seat
+    /// lock on their stroke seat — these are excluded from symmetry
+    /// breaking to avoid conflicting with coach-specified assignments.
+    pub(crate) fn post_symmetry_breaking(
+        &mut self,
+        locked_stroke_boats: &std::collections::HashSet<usize>,
+    ) -> Result<()> {
+        // Group boats by structural equivalence key.
+        // Use a string key since Side/WeightClass don't impl Hash.
+        let boat_key = |boat: &Boat| -> String {
+            format!(
+                "{}:{}:{}:{}:{}",
+                boat.seat_count,
+                boat.has_cox,
+                boat.oars_per_seat,
+                boat.stroke_side,
+                boat.weight_class,
+            )
+        };
+
+        let mut groups: std::collections::HashMap<String, Vec<usize>> =
+            std::collections::HashMap::new();
+        for (b_idx, boat) in self.boats.iter().enumerate() {
+            if locked_stroke_boats.contains(&b_idx) {
+                continue;
+            }
+            groups.entry(boat_key(boat)).or_default().push(b_idx);
+        }
+
+        let n_rowers = self.available.len() as i32;
+        let mut pairs_constrained = 0usize;
+
+        for (_key, indices) in &groups {
+            if indices.len() < 2 {
+                continue;
+            }
+
+            // Build stroke_id[b] = Σ_r (r_idx + 1) · x[r, b, stroke]
+            // for each boat in the group.
+            let mut stroke_ids: Vec<(usize, DomainId)> = Vec::new();
+            for &b_idx in indices {
+                let stroke_seat = self.boats[b_idx].seat_count.as_int();
+                let terms: Vec<_> = (0..self.available.len())
+                    .filter_map(|r_idx| {
+                        self.x
+                            .get(&(r_idx, b_idx, stroke_seat))
+                            .map(|&var| var.scaled((r_idx as i32) + 1))
+                    })
+                    .collect();
+                if terms.is_empty() {
+                    continue;
+                }
+                let stroke_id = self.solver.new_bounded_integer(0, n_rowers);
+                let tag = self.solver.new_constraint_tag();
+                let mut eq_terms = terms;
+                eq_terms.push(stroke_id.scaled(-1));
+                self.solver
+                    .add_constraint(pumpkin_constraints::equals(eq_terms, 0, tag))
+                    .post()
+                    .map_err(|e| anyhow!("posting symmetry stroke_id link: {e:?}"))?;
+                stroke_ids.push((b_idx, stroke_id));
+            }
+
+            // Chain pairwise: stroke_id[a] <= stroke_id[b]
+            for pair in stroke_ids.windows(2) {
+                let (_, id_a) = pair[0];
+                let (_, id_b) = pair[1];
+                let tag = self.solver.new_constraint_tag();
+                // id_a - id_b <= 0  ⟹  id_a <= id_b
+                self.solver
+                    .add_constraint(pumpkin_constraints::less_than_or_equals(
+                        vec![id_a.scaled(1), id_b.scaled(-1)],
+                        0,
+                        tag,
+                    ))
+                    .post()
+                    .map_err(|e| anyhow!("posting symmetry ordering: {e:?}"))?;
+                pairs_constrained += 1;
+            }
+        }
+
+        if pairs_constrained > 0 {
+            tracing::debug!(
+                pairs_constrained,
+                "symmetry breaking: ordered equivalent boat pairs"
+            );
+        }
+        Ok(())
     }
 
     /// Partial-fill bonus — rewards each optional seat that the
