@@ -667,13 +667,19 @@ impl<'a> ModelBuilder<'a> {
         let w = self.cfg.top_boat_stacking_weight;
         let aw = w.unsigned_abs() as i64;
 
-        // Decay factors as thousandths: 1000, 750, 500, 250, 125, 62, 31, ...
+        // Decay factors as thousandths. Each successive boat gets 40%
+        // of the previous one's reward, creating a clear talent gradient:
+        //   boat 0 = 1000, boat 1 = 400, boat 2 = 160, boat 3 = 64, ...
+        // This is steep enough that a quality-7 rower in boat 1 (reward
+        // 4*7*400/1000=11) scores below a quality-4 rower in boat 0
+        // (reward 4*4*1000/1000=16), driving talent concentration.
         let factors: Vec<i64> = (0..self.boats.len())
-            .map(|rank| match rank {
-                0 => 1000,
-                1 => 750,
-                2 => 500,
-                n => 500i64 >> (n - 2), // halves after rank 2
+            .map(|rank| {
+                let mut f = 1000i64;
+                for _ in 0..rank {
+                    f = f * 2 / 5; // 40% of previous
+                }
+                f
             })
             .collect();
 
