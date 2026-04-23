@@ -667,17 +667,15 @@ impl<'a> ModelBuilder<'a> {
         let w = self.cfg.top_boat_stacking_weight;
         let aw = w.unsigned_abs() as i64;
 
-        // Decay factors as thousandths. Each successive boat gets 40%
-        // of the previous one's reward, creating a clear talent gradient:
-        //   boat 0 = 1000, boat 1 = 400, boat 2 = 160, boat 3 = 64, ...
-        // This is steep enough that a quality-7 rower in boat 1 (reward
-        // 4*7*400/1000=11) scores below a quality-4 rower in boat 0
-        // (reward 4*4*1000/1000=16), driving talent concentration.
+        // Decay factors as thousandths. Each successive boat gets 60%
+        // of the previous one's reward, creating a meaningful gradient
+        // without making lower boats worthless:
+        //   boat 0 = 1000, boat 1 = 600, boat 2 = 360, boat 3 = 216, ...
         let factors: Vec<i64> = (0..self.boats.len())
             .map(|rank| {
                 let mut f = 1000i64;
                 for _ in 0..rank {
-                    f = f * 2 / 5; // 40% of previous
+                    f = f * 3 / 5; // 60% of previous
                 }
                 f
             })
@@ -694,8 +692,11 @@ impl<'a> ModelBuilder<'a> {
                 for seat in 1..=boat.seat_count.as_int() {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            let quality =
-                                rower.skill.ordinal() as i64 + rower.strength.ordinal() as i64;
+                            // Zero-based quality: bottom-tier rowers (Novice/Weak)
+                            // contribute zero, so S16 is indifferent about where
+                            // they go. Only above-average rowers drive stacking.
+                            let quality = (rower.skill.ordinal() - 1) as i64
+                                + (rower.strength.ordinal() - 1) as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
@@ -718,8 +719,8 @@ impl<'a> ModelBuilder<'a> {
                 for seat in 1..=boat.seat_count.as_int() {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            let quality =
-                                rower.skill.ordinal() as i64 + rower.strength.ordinal() as i64;
+                            let quality = (rower.skill.ordinal() - 1) as i64
+                                + (rower.strength.ordinal() - 1) as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
