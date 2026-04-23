@@ -18,10 +18,10 @@ async fn use_streamed_alternative() {
         .map(|id| format!("/solve/{id}"))
         .expect("expected a /solve/ link on the practices page");
 
-    // Navigate to the solve page with generate=1, alts=1, budget=1,
-    // partial=1 to allow partial fills so the solver can find a solution.
+    // Navigate to the solve page with generate + alternatives enabled.
+    // partial=2 allows up to 2 optional seats empty per boat.
     let generate_url = format!(
-        "{}{}{}generate=1&budget=1&alts=1&partial=1",
+        "{}{}{}generate=1&budget=3&alts=1&partial=2",
         instance.base_url(),
         solve_path,
         if solve_path.contains('?') { "&" } else { "?" }
@@ -29,6 +29,7 @@ async fn use_streamed_alternative() {
     client.goto(&generate_url).await.unwrap();
 
     // Wait for the primary result to stream in (boat cards in editor).
+    // The solver gets 10s budget; allow extra time for SSE delivery.
     client
         .wait()
         .at_most(std::time::Duration::from_secs(15))
@@ -37,6 +38,7 @@ async fn use_streamed_alternative() {
         .expect("expected boat cards in lineup editor after generation");
 
     // Wait for an alternative to stream in — look for "Alternative #2".
+    // The alternative re-solves after the primary, so allow another full budget.
     let _alt_header = client
         .wait()
         .at_most(std::time::Duration::from_secs(15))

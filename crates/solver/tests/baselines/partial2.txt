@@ -1,6 +1,6 @@
 status: Satisfied
-fielded: 1/2
-skipped: Artemis
+fielded: 1/1
+skipped: 
 benched: Grace, Mika, Nico
 
 boat 1: Persephone

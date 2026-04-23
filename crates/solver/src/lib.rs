@@ -1193,10 +1193,12 @@ fn greedy_fleet_select<'a>(
                 remaining_before = remaining,
                 "greedy: selected boat"
             );
-            // Reserve only min_seats worth of rowers so subsequent
-            // boats can still qualify. The solver decides the actual
-            // fill level via use[b] + partial-fill constraints.
-            remaining -= min_seats;
+            // Reserve full seats_total (not min_seats) so the greedy
+            // selector prefers fully crewing fewer boats over partially
+            // filling more. The partial-fill allowance is the solver's
+            // escape valve, not the fleet selector's licence to over-commit.
+            // min_seats is used only for the *eligibility* check above.
+            remaining -= seats_total;
         } else {
             tracing::debug!(
                 boat = %boat.name,
