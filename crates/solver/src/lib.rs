@@ -1277,15 +1277,28 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
             }
         }
 
-        // Rowing seats: fill by quality, respecting eligibility.
+        // Rowing seats: fill by quality, preferring correct-side rowers.
         for seat in 1..=boat.seat_count.as_int() {
+            use model::wrong_side_penalty;
+            // Try correct-side rowers first, then fall back to any eligible.
             let candidate = rower_quality
                 .iter()
                 .map(|(r_idx, _)| *r_idx)
                 .filter(|r_idx| !assigned_rowers.contains(r_idx))
                 .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
                 .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
-                .next();
+                .filter(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
+                .next()
+                .or_else(|| {
+                    // Fallback: any eligible rower (wrong side OK)
+                    rower_quality
+                        .iter()
+                        .map(|(r_idx, _)| *r_idx)
+                        .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                        .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
+                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
+                        .next()
+                });
             if let Some(r_idx) = candidate {
                 if let Some(&var) = builder.x.get(&(r_idx, b_idx, seat)) {
                     vars.push(var);
