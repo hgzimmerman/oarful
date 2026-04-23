@@ -140,3 +140,120 @@ impl SolverProfile {
         diesel::delete(solver_profile::table.find(id)).execute(conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::team::{NewTeam, Team};
+    use crate::test_support::in_memory_conn;
+
+    fn seed_team(conn: &mut diesel::SqliteConnection) -> TeamId {
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn make_profile(tid: TeamId, name: &str) -> NewSolverProfile {
+        NewSolverProfile {
+            team_id: tid,
+            name: name.into(),
+            description: None,
+            skill_variance_weight: 1,
+            pair_affinity_weight: 1,
+            seat_affinity_weight: 1,
+            side_preference_weight: 1,
+            weight_class_slack_weight: 1,
+            cox_cooldown_penalty: 1,
+            placement_reward_weight: 1,
+            pair_strength_weight: 1,
+            bow_pair_strength_weight: 1,
+            height_balance_weight: 1,
+            end_pair_skill_weight: 1,
+            engine_room_strength_weight: 1,
+            partial_fill_bonus: 1,
+            non_scull_retention_weight: 1,
+            bow_cox_fit_weight: 1,
+            top_boat_stacking_weight: 1,
+            pair_eligibility_weight: 1,
+            minimize_bench_weight: 1,
+            boat_size_stacking_weight: 1,
+            bench_cooldown_penalty: 1,
+            stroke_spread_weight: 1,
+            eight_bias: 0,
+            coxed_four_bias: 0,
+            four_bias: 0,
+            quad_bias: 0,
+            pair_bias: 0,
+            double_bias: 0,
+            single_bias: 0,
+        }
+    }
+
+    #[test]
+    fn upsert_and_find_by_name() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+
+        let p = SolverProfile::upsert(&mut conn, make_profile(tid, "Race Day")).unwrap();
+        assert_eq!(p.name, "Race Day");
+
+        let found = SolverProfile::find_by_name(&mut conn, tid, "Race Day")
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.id, p.id);
+        assert!(SolverProfile::find_by_name(&mut conn, tid, "Nope")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn list_for_team() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+
+        SolverProfile::upsert(&mut conn, make_profile(tid, "B Profile")).unwrap();
+        SolverProfile::upsert(&mut conn, make_profile(tid, "A Profile")).unwrap();
+
+        let list = SolverProfile::list_for_team(&mut conn, tid).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "A Profile"); // ordered by name
+    }
+
+    #[test]
+    fn delete() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = SolverProfile::upsert(&mut conn, make_profile(tid, "X")).unwrap();
+
+        let deleted = SolverProfile::delete(&mut conn, p.id).unwrap();
+        assert_eq!(deleted, 1);
+        assert!(SolverProfile::find_by_name(&mut conn, tid, "X")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn upsert_replaces_on_same_name() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+
+        let mut prof = make_profile(tid, "My Prof");
+        prof.skill_variance_weight = 10;
+        SolverProfile::upsert(&mut conn, prof).unwrap();
+
+        let mut prof2 = make_profile(tid, "My Prof");
+        prof2.skill_variance_weight = 99;
+        SolverProfile::upsert(&mut conn, prof2).unwrap();
+
+        let list = SolverProfile::list_for_team(&mut conn, tid).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].skill_variance_weight, 99);
+    }
+}

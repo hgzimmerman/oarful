@@ -320,3 +320,175 @@ impl Practice {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::team::{NewTeam, Team};
+    use crate::test_support::in_memory_conn;
+
+    fn seed_team(conn: &mut diesel::SqliteConnection) -> TeamId {
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    #[test]
+    fn upsert_creates_new() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        assert_eq!(p.date, d(2026, 5, 1));
+        assert_eq!(p.team_id, tid);
+    }
+
+    #[test]
+    fn upsert_returns_existing() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p1 =
+            Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, Some("note".into())).unwrap();
+        let p2 = Practice::upsert(
+            &mut conn,
+            tid,
+            d(2026, 5, 1),
+            None,
+            Some("different".into()),
+        )
+        .unwrap();
+        assert_eq!(p1.id, p2.id);
+        assert_eq!(p2.notes.as_deref(), Some("note")); // not overwritten
+    }
+
+    #[test]
+    fn get() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        let fetched = Practice::get(&mut conn, p.id).unwrap().unwrap();
+        assert_eq!(fetched.id, p.id);
+        assert!(Practice::get(&mut conn, PracticeId::new(9999))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn update_notes() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        assert!(p.notes.is_none());
+
+        let updated =
+            Practice::update_notes_by_id(&mut conn, p.id, Some("new note".into())).unwrap();
+        assert_eq!(updated.notes.as_deref(), Some("new note"));
+    }
+
+    #[test]
+    fn list_upcoming_excludes_cancelled_and_past() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let today = d(2026, 5, 5);
+        Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap(); // past
+        Practice::upsert(&mut conn, tid, d(2026, 5, 5), None, None).unwrap(); // today
+        Practice::upsert(&mut conn, tid, d(2026, 5, 10), None, None).unwrap(); // future
+        let cancelled = Practice::upsert(&mut conn, tid, d(2026, 5, 15), None, None).unwrap();
+        Practice::set_cancelled_by_id(&mut conn, cancelled.id, true).unwrap();
+
+        let upcoming = Practice::list_upcoming(&mut conn, tid, today).unwrap();
+        assert_eq!(upcoming.len(), 2); // today + future, not past or cancelled
+        assert_eq!(upcoming[0].date, d(2026, 5, 5));
+        assert_eq!(upcoming[1].date, d(2026, 5, 10));
+    }
+
+    #[test]
+    fn set_cancelled_toggles() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        assert!(!p.cancelled.as_bool());
+
+        let c = Practice::set_cancelled_by_id(&mut conn, p.id, true).unwrap();
+        assert!(c.cancelled.as_bool());
+
+        let c = Practice::set_cancelled_by_id(&mut conn, p.id, false).unwrap();
+        assert!(!c.cancelled.as_bool());
+    }
+
+    #[test]
+    fn find_by_date() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+
+        assert!(Practice::find_by_date(&mut conn, tid, d(2026, 5, 1))
+            .unwrap()
+            .is_some());
+        assert!(Practice::find_by_date(&mut conn, tid, d(2026, 5, 2))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn label_without_time() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        assert_eq!(p.label(), "May 1");
+    }
+
+    #[test]
+    fn label_with_time() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let time = NaiveTime::from_hms_opt(6, 30, 0);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), time, None).unwrap();
+        assert_eq!(p.label(), "May 1 · 6:30 AM");
+    }
+
+    #[test]
+    fn effective_duration_prefers_practice_override() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let mut p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        p.duration_minutes = Some(DurationMinutes::new(45));
+
+        let team_default = Some(DurationMinutes::new(90));
+        assert_eq!(p.effective_duration(team_default).unwrap().as_int(), 45);
+    }
+
+    #[test]
+    fn effective_duration_falls_back_to_team() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
+        assert!(p.duration_minutes.is_none());
+
+        let team_default = Some(DurationMinutes::new(90));
+        assert_eq!(p.effective_duration(team_default).unwrap().as_int(), 90);
+    }
+
+    #[test]
+    fn time_window() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let time = NaiveTime::from_hms_opt(6, 0, 0);
+        let mut p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), time, None).unwrap();
+        p.duration_minutes = Some(DurationMinutes::new(90));
+
+        let (start, end) = p.time_window(None).unwrap();
+        assert_eq!(start, NaiveTime::from_hms_opt(6, 0, 0).unwrap());
+        assert_eq!(end, NaiveTime::from_hms_opt(7, 30, 0).unwrap());
+    }
+}

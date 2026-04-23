@@ -141,3 +141,134 @@ impl SyncSource {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::team::{NewTeam, Team};
+    use crate::test_support::in_memory_conn;
+
+    fn seed_team(conn: &mut diesel::SqliteConnection) -> TeamId {
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    #[test]
+    fn upsert_creates_then_updates() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let st = SyncSourceType::new("google_sheet");
+
+        SyncSource::upsert(&mut conn, tid, &st, r#"{"id":"abc"}"#, None).unwrap();
+        let found = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.config, r#"{"id":"abc"}"#);
+
+        // Upsert updates config
+        SyncSource::upsert(&mut conn, tid, &st, r#"{"id":"xyz"}"#, None).unwrap();
+        let found = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.config, r#"{"id":"xyz"}"#);
+    }
+
+    #[test]
+    fn list_for_team() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let tid2 = {
+            let now = chrono::Utc::now().naive_utc();
+            Team::create(
+                &mut conn,
+                NewTeam {
+                    name: "Other".into(),
+                    created_at: now,
+                },
+            )
+            .unwrap()
+            .id
+        };
+        let gs = SyncSourceType::new("google_sheet");
+
+        SyncSource::upsert(&mut conn, tid, &gs, r#"{"id":"a"}"#, None).unwrap();
+        SyncSource::upsert(&mut conn, tid2, &gs, r#"{"id":"b"}"#, None).unwrap();
+
+        let list = SyncSource::list_for_team(&mut conn, tid).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].config, r#"{"id":"a"}"#);
+    }
+
+    #[test]
+    fn list_pollable() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let gs = SyncSourceType::new("google_sheet");
+
+        SyncSource::upsert(&mut conn, tid, &gs, "{}", Some(DurationMinutes::new(30))).unwrap();
+
+        let pollable = SyncSource::list_pollable(&mut conn).unwrap();
+        assert_eq!(pollable.len(), 1);
+        assert!(pollable[0].poll_interval_minutes.is_some());
+    }
+
+    #[test]
+    fn mark_synced_and_error() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let st = SyncSourceType::new("google_sheet");
+        SyncSource::upsert(&mut conn, tid, &st, "{}", None).unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert!(src.last_synced_at.is_none());
+        assert!(src.last_error.is_none());
+
+        SyncSource::mark_synced(&mut conn, src.id).unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert!(src.last_synced_at.is_some());
+        assert!(src.last_error.is_none());
+
+        SyncSource::mark_error(&mut conn, src.id, "timeout").unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert_eq!(src.last_error.as_deref(), Some("timeout"));
+
+        // mark_synced clears error
+        SyncSource::mark_synced(&mut conn, src.id).unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert!(src.last_error.is_none());
+    }
+
+    #[test]
+    fn upsert_clears_error() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let st = SyncSourceType::new("google_sheet");
+        SyncSource::upsert(&mut conn, tid, &st, "{}", None).unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        SyncSource::mark_error(&mut conn, src.id, "oops").unwrap();
+
+        // Re-upsert should clear error
+        SyncSource::upsert(&mut conn, tid, &st, r#"{"new":true}"#, None).unwrap();
+        let src = SyncSource::find_by_type(&mut conn, tid, &st)
+            .unwrap()
+            .unwrap();
+        assert!(src.last_error.is_none());
+    }
+}

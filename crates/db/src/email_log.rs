@@ -106,3 +106,101 @@ impl EmailLog {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::in_memory_conn;
+
+    fn seed_team(conn: &mut diesel::SqliteConnection) -> TeamId {
+        use crate::team::{NewTeam, Team};
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn seed_user(conn: &mut diesel::SqliteConnection) -> UserId {
+        use crate::app_user::{AppUser, NewAppUser, UserStatus};
+        let now = chrono::Utc::now().naive_utc();
+        AppUser::create(
+            conn,
+            NewAppUser {
+                email: "test@example.com".into(),
+                password_hash: None,
+                name: "Test".into(),
+                status: UserStatus::Active,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    #[test]
+    fn record_and_already_sent_today() {
+        let mut conn = in_memory_conn();
+        let team_id = seed_team(&mut conn);
+        let user_id = seed_user(&mut conn);
+        let practice_date = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+        let email_type = EmailLogType::new("reminder");
+
+        // Not sent yet
+        assert!(
+            !EmailLog::already_sent_today(&mut conn, team_id, &email_type, practice_date).unwrap()
+        );
+
+        // Record a send with now as sent_at
+        EmailLog::record(
+            &mut conn,
+            NewEmailLog {
+                team_id,
+                email_type: email_type.clone(),
+                practice_date,
+                sent_at: chrono::Utc::now().naive_utc(),
+                recipient_count: 5,
+                sent_by_user_id: user_id,
+            },
+        )
+        .unwrap();
+
+        // Now it should be detected as sent today
+        assert!(
+            EmailLog::already_sent_today(&mut conn, team_id, &email_type, practice_date).unwrap()
+        );
+    }
+
+    #[test]
+    fn already_sent_different_type_not_blocked() {
+        let mut conn = in_memory_conn();
+        let team_id = seed_team(&mut conn);
+        let user_id = seed_user(&mut conn);
+        let practice_date = NaiveDate::from_ymd_opt(2026, 5, 1).unwrap();
+
+        EmailLog::record(
+            &mut conn,
+            NewEmailLog {
+                team_id,
+                email_type: EmailLogType::new("reminder"),
+                practice_date,
+                sent_at: chrono::Utc::now().naive_utc(),
+                recipient_count: 3,
+                sent_by_user_id: user_id,
+            },
+        )
+        .unwrap();
+
+        // Different type should not be blocked
+        let lineup_type = EmailLogType::new("lineup");
+        assert!(
+            !EmailLog::already_sent_today(&mut conn, team_id, &lineup_type, practice_date).unwrap()
+        );
+    }
+}

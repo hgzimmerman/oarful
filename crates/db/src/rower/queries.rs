@@ -445,4 +445,88 @@ mod tests {
             "a name change should bump updated_at"
         );
     }
+
+    // ── CRUD tests ──────────────────────────────────────────────────
+
+    #[test]
+    fn insert_and_get() {
+        let mut conn = in_memory_conn();
+        let r = seed_rower(&mut conn, Side::Port);
+        let fetched = Rower::get(&mut conn, r.id).unwrap().unwrap();
+        assert_eq!(fetched.name, "Seed Rower");
+        assert!(Rower::get(&mut conn, RowerId::new(9999)).unwrap().is_none());
+    }
+
+    #[test]
+    fn list_active_excludes_inactive() {
+        let mut conn = in_memory_conn();
+        let r1 = seed_rower(&mut conn, Side::Port);
+        let r2 = seed_rower(&mut conn, Side::Starboard);
+        Rower::set_active(&mut conn, r2.id, false).unwrap();
+
+        let active = Rower::list_active(&mut conn).unwrap();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, r1.id);
+    }
+
+    #[test]
+    fn list_all_includes_inactive() {
+        let mut conn = in_memory_conn();
+        seed_rower(&mut conn, Side::Port);
+        let r2 = seed_rower(&mut conn, Side::Starboard);
+        Rower::set_active(&mut conn, r2.id, false).unwrap();
+
+        let all = Rower::list_all(&mut conn).unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn count() {
+        let mut conn = in_memory_conn();
+        assert_eq!(Rower::count(&mut conn).unwrap(), 0);
+        seed_rower(&mut conn, Side::Port);
+        seed_rower(&mut conn, Side::Starboard);
+        assert_eq!(Rower::count(&mut conn).unwrap(), 2);
+    }
+
+    #[test]
+    fn save_updates_fields() {
+        let mut conn = in_memory_conn();
+        let r = seed_rower(&mut conn, Side::Port);
+        let mut modified = r.clone();
+        modified.skill = Skill::Expert;
+        let saved = Rower::save(&mut conn, &modified).unwrap();
+        assert_eq!(saved.skill, Skill::Expert);
+    }
+
+    #[test]
+    fn set_active_toggles() {
+        let mut conn = in_memory_conn();
+        let r = seed_rower(&mut conn, Side::Port);
+        assert!(r.active.as_bool());
+
+        Rower::set_active(&mut conn, r.id, false).unwrap();
+        let fetched = Rower::get(&mut conn, r.id).unwrap().unwrap();
+        assert!(!fetched.active.as_bool());
+
+        Rower::set_active(&mut conn, r.id, true).unwrap();
+        let fetched = Rower::get(&mut conn, r.id).unwrap().unwrap();
+        assert!(fetched.active.as_bool());
+    }
+
+    #[test]
+    fn last_coxed_dates_empty_when_no_lineups() {
+        let mut conn = in_memory_conn();
+        seed_rower(&mut conn, Side::Port);
+        let dates = Rower::last_coxed_dates(&mut conn).unwrap();
+        assert!(dates.is_empty());
+    }
+
+    #[test]
+    fn last_benched_dates_empty_when_no_lineups() {
+        let mut conn = in_memory_conn();
+        seed_rower(&mut conn, Side::Port);
+        let dates = Rower::last_benched_dates(&mut conn).unwrap();
+        assert!(dates.is_empty());
+    }
 }

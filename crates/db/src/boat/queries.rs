@@ -114,3 +114,104 @@ impl Boat {
             .get_result(conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+    use crate::boat::NewBoat;
+    use crate::rower::types::Side;
+    use crate::test_support::in_memory_conn;
+    use crate::types::IntBool;
+
+    fn make_boat(name: &str, oars: i32) -> NewBoat {
+        NewBoat {
+            name: name.into(),
+            weight_class: WeightClass::Heavy,
+            seat_count: SeatCount::new(8),
+            has_cox: IntBool::TRUE,
+            oars_per_seat: OarsPerSeat::new(oars),
+            acquired_at: None,
+            manufactured_at: None,
+            stroke_side: Side::Starboard,
+            cox_position: CoxPosition::Stern,
+        }
+    }
+
+    #[test]
+    fn insert_and_get() {
+        let mut conn = in_memory_conn();
+        let b = Boat::insert(&mut conn, make_boat("Spirit", 1)).unwrap();
+        let fetched = Boat::get(&mut conn, b.id).unwrap().unwrap();
+        assert_eq!(fetched.name, "Spirit");
+        assert!(Boat::get(&mut conn, BoatId::new(9999)).unwrap().is_none());
+    }
+
+    #[test]
+    fn list_sweep_excludes_sculls() {
+        let mut conn = in_memory_conn();
+        Boat::insert(&mut conn, make_boat("Sweep 8+", 1)).unwrap();
+        Boat::insert(&mut conn, make_boat("Quad", 2)).unwrap();
+
+        let sweep = Boat::list_sweep(&mut conn).unwrap();
+        assert_eq!(sweep.len(), 1);
+        assert_eq!(sweep[0].name, "Sweep 8+");
+    }
+
+    #[test]
+    fn list_in_service_excludes_relinquished() {
+        let mut conn = in_memory_conn();
+        Boat::insert(&mut conn, make_boat("Active", 1)).unwrap();
+        let mut retired = make_boat("Retired", 1);
+        retired.name = "Retired".into();
+        let b = Boat::insert(&mut conn, retired).unwrap();
+        let mut b = b;
+        b.relinquished_at = Some(chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap());
+        Boat::save(&mut conn, &b).unwrap();
+
+        let in_service = Boat::list_in_service(&mut conn).unwrap();
+        assert_eq!(in_service.len(), 1);
+        assert_eq!(in_service[0].name, "Active");
+    }
+
+    #[test]
+    fn is_sweep_and_is_scull() {
+        let mut conn = in_memory_conn();
+        let sweep = Boat::insert(&mut conn, make_boat("S", 1)).unwrap();
+        let scull = Boat::insert(&mut conn, make_boat("Q", 2)).unwrap();
+
+        assert!(sweep.is_sweep());
+        assert!(!sweep.is_scull());
+        assert!(!scull.is_sweep());
+        assert!(scull.is_scull());
+    }
+
+    #[test]
+    fn seat_side_alternating_rig() {
+        let mut conn = in_memory_conn();
+        let b = Boat::insert(&mut conn, make_boat("Eight", 1)).unwrap();
+        // stroke_side = Starboard, seat 8 = stroke
+        assert_eq!(b.seat_side(8), Some(Side::Starboard)); // stroke
+        assert_eq!(b.seat_side(7), Some(Side::Port)); // one from stroke
+        assert_eq!(b.seat_side(1), Some(Side::Port)); // bow (7 from stroke, odd)
+    }
+
+    #[test]
+    fn seat_side_returns_none_for_cox_and_scull() {
+        let mut conn = in_memory_conn();
+        let sweep = Boat::insert(&mut conn, make_boat("S", 1)).unwrap();
+        assert!(sweep.seat_side(0).is_none()); // cox seat
+
+        let scull = Boat::insert(&mut conn, make_boat("Q", 2)).unwrap();
+        assert!(scull.seat_side(1).is_none()); // scull has no side
+    }
+
+    #[test]
+    fn save_updates() {
+        let mut conn = in_memory_conn();
+        let mut b = Boat::insert(&mut conn, make_boat("Old Name", 1)).unwrap();
+        b.name = "New Name".into();
+        let saved = Boat::save(&mut conn, &b).unwrap();
+        assert_eq!(saved.name, "New Name");
+    }
+}

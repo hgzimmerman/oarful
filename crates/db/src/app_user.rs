@@ -376,4 +376,101 @@ mod tests {
         assert_eq!(id.as_int(), 99);
         assert_eq!(id.to_string(), "99");
     }
+
+    // ── DB-dependent tests ──────────────────────────────────────────
+
+    use crate::test_support::in_memory_conn;
+
+    fn seed_user(conn: &mut diesel::SqliteConnection) -> AppUser {
+        let now = chrono::Utc::now().naive_utc();
+        AppUser::create(
+            conn,
+            NewAppUser {
+                email: "test@example.com".into(),
+                password_hash: None,
+                name: "Test User".into(),
+                status: UserStatus::Invited,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .expect("seed user")
+    }
+
+    #[test]
+    fn create_and_get() {
+        let mut conn = in_memory_conn();
+        let user = seed_user(&mut conn);
+        let fetched = AppUser::get(&mut conn, user.id).unwrap().unwrap();
+        assert_eq!(fetched.email, "test@example.com");
+        assert_eq!(fetched.status, UserStatus::Invited);
+    }
+
+    #[test]
+    fn find_by_email() {
+        let mut conn = in_memory_conn();
+        seed_user(&mut conn);
+        let found = AppUser::find_by_email(&mut conn, "test@example.com")
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.name, "Test User");
+        assert!(AppUser::find_by_email(&mut conn, "nope@example.com")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn set_role_and_read() {
+        let mut conn = in_memory_conn();
+        let user = seed_user(&mut conn);
+        assert!(AppUser::role(&mut conn, user.id).unwrap().is_none());
+
+        AppUser::set_role(&mut conn, user.id, Role::Coach).unwrap();
+        assert_eq!(
+            AppUser::role(&mut conn, user.id).unwrap(),
+            Some(Role::Coach)
+        );
+
+        // Upsert to PD
+        AppUser::set_role(&mut conn, user.id, Role::ProgramDirector).unwrap();
+        assert_eq!(
+            AppUser::role(&mut conn, user.id).unwrap(),
+            Some(Role::ProgramDirector)
+        );
+    }
+
+    #[test]
+    fn set_status() {
+        let mut conn = in_memory_conn();
+        let user = seed_user(&mut conn);
+        assert_eq!(user.status, UserStatus::Invited);
+
+        AppUser::set_status(&mut conn, user.id, UserStatus::Active).unwrap();
+        let fetched = AppUser::get(&mut conn, user.id).unwrap().unwrap();
+        assert_eq!(fetched.status, UserStatus::Active);
+    }
+
+    #[test]
+    fn set_password_and_activate() {
+        let mut conn = in_memory_conn();
+        let user = seed_user(&mut conn);
+        AppUser::set_password_and_activate(&mut conn, user.id, "hashed").unwrap();
+        let fetched = AppUser::get(&mut conn, user.id).unwrap().unwrap();
+        assert_eq!(fetched.status, UserStatus::Active);
+        assert_eq!(fetched.password_hash.as_deref(), Some("hashed"));
+    }
+
+    #[test]
+    fn email_prefs() {
+        let mut conn = in_memory_conn();
+        let user = seed_user(&mut conn);
+        // Defaults are opt-in (1) per migration
+        assert!(user.wants_reminders());
+        assert!(user.wants_lineups());
+
+        AppUser::set_email_prefs(&mut conn, user.id, false, false).unwrap();
+        let fetched = AppUser::get(&mut conn, user.id).unwrap().unwrap();
+        assert!(!fetched.wants_reminders());
+        assert!(!fetched.wants_lineups());
+    }
 }

@@ -153,3 +153,166 @@ impl AuditLog {
         diesel::delete(audit_log::table.filter(audit_log::timestamp.lt(cutoff))).execute(conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_user::{AppUser, NewAppUser, UserStatus};
+    use crate::test_support::in_memory_conn;
+
+    fn ts(secs: i64) -> NaiveDateTime {
+        chrono::DateTime::from_timestamp(secs, 0)
+            .unwrap()
+            .naive_utc()
+    }
+
+    fn seed_user(conn: &mut diesel::SqliteConnection, email: &str) -> UserId {
+        let now = chrono::Utc::now().naive_utc();
+        AppUser::create(
+            conn,
+            NewAppUser {
+                email: email.into(),
+                password_hash: None,
+                name: "U".into(),
+                status: UserStatus::Active,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn seed_entry(
+        conn: &mut diesel::SqliteConnection,
+        user_id: Option<UserId>,
+        action: &str,
+        resource_type: &str,
+        resource_id: &str,
+        timestamp: NaiveDateTime,
+    ) {
+        AuditLog::record(
+            conn,
+            NewAuditEntry {
+                timestamp,
+                user_id,
+                action: AuditAction::new(action),
+                resource_type: AuditResourceType::new(resource_type),
+                resource_id: AuditResourceId::new(resource_id),
+                detail: None,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn record_and_list_unfiltered() {
+        let mut conn = in_memory_conn();
+        let u1 = seed_user(&mut conn, "a@test.com");
+        let u2 = seed_user(&mut conn, "b@test.com");
+        seed_entry(&mut conn, Some(u1), "boat.create", "boat", "1", ts(1000));
+        seed_entry(&mut conn, Some(u2), "rower.update", "rower", "5", ts(2000));
+
+        let all = AuditLog::list(&mut conn, &AuditFilter::default(), 100, 0).unwrap();
+        assert_eq!(all.len(), 2);
+        // Newest first
+        assert_eq!(all[0].action.as_str(), "rower.update");
+        assert_eq!(all[1].action.as_str(), "boat.create");
+    }
+
+    #[test]
+    fn list_filter_by_user() {
+        let mut conn = in_memory_conn();
+        let u1 = seed_user(&mut conn, "a@test.com");
+        let u2 = seed_user(&mut conn, "b@test.com");
+        seed_entry(&mut conn, Some(u1), "a", "r", "1", ts(1000));
+        seed_entry(&mut conn, Some(u2), "b", "r", "2", ts(2000));
+
+        let filter = AuditFilter {
+            user_id: Some(u1),
+            ..Default::default()
+        };
+        let results = AuditLog::list(&mut conn, &filter, 100, 0).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].user_id, Some(u1));
+    }
+
+    #[test]
+    fn list_filter_system_only() {
+        let mut conn = in_memory_conn();
+        let u1 = seed_user(&mut conn, "a@test.com");
+        seed_entry(&mut conn, Some(u1), "user.action", "r", "1", ts(1000));
+        seed_entry(&mut conn, None, "system.sync", "r", "2", ts(2000));
+
+        let filter = AuditFilter {
+            system_only: true,
+            ..Default::default()
+        };
+        let results = AuditLog::list(&mut conn, &filter, 100, 0).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].action.as_str(), "system.sync");
+    }
+
+    #[test]
+    fn list_filter_by_action() {
+        let mut conn = in_memory_conn();
+        seed_entry(&mut conn, None, "boat.create", "boat", "1", ts(1000));
+        seed_entry(&mut conn, None, "rower.update", "rower", "1", ts(2000));
+
+        let filter = AuditFilter {
+            action: Some(AuditAction::new("boat.create")),
+            ..Default::default()
+        };
+        let results = AuditLog::list(&mut conn, &filter, 100, 0).unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn list_limit_and_offset() {
+        let mut conn = in_memory_conn();
+        for i in 0..5 {
+            seed_entry(&mut conn, None, "a", "r", &i.to_string(), ts(i * 1000));
+        }
+        let page = AuditLog::list(&mut conn, &AuditFilter::default(), 2, 1).unwrap();
+        assert_eq!(page.len(), 2);
+    }
+
+    #[test]
+    fn distinct_actions() {
+        let mut conn = in_memory_conn();
+        seed_entry(&mut conn, None, "boat.create", "boat", "1", ts(1000));
+        seed_entry(&mut conn, None, "boat.create", "boat", "2", ts(2000));
+        seed_entry(&mut conn, None, "rower.update", "rower", "1", ts(3000));
+
+        let actions = AuditLog::distinct_actions(&mut conn).unwrap();
+        assert_eq!(actions.len(), 2);
+    }
+
+    #[test]
+    fn distinct_user_ids() {
+        let mut conn = in_memory_conn();
+        let u1 = seed_user(&mut conn, "a@test.com");
+        let u2 = seed_user(&mut conn, "b@test.com");
+        seed_entry(&mut conn, Some(u1), "a", "r", "1", ts(1000));
+        seed_entry(&mut conn, Some(u1), "b", "r", "2", ts(2000));
+        seed_entry(&mut conn, Some(u2), "c", "r", "3", ts(3000));
+        seed_entry(&mut conn, None, "d", "r", "4", ts(4000)); // system
+
+        let ids = AuditLog::distinct_user_ids(&mut conn).unwrap();
+        assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn prune_before() {
+        let mut conn = in_memory_conn();
+        seed_entry(&mut conn, None, "old", "r", "1", ts(1000));
+        seed_entry(&mut conn, None, "new", "r", "2", ts(5000));
+
+        let deleted = AuditLog::prune_before(&mut conn, ts(3000)).unwrap();
+        assert_eq!(deleted, 1);
+
+        let remaining = AuditLog::list(&mut conn, &AuditFilter::default(), 100, 0).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].action.as_str(), "new");
+    }
+}

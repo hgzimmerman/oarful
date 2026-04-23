@@ -359,3 +359,257 @@ impl Lineup {
         Ok(count > 0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+    use crate::boat::{Boat, NewBoat};
+    use crate::practice::Practice;
+    use crate::rower::types::{
+        Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+    };
+    use crate::rower::{NewRower, Rower};
+    use crate::team::{NewTeam, Team, TeamId};
+    use crate::test_support::in_memory_conn;
+
+    fn seed_team(conn: &mut diesel::SqliteConnection) -> TeamId {
+        let now = chrono::Utc::now().naive_utc();
+        Team::create(
+            conn,
+            NewTeam {
+                name: "Test".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn seed_boat(conn: &mut diesel::SqliteConnection) -> Boat {
+        Boat::insert(
+            conn,
+            NewBoat {
+                name: "Eight".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(8),
+                has_cox: IntBool::TRUE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap()
+    }
+
+    fn seed_rower(conn: &mut diesel::SqliteConnection, name: &str) -> Rower {
+        let now = chrono::Utc::now().naive_utc();
+        Rower::insert(
+            conn,
+            NewRower {
+                name: name.into(),
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::TRUE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap()
+    }
+
+    fn seed_practice(
+        conn: &mut diesel::SqliteConnection,
+        tid: TeamId,
+        date: NaiveDate,
+    ) -> Practice {
+        Practice::upsert(conn, tid, date, None, None).unwrap()
+    }
+
+    #[test]
+    fn commit_and_retrieve() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        let lineup = Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[
+                CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                },
+                CommitSeat {
+                    seat_position: SeatPosition::new(2),
+                    rower_id: r2.id,
+                    is_cox: false,
+                },
+            ],
+        )
+        .unwrap();
+
+        let committed = Lineup::for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].lineup.id, lineup.id);
+        assert_eq!(committed[0].seats.len(), 2);
+    }
+
+    #[test]
+    fn commit_replaces_existing() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        // First commit
+        Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        // Second commit replaces
+        Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r2.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        let committed = Lineup::for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].seats[0].rower_id, r2.id);
+    }
+
+    #[test]
+    fn is_rower_in_committed_lineup() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        assert!(Lineup::is_rower_in_committed_lineup(&mut conn, practice.id, r1.id).unwrap());
+        assert!(!Lineup::is_rower_in_committed_lineup(&mut conn, practice.id, r2.id).unwrap());
+    }
+
+    #[test]
+    fn recent_placements() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+
+        for day in [1, 2, 3] {
+            let p = seed_practice(
+                &mut conn,
+                tid,
+                NaiveDate::from_ymd_opt(2026, 5, day).unwrap(),
+            );
+            Lineup::commit_for_boat(
+                &mut conn,
+                p.id,
+                boat.id,
+                &[CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                }],
+            )
+            .unwrap();
+        }
+
+        let placements = Lineup::recent_placements(&mut conn, 2).unwrap();
+        // Should only include the 2 most recent practices
+        let dates: Vec<_> = placements.iter().map(|p| p.practice_date).collect();
+        assert_eq!(dates.len(), 2);
+        assert!(dates.contains(&NaiveDate::from_ymd_opt(2026, 5, 3).unwrap()));
+        assert!(dates.contains(&NaiveDate::from_ymd_opt(2026, 5, 2).unwrap()));
+    }
+
+    #[test]
+    fn committed_rower_ids_for_practices() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let p1 = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+        let p2 = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 2).unwrap());
+
+        Lineup::commit_for_boat(
+            &mut conn,
+            p1.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p2.id,
+            boat.id,
+            &[
+                CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                },
+                CommitSeat {
+                    seat_position: SeatPosition::new(2),
+                    rower_id: r2.id,
+                    is_cox: false,
+                },
+            ],
+        )
+        .unwrap();
+
+        let map = Lineup::committed_rower_ids_for_practices(&mut conn, &[p1.id, p2.id]).unwrap();
+        assert_eq!(map[&p1.id].len(), 1);
+        assert_eq!(map[&p2.id].len(), 2);
+    }
+}
