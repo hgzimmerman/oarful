@@ -937,7 +937,8 @@ pub fn solve_streaming(
     let (mut builder, objective) =
         build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
-    let mut brancher = builder.solver.default_brancher();
+    let (ws_vars, ws_vals) = build_warm_start(&builder);
+    let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 
     let run_one =
@@ -1093,6 +1094,187 @@ fn rss_kb() -> u64 {
 /// This is a heuristic — the solver still decides the final fleet
 /// via `use[b]` variables. But narrowing the candidate set from
 /// "all in-service boats" to "the ones that actually fit"
+/// A brancher that tries warm-start assignments first, then falls
+/// back to the default VSIDS brancher for any remaining decisions.
+/// Unlike `AlternatingBrancher + WarmStart`, this correctly handles
+/// the case where the warm-start runs out of suggestions before all
+/// variables are assigned.
+struct WarmDefaultBrancher {
+    /// Warm-start variables and their target values.
+    ws_vars: Vec<DomainId>,
+    ws_vals: Vec<i32>,
+    /// Current position in the warm-start list.
+    ws_index: usize,
+    /// Whether the warm-start phase has yielded a solution.
+    ws_done: bool,
+    /// The standard VSIDS brancher for fallback.
+    default: pumpkin_core::DefaultBrancher,
+}
+
+impl WarmDefaultBrancher {
+    fn new(solver: &Solver, ws_vars: Vec<DomainId>, ws_vals: Vec<i32>) -> Self {
+        Self {
+            ws_vars,
+            ws_vals,
+            ws_index: 0,
+            ws_done: false,
+            default: solver.default_brancher(),
+        }
+    }
+}
+
+impl Brancher for WarmDefaultBrancher {
+    fn next_decision(
+        &mut self,
+        context: &mut pumpkin_core::branching::SelectionContext,
+    ) -> Option<pumpkin_core::predicates::Predicate> {
+        // During the warm-start phase, try each suggestion. Skip any
+        // that are already satisfied or conflict with propagation.
+        if !self.ws_done {
+            while self.ws_index < self.ws_vars.len() {
+                let var = self.ws_vars[self.ws_index];
+                let val = self.ws_vals[self.ws_index];
+                self.ws_index += 1;
+
+                let pred = pumpkin_core::predicate!(var == val);
+                if !context.is_predicate_assigned(pred) {
+                    return Some(pred);
+                }
+            }
+            // Warm-start exhausted — fall through to default for the
+            // remaining variables.
+        }
+        self.default.next_decision(context)
+    }
+
+    fn synchronise(&mut self, context: &mut pumpkin_core::branching::SelectionContext) {
+        if !self.ws_done {
+            self.ws_index = 0;
+        }
+        self.default.synchronise(context);
+    }
+
+    fn on_solution(&mut self, solution: SolutionReference) {
+        self.ws_done = true;
+        self.default.on_solution(solution);
+    }
+
+    fn on_conflict(&mut self) {
+        self.default.on_conflict();
+    }
+
+    fn on_unassign_integer(&mut self, variable: DomainId, value: i32) {
+        self.default.on_unassign_integer(variable, value);
+    }
+
+    fn is_restart_pointless(&mut self) -> bool {
+        self.default.is_restart_pointless()
+    }
+
+    fn subscribe_to_events(&self) -> Vec<pumpkin_core::branching::BrancherEvent> {
+        use pumpkin_core::branching::BrancherEvent;
+        let mut events = self.default.subscribe_to_events();
+        if !events.contains(&BrancherEvent::Solution) {
+            events.push(BrancherEvent::Solution);
+        }
+        if !events.contains(&BrancherEvent::Synchronise) {
+            events.push(BrancherEvent::Synchronise);
+        }
+        events
+    }
+}
+
+/// Build a greedy initial solution for warm-starting the solver.
+///
+/// Returns `(vars, values)` suitable for `WarmStart::new`. The greedy
+/// assignment sets `use[b]` for selected boats, assigns designated
+/// coxes to cox seats, then fills rowing seats by quality (skill +
+/// strength), respecting side constraints.
+///
+/// The assignment may be infeasible (violate hard constraints). That's
+/// fine — `WarmStart` skips assignments that conflict with propagation,
+/// and `AlternatingBrancher` falls back to VSIDS after the first
+/// solution.
+fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
+    let mut vars: Vec<DomainId> = Vec::new();
+    let mut values: Vec<i32> = Vec::new();
+    let mut assigned_rowers: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+    // Set use[b] = 1 for all candidate boats (greedy fleet already pruned).
+    for (b_idx, _) in builder.boats.iter().enumerate() {
+        vars.push(builder.use_b[b_idx]);
+        values.push(1);
+    }
+
+    // Rank rowers by quality for assignment priority.
+    let mut rower_quality: Vec<(usize, i32)> = builder
+        .available
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let q = r.skill.ordinal() + r.strength.ordinal();
+            (i, q)
+        })
+        .collect();
+    rower_quality.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // For each boat, assign rowers to seats greedily.
+    for (b_idx, boat) in builder.boats.iter().enumerate() {
+        // Cox seat first: prefer designated coxes.
+        if boat.has_cox.as_bool() {
+            let cox = rower_quality
+                .iter()
+                .map(|(r_idx, _)| *r_idx)
+                .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                .filter(|r_idx| builder.available[*r_idx].is_designated_cox.as_bool())
+                .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
+                .next()
+                .or_else(|| {
+                    // Fallback: any can_cox rower
+                    rower_quality
+                        .iter()
+                        .map(|(r_idx, _)| *r_idx)
+                        .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
+                        .next()
+                });
+            if let Some(r_idx) = cox {
+                if let Some(&var) = builder.x.get(&(r_idx, b_idx, 0)) {
+                    vars.push(var);
+                    values.push(1);
+                    assigned_rowers.insert(r_idx);
+                }
+            }
+        }
+
+        // Rowing seats: fill by quality, respecting eligibility.
+        for seat in 1..=boat.seat_count.as_int() {
+            let candidate = rower_quality
+                .iter()
+                .map(|(r_idx, _)| *r_idx)
+                .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
+                .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
+                .next();
+            if let Some(r_idx) = candidate {
+                if let Some(&var) = builder.x.get(&(r_idx, b_idx, seat)) {
+                    vars.push(var);
+                    values.push(1);
+                    assigned_rowers.insert(r_idx);
+                }
+            }
+        }
+    }
+
+    tracing::debug!(
+        warm_start_vars = vars.len(),
+        assigned_rowers = assigned_rowers.len(),
+        "built greedy warm-start solution"
+    );
+
+    (vars, values)
+}
+
 /// dramatically reduces the search space and prevents timeout on
 /// fleet-configuration exploration.
 fn greedy_fleet_select<'a>(
@@ -1484,7 +1666,8 @@ fn search_lineups(
     request: &SolveRequest,
     diagnostics: Vec<Diagnostic>,
 ) -> Result<SolveResult> {
-    let mut brancher = builder.solver.default_brancher();
+    let (ws_vars, ws_vals) = build_warm_start(&builder);
+    let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 
     // Helper: run a single optimisation call with the current
