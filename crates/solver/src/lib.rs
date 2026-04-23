@@ -824,7 +824,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     // capacity is exhausted. This doesn't prevent the solver from
     // choosing differently — it just prunes obviously-suboptimal
     // candidates so the solver converges faster.
-    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill);
+    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill, &request.config);
 
     // Ensure required boats (from pins/locks) survive greedy selection.
     for &req_bid in &request.required_boats {
@@ -917,7 +917,7 @@ pub fn solve_streaming(
         bail!("no rowers are available for seating on {}", request.date);
     }
 
-    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill);
+    let mut boats = greedy_fleet_select(boats, &available, request.partial_fill, &request.config);
     for &req_bid in &request.required_boats {
         if !boats.iter().any(|b| b.id == req_bid) {
             if let Some(b) = snapshot.boats.iter().find(|b| b.id == req_bid) {
@@ -1099,6 +1099,7 @@ fn greedy_fleet_select<'a>(
     mut candidates: Vec<&'a Boat>,
     available: &[&Rower],
     partial_fill: PartialFillPolicy,
+    config: &SolverConfig,
 ) -> Vec<&'a Boat> {
     use model::{boat_target_weight_ordinal, optional_seats};
 
@@ -1144,11 +1145,11 @@ fn greedy_fleet_select<'a>(
         }
     };
 
-    // Sort: largest boats first. Among same-sized boats, count how
-    // many strong heavy rowers (quality above median, weight >= Heavy)
-    // are available. If there are enough to justify a heavy boat,
-    // put it first. Otherwise fall back to heavier-boat-first as a
-    // tiebreaker (it's more forgiving of mixed-weight crews).
+    // Sort by priority: seat count + class bias. A positive class bias
+    // boosts a boat class's priority so it competes with larger boats
+    // (e.g. four_bias=3 on a 5-seat 4+ gives priority 8, rivalling a
+    // 9-seat 8+). Among equal-priority boats, weight class breaks ties
+    // using the rower pool composition.
     let heavy_strong_count = rower_quality
         .iter()
         .filter(|(q, w)| *w >= 3 && *q >= 6) // Heavy+ and decent quality
@@ -1157,16 +1158,14 @@ fn greedy_fleet_select<'a>(
     candidates.sort_by(|a, b| {
         let a_total = a.seat_count.as_int() + if a.has_cox.as_bool() { 1 } else { 0 };
         let b_total = b.seat_count.as_int() + if b.has_cox.as_bool() { 1 } else { 0 };
-        b_total.cmp(&a_total).then_with(|| {
+        let a_priority = a_total + config.class_bias(BoatClass::from_boat(a));
+        let b_priority = b_total + config.class_bias(BoatClass::from_boat(b));
+        b_priority.cmp(&a_priority).then_with(|| {
             if heavy_strong_count >= 2 {
-                // Enough strong heavies — put the heavier boat first
-                // so they don't fight the weight-class wall.
                 let a_wc = boat_target_weight_ordinal(a.weight_class);
                 let b_wc = boat_target_weight_ordinal(b.weight_class);
                 b_wc.cmp(&a_wc)
             } else {
-                // Few strong heavies — put the lighter boat first
-                // since the top rowers are mostly lighter.
                 let a_wc = boat_target_weight_ordinal(a.weight_class);
                 let b_wc = boat_target_weight_ordinal(b.weight_class);
                 a_wc.cmp(&b_wc)
