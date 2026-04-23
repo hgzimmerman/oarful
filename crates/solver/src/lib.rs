@@ -1139,6 +1139,8 @@ struct WarmDefaultBrancher {
     ws_done: bool,
     /// The standard VSIDS brancher for fallback.
     default: pumpkin_core::DefaultBrancher,
+    /// When the brancher was created (for timing the warm-start phase).
+    created_at: std::time::Instant,
 }
 
 impl WarmDefaultBrancher {
@@ -1149,6 +1151,7 @@ impl WarmDefaultBrancher {
             ws_index: 0,
             ws_done: false,
             default: solver.default_brancher(),
+            created_at: std::time::Instant::now(),
         }
     }
 }
@@ -1185,6 +1188,13 @@ impl Brancher for WarmDefaultBrancher {
     }
 
     fn on_solution(&mut self, solution: SolutionReference) {
+        if !self.ws_done {
+            let elapsed = self.created_at.elapsed();
+            tracing::debug!(
+                elapsed_ms = elapsed.as_millis() as u64,
+                "warm-start phase complete, switching to VSIDS"
+            );
+        }
         self.ws_done = true;
         self.default.on_solution(solution);
     }
