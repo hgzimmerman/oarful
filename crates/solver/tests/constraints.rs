@@ -1614,7 +1614,7 @@ fn topn_one_is_identical_to_single_solve() {
     // Regression guard: `top_n == 1` must produce exactly the
     // same SolveResult shape as the pre-Top-N code path, which
     // means an empty alternatives vec. This protects callers
-    // who read `result.lineups` and never look at alternatives.
+    // who read `result.primary.lineups` and never look at alternatives.
     let rowers = vec![
         rower(
             1,
@@ -1865,4 +1865,514 @@ fn solver_emits_debug_diagnostics() {
     assert!(logs_contain("S18 minimize bench"));
     // Unplaced rowers
     assert!(logs_contain("unplaced rowers"));
+}
+
+// ── Cox pre-filtering ───────────────────────────────────────────
+
+/// When there are enough designated coxswains for every coxed boat,
+/// the solver should still find valid lineups — designated coxes fill
+/// cox seats and non-designated rowers only row.
+#[test]
+#[traced_test]
+fn cox_prefilter_designated_coxes_fill_all_boats() {
+    let rowers = vec![
+        // 8 rowers + 2 designated coxes for 2 coxed boats
+        rower(
+            1,
+            "P1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "S1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "P2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "S2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "P3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "S3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "P4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "S4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(9, "CoxA"),
+        cox_rower(10, "CoxB"),
+    ];
+    let boats = vec![four_boat(1, "BoatA"), four_boat(2, "BoatB")];
+    let snap = snapshot(rowers, boats);
+    let result = solve(&snap, &request(silent_config())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // Both boats should be fielded with designated coxes in seat 0
+    let used: Vec<_> = result.primary.lineups.iter().filter(|l| l.used).collect();
+    assert_eq!(used.len(), 2);
+
+    for lineup in &used {
+        let cox_id = rower_in_seat(lineup, 0);
+        // Cox must be one of the designated coxes (IDs 9 or 10)
+        assert!(
+            cox_id == RowerId::new(9) || cox_id == RowerId::new(10),
+            "expected designated cox in seat 0 of {}, got {:?}",
+            lineup.boat_name,
+            cox_id
+        );
+    }
+
+    // The two boats should have different coxes
+    let cox_a = rower_in_seat(used[0], 0);
+    let cox_b = rower_in_seat(used[1], 0);
+    assert_ne!(cox_a, cox_b, "each boat should have a different cox");
+
+    assert!(logs_contain(
+        "cox pre-filter: restricting cox seats to designated coxswains"
+    ));
+}
+
+/// When there are fewer designated coxswains than coxed boats,
+/// non-designated can_cox rowers should still be eligible for cox seats.
+#[test]
+#[traced_test]
+fn cox_prefilter_fallback_when_not_enough_designated() {
+    let rowers = vec![
+        // 10 rowers + only 1 designated cox for 2 coxed boats (need 2 coxes)
+        rower(
+            1,
+            "P1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "S1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "P2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "S2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "P3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "S3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "P4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "S4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            9,
+            "P5",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            10,
+            "S5",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(11, "DesignatedCox"),
+    ];
+    let boats = vec![four_boat(1, "BoatA"), four_boat(2, "BoatB")];
+    let snap = snapshot(rowers, boats);
+    let result = solve(&snap, &request(silent_config())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // Both boats should be fielded — one with the designated cox,
+    // one with a non-designated can_cox rower
+    let used: Vec<_> = result.primary.lineups.iter().filter(|l| l.used).collect();
+    assert_eq!(used.len(), 2);
+
+    // Pre-filter should NOT have activated
+    assert!(!logs_contain("cox pre-filter: restricting"));
+}
+
+// ── Symmetry breaking ───────────────────────────────────────────
+
+/// Two identical boats should both be fielded, with the stroke-seat
+/// rower index of the first boat <= the second.
+#[test]
+#[traced_test]
+fn symmetry_breaking_orders_identical_boats() {
+    let rowers = vec![
+        rower(
+            1,
+            "P1",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "S1",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "P2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "S2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "P3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "S3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "P4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "S4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(9, "CoxA"),
+        cox_rower(10, "CoxB"),
+    ];
+    // Two structurally identical boats
+    let boats = vec![four_boat(1, "Alpha"), four_boat(2, "Beta")];
+    let snap = snapshot(rowers, boats);
+    let result = solve(&snap, &request(silent_config())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    let used: Vec<_> = result.primary.lineups.iter().filter(|l| l.used).collect();
+    assert_eq!(used.len(), 2);
+
+    // Stroke seat is seat 4 on a 4+ boat.
+    // The rower index (0-based in the solver) of the stroke in the
+    // first boat should be <= that of the second boat.
+    let stroke_a = rower_in_seat(used[0], 4);
+    let stroke_b = rower_in_seat(used[1], 4);
+    assert!(
+        stroke_a.as_int() <= stroke_b.as_int(),
+        "symmetry breaking: stroke of {} (rower {}) should have index <= stroke of {} (rower {})",
+        used[0].boat_name,
+        stroke_a,
+        used[1].boat_name,
+        stroke_b
+    );
+
+    assert!(logs_contain(
+        "symmetry breaking: ordered equivalent boat pairs"
+    ));
+}
+
+/// Boats that differ in any structural property should NOT have
+/// symmetry-breaking constraints.
+#[test]
+#[traced_test]
+fn symmetry_breaking_skips_different_boats() {
+    let rowers = vec![
+        rower(
+            1,
+            "P1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "S1",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "P2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "S2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(5, "Cox"),
+    ];
+    // One 4+ and one 8+ — structurally different, no symmetry to break
+    let boats = vec![four_boat(1, "Four"), eight_boat(2, "Eight")];
+    let snap = snapshot(rowers, boats);
+    let result = solve(&snap, &request(silent_config())).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // Should NOT log symmetry breaking
+    assert!(!logs_contain(
+        "symmetry breaking: ordered equivalent boat pairs"
+    ));
+}
+
+/// When a coach locks a rower into the stroke seat of one boat in an
+/// identical pair, symmetry breaking should skip that pair.
+#[test]
+#[traced_test]
+fn symmetry_breaking_respects_stroke_seat_lock() {
+    use lineup_solver::SeatLock;
+
+    let rowers = vec![
+        rower(
+            1,
+            "P1",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "S1",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "P2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "S2",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            5,
+            "P3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            6,
+            "S3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        rower(
+            7,
+            "P4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            8,
+            "S4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(9, "CoxA"),
+        cox_rower(10, "CoxB"),
+    ];
+    let boats = vec![four_boat(1, "Alpha"), four_boat(2, "Beta")];
+    let snap = snapshot(rowers, boats);
+
+    // Lock rower S4 (id=8, high index) into the stroke seat of Alpha.
+    // Without the lock exemption, symmetry breaking would require
+    // Alpha's stroke index <= Beta's, potentially conflicting.
+    let mut req = request(silent_config());
+    req.locks = vec![SeatLock {
+        rower_id: RowerId::new(8),
+        boat_id: BoatId::new(1), // Alpha
+        seat: 4,                 // stroke seat of a 4+
+    }];
+
+    let result = solve(&snap, &req).unwrap();
+    assert_eq!(result.status, SolveStatus::Satisfied);
+
+    // The lock should be respected
+    let alpha = result
+        .primary
+        .lineups
+        .iter()
+        .find(|l| l.boat_name == "Alpha")
+        .unwrap();
+    assert_eq!(rower_in_seat(alpha, 4), RowerId::new(8));
+
+    // With only 2 identical boats and one locked, the pair should
+    // be excluded from symmetry breaking — so no log message.
+    assert!(!logs_contain(
+        "symmetry breaking: ordered equivalent boat pairs"
+    ));
 }
