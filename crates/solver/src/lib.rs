@@ -1277,8 +1277,15 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
             }
         }
 
-        // Rowing seats: fill by quality, preferring correct-side rowers.
-        for seat in 1..=boat.seat_count.as_int() {
+        // When top-boat stacking is active, fill stern-first (stroke→bow)
+        // so the strongest rowers land in the most impactful seats of the
+        // top boat. For other presets, bow-first is fine.
+        let seats: Vec<i32> = if builder.cfg.top_boat_stacking_weight > 0 && b_idx == 0 {
+            (1..=boat.seat_count.as_int()).rev().collect()
+        } else {
+            (1..=boat.seat_count.as_int()).collect()
+        };
+        for seat in seats {
             use model::wrong_side_penalty;
             // Try correct-side rowers first, then fall back to any eligible.
             let candidate = rower_quality
