@@ -26,7 +26,6 @@ use pumpkin_conflict_resolvers::resolvers::ResolutionResolver;
 use pumpkin_core::branching::Brancher;
 use pumpkin_core::conflict_resolving::ConflictResolver;
 use pumpkin_core::optimisation::linear_sat_unsat::LinearSatUnsat;
-use pumpkin_core::optimisation::solution_callback::SolutionCallback;
 use pumpkin_core::optimisation::OptimisationDirection;
 use pumpkin_core::results::{OptimisationResult, ProblemSolution, SolutionReference};
 use pumpkin_core::termination::{Indefinite, TimeBudget};
@@ -941,26 +940,28 @@ pub fn solve_streaming(
     let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 
-    let run_one =
-        |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
-            match request.time_budget {
-                None => {
-                    let mut termination = Indefinite;
-                    let procedure =
-                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                    solver.optimise(brancher, &mut termination, resolver, procedure)
-                }
-                Some(budget) => {
-                    let mut termination = TimeBudget::starting_now(budget);
-                    let procedure =
-                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                    solver.optimise(brancher, &mut termination, resolver, procedure)
-                }
-            }
-        };
-
     // Primary solve
-    let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+    let tracker = ProgressTracker::new(objective);
+    let primary_opt = {
+        let cb = tracker.callback();
+        match request.time_budget {
+            None => {
+                let mut termination = Indefinite;
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                builder
+                    .solver
+                    .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+            }
+            Some(budget) => {
+                let mut termination = TimeBudget::starting_now(budget);
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                builder
+                    .solver
+                    .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+            }
+        }
+    };
+    tracker.log("primary solve");
     let (_primary_lineups, primary_placements) = match primary_opt {
         OptimisationResult::Optimal(sol)
         | OptimisationResult::Satisfiable(sol)
@@ -1016,9 +1017,36 @@ pub fn solve_streaming(
             request.tabu_min_diff,
         )? {
             let mut alt_index = 0usize;
-            for _ in 1..request.top_n {
-                // If the receiver is dropped (client disconnected), stop early.
-                let next = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+            for alt_i in 1..request.top_n {
+                let alt_tracker = ProgressTracker::new(objective);
+                let next = {
+                    let cb = alt_tracker.callback();
+                    match request.time_budget {
+                        None => {
+                            let mut termination = Indefinite;
+                            let procedure =
+                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                            builder.solver.optimise(
+                                &mut brancher,
+                                &mut termination,
+                                &mut resolver,
+                                procedure,
+                            )
+                        }
+                        Some(budget) => {
+                            let mut termination = TimeBudget::starting_now(budget);
+                            let procedure =
+                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                            builder.solver.optimise(
+                                &mut brancher,
+                                &mut termination,
+                                &mut resolver,
+                                procedure,
+                            )
+                        }
+                    }
+                };
+                alt_tracker.log(&format!("streaming alt {alt_i}"));
                 let sol = match next {
                     OptimisationResult::Optimal(sol)
                     | OptimisationResult::Satisfiable(sol)
@@ -1670,27 +1698,6 @@ fn search_lineups(
     let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 
-    // Helper: run a single optimisation call with the current
-    // time-budget policy. Returns the raw Pumpkin result so the
-    // caller can decode and decide whether to continue.
-    let run_one =
-        |solver: &mut Solver, brancher: &mut _, resolver: &mut _| -> OptimisationResult<()> {
-            match request.time_budget {
-                None => {
-                    let mut termination = Indefinite;
-                    let procedure =
-                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                    solver.optimise(brancher, &mut termination, resolver, procedure)
-                }
-                Some(budget) => {
-                    let mut termination = TimeBudget::starting_now(budget);
-                    let procedure =
-                        LinearSatUnsat::new(OptimisationDirection::Minimise, objective, NoCallback);
-                    solver.optimise(brancher, &mut termination, resolver, procedure)
-                }
-            }
-        };
-
     tracing::info!(
         boats = builder.boats.len(),
         rowers = builder.available.len(),
@@ -1700,7 +1707,27 @@ fn search_lineups(
     );
 
     // Primary solve — determines the overall result status.
-    let primary_opt = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+    let tracker = ProgressTracker::new(objective);
+    let primary_opt = {
+        let cb = tracker.callback();
+        match request.time_budget {
+            None => {
+                let mut termination = Indefinite;
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                builder
+                    .solver
+                    .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+            }
+            Some(budget) => {
+                let mut termination = TimeBudget::starting_now(budget);
+                let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                builder
+                    .solver
+                    .optimise(&mut brancher, &mut termination, &mut resolver, procedure)
+            }
+        }
+    };
+    tracker.log("primary solve");
     let (primary_status, primary_lineups, primary_placements, primary_objective) = match primary_opt
     {
         OptimisationResult::Optimal(sol) => {
@@ -1822,8 +1849,36 @@ fn search_lineups(
             &primary_placements,
             request.tabu_min_diff,
         )? {
-            for _ in 1..request.top_n {
-                let next = run_one(&mut builder.solver, &mut brancher, &mut resolver);
+            for alt_i in 1..request.top_n {
+                let alt_tracker = ProgressTracker::new(objective);
+                let next = {
+                    let cb = alt_tracker.callback();
+                    match request.time_budget {
+                        None => {
+                            let mut termination = Indefinite;
+                            let procedure =
+                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                            builder.solver.optimise(
+                                &mut brancher,
+                                &mut termination,
+                                &mut resolver,
+                                procedure,
+                            )
+                        }
+                        Some(budget) => {
+                            let mut termination = TimeBudget::starting_now(budget);
+                            let procedure =
+                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                            builder.solver.optimise(
+                                &mut brancher,
+                                &mut termination,
+                                &mut resolver,
+                                procedure,
+                            )
+                        }
+                    }
+                };
+                alt_tracker.log(&format!("alternative {alt_i}"));
                 let sol = match next {
                     OptimisationResult::Optimal(sol)
                     | OptimisationResult::Satisfiable(sol)
@@ -1965,19 +2020,64 @@ fn post_tabu_constraint(
 /// implemented via the tabu re-solve loop around `optimise()`,
 /// not via an in-search callback, so every top-N iteration
 /// re-uses this same no-op stub.
-#[derive(Debug, Default)]
-struct NoCallback;
+/// Tracks each improving solution's objective value and elapsed time.
+/// Use [`ProgressTracker::callback`] to get a closure suitable for
+/// `LinearSatUnsat`, then call [`ProgressTracker::log`] after the
+/// solve completes.
+struct ProgressTracker {
+    objective: DomainId,
+    start: std::time::Instant,
+    samples: std::rc::Rc<std::cell::RefCell<Vec<(std::time::Duration, i32)>>>,
+}
 
-impl<B: Brancher, R: ConflictResolver> SolutionCallback<B, R> for NoCallback {
-    type Stop = ();
+impl ProgressTracker {
+    fn new(objective: DomainId) -> Self {
+        Self {
+            objective,
+            start: std::time::Instant::now(),
+            samples: std::rc::Rc::new(std::cell::RefCell::new(Vec::new())),
+        }
+    }
 
-    fn on_solution_callback(
-        &mut self,
-        _solver: &Solver,
-        _solution: SolutionReference<'_>,
-        _brancher: &B,
-        _resolver: &R,
-    ) -> ControlFlow<Self::Stop> {
-        ControlFlow::Continue(())
+    /// Returns a closure that records `(elapsed, objective)` on each
+    /// improving solution. The closure takes ownership of an `Rc` clone,
+    /// so the tracker retains access to the samples after the solve.
+    fn callback<B: Brancher, R: ConflictResolver>(
+        &self,
+    ) -> impl FnMut(&Solver, SolutionReference<'_>, &B, &R) -> ControlFlow<()> {
+        let samples = self.samples.clone();
+        let start = self.start;
+        let objective = self.objective;
+        move |_solver: &Solver,
+              solution: SolutionReference<'_>,
+              _brancher: &B,
+              _resolver: &R|
+              -> ControlFlow<()> {
+            let obj = solution.get_integer_value(objective);
+            samples.borrow_mut().push((start.elapsed(), obj));
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn log(&self, label: &str) {
+        let samples = self.samples.borrow();
+        if samples.is_empty() {
+            tracing::debug!("{label}: no improving solutions found");
+            return;
+        }
+        let trace: Vec<String> = samples
+            .iter()
+            .map(|(elapsed, obj)| format!("{}ms={obj}", elapsed.as_millis()))
+            .collect();
+        tracing::debug!(
+            improvements = samples.len(),
+            first_ms = samples
+                .first()
+                .map(|(e, _)| e.as_millis() as u64)
+                .unwrap_or(0),
+            final_obj = samples.last().map(|(_, o)| *o).unwrap_or(0),
+            "{label}: objective trajectory [{}]",
+            trace.join(", ")
+        );
     }
 }
