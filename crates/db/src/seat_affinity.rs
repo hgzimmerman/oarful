@@ -248,3 +248,104 @@ impl SeatAffinity {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── SeatZone str round-trip ─────────────────────────────────────
+
+    #[test]
+    fn seat_zone_as_str_from_str_round_trip() {
+        for zone in SeatZone::ALL {
+            let s = zone.as_str();
+            assert_eq!(
+                SeatZone::from_str_opt(s),
+                Some(zone),
+                "round-trip failed for {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn seat_zone_from_str_opt_unknown() {
+        assert!(SeatZone::from_str_opt("UnknownZone").is_none());
+        assert!(SeatZone::from_str_opt("").is_none());
+    }
+
+    // ── is_single_seat ──────────────────────────────────────────────
+
+    #[test]
+    fn seat_zone_single_seat() {
+        assert!(SeatZone::Stroke.is_single_seat());
+        assert!(SeatZone::Bow.is_single_seat());
+        assert!(!SeatZone::SternPair.is_single_seat());
+        assert!(!SeatZone::EngineRoom.is_single_seat());
+        assert!(!SeatZone::BowHalf.is_single_seat());
+        assert!(!SeatZone::BowPair.is_single_seat());
+        assert!(!SeatZone::SternHalf.is_single_seat());
+    }
+
+    // ── seats_for: 8-seat ───────────────────────────────────────────
+
+    #[test]
+    fn seats_for_eight() {
+        assert_eq!(SeatZone::Stroke.seats_for(8), vec![8]);
+        assert_eq!(SeatZone::SternPair.seats_for(8), vec![7, 8]);
+        assert_eq!(SeatZone::SternHalf.seats_for(8), vec![5, 6, 7, 8]);
+        assert_eq!(SeatZone::EngineRoom.seats_for(8), vec![3, 4, 5, 6]);
+        assert_eq!(SeatZone::BowHalf.seats_for(8), vec![1, 2, 3, 4]);
+        assert_eq!(SeatZone::BowPair.seats_for(8), vec![1, 2]);
+        assert_eq!(SeatZone::Bow.seats_for(8), vec![1]);
+    }
+
+    // ── seats_for: 4-seat ───────────────────────────────────────────
+
+    #[test]
+    fn seats_for_four() {
+        assert_eq!(SeatZone::Stroke.seats_for(4), vec![4]);
+        assert_eq!(SeatZone::SternPair.seats_for(4), vec![3, 4]);
+        assert_eq!(SeatZone::SternHalf.seats_for(4), vec![3, 4]);
+        assert_eq!(SeatZone::EngineRoom.seats_for(4), vec![2, 3]);
+        assert_eq!(SeatZone::BowHalf.seats_for(4), vec![1, 2]);
+        assert_eq!(SeatZone::BowPair.seats_for(4), vec![1, 2]);
+        assert_eq!(SeatZone::Bow.seats_for(4), vec![1]);
+    }
+
+    // ── seats_for: pair (2-seat) ────────────────────────────────────
+
+    #[test]
+    fn seats_for_pair() {
+        assert_eq!(SeatZone::Stroke.seats_for(2), vec![2]);
+        assert_eq!(SeatZone::SternPair.seats_for(2), vec![]); // need >= 3
+        assert_eq!(SeatZone::SternHalf.seats_for(2), vec![2]);
+        assert_eq!(SeatZone::EngineRoom.seats_for(2), vec![]); // need >= 4
+        assert_eq!(SeatZone::BowHalf.seats_for(2), vec![1]);
+        assert_eq!(SeatZone::BowPair.seats_for(2), vec![]); // need >= 3
+        assert_eq!(SeatZone::Bow.seats_for(2), vec![1]);
+    }
+
+    // ── seats_for: single (1-seat) ─────────────────────────────────
+
+    #[test]
+    fn seats_for_single() {
+        for zone in SeatZone::ALL {
+            assert_eq!(
+                zone.seats_for(1),
+                vec![],
+                "zone {zone:?} should be empty for n=1"
+            );
+        }
+    }
+
+    // ── display_name ────────────────────────────────────────────────
+
+    #[test]
+    fn seat_zone_display_names() {
+        assert_eq!(SeatZone::Stroke.display_name(), "Stroke");
+        assert_eq!(SeatZone::SternPair.display_name(), "Stern pair");
+        assert_eq!(SeatZone::EngineRoom.display_name(), "Engine room");
+        assert_eq!(SeatZone::BowPair.display_name(), "Bow pair");
+        assert_eq!(SeatZone::Bow.display_name(), "Bow");
+    }
+}

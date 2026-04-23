@@ -306,3 +306,74 @@ impl AppUser {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── Role::at_least ──────────────────────────────────────────────
+
+    #[test]
+    fn role_hierarchy() {
+        assert!(Role::ProgramDirector.at_least(Role::ProgramDirector));
+        assert!(Role::ProgramDirector.at_least(Role::Coach));
+        assert!(Role::ProgramDirector.at_least(Role::Member));
+
+        assert!(!Role::Coach.at_least(Role::ProgramDirector));
+        assert!(Role::Coach.at_least(Role::Coach));
+        assert!(Role::Coach.at_least(Role::Member));
+
+        assert!(!Role::Member.at_least(Role::ProgramDirector));
+        assert!(!Role::Member.at_least(Role::Coach));
+        assert!(Role::Member.at_least(Role::Member));
+    }
+
+    #[test]
+    fn role_from_str_round_trip() {
+        for role in [Role::Member, Role::Coach, Role::ProgramDirector] {
+            let s = role.as_str();
+            assert_eq!(Role::from_str(s), Some(role));
+        }
+    }
+
+    #[test]
+    fn role_from_str_unknown() {
+        assert!(Role::from_str("Admin").is_none());
+        assert!(Role::from_str("").is_none());
+    }
+
+    // ── UserStatus ──────────────────────────────────────────────────
+
+    #[test]
+    fn user_status_round_trip() {
+        for status in [
+            UserStatus::Invited,
+            UserStatus::Active,
+            UserStatus::Disabled,
+        ] {
+            let s = status.as_str();
+            assert_eq!(UserStatus::from_str(s), Some(status));
+        }
+    }
+
+    #[test]
+    fn user_status_from_str_unknown() {
+        assert!(UserStatus::from_str("banned").is_none());
+    }
+
+    #[test]
+    fn user_status_display() {
+        assert_eq!(UserStatus::Active.to_string(), "active");
+        assert_eq!(UserStatus::Invited.to_string(), "invited");
+        assert_eq!(UserStatus::Disabled.to_string(), "disabled");
+    }
+
+    // ── UserId ──────────────────────────────────────────────────────
+
+    #[test]
+    fn user_id_round_trip() {
+        let id = UserId::new(99);
+        assert_eq!(id.as_int(), 99);
+        assert_eq!(id.to_string(), "99");
+    }
+}

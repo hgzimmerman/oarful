@@ -155,3 +155,37 @@ impl PairAffinity {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_orders_a_less_than_b() {
+        let w = AffinityWeight::new(3);
+        let pair = NewPairAffinity::canonical(RowerId::new(10), RowerId::new(2), w);
+        assert_eq!(pair.rower_a_id, RowerId::new(2));
+        assert_eq!(pair.rower_b_id, RowerId::new(10));
+    }
+
+    #[test]
+    fn canonical_already_ordered() {
+        let w = AffinityWeight::new(-1);
+        let pair = NewPairAffinity::canonical(RowerId::new(1), RowerId::new(5), w);
+        assert_eq!(pair.rower_a_id, RowerId::new(1));
+        assert_eq!(pair.rower_b_id, RowerId::new(5));
+    }
+
+    #[test]
+    fn canonical_preserves_weight() {
+        let w = AffinityWeight::new(-4);
+        let pair = NewPairAffinity::canonical(RowerId::new(5), RowerId::new(1), w);
+        assert_eq!(pair.weight.as_int(), -4);
+    }
+
+    #[test]
+    #[should_panic(expected = "same rower twice")]
+    fn canonical_panics_on_self_pair() {
+        NewPairAffinity::canonical(RowerId::new(3), RowerId::new(3), AffinityWeight::new(1));
+    }
+}

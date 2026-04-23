@@ -119,10 +119,7 @@ async fn planning_tab_content(
                     continue;
                 }
                 let avail_map = Availability::map_for_practice(conn, practice.id)?;
-                let yes = avail_map
-                    .values()
-                    .filter(|s| s.is_available_for_sweep())
-                    .count();
+                let yes = avail_map.values().filter(|s| s.is_available()).count();
                 let total = avail_map.len();
                 let non_respondents = rowers_with_user
                     .iter()

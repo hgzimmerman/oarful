@@ -290,3 +290,164 @@ impl std::fmt::Display for AffinityWeight {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── IntBool ──────────────────────────────────────────────────────
+
+    #[test]
+    fn int_bool_round_trip() {
+        assert!(IntBool::new(true).as_bool());
+        assert!(!IntBool::new(false).as_bool());
+        assert_eq!(IntBool::TRUE.as_value(), 1);
+        assert_eq!(IntBool::FALSE.as_value(), 0);
+    }
+
+    #[test]
+    fn int_bool_from_bool() {
+        let t: IntBool = true.into();
+        let f: IntBool = false.into();
+        assert!(t.as_bool());
+        assert!(!f.as_bool());
+    }
+
+    #[test]
+    fn int_bool_nonzero_is_true() {
+        // Any non-zero value should be truthy
+        assert!(IntBool(42).as_bool());
+        assert!(IntBool(-1).as_bool());
+    }
+
+    #[test]
+    fn int_bool_display() {
+        assert_eq!(IntBool::TRUE.to_string(), "yes");
+        assert_eq!(IntBool::FALSE.to_string(), "no");
+    }
+
+    // ── DurationMinutes ─────────────────────────────────────────────
+
+    #[test]
+    fn duration_minutes_round_trip() {
+        let d = DurationMinutes::new(90);
+        assert_eq!(d.as_int(), 90);
+        assert_eq!(d.to_string(), "90");
+    }
+
+    #[test]
+    fn duration_minutes_from_str() {
+        let d: DurationMinutes = "120".parse().unwrap();
+        assert_eq!(d.as_int(), 120);
+        assert!("abc".parse::<DurationMinutes>().is_err());
+    }
+
+    // ── WeightKg ────────────────────────────────────────────────────
+
+    #[test]
+    fn weight_kg_to_lbs() {
+        let w = WeightKg::new(100.0);
+        let lbs = w.to_lbs();
+        assert!((lbs - 220.462).abs() < 0.01);
+    }
+
+    #[test]
+    fn weight_kg_display() {
+        assert_eq!(WeightKg::new(80.0).to_string(), "80.0");
+        assert_eq!(WeightKg::new(72.56).to_string(), "72.6"); // rounds to 1 decimal
+    }
+
+    // ── HeightM ─────────────────────────────────────────────────────
+
+    #[test]
+    fn height_m_to_inches() {
+        let h = HeightM::new(1.0);
+        assert!((h.to_inches() - 39.3701).abs() < 0.01);
+    }
+
+    #[test]
+    fn height_m_to_ft_in_known_heights() {
+        // 6'0" = 1.8288m
+        assert_eq!(HeightM::new(1.8288).to_ft_in(), "6'0\"");
+        // 5'11" ≈ 1.8034m
+        assert_eq!(HeightM::new(1.8034).to_ft_in(), "5'11\"");
+    }
+
+    #[test]
+    fn height_m_display() {
+        assert_eq!(HeightM::new(1.83).to_string(), "1.83");
+    }
+
+    // ── String newtypes (macro-generated) ───────────────────────────
+
+    #[test]
+    fn string_newtype_round_trip() {
+        let a = AuditAction::new("boat.create");
+        assert_eq!(a.as_str(), "boat.create");
+        assert_eq!(a.to_string(), "boat.create");
+
+        let e = EmailLogType::new("reminder");
+        assert_eq!(e.as_str(), "reminder");
+
+        let s = SyncSourceType::new("google_sheet");
+        assert_eq!(s.as_str(), "google_sheet");
+    }
+
+    #[test]
+    fn string_newtype_from_owned_string() {
+        let a = AuditAction::new(String::from("rower.update"));
+        assert_eq!(a.as_str(), "rower.update");
+    }
+
+    // ── AffinityWeight ──────────────────────────────────────────────
+
+    #[test]
+    fn affinity_weight_clamps_to_range() {
+        assert_eq!(AffinityWeight::new(10).as_int(), 5);
+        assert_eq!(AffinityWeight::new(-10).as_int(), -5);
+    }
+
+    #[test]
+    fn affinity_weight_zero_bumps_to_one() {
+        assert_eq!(AffinityWeight::new(0).as_int(), 1);
+    }
+
+    #[test]
+    fn affinity_weight_in_range_unchanged() {
+        for n in [-5, -3, -1, 1, 3, 5] {
+            assert_eq!(AffinityWeight::new(n).as_int(), n);
+        }
+    }
+
+    #[test]
+    fn affinity_weight_try_new_rejects_zero() {
+        assert!(AffinityWeight::try_new(0).is_none());
+    }
+
+    #[test]
+    fn affinity_weight_try_new_rejects_out_of_range() {
+        assert!(AffinityWeight::try_new(6).is_none());
+        assert!(AffinityWeight::try_new(-6).is_none());
+    }
+
+    #[test]
+    fn affinity_weight_try_new_accepts_valid() {
+        for n in [-5, -1, 1, 5] {
+            assert_eq!(AffinityWeight::try_new(n).unwrap().as_int(), n);
+        }
+    }
+
+    #[test]
+    fn affinity_weight_predicates() {
+        assert!(AffinityWeight::new(3).is_affinity());
+        assert!(!AffinityWeight::new(3).is_anti());
+        assert!(AffinityWeight::new(-3).is_anti());
+        assert!(!AffinityWeight::new(-3).is_affinity());
+    }
+
+    #[test]
+    fn affinity_weight_display() {
+        assert_eq!(AffinityWeight::new(3).to_string(), "+3");
+        assert_eq!(AffinityWeight::new(-2).to_string(), "-2");
+    }
+}

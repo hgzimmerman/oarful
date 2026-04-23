@@ -173,3 +173,59 @@ impl std::fmt::Display for CoxPosition {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── CoxPosition ─────────────────────────────────────────────────
+
+    #[test]
+    fn cox_position_stern_is_first() {
+        assert!(CoxPosition::Stern.cox_first());
+        assert!(!CoxPosition::Bow.cox_first());
+    }
+
+    #[test]
+    fn cox_position_display() {
+        assert_eq!(CoxPosition::Bow.to_string(), "Bow");
+        assert_eq!(CoxPosition::Stern.to_string(), "Stern");
+    }
+
+    // ── WeightClass ─────────────────────────────────────────────────
+
+    #[test]
+    fn boat_weight_class_display() {
+        assert_eq!(WeightClass::Light.to_string(), "Light");
+        assert_eq!(WeightClass::Medium.to_string(), "Medium");
+        assert_eq!(WeightClass::Heavy.to_string(), "Heavy");
+        assert_eq!(WeightClass::Tubby.to_string(), "Tubby");
+    }
+
+    // ── ID newtypes ─────────────────────────────────────────────────
+
+    #[test]
+    fn boat_id_round_trip() {
+        let id = BoatId::new(5);
+        assert_eq!(id.as_int(), 5);
+        assert_eq!(id.to_string(), "5");
+        assert_eq!("5".parse::<BoatId>().unwrap(), id);
+    }
+
+    #[test]
+    fn seat_count_round_trip() {
+        let sc = SeatCount::new(8);
+        assert_eq!(sc.as_int(), 8);
+        assert_eq!(sc.to_string(), "8");
+        assert_eq!("8".parse::<SeatCount>().unwrap(), sc);
+    }
+
+    #[test]
+    fn oars_per_seat_round_trip() {
+        let sweep = OarsPerSeat::new(1);
+        let scull = OarsPerSeat::new(2);
+        assert_eq!(sweep.as_int(), 1);
+        assert_eq!(scull.as_int(), 2);
+        assert_eq!("1".parse::<OarsPerSeat>().unwrap(), sweep);
+    }
+}

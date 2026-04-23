@@ -416,3 +416,142 @@ impl std::fmt::Display for Side {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── SideStrength ────────────────────────────────────────────────
+
+    #[test]
+    fn side_strength_hard() {
+        assert!(SideStrength::HARD.is_hard());
+        assert_eq!(SideStrength::HARD.as_int(), 0);
+    }
+
+    #[test]
+    fn side_strength_soft_clamps() {
+        assert_eq!(SideStrength::soft(0).as_int(), 1); // clamps up
+        assert_eq!(SideStrength::soft(6).as_int(), 5); // clamps down
+        assert_eq!(SideStrength::soft(3).as_int(), 3); // in range
+    }
+
+    #[test]
+    fn side_strength_new_clamps() {
+        assert_eq!(SideStrength::new(-5).as_int(), 0); // clamps up
+        assert_eq!(SideStrength::new(10).as_int(), 5); // clamps down
+        assert_eq!(SideStrength::new(0).as_int(), 0); // allowed via new()
+    }
+
+    #[test]
+    fn side_strength_default() {
+        assert_eq!(SideStrength::default().as_int(), 3);
+        assert!(!SideStrength::default().is_hard());
+    }
+
+    // ── SweepBias ───────────────────────────────────────────────────
+
+    #[test]
+    fn sweep_bias_constants() {
+        assert_eq!(SweepBias::SWEEP_HARD.as_int(), 2);
+        assert_eq!(SweepBias::SCULL_HARD.as_int(), -2);
+    }
+
+    #[test]
+    fn sweep_bias_clamps() {
+        assert_eq!(SweepBias::new(5).as_int(), 2);
+        assert_eq!(SweepBias::new(-5).as_int(), -2);
+        assert_eq!(SweepBias::new(0).as_int(), 0);
+    }
+
+    #[test]
+    fn sweep_bias_is_hard_sculler() {
+        assert!(SweepBias::SCULL_HARD.is_hard_sculler());
+        assert!(!SweepBias::new(-1).is_hard_sculler());
+        assert!(!SweepBias::default().is_hard_sculler());
+        assert!(!SweepBias::SWEEP_HARD.is_hard_sculler());
+    }
+
+    #[test]
+    fn sweep_bias_default() {
+        assert_eq!(SweepBias::default().as_int(), 0);
+    }
+
+    #[test]
+    fn sweep_bias_display() {
+        assert_eq!(SweepBias::SCULL_HARD.to_string(), "Scull only");
+        assert_eq!(SweepBias::new(-1).to_string(), "Prefers scull");
+        assert_eq!(SweepBias::default().to_string(), "No preference");
+        assert_eq!(SweepBias::new(1).to_string(), "Prefers sweep");
+        assert_eq!(SweepBias::SWEEP_HARD.to_string(), "Sweep only");
+    }
+
+    // ── Enum ordinals ───────────────────────────────────────────────
+
+    #[test]
+    fn rower_weight_class_ordinals_monotonic() {
+        assert!(RowerWeightClass::Light.ordinal() < RowerWeightClass::Medium.ordinal());
+        assert!(RowerWeightClass::Medium.ordinal() < RowerWeightClass::Heavy.ordinal());
+        assert!(RowerWeightClass::Heavy.ordinal() < RowerWeightClass::VeryHeavy.ordinal());
+    }
+
+    #[test]
+    fn skill_ordinals_monotonic() {
+        assert!(Skill::Novice.ordinal() < Skill::Intermediate.ordinal());
+        assert!(Skill::Intermediate.ordinal() < Skill::Master.ordinal());
+        assert!(Skill::Master.ordinal() < Skill::Expert.ordinal());
+    }
+
+    #[test]
+    fn strength_ordinals_monotonic() {
+        assert!(Strength::Weak.ordinal() < Strength::Intermediate.ordinal());
+        assert!(Strength::Intermediate.ordinal() < Strength::Strong.ordinal());
+        assert!(Strength::Strong.ordinal() < Strength::VeryStrong.ordinal());
+    }
+
+    #[test]
+    fn height_ordinals_monotonic() {
+        assert!(Height::Short.ordinal() < Height::Medium.ordinal());
+        assert!(Height::Medium.ordinal() < Height::Tall.ordinal());
+        assert!(Height::Tall.ordinal() < Height::VeryTall.ordinal());
+    }
+
+    #[test]
+    fn ordinals_start_at_one() {
+        // Important: ordinals start at 1 to avoid Pumpkin .scaled(0) panics
+        assert_eq!(RowerWeightClass::Light.ordinal(), 1);
+        assert_eq!(Skill::Novice.ordinal(), 1);
+        assert_eq!(Strength::Weak.ordinal(), 1);
+        assert_eq!(Height::Short.ordinal(), 1);
+    }
+
+    // ── Enum short labels ───────────────────────────────────────────
+
+    #[test]
+    fn weight_class_short() {
+        assert_eq!(RowerWeightClass::Light.short(), "Lt");
+        assert_eq!(RowerWeightClass::VeryHeavy.short(), "VH");
+    }
+
+    #[test]
+    fn skill_short() {
+        assert_eq!(Skill::Novice.short(), "Nov");
+        assert_eq!(Skill::Expert.short(), "Exp");
+    }
+
+    #[test]
+    fn strength_short() {
+        assert_eq!(Strength::Weak.short(), "Wk");
+        assert_eq!(Strength::VeryStrong.short(), "V.Str");
+    }
+
+    // ── RowerId ─────────────────────────────────────────────────────
+
+    #[test]
+    fn rower_id_round_trip() {
+        let id = RowerId::new(7);
+        assert_eq!(id.as_int(), 7);
+        assert_eq!(id.to_string(), "7");
+        assert_eq!("7".parse::<RowerId>().unwrap(), id);
+    }
+}

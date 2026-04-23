@@ -457,3 +457,145 @@ impl TeamBoatDefault {
             .get_results(conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    // ── PracticeDays bitmask ────────────────────────────────────────
+
+    #[test]
+    fn practice_days_empty() {
+        assert!(PracticeDays::EMPTY.is_empty());
+        assert_eq!(PracticeDays::EMPTY.weekdays().count(), 0);
+    }
+
+    #[test]
+    fn practice_days_round_trip() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Mon, Weekday::Wed, Weekday::Fri]);
+        assert!(days.contains(Weekday::Mon));
+        assert!(!days.contains(Weekday::Tue));
+        assert!(days.contains(Weekday::Wed));
+        assert!(!days.contains(Weekday::Thu));
+        assert!(days.contains(Weekday::Fri));
+        assert!(!days.contains(Weekday::Sat));
+        assert!(!days.contains(Weekday::Sun));
+    }
+
+    #[test]
+    fn practice_days_weekdays_iterator() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Tue, Weekday::Thu]);
+        let result: Vec<_> = days.weekdays().collect();
+        assert_eq!(result, vec![Weekday::Tue, Weekday::Thu]);
+    }
+
+    #[test]
+    fn practice_days_all_seven() {
+        let all = PracticeDays::from_weekdays(&[
+            Weekday::Mon,
+            Weekday::Tue,
+            Weekday::Wed,
+            Weekday::Thu,
+            Weekday::Fri,
+            Weekday::Sat,
+            Weekday::Sun,
+        ]);
+        assert!(!all.is_empty());
+        assert_eq!(all.weekdays().count(), 7);
+    }
+
+    #[test]
+    fn practice_days_duplicate_weekdays_idempotent() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Mon, Weekday::Mon, Weekday::Mon]);
+        assert_eq!(days.weekdays().count(), 1);
+    }
+
+    #[test]
+    fn next_unfilled_returns_none_when_empty() {
+        let days = PracticeDays::EMPTY;
+        let date = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap(); // Monday
+        assert!(days.next_unfilled(date, &HashSet::new()).is_none());
+    }
+
+    #[test]
+    fn next_unfilled_finds_first_matching_day() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Wed]);
+        let monday = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap();
+        let result = days.next_unfilled(monday, &HashSet::new());
+        // Wednesday April 22
+        assert_eq!(result, Some(NaiveDate::from_ymd_opt(2026, 4, 22).unwrap()));
+    }
+
+    #[test]
+    fn next_unfilled_skips_existing() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Mon]);
+        let monday = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap();
+        let existing: HashSet<_> = [monday].into();
+        let result = days.next_unfilled(monday, &existing);
+        // Should skip to next Monday, April 27
+        assert_eq!(result, Some(NaiveDate::from_ymd_opt(2026, 4, 27).unwrap()));
+    }
+
+    #[test]
+    fn next_unfilled_returns_none_when_all_filled() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Mon]);
+        let start = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap();
+        // Fill all Mondays in the 60-day window
+        let existing: HashSet<_> = (0..60)
+            .filter_map(|i| start.checked_add_signed(chrono::Duration::days(i)))
+            .filter(|d| d.weekday() == Weekday::Mon)
+            .collect();
+        assert!(days.next_unfilled(start, &existing).is_none());
+    }
+
+    #[test]
+    fn next_unfilled_returns_from_date_if_it_matches() {
+        let days = PracticeDays::from_weekdays(&[Weekday::Mon]);
+        let monday = NaiveDate::from_ymd_opt(2026, 4, 20).unwrap();
+        let result = days.next_unfilled(monday, &HashSet::new());
+        assert_eq!(result, Some(monday));
+    }
+
+    // ── SelfEditLevel ───────────────────────────────────────────────
+
+    #[test]
+    fn self_edit_level_round_trip() {
+        assert_eq!(SelfEditLevel::from_str("low"), SelfEditLevel::Low);
+        assert_eq!(SelfEditLevel::from_str("medium"), SelfEditLevel::Medium);
+        assert_eq!(SelfEditLevel::from_str("high"), SelfEditLevel::High);
+        assert_eq!(SelfEditLevel::from_str("bogus"), SelfEditLevel::Low); // default
+    }
+
+    #[test]
+    fn self_edit_level_as_str() {
+        assert_eq!(SelfEditLevel::Low.as_str(), "low");
+        assert_eq!(SelfEditLevel::Medium.as_str(), "medium");
+        assert_eq!(SelfEditLevel::High.as_str(), "high");
+    }
+
+    #[test]
+    fn self_edit_level_permissions() {
+        assert!(!SelfEditLevel::Low.can_edit_weight_class());
+        assert!(!SelfEditLevel::Medium.can_edit_weight_class());
+        assert!(SelfEditLevel::High.can_edit_weight_class());
+
+        assert!(!SelfEditLevel::Low.can_edit_height());
+        assert!(SelfEditLevel::Medium.can_edit_height());
+        assert!(SelfEditLevel::High.can_edit_height());
+
+        assert!(!SelfEditLevel::Low.can_edit_skill());
+        assert!(!SelfEditLevel::Medium.can_edit_skill());
+        assert!(SelfEditLevel::High.can_edit_skill());
+
+        assert!(!SelfEditLevel::Low.can_edit_strength());
+        assert!(!SelfEditLevel::Medium.can_edit_strength());
+        assert!(SelfEditLevel::High.can_edit_strength());
+    }
+
+    #[test]
+    fn self_edit_level_display() {
+        assert_eq!(SelfEditLevel::Low.to_string(), "low");
+        assert_eq!(SelfEditLevel::High.to_string(), "high");
+    }
+}

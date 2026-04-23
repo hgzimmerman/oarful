@@ -175,7 +175,7 @@ impl Rower {
 
         let mut available_by_date: HashMap<NaiveDate, HashSet<RowerId>> = HashMap::new();
         for (rid, pid, status) in &avail_rows {
-            if status.is_available_for_sweep() {
+            if status.is_available() {
                 if let Some(&date) = practice_id_to_date.get(pid) {
                     available_by_date.entry(date).or_default().insert(*rid);
                 }

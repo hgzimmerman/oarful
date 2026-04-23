@@ -87,7 +87,7 @@ pub(crate) fn detail_content(
             !snapshot
                 .availability
                 .get(rid)
-                .map(|s| s.is_available_for_sweep())
+                .map(|s| s.is_available())
                 .unwrap_or(snapshot.assume_available)
         })
         .collect();

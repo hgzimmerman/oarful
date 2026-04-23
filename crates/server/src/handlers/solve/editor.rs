@@ -86,7 +86,7 @@ pub(crate) async fn editor_handler(
                     }
                     if other_avail
                         .get(rid)
-                        .map(|s| s.is_available_for_sweep())
+                        .map(|s| s.is_available())
                         .unwrap_or(other_assume)
                     {
                         if let Some(rower) = lineup_db::rower::Rower::get(conn, *rid)? {
@@ -197,7 +197,7 @@ pub(crate) async fn editor_handler(
             !snapshot
                 .availability
                 .get(&r.id)
-                .map(|s| s.is_available_for_sweep())
+                .map(|s| s.is_available())
                 .unwrap_or(snapshot.assume_available)
         })
         .collect();

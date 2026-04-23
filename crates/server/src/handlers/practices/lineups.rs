@@ -131,7 +131,7 @@ fn gather_lineup_recipients(
 
         let available = Availability::map_for_practice(conn, practice.id)?;
         for (rid, status) in &available {
-            if status.is_available_for_sweep() && !placed_rower_ids.contains(rid) {
+            if status.is_available() && !placed_rower_ids.contains(rid) {
                 benched_rower_ids.insert(*rid);
             }
         }
@@ -270,7 +270,7 @@ pub(crate) async fn send_lineups_handler(
                 let mut benched_names = Vec::new();
                 let mut date_benched: HashSet<lineup_db::rower::types::RowerId> = HashSet::new();
                 for (rid, status) in &available {
-                    if status.is_available_for_sweep() && !date_placed.contains(rid) {
+                    if status.is_available() && !date_placed.contains(rid) {
                         if let Some(r) = rower_map.get(rid) {
                             benched_names.push(r.name.clone());
                             date_benched.insert(*rid);

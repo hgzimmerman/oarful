@@ -134,3 +134,83 @@ pub fn metres_to_ft_in(m: f64) -> String {
     let inches = (total_inches.round() as i32) % 12;
     format!("{feet}'{inches}\"")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── format_time_cs ──────────────────────────────────────────────
+
+    #[test]
+    fn format_time_cs_typical_2k() {
+        // 7:03.50 = 423.50s = 42350cs
+        assert_eq!(format_time_cs(42350), "7:03.50");
+    }
+
+    #[test]
+    fn format_time_cs_exact_minutes() {
+        // 6:00.00 = 360s = 36000cs
+        assert_eq!(format_time_cs(36000), "6:00.00");
+    }
+
+    #[test]
+    fn format_time_cs_sub_minute() {
+        // 0:45.12 = 45.12s = 4512cs
+        assert_eq!(format_time_cs(4512), "0:45.12");
+    }
+
+    #[test]
+    fn format_time_cs_single_digit_frac() {
+        // 1:30.05 = 90.05s = 9005cs
+        assert_eq!(format_time_cs(9005), "1:30.05");
+    }
+
+    // ── format_distance ─────────────────────────────────────────────
+
+    #[test]
+    fn format_distance_thousands() {
+        assert_eq!(format_distance(2000), "2k");
+        assert_eq!(format_distance(5000), "5k");
+        assert_eq!(format_distance(6000), "6k");
+        assert_eq!(format_distance(1000), "1k");
+    }
+
+    #[test]
+    fn format_distance_non_thousands() {
+        assert_eq!(format_distance(500), "500m");
+        assert_eq!(format_distance(1500), "1500m");
+        assert_eq!(format_distance(2500), "2500m");
+    }
+
+    #[test]
+    fn format_distance_below_thousand() {
+        assert_eq!(format_distance(100), "100m");
+    }
+
+    // ── kg_to_lbs ───────────────────────────────────────────────────
+
+    #[test]
+    fn kg_to_lbs_known_values() {
+        assert!((kg_to_lbs(100.0) - 220.462).abs() < 0.01);
+        assert!((kg_to_lbs(0.0)).abs() < 0.001);
+        assert!((kg_to_lbs(1.0) - 2.20462).abs() < 0.001);
+    }
+
+    // ── metres_to_ft_in ─────────────────────────────────────────────
+
+    #[test]
+    fn metres_to_ft_in_known_heights() {
+        assert_eq!(metres_to_ft_in(1.8288), "6'0\""); // exactly 6'0"
+        assert_eq!(metres_to_ft_in(1.8034), "5'11\""); // ~5'11"
+    }
+
+    // ── ID newtype ──────────────────────────────────────────────────
+
+    #[test]
+    fn erg_test_id_round_trip() {
+        let id = ErgTestId::new(42);
+        assert_eq!(id.as_int(), 42);
+        assert_eq!(id.to_string(), "42");
+        assert_eq!("42".parse::<ErgTestId>().unwrap(), id);
+    }
+}

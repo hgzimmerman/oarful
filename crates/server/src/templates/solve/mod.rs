@@ -235,7 +235,7 @@ pub(crate) fn landing_content(
             !snapshot
                 .availability
                 .get(&r.id)
-                .map(|s| s.is_available_for_sweep())
+                .map(|s| s.is_available())
                 .unwrap_or(snapshot.assume_available)
         })
         .collect();

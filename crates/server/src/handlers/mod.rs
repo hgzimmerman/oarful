@@ -484,7 +484,7 @@ async fn stale_badge_handler(
                     rower_ids.iter().any(|rid| {
                         !avail
                             .get(&(*rid, **pid))
-                            .map(|s| s.is_available_for_sweep())
+                            .map(|s| s.is_available())
                             .unwrap_or(assume_available)
                     })
                 })

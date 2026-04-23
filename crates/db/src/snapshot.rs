@@ -95,7 +95,7 @@ impl DbSnapshot {
         self.rowers.iter().filter(|r| {
             self.availability
                 .get(&r.id)
-                .map(|s| s.is_available_for_sweep())
+                .map(|s| s.is_available())
                 .unwrap_or(self.assume_available)
         })
     }

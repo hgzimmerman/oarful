@@ -375,7 +375,7 @@ pub(crate) async fn availability_update_handler(
     );
 
     // Check if this change affects a committed lineup.
-    let stale_warning = if !status.is_available_for_sweep() {
+    let stale_warning = if !status.is_available() {
         let pid = practice_id;
         let rid = rower_id;
         let affected = tenant
