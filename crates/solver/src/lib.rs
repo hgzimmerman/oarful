@@ -472,7 +472,9 @@ impl SolverConfig {
     pub fn tiered() -> Self {
         Self {
             skill_variance_weight: 0,
-            seat_affinity_weight: 2, // yield to stacking, not ignored
+            side_preference_weight: 4, // wrong side is physical, not a trade-off
+            seat_affinity_weight: 3,   // coach-set zones matter even when stacking
+            weight_class_slack_weight: 4, // concentrate weight classes per boat
             end_pair_skill_weight: 1,
             engine_room_strength_weight: 1,
             pair_strength_weight: 0,
