@@ -15,20 +15,42 @@ use std::sync::Arc;
 /// JWT lifetime in seconds (24 hours).
 const TOKEN_LIFETIME_SECS: u64 = 86400;
 
+/// Sentinel value for the superuser identity in the `sub` claim.
+const SUPERUSER_SUB: i32 = -1;
+
 /// Who the token belongs to: a real tenant user or the global superuser.
-/// Serializes as `{"identity": "user", "id": 42}` or `{"identity": "superuser"}`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "identity", content = "id")]
+/// Serializes as a plain integer in the JWT `sub` claim: positive values
+/// are user IDs, `-1` is the superuser sentinel. This keeps `sub` as a
+/// simple numeric type that `jsonwebtoken` can validate without choking.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Identity {
-    #[serde(rename = "user")]
     User(UserId),
-    #[serde(rename = "superuser")]
     Superuser,
+}
+
+impl Serialize for Identity {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Identity::User(id) => serializer.serialize_i32(id.as_int()),
+            Identity::Superuser => serializer.serialize_i32(SUPERUSER_SUB),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Identity {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let n = i32::deserialize(deserializer)?;
+        if n == SUPERUSER_SUB {
+            Ok(Identity::Superuser)
+        } else {
+            Ok(Identity::User(UserId::new(n)))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Claims {
-    /// Who this token belongs to.
+    /// Who this token belongs to. Positive = user ID, -1 = superuser.
     sub: Identity,
     /// Which tenant (club) this token is for.
     tenant_id: TenantId,
@@ -197,5 +219,98 @@ impl JwtKeys {
     pub(crate) fn verify(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let data = jsonwebtoken::decode::<Claims>(token, &self.decoding, &Validation::default())?;
         Ok(data.claims)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_keys() -> JwtKeys {
+        JwtKeys::from_secret(b"test-secret-key")
+    }
+
+    #[test]
+    fn issue_and_verify_round_trip() {
+        let keys = test_keys();
+        let token = keys
+            .issue(
+                UserId::new(1),
+                TenantId::new(2),
+                Role::Coach,
+                TeamId::new(3),
+            )
+            .unwrap();
+        let claims = keys.verify(&token).unwrap();
+        assert_eq!(claims.user_id(), Some(UserId::new(1)));
+        assert_eq!(claims.tenant_id(), TenantId::new(2));
+        assert_eq!(claims.role(), Role::Coach);
+        assert_eq!(claims.team_id(), TeamId::new(3));
+        assert!(!claims.is_superuser());
+    }
+
+    #[test]
+    fn issue_with_expiry_round_trip() {
+        let keys = test_keys();
+        let future_exp = now_secs() + 3600;
+        let token = keys
+            .issue_with_expiry(
+                UserId::new(5),
+                TenantId::new(1),
+                Role::ProgramDirector,
+                TeamId::new(1),
+                future_exp,
+            )
+            .unwrap();
+        let claims = keys.verify(&token).unwrap();
+        assert_eq!(claims.user_id(), Some(UserId::new(5)));
+        assert_eq!(claims.role(), Role::ProgramDirector);
+    }
+
+    #[test]
+    fn superuser_round_trip() {
+        let keys = test_keys();
+        let token = keys.issue_superuser().unwrap();
+        let claims = keys.verify(&token).unwrap();
+        assert!(claims.is_superuser());
+        assert!(claims.user_id().is_none());
+    }
+
+    #[test]
+    fn wrong_secret_rejects() {
+        let keys = test_keys();
+        let token = keys
+            .issue(
+                UserId::new(1),
+                TenantId::new(1),
+                Role::Member,
+                TeamId::new(1),
+            )
+            .unwrap();
+        let other_keys = JwtKeys::from_secret(b"different-secret");
+        assert!(other_keys.verify(&token).is_err());
+    }
+
+    #[test]
+    fn expired_token_rejects() {
+        let keys = test_keys();
+        let past_exp = now_secs() - 120; // well past the 60s leeway
+        let token = keys
+            .issue_with_expiry(
+                UserId::new(1),
+                TenantId::new(1),
+                Role::Member,
+                TeamId::new(1),
+                past_exp,
+            )
+            .unwrap();
+        assert!(keys.verify(&token).is_err());
+    }
+
+    #[test]
+    fn garbage_token_rejects() {
+        let keys = test_keys();
+        assert!(keys.verify("not.a.jwt").is_err());
+        assert!(keys.verify("").is_err());
     }
 }
