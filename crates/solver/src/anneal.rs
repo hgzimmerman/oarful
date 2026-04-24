@@ -200,10 +200,12 @@ pub(crate) fn anneal(
     let alpha = (t_final / t_initial).powf(1.0 / ITERATIONS as f64);
     let mut temperature = t_initial;
     let mut accepted = 0usize;
+    let mut last_improved = 0usize;
+    let mut reheated = false;
 
     let start = std::time::Instant::now();
 
-    for _ in 0..ITERATIONS {
+    for iter in 0..ITERATIONS {
         // Generate a random move
         let (r_a, r_b) =
             match generate_move(&assignment, &seated, boats, available, &locked, &mut rng) {
@@ -226,10 +228,19 @@ pub(crate) fn anneal(
             if current_obj < best_obj {
                 best_obj = current_obj;
                 best_assignment = assignment.places.clone();
+                last_improved = iter;
             }
         } else {
             // Reject — undo
             assignment.swap(r_a, r_b);
+        }
+
+        // Reheat: if stuck for 2000 iterations, bump temperature
+        // back up to escape the local minimum. One-shot only.
+        if !reheated && iter - last_improved > 2000 {
+            temperature = t_initial / 2.0;
+            reheated = true;
+            last_improved = iter;
         }
 
         temperature *= alpha;
