@@ -190,13 +190,39 @@ pub(crate) fn anneal(
 
     let mut rng = rand::thread_rng();
 
-    // Collect seated indices for move generation. Bench swaps are
-    // disabled — only seated↔seated swaps are explored.
+    // Collect seated, benched, and empty-seat lists for move generation.
     let seated: Vec<usize> = available
         .iter()
         .enumerate()
         .filter(|(i, _)| matches!(assignment.places[*i], Place::Seated { .. }))
         .map(|(i, _)| i)
+        .collect();
+    let benched: Vec<usize> = available
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| matches!(assignment.places[*i], Place::Benched))
+        .map(|(i, _)| i)
+        .collect();
+    // Find empty seats in used boats (partial-fill gaps).
+    let empty_seats: Vec<(usize, i32)> = boats
+        .iter()
+        .enumerate()
+        .flat_map(|(b_idx, boat)| {
+            let used = assignment.grid.keys().any(|(bi, _)| *bi == b_idx);
+            if !used {
+                return vec![];
+            }
+            let mut empty = Vec::new();
+            if boat.has_cox.as_bool() && !assignment.grid.contains_key(&(b_idx, 0)) {
+                empty.push((b_idx, 0));
+            }
+            for s in 1..=boat.seat_count.as_int() {
+                if !assignment.grid.contains_key(&(b_idx, s)) {
+                    empty.push((b_idx, s));
+                }
+            }
+            empty
+        })
         .collect();
 
     // SA parameters
@@ -212,32 +238,65 @@ pub(crate) fn anneal(
 
     for iter in 0..ITERATIONS {
         // Generate a random move
-        let (r_a, r_b) =
-            match generate_move(&assignment, &seated, boats, available, &locked, &mut rng) {
-                Some(m) => m,
-                None => {
-                    temperature *= alpha;
-                    continue;
-                }
-            };
-
-        // Apply move
-        assignment.swap(r_a, r_b);
-        let new_obj = evaluate(&assignment, &ctx);
-        let delta = new_obj - current_obj;
-
-        if delta <= 0 || rng.gen::<f64>() < (-delta as f64 / temperature).exp() {
-            // Accept
-            current_obj = new_obj;
-            accepted += 1;
-            if current_obj < best_obj {
-                best_obj = current_obj;
-                best_assignment = assignment.places.clone();
-                last_improved = iter;
+        let mv = match generate_move(
+            &assignment,
+            &seated,
+            &benched,
+            &empty_seats,
+            boats,
+            available,
+            &locked,
+            &mut rng,
+        ) {
+            Some(m) => m,
+            None => {
+                temperature *= alpha;
+                continue;
             }
-        } else {
-            // Reject — undo
-            assignment.swap(r_a, r_b);
+        };
+
+        // Apply move and evaluate
+        match mv {
+            Move::Swap(r_a, r_b) => {
+                assignment.swap(r_a, r_b);
+                let new_obj = evaluate(&assignment, &ctx);
+                let delta = new_obj - current_obj;
+                if delta <= 0 || rng.gen::<f64>() < (-delta as f64 / temperature).exp() {
+                    current_obj = new_obj;
+                    accepted += 1;
+                    if current_obj < best_obj {
+                        best_obj = current_obj;
+                        best_assignment = assignment.places.clone();
+                        last_improved = iter;
+                    }
+                } else {
+                    assignment.swap(r_a, r_b);
+                }
+            }
+            Move::Fill {
+                rower_idx,
+                boat_idx,
+                seat,
+            } => {
+                // Place benched rower into empty seat (one-way — never undo a fill)
+                assignment.places[rower_idx] = Place::Seated { boat_idx, seat };
+                assignment.grid.insert((boat_idx, seat), rower_idx);
+                let new_obj = evaluate(&assignment, &ctx);
+                let delta = new_obj - current_obj;
+                if delta <= 0 || rng.gen::<f64>() < (-delta as f64 / temperature).exp() {
+                    current_obj = new_obj;
+                    accepted += 1;
+                    if current_obj < best_obj {
+                        best_obj = current_obj;
+                        best_assignment = assignment.places.clone();
+                        last_improved = iter;
+                    }
+                } else {
+                    // Undo fill
+                    assignment.places[rower_idx] = Place::Benched;
+                    assignment.grid.remove(&(boat_idx, seat));
+                }
+            }
         }
 
         // Reheat: if stuck for 2000 iterations, bump temperature
@@ -294,24 +353,62 @@ fn build_locked_set(
     locked_rowers
 }
 
-/// Generate a random feasible move. Returns (rower_a, rower_b) to swap.
+/// A move to apply: either swap two rowers or fill an empty seat.
+enum Move {
+    Swap(usize, usize),
+    Fill {
+        rower_idx: usize,
+        boat_idx: usize,
+        seat: i32,
+    },
+}
+
+/// Generate a random feasible move.
 fn generate_move(
     assignment: &Assignment,
     seated: &[usize],
+    benched: &[usize],
+    empty_seats: &[(usize, i32)],
     boats: &[&Boat],
     available: &[&Rower],
     locked: &std::collections::HashSet<usize>,
     rng: &mut impl Rng,
-) -> Option<(usize, usize)> {
+) -> Option<Move> {
     // Try up to 20 times to find a feasible move
     for _ in 0..20 {
-        // Only seated↔seated swaps (cross-boat and within-boat).
-        // Bench swaps are disabled because the CP solver already
-        // optimized who sits out — SA bench swaps can undo that by
-        // pulling weak rowers off the bench and pushing strong ones
-        // onto it, degrading the lineup quality.
+        // 80% seated↔seated swaps, 20% fill empty seat from bench
+        let try_fill = !empty_seats.is_empty() && !benched.is_empty() && rng.gen_range(0..5) == 0;
+
+        if try_fill {
+            let &(boat_idx, seat) = &empty_seats[rng.gen_range(0..empty_seats.len())];
+            // Check if seat is still empty (may have been filled
+            // by a previous accepted fill move)
+            if assignment.grid.contains_key(&(boat_idx, seat)) {
+                continue;
+            }
+            let r_idx = benched[rng.gen_range(0..benched.len())];
+            if !matches!(assignment.places[r_idx], Place::Benched) {
+                continue; // already placed by a prior fill
+            }
+            if !rower_eligible_for_seat(available[r_idx], boats[boat_idx], seat) {
+                continue;
+            }
+            if !sweep_bias_ok(available[r_idx], boats[boat_idx]) {
+                continue;
+            }
+            return Some(Move::Fill {
+                rower_idx: r_idx,
+                boat_idx,
+                seat,
+            });
+        }
+
+        // Seated↔seated swap
         if seated.len() < 2 {
-            return None;
+            if empty_seats.is_empty() || benched.is_empty() {
+                return None;
+            }
+            continue;
         }
         let i = rng.gen_range(0..seated.len());
         let j = rng.gen_range(0..seated.len());
@@ -355,7 +452,7 @@ fn generate_move(
         if !sweep_bias_ok(available[r_a], boats[bb]) || !sweep_bias_ok(available[r_b], boats[ba]) {
             continue;
         }
-        return Some((r_a, r_b));
+        return Some(Move::Swap(r_a, r_b));
     }
     None
 }
