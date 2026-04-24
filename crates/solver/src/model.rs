@@ -110,8 +110,7 @@ impl<'a> ModelBuilder<'a> {
     /// Push a scaled objective term and record `(var, scale)` for
     /// post-solve per-constraint evaluation.
     pub(crate) fn push_obj_term(&mut self, var: DomainId, scale: i32) {
-        self.obj_terms.push(var.scaled(scale));
-        self.obj_term_evals.push((var, scale));
+        push_obj!(self.obj_terms, self.obj_term_evals, var, scale);
     }
 
     /// Mark the start of a named constraint's obj_terms range.
@@ -578,7 +577,7 @@ impl<'a> ModelBuilder<'a> {
             for seat in optional_seats(boat) {
                 for r_idx in 0..self.available.len() {
                     if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                        self.obj_terms.push(var.scaled(coef));
+                        push_obj!(self.obj_terms, self.obj_term_evals, var, coef);
                     }
                 }
             }
@@ -706,10 +705,18 @@ impl<'a> ModelBuilder<'a> {
                     .post()
                     .map_err(|e| anyhow!("weight-class slack equality: {e:?}"))?;
 
-                self.obj_terms
-                    .push(over.scaled(self.cfg.weight_class_slack_weight));
-                self.obj_terms
-                    .push(under.scaled(self.cfg.weight_class_slack_weight));
+                push_obj!(
+                    self.obj_terms,
+                    self.obj_term_evals,
+                    over,
+                    self.cfg.weight_class_slack_weight
+                );
+                push_obj!(
+                    self.obj_terms,
+                    self.obj_term_evals,
+                    under,
+                    self.cfg.weight_class_slack_weight
+                );
             }
         }
         Ok(())

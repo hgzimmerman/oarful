@@ -179,6 +179,7 @@ pub(crate) async fn stream_handler(
                         diagnostics,
                         elapsed: std::time::Duration::ZERO,
                         objective: None,
+                        cp_breakdown: vec![],
                     };
                     let html = templates::solve::knobs::status_banner(date, &result);
                     yield Ok(Event::default().event("error").data(html.into_string()));

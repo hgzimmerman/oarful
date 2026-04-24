@@ -48,7 +48,8 @@ impl<'a> ModelBuilder<'a> {
             let effective_weight = self.cfg.placement_reward_weight * (1 + bias);
             let coef = -seats_total * effective_weight;
             if coef != 0 {
-                self.obj_terms.push(self.use_b[b_idx].scaled(coef));
+                let var = self.use_b[b_idx];
+                push_obj!(self.obj_terms, self.obj_term_evals, var, coef);
                 count += 1;
             }
         }
@@ -76,6 +77,7 @@ impl<'a> ModelBuilder<'a> {
             solver,
             available,
             obj_terms,
+            obj_term_evals,
             wrong_side_by_rower,
             cfg,
             ..
@@ -100,7 +102,7 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S4 wrong-side link: {e:?}"))?;
 
-            obj_terms.push(wrong_count.scaled(coef));
+            push_obj!(obj_terms, obj_term_evals, wrong_count, coef);
             count += 1;
         }
         tracing::debug!(terms = count, "S4 wrong-side aggregation");
@@ -148,6 +150,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -204,7 +207,7 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S6 cox-use link: {e:?}"))?;
 
-            obj_terms.push(cox_use.scaled(effective));
+            push_obj!(obj_terms, obj_term_evals, cox_use, effective);
             count += 1;
         }
         tracing::debug!(terms = count, "S6 cox cooldown");
@@ -237,6 +240,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             ..
         } = self;
         for reference in references {
@@ -251,7 +255,7 @@ impl<'a> ModelBuilder<'a> {
                     continue;
                 };
                 if let Some(&var) = x.get(&(r_idx, b_idx, p.seat)) {
-                    obj_terms.push(var.scaled(reference.weight));
+                    push_obj!(obj_terms, obj_term_evals, var, reference.weight);
                 }
             }
         }
@@ -286,6 +290,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -316,7 +321,12 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S13 rower-use link: {e:?}"))?;
 
-            obj_terms.push(rower_used.scaled(-cfg.non_scull_retention_weight * scale));
+            push_obj!(
+                obj_terms,
+                obj_term_evals,
+                rower_used,
+                -cfg.non_scull_retention_weight * scale
+            );
             count += 1;
         }
         tracing::debug!(terms = count, "S13 non-scull retention");
@@ -363,7 +373,7 @@ impl<'a> ModelBuilder<'a> {
                 // penalty terms. Most rowers will have 0 or a few.
                 for s in 0..=(boat.seat_count.as_int()) {
                     if let Some(&var) = self.x.get(&(r_idx, b_idx, s)) {
-                        self.obj_terms.push(var.scaled(penalty));
+                        push_obj!(self.obj_terms, self.obj_term_evals, var, penalty);
                         count += 1;
                     }
                 }
@@ -418,7 +428,7 @@ impl<'a> ModelBuilder<'a> {
                 if scaled == 0 {
                     continue;
                 }
-                self.obj_terms.push(var.scaled(scaled));
+                push_obj!(self.obj_terms, self.obj_term_evals, var, scaled);
                 count += 1;
             }
         }
@@ -438,6 +448,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             ..
         } = self;
 
@@ -475,7 +486,7 @@ impl<'a> ModelBuilder<'a> {
             // Strong negative weight = reward for placing.
             // 10 is higher than most other soft constraints to ensure
             // designated coxes are placed before anything else.
-            obj_terms.push(cox_used.scaled(-10));
+            push_obj!(obj_terms, obj_term_evals, cox_used, -10);
             count += 1;
         }
         tracing::debug!(terms = count, "S15 designated-cox retention");
@@ -503,6 +514,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             seat_strength_by_seat,
             ..
@@ -524,7 +536,7 @@ impl<'a> ModelBuilder<'a> {
                             _ => 0, // Novice hard-gated, Master/Expert = free
                         };
                         if penalty > 0 {
-                            obj_terms.push(var.scaled(w * penalty));
+                            push_obj!(obj_terms, obj_term_evals, var, w * penalty);
                             count += 1;
                         }
                     }
@@ -562,7 +574,7 @@ impl<'a> ModelBuilder<'a> {
                     .post()
                     .map_err(|e| anyhow!("S17 pair strength diff (b): {e:?}"))?;
 
-                obj_terms.push(diff.scaled(w));
+                push_obj!(obj_terms, obj_term_evals, diff, w);
                 count += 1;
             }
         }
@@ -584,6 +596,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -611,7 +624,12 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("S18 rower-use link: {e:?}"))?;
 
-            obj_terms.push(rower_used.scaled(-cfg.minimize_bench_weight));
+            push_obj!(
+                obj_terms,
+                obj_term_evals,
+                rower_used,
+                -cfg.minimize_bench_weight
+            );
             count += 1;
         }
         tracing::debug!(terms = count, "S18 minimize bench");
@@ -643,6 +661,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -687,7 +706,7 @@ impl<'a> ModelBuilder<'a> {
                 .map_err(|e| anyhow!("S20 bench-cooldown link: {e:?}"))?;
 
             // Reward placing = penalise benching again.
-            obj_terms.push(rower_used.scaled(-effective));
+            push_obj!(obj_terms, obj_term_evals, rower_used, -effective);
             count += 1;
         }
         tracing::debug!(terms = count, "S20 bench cooldown");
@@ -714,6 +733,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -798,7 +818,12 @@ impl<'a> ModelBuilder<'a> {
                         .post()
                         .map_err(|e| anyhow!("S21 stroke-spread together: {e:?}"))?;
 
-                    obj_terms.push(together.scaled(cfg.stroke_spread_weight));
+                    push_obj!(
+                        obj_terms,
+                        obj_term_evals,
+                        together,
+                        cfg.stroke_spread_weight
+                    );
                     count += 1;
                 }
             }

@@ -100,6 +100,7 @@ impl<'a> ModelBuilder<'a> {
             solver,
             boats,
             obj_terms,
+            obj_term_evals,
             seat_skill_by_seat,
             cfg,
             ..
@@ -158,7 +159,7 @@ impl<'a> ModelBuilder<'a> {
                 .post()
                 .map_err(|e| anyhow!("spread link: {e:?}"))?;
 
-            obj_terms.push(spread.scaled(cfg.skill_variance_weight));
+            push_obj!(obj_terms, obj_term_evals, spread, cfg.skill_variance_weight);
             count += 1;
         }
         tracing::debug!(terms = count, "S1 skill variance");
@@ -200,6 +201,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -284,8 +286,12 @@ impl<'a> ModelBuilder<'a> {
                         .post()
                         .map_err(|e| anyhow!("pair reif lower: {e:?}"))?;
 
-                    obj_terms
-                        .push(together.scaled(-aff.weight.as_int() * cfg.pair_affinity_weight));
+                    push_obj!(
+                        obj_terms,
+                        obj_term_evals,
+                        together,
+                        -aff.weight.as_int() * cfg.pair_affinity_weight
+                    );
                     count += 1;
 
                     s_lo += 2;
@@ -312,6 +318,7 @@ impl<'a> ModelBuilder<'a> {
             available,
             x,
             obj_terms,
+            obj_term_evals,
             cfg,
             ..
         } = self;
@@ -354,7 +361,12 @@ impl<'a> ModelBuilder<'a> {
 
         for ((r_idx, b_idx, seat), weight) in &best {
             if let Some(&var) = x.get(&(*r_idx, *b_idx, *seat)) {
-                obj_terms.push(var.scaled(-weight * cfg.seat_affinity_weight));
+                push_obj!(
+                    obj_terms,
+                    obj_term_evals,
+                    var,
+                    -weight * cfg.seat_affinity_weight
+                );
                 count += 1;
             }
         }
@@ -399,6 +411,7 @@ impl<'a> ModelBuilder<'a> {
             solver,
             boats,
             obj_terms,
+            obj_term_evals,
             seat_strength_by_seat,
             seat_skill_by_seat,
             cfg,
@@ -489,22 +502,27 @@ impl<'a> ModelBuilder<'a> {
 
                 // Combined penalty: strength_diff * 2 + skill_diff
                 if let Some(sd) = str_diff {
-                    obj_terms.push(sd.scaled(cfg.pair_strength_weight * 2));
+                    push_obj!(obj_terms, obj_term_evals, sd, cfg.pair_strength_weight * 2);
                     count += 1;
                 }
                 if let Some(kd) = skill_diff {
-                    obj_terms.push(kd.scaled(cfg.pair_strength_weight));
+                    push_obj!(obj_terms, obj_term_evals, kd, cfg.pair_strength_weight);
                     count += 1;
                 }
 
                 // S9b: bow pair extra penalty
                 if s_lo == 1 && cfg.bow_pair_strength_weight != 0 {
                     if let Some(sd) = str_diff {
-                        obj_terms.push(sd.scaled(cfg.bow_pair_strength_weight * 2));
+                        push_obj!(
+                            obj_terms,
+                            obj_term_evals,
+                            sd,
+                            cfg.bow_pair_strength_weight * 2
+                        );
                         count += 1;
                     }
                     if let Some(kd) = skill_diff {
-                        obj_terms.push(kd.scaled(cfg.bow_pair_strength_weight));
+                        push_obj!(obj_terms, obj_term_evals, kd, cfg.bow_pair_strength_weight);
                         count += 1;
                     }
                 }
@@ -531,6 +549,7 @@ impl<'a> ModelBuilder<'a> {
             solver,
             boats,
             obj_terms,
+            obj_term_evals,
             seat_height_by_seat,
             cfg,
             ..
@@ -589,7 +608,7 @@ impl<'a> ModelBuilder<'a> {
                     .post()
                     .map_err(|e| anyhow!("pair height diff: {e:?}"))?;
 
-                obj_terms.push(diff.scaled(cfg.height_balance_weight));
+                push_obj!(obj_terms, obj_term_evals, diff, cfg.height_balance_weight);
                 count += 1;
 
                 s_lo += 2;
@@ -644,7 +663,7 @@ impl<'a> ModelBuilder<'a> {
                     _ => (w / 4).max(1),
                 };
                 if let Some(&s_var) = self.seat_skill_by_seat.get(&(b_idx, seat)) {
-                    self.obj_terms.push(s_var.scaled(-coef));
+                    push_obj!(self.obj_terms, self.obj_term_evals, s_var, -coef);
                     count += 1;
                 }
             }
@@ -665,8 +684,12 @@ impl<'a> ModelBuilder<'a> {
         for (b_idx, boat) in self.boats.iter().enumerate() {
             for seat in SeatZone::EngineRoom.seats_for(boat.seat_count.as_int()) {
                 if let Some(&s_var) = self.seat_strength_by_seat.get(&(b_idx, seat)) {
-                    self.obj_terms
-                        .push(s_var.scaled(-self.cfg.engine_room_strength_weight));
+                    push_obj!(
+                        self.obj_terms,
+                        self.obj_term_evals,
+                        s_var,
+                        -self.cfg.engine_room_strength_weight
+                    );
                     count += 1;
                 }
             }
@@ -750,7 +773,7 @@ impl<'a> ModelBuilder<'a> {
                                 / 2;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
-                                self.obj_terms.push(var.scaled(coef));
+                                push_obj!(self.obj_terms, self.obj_term_evals, var, coef);
                                 count += 1;
                             }
                         }
@@ -775,7 +798,7 @@ impl<'a> ModelBuilder<'a> {
                                 / 2;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
-                                self.obj_terms.push(var.scaled(coef));
+                                push_obj!(self.obj_terms, self.obj_term_evals, var, coef);
                                 count += 1;
                             }
                         }
@@ -816,7 +839,7 @@ impl<'a> ModelBuilder<'a> {
                         let quality = rower.skill.ordinal() + rower.strength.ordinal();
                         let coef = -w * quality * size_factor;
                         if coef != 0 {
-                            self.obj_terms.push(var.scaled(coef));
+                            push_obj!(self.obj_terms, self.obj_term_evals, var, coef);
                             count += 1;
                         }
                     }

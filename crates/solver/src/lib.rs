@@ -12,6 +12,17 @@
 //! combinations simply don't exist in the model, which is cleaner than
 //! creating vars with domain `{0}`.
 
+/// Push a scaled objective term to both `obj_terms` (for Pumpkin)
+/// and `obj_term_evals` (for post-solve per-constraint evaluation).
+macro_rules! push_obj {
+    ($obj_terms:expr, $obj_term_evals:expr, $var:expr, $scale:expr) => {{
+        let v = $var;
+        let s = $scale;
+        $obj_terms.push(v.scaled(s));
+        $obj_term_evals.push((v, s));
+    }};
+}
+
 mod anneal;
 mod decode;
 mod model;
@@ -634,6 +645,10 @@ pub struct SolveResult {
     /// Best objective value found (lower is better). None when
     /// unsatisfiable or unknown.
     pub objective: Option<i32>,
+    /// Per-constraint CP objective breakdown, populated when
+    /// `obj_term_evals` tracking is active. Maps constraint name →
+    /// contribution (sum of `scale * var_value` for that range).
+    pub cp_breakdown: Vec<(&'static str, i32)>,
 }
 
 /// A single self-contained proposal from the solver: one
@@ -805,6 +820,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             diagnostics: vec![],
             elapsed: solve_start.elapsed(),
             objective: None,
+            cp_breakdown: vec![],
         });
     }
 
@@ -1708,51 +1724,51 @@ fn build_model<'a>(
         }
     }
 
-    // Fleet-level soft constraints: S4 wrong-side aggregation,
-    // S6 cox cooldown, S7 novelty vs recent lineups, S13
-    // retention. These live in `soft_fleet.rs` as
-    // ModelBuilder methods. S8 already ran above because it
-    // only needs `use_b` / `boats` / `cfg` and doesn't touch
-    // `x`.
-    m.post_s4_wrong_side()?;
-    m.post_s6_cox_cooldown(snapshot, request.date)?;
-    m.post_s13_non_scull_retention()?;
-    m.post_sweep_bias_penalty();
-    m.post_s18_minimize_bench()?;
-    m.post_s20_bench_cooldown(snapshot, request.date)?;
-    m.post_s14_bow_cox_fit()?;
-    m.post_s15_designated_cox_retention()?;
-    m.post_s21_stroke_spread(snapshot)?;
-    m.post_reference_similarity(&request.reference_lineups)?;
+    // Track per-constraint obj_term ranges for post-solve debugging.
+    macro_rules! track {
+        ($name:expr, $call:expr) => {{
+            m.mark_constraint_start($name);
+            $call;
+            m.mark_constraint_end();
+        }};
+    }
+    // S8 was already posted — mark its range retroactively.
+    m.constraint_ranges.push(("s8", 0, m.obj_terms.len()));
 
-    // Hard constraints: H1 seat fill + partial-fill cap, H2
-    // rower-at-most-one, H6 fleet capacity, H5 weight-class wall
-    // (plus the S5 weight-class slack bundled with it because
-    // the wall and the slack iterate the same boat loop and
-    // share the `positive_terms` sum). See the method docs on
-    // ModelBuilder for the per-constraint rationale.
+    track!("s4", m.post_s4_wrong_side()?);
+    track!("s6", m.post_s6_cox_cooldown(snapshot, request.date)?);
+    track!("s13", m.post_s13_non_scull_retention()?);
+    track!("sweep_bias", m.post_sweep_bias_penalty());
+    track!("s18", m.post_s18_minimize_bench()?);
+    track!("s20", m.post_s20_bench_cooldown(snapshot, request.date)?);
+    track!("s14", m.post_s14_bow_cox_fit()?);
+    track!("s15", m.post_s15_designated_cox_retention()?);
+    track!("s21", m.post_s21_stroke_spread(snapshot)?);
+    track!(
+        "reference",
+        m.post_reference_similarity(&request.reference_lineups)?
+    );
+
     m.post_h1_seat_fill(request.partial_fill)?;
     m.post_h2_at_most_one()?;
     m.post_h6_fleet_capacity(request.partial_fill)?;
-    m.post_h5_s5_weight_class()?;
-    m.post_partial_fill_bonus(request.partial_fill)?;
+    track!("s5", m.post_h5_s5_weight_class()?);
+    track!(
+        "partial_fill",
+        m.post_partial_fill_bonus(request.partial_fill)?
+    );
 
-    // Seat-level soft constraints. First build the shared
-    // `seat_{skill,strength,height}_by_seat` maps for any trait
-    // whose consumer constraints are enabled, then post the
-    // per-boat / per-partition / per-end-pair soft terms that
-    // read them. All of this lives in `soft_seats.rs`.
     m.build_seat_trait_maps(request.partial_fill)?;
-    m.post_s1_skill_variance()?;
-    m.post_s2_pair_affinities(snapshot)?;
-    m.post_s3_seat_affinities(snapshot)?;
-    m.post_s9_pair_strength()?;
-    m.post_s10_pair_height()?;
-    m.post_s11_end_pair_skill();
-    m.post_s12_engine_room_strength();
-    m.post_s16_top_boat_stacking();
-    m.post_s17_pair_eligibility()?;
-    m.post_s19_boat_size_stacking();
+    track!("s1", m.post_s1_skill_variance()?);
+    track!("s2", m.post_s2_pair_affinities(snapshot)?);
+    track!("s3", m.post_s3_seat_affinities(snapshot)?);
+    track!("s9", m.post_s9_pair_strength()?);
+    track!("s10", m.post_s10_pair_height()?);
+    track!("s11", m.post_s11_end_pair_skill());
+    track!("s12", m.post_s12_engine_room_strength());
+    track!("s16", m.post_s16_top_boat_stacking());
+    track!("s17", m.post_s17_pair_eligibility()?);
+    track!("s19", m.post_s19_boat_size_stacking());
 
     // --- Objective variable ---
     //
@@ -1845,110 +1861,133 @@ fn search_lineups(
         }
     };
     tracker.log("primary solve");
-    let (primary_status, primary_lineups, primary_placements, primary_objective) = match primary_opt
-    {
-        OptimisationResult::Optimal(sol) => {
-            let obj_val = sol.get_integer_value(objective);
-            // Debug: log seat_skill trait map values from the solution
-            // to verify they match the rower ordinals. This helps
-            // diagnose SA evaluator discrepancies.
-            let boat_usage: Vec<_> = builder
-                .boats
-                .iter()
-                .enumerate()
-                .map(|(i, b)| {
-                    let used = sol.get_integer_value(builder.use_b[i]);
-                    format!("{}={}", b.name, used)
-                })
-                .collect();
-            tracing::info!(
-                objective = obj_val,
-                boats = %boat_usage.join(", "),
-                "primary solve OPTIMAL"
-            );
-            let lineups = decode_solution(
-                &builder.x,
-                &builder.use_b,
-                &builder.boats,
-                &builder.available,
-                |v| sol.get_integer_value(v),
-            );
-            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
-            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-        }
-        OptimisationResult::Satisfiable(sol) => {
-            let obj_val = sol.get_integer_value(objective);
-            let boat_usage: Vec<_> = builder
-                .boats
-                .iter()
-                .enumerate()
-                .map(|(i, b)| {
-                    let used = sol.get_integer_value(builder.use_b[i]);
-                    format!("{}={}", b.name, used)
-                })
-                .collect();
-            tracing::info!(
-                objective = obj_val,
-                boats = %boat_usage.join(", "),
-                "primary solve SATISFIABLE (not proven optimal)"
-            );
-            let lineups = decode_solution(
-                &builder.x,
-                &builder.use_b,
-                &builder.boats,
-                &builder.available,
-                |v| sol.get_integer_value(v),
-            );
-            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
-            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-        }
-        OptimisationResult::Stopped(sol, _) => {
-            let obj_val = sol.get_integer_value(objective);
-            let boat_usage: Vec<_> = builder
-                .boats
-                .iter()
-                .enumerate()
-                .map(|(i, b)| {
-                    let used = sol.get_integer_value(builder.use_b[i]);
-                    format!("{}={}", b.name, used)
-                })
-                .collect();
-            tracing::warn!(
-                objective = obj_val,
-                boats = %boat_usage.join(", "),
-                "primary solve TIMED OUT — returning best-so-far"
-            );
-            let lineups = decode_solution(
-                &builder.x,
-                &builder.use_b,
-                &builder.boats,
-                &builder.available,
-                |v| sol.get_integer_value(v),
-            );
-            let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
-            (SolveStatus::Satisfied, lineups, placements, Some(obj_val))
-        }
-        OptimisationResult::Unsatisfiable => {
-            return Ok(SolveResult {
-                status: SolveStatus::Unsatisfiable,
-                primary: ProposedSolution::default(),
-                alternatives: vec![],
-                diagnostics,
-                elapsed: std::time::Duration::ZERO,
-                objective: None,
-            });
-        }
-        OptimisationResult::Unknown => {
-            return Ok(SolveResult {
-                status: SolveStatus::Timeout,
-                primary: ProposedSolution::default(),
-                alternatives: vec![],
-                diagnostics: vec![],
-                elapsed: std::time::Duration::ZERO,
-                objective: None,
-            });
-        }
-    };
+    let (primary_status, primary_lineups, primary_placements, primary_objective, cp_breakdown) =
+        match primary_opt {
+            OptimisationResult::Optimal(sol) => {
+                let obj_val = sol.get_integer_value(objective);
+                let breakdown =
+                    builder.evaluate_constraint_contributions(&mut |v| sol.get_integer_value(v));
+                let boat_usage: Vec<_> = builder
+                    .boats
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        let used = sol.get_integer_value(builder.use_b[i]);
+                        format!("{}={}", b.name, used)
+                    })
+                    .collect();
+                tracing::info!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve OPTIMAL"
+                );
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                (
+                    SolveStatus::Satisfied,
+                    lineups,
+                    placements,
+                    Some(obj_val),
+                    breakdown,
+                )
+            }
+            OptimisationResult::Satisfiable(sol) => {
+                let obj_val = sol.get_integer_value(objective);
+                let breakdown =
+                    builder.evaluate_constraint_contributions(&mut |v| sol.get_integer_value(v));
+                let boat_usage: Vec<_> = builder
+                    .boats
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        let used = sol.get_integer_value(builder.use_b[i]);
+                        format!("{}={}", b.name, used)
+                    })
+                    .collect();
+                tracing::info!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve SATISFIABLE (not proven optimal)"
+                );
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                (
+                    SolveStatus::Satisfied,
+                    lineups,
+                    placements,
+                    Some(obj_val),
+                    breakdown,
+                )
+            }
+            OptimisationResult::Stopped(sol, _) => {
+                let obj_val = sol.get_integer_value(objective);
+                let breakdown =
+                    builder.evaluate_constraint_contributions(&mut |v| sol.get_integer_value(v));
+                let boat_usage: Vec<_> = builder
+                    .boats
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        let used = sol.get_integer_value(builder.use_b[i]);
+                        format!("{}={}", b.name, used)
+                    })
+                    .collect();
+                tracing::warn!(
+                    objective = obj_val,
+                    boats = %boat_usage.join(", "),
+                    "primary solve TIMED OUT — returning best-so-far"
+                );
+                let lineups = decode_solution(
+                    &builder.x,
+                    &builder.use_b,
+                    &builder.boats,
+                    &builder.available,
+                    |v| sol.get_integer_value(v),
+                );
+                let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+                (
+                    SolveStatus::Satisfied,
+                    lineups,
+                    placements,
+                    Some(obj_val),
+                    breakdown,
+                )
+            }
+            OptimisationResult::Unsatisfiable => {
+                return Ok(SolveResult {
+                    status: SolveStatus::Unsatisfiable,
+                    primary: ProposedSolution::default(),
+                    alternatives: vec![],
+                    diagnostics,
+                    elapsed: std::time::Duration::ZERO,
+                    objective: None,
+                    cp_breakdown: vec![],
+                });
+            }
+            OptimisationResult::Unknown => {
+                return Ok(SolveResult {
+                    status: SolveStatus::Timeout,
+                    primary: ProposedSolution::default(),
+                    alternatives: vec![],
+                    diagnostics: vec![],
+                    elapsed: std::time::Duration::ZERO,
+                    objective: None,
+                    cp_breakdown: vec![],
+                });
+            }
+        };
 
     // Tabu re-solve loop for the remaining alternatives. Each
     // entry is a full `ProposedSolution` — lineups *and* its
@@ -2060,6 +2099,7 @@ fn search_lineups(
         diagnostics: vec![],
         elapsed: std::time::Duration::ZERO, // filled in by solve()
         objective: primary_objective,
+        cp_breakdown,
     })
 }
 
