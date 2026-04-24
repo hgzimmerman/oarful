@@ -1735,9 +1735,6 @@ fn build_model<'a>(
     m.post_h2_at_most_one()?;
     m.post_h6_fleet_capacity(request.partial_fill)?;
     m.post_h5_s5_weight_class()?;
-    // Partial-fill bonus rewards each occupied optional seat
-    // under non-strict partial-fill policies. Inert (no-op) under
-    // Strict, so this is safe to call unconditionally.
     m.post_partial_fill_bonus(request.partial_fill)?;
 
     // Seat-level soft constraints. First build the shared
