@@ -107,12 +107,6 @@ impl<'a> ModelBuilder<'a> {
         }
     }
 
-    /// Push a scaled objective term and record `(var, scale)` for
-    /// post-solve per-constraint evaluation.
-    pub(crate) fn push_obj_term(&mut self, var: DomainId, scale: i32) {
-        push_obj!(self.obj_terms, self.obj_term_evals, var, scale);
-    }
-
     /// Mark the start of a named constraint's obj_terms range.
     pub(crate) fn mark_constraint_start(&mut self, name: &'static str) {
         self.constraint_ranges.push((name, self.obj_terms.len(), 0));
