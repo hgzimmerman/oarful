@@ -352,6 +352,7 @@ impl SolveKnobs {
             reference_lineups,
             locks: self.parse_locks(),
             required_boats,
+            sa_postprocess: true,
         }
     }
 

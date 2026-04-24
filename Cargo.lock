@@ -1582,6 +1582,7 @@ dependencies = [
  "pumpkin-conflict-resolvers",
  "pumpkin-constraints",
  "pumpkin-core",
+ "rand 0.8.5",
  "tracing",
  "tracing-test",
 ]

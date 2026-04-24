@@ -12,6 +12,7 @@
 //! combinations simply don't exist in the model, which is cleaner than
 //! creating vars with domain `{0}`.
 
+mod anneal;
 mod decode;
 mod model;
 mod soft_fleet;
@@ -143,6 +144,10 @@ pub struct SolveRequest {
     /// these don't pin any specific rower — they just force the boat
     /// to be used. Used by the boat pin/lock state machine.
     pub required_boats: Vec<BoatId>,
+    /// Run a simulated-annealing post-processor after the CP solve.
+    /// SA explores cross-boat swaps that CP's single-variable branching
+    /// misses. Default `true`.
+    pub sa_postprocess: bool,
 }
 
 /// A set of placements from a committed lineup, scored as a group
@@ -573,7 +578,7 @@ impl Default for PartialFillPolicy {
 }
 
 impl PartialFillPolicy {
-    fn max_empty(self) -> i32 {
+    pub(crate) fn max_empty(self) -> i32 {
         match self {
             Self::Strict => 0,
             Self::Allowed(k) => k.max(0),
@@ -841,10 +846,38 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
 
     // --- Phase 2: build the model ---
     let rss_before = rss_kb();
+    // Save the ordered boat/rower lists for SA — build_model consumes them.
+    let sa_boats: Vec<&Boat> = boats.clone();
+    let sa_available: Vec<&Rower> = available.clone();
     let (builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     // --- Phase 3: search ---
     let mut result = search_lineups(builder, objective, request, diagnostics)?;
+
+    // --- Phase 4: SA post-processing ---
+    if request.sa_postprocess && result.status == SolveStatus::Satisfied {
+        let cp_obj = result.objective.unwrap_or(0);
+        if let Some((improved, sa_best_obj)) = anneal::anneal(
+            &result.primary,
+            snapshot,
+            request,
+            &sa_boats,
+            &sa_available,
+            cp_obj,
+        ) {
+            if sa_best_obj < cp_obj {
+                tracing::info!(
+                    cp_obj,
+                    sa_best_obj,
+                    improvement = cp_obj - sa_best_obj,
+                    "SA improved primary solution"
+                );
+                result.primary = improved;
+                result.objective = Some(sa_best_obj);
+            }
+        }
+    }
+
     result.elapsed = solve_start.elapsed();
 
     let rss_after = rss_kb();
@@ -970,14 +1003,40 @@ pub fn solve_streaming(
             );
             let placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
             let unplaced = compute_unplaced(&builder.available, &lineups);
+            let mut primary_solution = ProposedSolution {
+                lineups: lineups.clone(),
+                unplaced,
+            };
+            let mut primary_obj = obj_val;
+            // SA post-processing before sending the primary event
+            if request.sa_postprocess {
+                let sa_boats: Vec<&Boat> = builder.boats.clone();
+                let sa_available: Vec<&Rower> = builder.available.clone();
+                if let Some((improved, new_obj)) = anneal::anneal(
+                    &primary_solution,
+                    snapshot,
+                    request,
+                    &sa_boats,
+                    &sa_available,
+                    primary_obj,
+                ) {
+                    if new_obj < primary_obj {
+                        tracing::info!(
+                            old_obj = primary_obj,
+                            new_obj,
+                            improvement = primary_obj - new_obj,
+                            "SA improved streaming primary"
+                        );
+                        primary_solution = improved;
+                        primary_obj = new_obj;
+                    }
+                }
+            }
             let _ = tx.send(SolveStreamEvent::Primary {
                 status: SolveStatus::Satisfied,
-                solution: ProposedSolution {
-                    lineups: lineups.clone(),
-                    unplaced,
-                },
+                solution: primary_solution,
                 diagnostics: diagnostics.clone(),
-                objective: Some(obj_val),
+                objective: Some(primary_obj),
             });
             (lineups, placements)
         }

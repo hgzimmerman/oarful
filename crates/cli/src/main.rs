@@ -270,6 +270,7 @@ async fn cmd_solve(db: &Db, team_id: TeamId, opts: SolveOpts) -> Result<()> {
         reference_lineups,
         locks: vec![],
         required_boats: vec![],
+        sa_postprocess: true,
     };
     let started = std::time::Instant::now();
     let result = solve(&snapshot, &request)?;

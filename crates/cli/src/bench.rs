@@ -131,6 +131,7 @@ fn run_repeated(
         reference_lineups: vec![],
         locks: vec![],
         required_boats: vec![],
+        sa_postprocess: true,
     };
 
     let mut elapsed: Vec<std::time::Duration> = Vec::with_capacity(samples);
@@ -210,6 +211,7 @@ fn run_one_with_label(
         reference_lineups: vec![],
         locks: vec![],
         required_boats: vec![],
+        sa_postprocess: true,
     };
 
     let start = std::time::Instant::now();

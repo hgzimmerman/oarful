@@ -14,6 +14,7 @@ pumpkin-conflict-resolvers.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 tracing-test = { version = "0.2.6", features = ["no-env-filter"] }

@@ -103,6 +103,7 @@ fn request(partial_fill: PartialFillPolicy) -> SolveRequest {
         reference_lineups: vec![],
         locks: vec![],
         required_boats: vec![],
+        sa_postprocess: false,
     }
 }
 

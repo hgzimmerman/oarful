@@ -421,73 +421,17 @@ spinner runs.
 `handlers/solve/stream.rs` (SSE event), `templates/solve/editor.rs`
 (JS animation handler).
 
-#### Simulated annealing post-processor for lineup optimization
+#### Simulated annealing post-processor for lineup optimization — shipped
 
-The CP solver (Pumpkin) finds good feasible solutions but gets
-trapped in local optima — it can't make cross-boat swaps because
-each individual variable flip looks worse before the pair completes.
-A simulated annealing (SA) post-processor would take the CP result
-and improve it via random neighborhood moves.
+SA post-processor in `crates/solver/src/anneal.rs`. Runs 10k
+iterations after the CP solve, exploring cross-boat swaps,
+within-boat swaps, and bench swaps. Standalone objective evaluator
+mirrors all S1–S21 soft constraints. `sa_postprocess: bool` on
+`SolveRequest` (default true). Applied to primary in both `solve()`
+and `solve_streaming()`. Alternatives not yet SA-processed.
 
-**Problem:** With 2 boats × 8 seats × 21 rowers and ~20 soft
-constraints, the CP solver finds a solution in <1s but spends the
-remaining budget making incremental improvements that plateau.
-Cross-boat rower swaps (moving a strong rower from boat 2 to boat 1
-and a weak rower the other direction) require flipping 2+ variables
-simultaneously, which VSIDS-based branching rarely explores.
-
-**Design:**
-
-- **Input:** `ProposedSolution` + `DbSnapshot` + `SolverConfig`.
-  Pure function, can be called or skipped via a flag.
-- **Move types:**
-  - Cross-boat swap: pick rower A in boat 1 seat X, rower B in
-    boat 2 seat Y. Swap them if both are eligible for the other's
-    seat (side, cox, designated-cox checks).
-  - Within-boat swap: pick two rowers in the same boat, swap seats.
-    Check side eligibility after swap.
-  - Bench swap: pick a seated rower and a benched rower, swap them
-    if the benched rower is eligible for the seat.
-- **Objective evaluator:** Re-evaluate the soft-constraint objective
-  for the modified lineup. This is a lightweight function that
-  computes the same weighted sum as the CP model but on a concrete
-  assignment (no solver state needed). Each soft constraint becomes
-  a simple loop: iterate partitions, compute diffs, sum penalties.
-  The evaluator should match the CP model's coefficients exactly so
-  the SA and CP objectives are comparable.
-- **Cooling schedule:** Start with temperature that accepts ~50% of
-  worsening moves, decay exponentially over N iterations. With
-  10,000 iterations at ~10µs each, the SA phase takes ~100ms.
-  Temperature should reach near-zero by the end so the final result
-  is a local optimum under the move neighborhood.
-- **Feasibility:** Each move must check hard constraints before
-  accepting: side eligibility (hard-locked rowers can't swap to
-  wrong side), cox-only rowers stay in cox seats, designated coxes
-  don't row, novices don't go in pairs. Reject infeasible moves
-  (don't evaluate objective).
-- **Integration:** Called after `search_lineups` returns, before
-  the result is sent to the client. The SA result replaces the CP
-  result if it has a better (lower) objective. Log the improvement:
-  `SA post-processor: objective -468 → -495 (27 point improvement
-  in 85ms, 10000 iterations, 3421 accepted)`.
-- **Enable/disable:** Add `pub sa_postprocess: bool` to
-  `SolveRequest` (default true). The handler passes it through
-  from a UI toggle or defaults to on. Can be disabled for
-  debugging or when the CP result is already optimal.
-- **Alternatives:** Run SA independently on each alternative too,
-  not just the primary.
-
-**Why this helps:** SA's random swap moves naturally explore the
-cross-boat neighborhood that CP's single-variable branching misses.
-A single "swap Henry from boat 2 to boat 1" move in SA is one
-step; in CP it requires the solver to discover that flipping
-x[Henry,boat2,s8]=0 AND x[Henry,boat1,s7]=1 AND
-x[Elizabeth,boat1,s5]=0 AND x[Elizabeth,boat2,s5]=1 is an
-improvement — which requires exploring through a temporarily
-infeasible state.
-
-**Touches:** New module `crates/solver/src/anneal.rs`. Wire into
-`search_lineups` and `solve_streaming` after the CP solve.
+Future tuning: adaptive initial temperature, SA on alternatives,
+seeded RNG for deterministic benchmarks.
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
 
