@@ -195,7 +195,7 @@ pub(crate) fn anneal(
         .collect();
 
     // SA parameters
-    let t_initial: f64 = 5.0;
+    let t_initial: f64 = 2.0;
     let t_final: f64 = 0.01;
     let alpha = (t_final / t_initial).powf(1.0 / ITERATIONS as f64);
     let mut temperature = t_initial;
