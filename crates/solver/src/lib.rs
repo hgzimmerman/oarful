@@ -471,6 +471,7 @@ impl SolverConfig {
             skill_variance_weight: 0,     // allow skill gap between boats
             top_boat_stacking_weight: 4,  // concentrate talent in top boat
             weight_class_slack_weight: 4, // tighter weight-class grouping
+            pair_strength_weight: 3,      // strongly penalize mismatched pairs
             minimize_bench_weight: 2,     // strategic benching OK
             bench_cooldown_penalty: 1,    // rotate who gets benched
             ..Self::balanced()
