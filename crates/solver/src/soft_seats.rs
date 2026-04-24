@@ -41,7 +41,10 @@ impl<'a> ModelBuilder<'a> {
     /// See `build_seat_trait_map` in `model.rs` for the per-trait
     /// construction details.
     pub(crate) fn build_seat_trait_maps(&mut self, partial_fill: PartialFillPolicy) -> Result<()> {
-        if self.cfg.skill_variance_weight != 0 || self.cfg.end_pair_skill_weight != 0 {
+        if self.cfg.skill_variance_weight != 0
+            || self.cfg.end_pair_skill_weight != 0
+            || self.cfg.pair_strength_weight != 0
+        {
             self.seat_skill_by_seat = build_seat_trait_map(
                 &mut self.solver,
                 &self.boats,
@@ -377,6 +380,16 @@ impl<'a> ModelBuilder<'a> {
     /// push the same `diff` DomainId twice — `AffineView` is a
     /// Copy projection and the objective-link equality just
     /// accumulates both coefficients.
+    /// S9 — pair mismatch penalty. For each 2-seat partition,
+    /// penalizes the combined strength and skill difference between
+    /// the two rowers, weighted 2:1 (strength mismatches matter more
+    /// than skill mismatches for boat balance).
+    ///
+    /// `penalty = strength_diff * 2 + skill_diff`
+    ///
+    /// S9b layers an additional penalty on the bow partition (seats
+    /// 1, 2) because bow pair influences set and steering more than
+    /// any other partition.
     pub(crate) fn post_s9_pair_strength(&mut self) -> Result<()> {
         if self.cfg.pair_strength_weight == 0 {
             return Ok(());
@@ -387,6 +400,7 @@ impl<'a> ModelBuilder<'a> {
             boats,
             obj_terms,
             seat_strength_by_seat,
+            seat_skill_by_seat,
             cfg,
             ..
         } = self;
@@ -396,74 +410,109 @@ impl<'a> ModelBuilder<'a> {
                 continue;
             }
 
-            // Iterate 2-seat partitions and penalise strength spread. The
-            // shared `seat_strength_by_seat` map already excludes optional
-            // seats, so any partition containing an optional seat will
-            // have a `None` lookup and skip. This keeps partial-fill-
-            // capable partitions out of the pair-balance objective.
             let mut s_lo = 1i32;
             while s_lo + 1 <= n_rowing {
                 let s_hi = s_lo + 1;
-                let (lo_var, hi_var) = match (
+
+                // Strength diff (weight 2)
+                let str_diff = match (
                     seat_strength_by_seat.get(&(b_idx, s_lo)).copied(),
                     seat_strength_by_seat.get(&(b_idx, s_hi)).copied(),
                 ) {
-                    (Some(l), Some(h)) => (l, h),
-                    _ => {
-                        s_lo += 2;
-                        continue;
+                    (Some(lo), Some(hi)) => {
+                        let mx = solver.new_bounded_integer(0, 4);
+                        let mn = solver.new_bounded_integer(0, 4);
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::maximum(vec![lo, hi], mx, tag))
+                            .post()
+                            .map_err(|e| anyhow!("pair str max: {e:?}"))?;
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::minimum(vec![lo, hi], mn, tag))
+                            .post()
+                            .map_err(|e| anyhow!("pair str min: {e:?}"))?;
+                        let d = solver.new_bounded_integer(0, 3);
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::equals(
+                                vec![mx.scaled(1), mn.scaled(-1), d.scaled(-1)],
+                                0,
+                                tag,
+                            ))
+                            .post()
+                            .map_err(|e| anyhow!("pair str diff: {e:?}"))?;
+                        Some(d)
                     }
+                    _ => None,
                 };
 
-                let pair_max = solver.new_bounded_integer(0, 4);
-                let pair_min = solver.new_bounded_integer(0, 4);
+                // Skill diff (weight 1)
+                let skill_diff = match (
+                    seat_skill_by_seat.get(&(b_idx, s_lo)).copied(),
+                    seat_skill_by_seat.get(&(b_idx, s_hi)).copied(),
+                ) {
+                    (Some(lo), Some(hi)) => {
+                        let mx = solver.new_bounded_integer(0, 4);
+                        let mn = solver.new_bounded_integer(0, 4);
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::maximum(vec![lo, hi], mx, tag))
+                            .post()
+                            .map_err(|e| anyhow!("pair skill max: {e:?}"))?;
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::minimum(vec![lo, hi], mn, tag))
+                            .post()
+                            .map_err(|e| anyhow!("pair skill min: {e:?}"))?;
+                        let d = solver.new_bounded_integer(0, 3);
+                        let tag = solver.new_constraint_tag();
+                        solver
+                            .add_constraint(pumpkin_constraints::equals(
+                                vec![mx.scaled(1), mn.scaled(-1), d.scaled(-1)],
+                                0,
+                                tag,
+                            ))
+                            .post()
+                            .map_err(|e| anyhow!("pair skill diff: {e:?}"))?;
+                        Some(d)
+                    }
+                    _ => None,
+                };
 
-                let tag = solver.new_constraint_tag();
-                solver
-                    .add_constraint(pumpkin_constraints::maximum(
-                        vec![lo_var, hi_var],
-                        pair_max,
-                        tag,
-                    ))
-                    .post()
-                    .map_err(|e| anyhow!("pair strength max: {e:?}"))?;
+                // Skip partition if neither diff could be computed
+                // (optional seats under partial fill).
+                if str_diff.is_none() && skill_diff.is_none() {
+                    s_lo += 2;
+                    continue;
+                }
 
-                let tag = solver.new_constraint_tag();
-                solver
-                    .add_constraint(pumpkin_constraints::minimum(
-                        vec![lo_var, hi_var],
-                        pair_min,
-                        tag,
-                    ))
-                    .post()
-                    .map_err(|e| anyhow!("pair strength min: {e:?}"))?;
-
-                let diff = solver.new_bounded_integer(0, 3);
-                let tag = solver.new_constraint_tag();
-                solver
-                    .add_constraint(pumpkin_constraints::equals(
-                        vec![pair_max.scaled(1), pair_min.scaled(-1), diff.scaled(-1)],
-                        0,
-                        tag,
-                    ))
-                    .post()
-                    .map_err(|e| anyhow!("pair strength diff: {e:?}"))?;
-
-                obj_terms.push(diff.scaled(cfg.pair_strength_weight));
-                count += 1;
-
-                // S9b: the bow pair (seats 1, 2) has outsized influence on
-                // set and steering, so we layer an extra diff term on top
-                // of the regular S9 contribution for that partition only.
-                if s_lo == 1 && cfg.bow_pair_strength_weight != 0 {
-                    obj_terms.push(diff.scaled(cfg.bow_pair_strength_weight));
+                // Combined penalty: strength_diff * 2 + skill_diff
+                if let Some(sd) = str_diff {
+                    obj_terms.push(sd.scaled(cfg.pair_strength_weight * 2));
                     count += 1;
+                }
+                if let Some(kd) = skill_diff {
+                    obj_terms.push(kd.scaled(cfg.pair_strength_weight));
+                    count += 1;
+                }
+
+                // S9b: bow pair extra penalty
+                if s_lo == 1 && cfg.bow_pair_strength_weight != 0 {
+                    if let Some(sd) = str_diff {
+                        obj_terms.push(sd.scaled(cfg.bow_pair_strength_weight * 2));
+                        count += 1;
+                    }
+                    if let Some(kd) = skill_diff {
+                        obj_terms.push(kd.scaled(cfg.bow_pair_strength_weight));
+                        count += 1;
+                    }
                 }
 
                 s_lo += 2;
             }
         }
-        tracing::debug!(terms = count, "S9 pair strength");
+        tracing::debug!(terms = count, "S9 pair mismatch");
         Ok(())
     }
 
