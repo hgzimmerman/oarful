@@ -1238,19 +1238,40 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
         values.push(1);
     }
 
-    // Rank rowers by quality for assignment priority.
+    // Rank rowers by quality — use multiplicative (matching S16)
+    // so the warm-start priority aligns with the solver's objective.
     let mut rower_quality: Vec<(usize, i32)> = builder
         .available
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let q = r.skill.ordinal() + r.strength.ordinal();
+            let q = r.skill.ordinal() * r.strength.ordinal();
             (i, q)
         })
         .collect();
     rower_quality.sort_by(|a, b| b.1.cmp(&a.1));
 
-    // For each boat, assign rowers to seats greedily.
+    // Interleave rowers across boats by quality rank instead of
+    // greedily filling boat 0 first. This gives the solver a feasible
+    // but deliberately imperfect initial solution — both boats get a
+    // mix of strong and weak rowers. The solver then optimizes the
+    // stacking via S16, exploring a wider search space than if we
+    // pre-committed all talent to boat 0.
+    let n_boats = builder.boats.len();
+    let mut boat_assignment: Vec<Vec<usize>> = vec![Vec::new(); n_boats];
+    {
+        let non_cox_ranked: Vec<usize> = rower_quality
+            .iter()
+            .map(|(r_idx, _)| *r_idx)
+            .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
+            .collect();
+        for (rank, &r_idx) in non_cox_ranked.iter().enumerate() {
+            let target_boat = rank % n_boats;
+            boat_assignment[target_boat].push(r_idx);
+        }
+    }
+
+    // For each boat, assign rowers to seats.
     for (b_idx, boat) in builder.boats.iter().enumerate() {
         // Cox seat first: prefer designated coxes.
         if boat.has_cox.as_bool() {
@@ -1289,17 +1310,33 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
         };
         for seat in seats {
             use model::wrong_side_penalty;
-            // Try correct-side rowers first, then fall back to any eligible.
-            let candidate = rower_quality
+            // Prefer rowers pre-assigned to this boat, correct-side first.
+            // Fall back to any unassigned rower if the boat's pool is
+            // exhausted (can happen when the interleave doesn't account
+            // for side constraints).
+            let boat_pool = &boat_assignment[b_idx];
+            let candidate = boat_pool
                 .iter()
-                .map(|(r_idx, _)| *r_idx)
+                .copied()
                 .filter(|r_idx| !assigned_rowers.contains(r_idx))
-                .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
                 .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
                 .filter(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
                 .next()
                 .or_else(|| {
-                    // Fallback: any eligible rower (wrong side OK)
+                    // Fallback: correct-side from any boat
+                    rower_quality
+                        .iter()
+                        .map(|(r_idx, _)| *r_idx)
+                        .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                        .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
+                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
+                        .filter(|r_idx| {
+                            wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0
+                        })
+                        .next()
+                })
+                .or_else(|| {
+                    // Last resort: any eligible rower (wrong side OK)
                     rower_quality
                         .iter()
                         .map(|(r_idx, _)| *r_idx)
