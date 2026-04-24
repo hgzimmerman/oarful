@@ -346,7 +346,7 @@ impl SolveKnobs {
                 PartialFillPolicy::Strict
             },
             config: self.resolve_config(),
-            time_budget: Some(Duration::from_secs(self.budget.max(1))),
+            time_budget: Some(Duration::from_secs(self.budget.clamp(1, 10))),
             top_n: (self.alts + 1).max(1),
             tabu_min_diff: 2,
             reference_lineups,
