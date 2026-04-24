@@ -69,6 +69,13 @@ pub(crate) struct ModelBuilder<'a> {
     /// Shared `seat_height[b, s]` vars used by S10 (pair height
     /// balance).
     pub(crate) seat_height_by_seat: BTreeMap<(usize, i32), DomainId>,
+    /// Parallel to `obj_terms`: `(base_var, scale)` for post-solve
+    /// per-constraint evaluation. Only populated when `build_model`
+    /// uses `mark_constraint_start/end`.
+    pub(crate) obj_term_evals: Vec<(DomainId, i32)>,
+    /// Named index ranges into `obj_term_evals`, recorded by
+    /// `mark_constraint_start/end` in `build_model`.
+    pub(crate) constraint_ranges: Vec<(&'static str, usize, usize)>,
 }
 
 impl<'a> ModelBuilder<'a> {
@@ -95,7 +102,46 @@ impl<'a> ModelBuilder<'a> {
             seat_skill_by_seat: BTreeMap::new(),
             seat_strength_by_seat: BTreeMap::new(),
             seat_height_by_seat: BTreeMap::new(),
+            obj_term_evals: Vec::new(),
+            constraint_ranges: Vec::new(),
         }
+    }
+
+    /// Push a scaled objective term and record `(var, scale)` for
+    /// post-solve per-constraint evaluation.
+    pub(crate) fn push_obj_term(&mut self, var: DomainId, scale: i32) {
+        self.obj_terms.push(var.scaled(scale));
+        self.obj_term_evals.push((var, scale));
+    }
+
+    /// Mark the start of a named constraint's obj_terms range.
+    pub(crate) fn mark_constraint_start(&mut self, name: &'static str) {
+        self.constraint_ranges.push((name, self.obj_terms.len(), 0));
+    }
+
+    /// Mark the end of the current constraint's obj_terms range.
+    pub(crate) fn mark_constraint_end(&mut self) {
+        if let Some(last) = self.constraint_ranges.last_mut() {
+            last.2 = self.obj_terms.len();
+        }
+    }
+
+    /// Evaluate each constraint's contribution from a Pumpkin
+    /// solution using the parallel `obj_term_evals` vec.
+    pub(crate) fn evaluate_constraint_contributions(
+        &self,
+        value_of: &mut impl FnMut(DomainId) -> i32,
+    ) -> Vec<(&'static str, i32)> {
+        self.constraint_ranges
+            .iter()
+            .map(|&(name, start, end)| {
+                let sum: i32 = self.obj_term_evals[start..end]
+                    .iter()
+                    .map(|&(var, scale)| scale * value_of(var))
+                    .sum();
+                (name, sum)
+            })
+            .collect()
     }
 
     /// Create one `x[r, b, s] ∈ {0, 1}` variable per eligible

@@ -1425,7 +1425,7 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
 
 /// dramatically reduces the search space and prevents timeout on
 /// fleet-configuration exploration.
-fn greedy_fleet_select<'a>(
+pub(crate) fn greedy_fleet_select<'a>(
     mut candidates: Vec<&'a Boat>,
     available: &[&Rower],
     partial_fill: PartialFillPolicy,
@@ -1849,6 +1849,9 @@ fn search_lineups(
     {
         OptimisationResult::Optimal(sol) => {
             let obj_val = sol.get_integer_value(objective);
+            // Debug: log seat_skill trait map values from the solution
+            // to verify they match the rower ordinals. This helps
+            // diagnose SA evaluator discrepancies.
             let boat_usage: Vec<_> = builder
                 .boats
                 .iter()
