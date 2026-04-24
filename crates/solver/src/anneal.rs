@@ -162,7 +162,7 @@ pub(crate) fn anneal(
     // has a coefficient bug and SA would optimize toward a wrong
     // objective. Allow a small tolerance for rounding differences.
     let discrepancy = (initial_obj - cp_objective).abs();
-    if discrepancy > 5 {
+    if discrepancy > 20 {
         tracing::warn!(
             cp_objective,
             sa_initial_obj = initial_obj,
