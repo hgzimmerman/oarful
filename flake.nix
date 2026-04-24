@@ -26,8 +26,40 @@
           pkgs.webkitgtk_4_1
           pkgs.tailwindcss
         ];
+        server = pkgs.rustPlatform.buildRustPackage {
+          pname = "lineup_server";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock.lockFile = ./Cargo.lock;
+          cargoBuildFlags = [ "-p" "lineup_server" ];
+          doCheck = false; # tests need fixtures + DB
+        };
       in
       {
+        packages = {
+          default = server;
+          docker = pkgs.dockerTools.buildLayeredImage {
+            name = "lineup-generator";
+            tag = "latest";
+            contents = [ server ];
+            extraCommands = ''
+              mkdir -p data data/demos app/public
+              cp -r ${./crates/server/public}/* app/public/
+            '';
+            config = {
+              Cmd = [ "${server}/bin/lineup_server" ];
+              Env = [
+                "HOST=0.0.0.0"
+                "PORT=8080"
+                "MASTER_DB=/data/master.db"
+                "DATA_DIR=/data"
+                "PUBLIC_DIR=/app/public"
+              ];
+              ExposedPorts = { "8080/tcp" = {}; };
+            };
+          };
+        };
+
         devShell = pkgs.mkShell {
           packages = inputs;
           nativeBuildInputs = with pkgs; [
