@@ -692,11 +692,14 @@ impl<'a> ModelBuilder<'a> {
                 for seat in 1..=boat.seat_count.as_int() {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
-                            // Zero-based quality: bottom-tier rowers (Novice/Weak)
-                            // contribute zero, so S16 is indifferent about where
-                            // they go. Only above-average rowers drive stacking.
+                            // Multiplicative quality: skill × strength, both
+                            // zero-based. A rower with either attribute at the
+                            // bottom tier (Novice or Weak) contributes zero —
+                            // one-dimensional rowers don't make boats faster.
+                            // Expert/V.Str = 3×3 = 9, Master/Strong = 2×2 = 4,
+                            // Int/Int = 1×1 = 1, anything/Weak = 0.
                             let quality = (rower.skill.ordinal() - 1) as i64
-                                + (rower.strength.ordinal() - 1) as i64;
+                                * (rower.strength.ordinal() - 1) as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
@@ -720,7 +723,7 @@ impl<'a> ModelBuilder<'a> {
                     for (r_idx, rower) in self.available.iter().enumerate() {
                         if let Some(&var) = self.x.get(&(r_idx, b_idx, seat)) {
                             let quality = (rower.skill.ordinal() - 1) as i64
-                                + (rower.strength.ordinal() - 1) as i64;
+                                * (rower.strength.ordinal() - 1) as i64;
                             let coef = (-(aw * quality * factor) / 1000) as i32;
                             if coef != 0 {
                                 self.obj_terms.push(var.scaled(coef));
