@@ -22,7 +22,7 @@ use crate::{
     SolverConfig, COX_COOLDOWN_DAYS,
 };
 
-const ITERATIONS: usize = 10_000;
+const ITERATIONS: usize = 15_000;
 const BENCH_COOLDOWN_DAYS: i64 = 7;
 
 /// Placement of a single rower.
