@@ -216,26 +216,19 @@ can resume without re-deriving context.
   categorical bucket labels; `member_raw_metrics` (bool) controls
   whether members can input weight, height, and erg tests. Members
   can add but not delete erg tests. `POST /my/erg-test` endpoint.
+- **Stale lineup email alerts (coach-facing)** — background poller
+  (5 min) detects committed lineups with availability changes.
+  Urgent (<3h to practice): immediate email. Non-urgent: 6-hour
+  digest. One email per coach, grouped by team with per-team
+  sections. Subject includes team names. `opt_in_stale_alerts` on
+  `app_user`, `stale_digest_log` table, `EmailType::StaleAlerts`
+  unsubscribe, "Lineup change alerts" on email preferences.
 
 ## Open work
 
 ### Quick wins
 
 ### Coach features
-
-#### Stale lineup notification — coach-facing
-
-Rower-side detection shipped (warning on the availability page when
-a change affects a committed lineup). Nav badge shipped: amber count
-badge on the Practices nav link for Coach+ when any upcoming
-committed lineup has availability changes. Derived at query time via
-`GET /nav/stale-badge` (HTMX on-load, same pattern as team
-selector). No migration, no stored state — badge clears naturally
-when the coach fixes the lineup.
-
-- **Email to coach:** optional — send an email when a rower changes
-  availability for a committed lineup. Gated by an opt-in flag on
-  the coach's account (avoid spam for frequent changes).
 
 #### Raw rower metrics — fully shipped
 
@@ -247,6 +240,20 @@ thresholds configured.
 
 
 ### Architecture / platform
+
+#### Squash migrations for 1.0
+
+Replace the ~30 incremental migrations with a single CREATE TABLE
+script reflecting the final schema. Each tenant DB is created fresh
+on signup, so only the final state matters — intermediate ALTER TABLE
+steps are wasted work on every new tenant.
+
+**Approach:** dump the post-migration schema as one `up.sql`, delete
+all existing migrations, replace with a single `2026-xx-xx_initial`.
+No production DBs exist yet — dev DBs can be wiped.
+
+Do this last, right before tagging 1.0 — any new migration added
+after the squash would defeat the purpose.
 
 #### Per-team roles
 
@@ -442,6 +449,6 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Stale lineup email (coach-side)** — opt-in email when availability changes affect a committed lineup.
-2. **Per-team roles** — design + migration.
-3. **Stripe payment integration** — convert trials to paid tenants.
+1. **Per-team roles** — design + migration.
+2. **Stripe payment integration** — convert trials to paid tenants.
+3. **CI/CD** — GitHub Actions build/test/lint.
