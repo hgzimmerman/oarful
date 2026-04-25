@@ -10,11 +10,9 @@ use axum_htmx::HxRequest;
 use lineup_db::app_user::{AppUser, Role};
 use maud::html;
 
-use lineup_master_db::tenant::BillingStatus;
-
 use crate::handlers::audit::AuditQuery;
 use crate::handlers::internal_error;
-use crate::handlers::{self, bad_request, not_found, ErrorResponse};
+use crate::handlers::{self, not_found, ErrorResponse};
 use crate::state::{TenantContext, TenantDb};
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 
@@ -456,19 +454,6 @@ pub(crate) async fn export_handler(
     Ok((headers, bytes))
 }
 
-/// Block trial tenants from restoring backups.
-fn require_paid_tenant(tenant: &TenantContext) -> Result<(), ErrorResponse> {
-    match tenant.config.billing_status {
-        BillingStatus::Active | BillingStatus::Grandfathered => Ok(()),
-        BillingStatus::Trial => Err(bad_request(
-            "Backup restore is not available during the free trial.",
-        )),
-        _ => Err(bad_request(
-            "Backup restore requires an active subscription.",
-        )),
-    }
-}
-
 /// `GET /admin/restore` — show the restore form.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn restore_form_handler(
@@ -476,7 +461,6 @@ pub(crate) async fn restore_form_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    require_paid_tenant(&tenant)?;
     let content = restore_form_markup(None, None);
     Ok(handlers::maybe_page_authed(
         "Restore Backup",
@@ -494,7 +478,6 @@ pub(crate) async fn restore_handler(
     mut multipart: Multipart,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    require_paid_tenant(&tenant)?;
 
     // Read the uploaded file from multipart.
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -603,7 +586,6 @@ pub(crate) async fn restore_confirm_handler(
     Form(input): Form<RestoreConfirmInput>,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    require_paid_tenant(&tenant)?;
 
     let temp_path = input.temp_path;
     if !std::path::Path::new(&temp_path).exists() {

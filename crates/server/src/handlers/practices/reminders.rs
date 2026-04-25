@@ -154,7 +154,7 @@ pub(crate) async fn send_reminders_handler(
     if !tenant.config.can_send_email() {
         return Ok(Html(
             templates::practices::send_result(
-                "Email is not available during the free trial. Share availability links manually.",
+                "Upgrade to unlock email. Share availability links manually.",
             )
             .into_string(),
         ));

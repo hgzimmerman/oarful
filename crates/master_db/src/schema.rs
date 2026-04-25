@@ -13,6 +13,5 @@ diesel::table! {
         demo_expires_at -> Nullable<Timestamp>,
         emails_visible -> Integer,
         billing_status -> BillingStatusMapping,
-        trial_expires_at -> Nullable<Timestamp>,
     }
 }

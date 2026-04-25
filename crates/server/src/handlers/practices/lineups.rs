@@ -182,8 +182,7 @@ pub(crate) async fn send_lineups_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if !tenant.config.can_send_email() {
         return Ok(Html(
-            templates::practices::send_result("Email is not available during the free trial.")
-                .into_string(),
+            templates::practices::send_result("Upgrade to unlock email.").into_string(),
         ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;

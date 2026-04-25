@@ -50,7 +50,7 @@ pub(crate) fn landing_page(signup_disabled: bool) -> Markup {
                                       class="block bg-slate-800 text-white font-semibold px-8 py-3 rounded-lg hover:bg-slate-900 transition text-sm" {
                                         "Get started free"
                                     }
-                                    p class="mt-2 text-xs text-slate-400" { "30-day trial, no credit card" }
+                                    p class="mt-2 text-xs text-slate-400" { "Free plan, no credit card" }
                                 }
                             }
                             div class="text-center" {
@@ -86,7 +86,7 @@ pub(crate) fn landing_page(signup_disabled: bool) -> Markup {
                                 "Get started free"
                             }
                             p class="mt-2 text-xs text-slate-400" {
-                                "30-day trial, no credit card"
+                                "Free plan, no credit card"
                             }
                         }
                     }

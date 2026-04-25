@@ -60,8 +60,7 @@ pub(crate) async fn create_demo_handler(
                     slug: slug_clone,
                     db_path: db_path_clone,
                     created_at: now,
-                    billing_status: BillingStatus::Trial,
-                    trial_expires_at: Some(expires),
+                    billing_status: BillingStatus::Free,
                 },
             )
         })

@@ -378,7 +378,6 @@ fn ensure_default_tenant(master_conn_str: &str, tenant_db_path: &str) -> anyhow:
             db_path: tenant_db_path.to_string(),
             created_at: now,
             billing_status: BillingStatus::Active,
-            trial_expires_at: None,
         },
     )?;
     tracing::info!(tenant_id = %tenant.id, "Created default tenant");

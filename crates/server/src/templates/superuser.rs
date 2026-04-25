@@ -83,7 +83,6 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
                             th class="text-left px-4 py-3 font-semibold text-slate-600" { "Name" }
                             th class="text-left px-4 py-3 font-semibold text-slate-600" { "Slug" }
                             th class="text-left px-4 py-3 font-semibold text-slate-600" { "Status" }
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Trial Expires" }
                             th class="text-left px-4 py-3 font-semibold text-slate-600" { "Created" }
                             th class="text-left px-4 py-3 font-semibold text-slate-600" { "Actions" }
                         }
@@ -124,7 +123,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                      class="flex items-center gap-2" {
                     select name="status"
                            class="border border-slate-300 rounded px-2 py-1 text-sm" {
-                        @for s in &[BillingStatus::Trial, BillingStatus::Active, BillingStatus::Grandfathered, BillingStatus::Suspended, BillingStatus::Cancelled] {
+                        @for s in &[BillingStatus::Free, BillingStatus::Active, BillingStatus::Grandfathered] {
                             option value=(s.as_str()) selected[*s == status] {
                                 (s.as_str())
                             }
@@ -134,13 +133,6 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                            class="text-xs bg-slate-700 text-white px-2 py-1 rounded hover:bg-slate-800 transition" {
                         "Save"
                     }
-                }
-            }
-            td class="px-4 py-3 text-xs text-slate-500" {
-                @if let Some(exp) = tenant.trial_expires_at {
-                    (exp.format("%Y-%m-%d"))
-                } @else {
-                    "—"
                 }
             }
             td class="px-4 py-3 text-xs text-slate-500" {

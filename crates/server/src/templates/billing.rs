@@ -1,34 +1,13 @@
-//! Billing-related templates (trial expired, suspended).
+//! Billing-related templates (demo expired).
 
 use maud::{html, Markup};
 
-use crate::tenant_cache::TenantConfig;
 use lineup_db::app_user::Role;
-use lineup_master_db::tenant::BillingStatus;
 
-pub(crate) fn suspended_page(
-    tenant_name: &str,
-    config: &TenantConfig,
-    webmaster_email: &str,
-) -> Markup {
-    let (title, message) = match config.billing_status {
-        BillingStatus::Trial => (
-            "Your free trial has expired",
-            "Your 30-day trial has ended. Contact us to continue using Oarful.",
-        ),
-        BillingStatus::Suspended => (
-            "Subscription suspended",
-            "Your subscription has been suspended. Contact us to reactivate.",
-        ),
-        BillingStatus::Cancelled => (
-            "Subscription cancelled",
-            "Your subscription has been cancelled. Contact us if you'd like to return.",
-        ),
-        BillingStatus::Active | BillingStatus::Grandfathered => (
-            "Account issue",
-            "There's an issue with your account. Please contact support.",
-        ),
-    };
+/// Shown when a demo tenant has expired.
+pub(crate) fn suspended_page(tenant_name: &str, webmaster_email: &str) -> Markup {
+    let title = "Demo expired";
+    let message = "This demo has expired. Contact us or sign up for a new account.";
 
     super::layout::page(
         title,
@@ -39,12 +18,6 @@ pub(crate) fn suspended_page(
                     h2 class="text-xl font-bold text-slate-800 mb-2" { (title) }
                     p class="text-slate-600 mb-1" { (tenant_name) }
                     p class="text-sm text-slate-500 mb-6" { (message) }
-
-                    @if let Some(exp) = config.trial_expires_at {
-                        p class="text-xs text-slate-400 mb-6" {
-                            "Trial expired: " (exp.format("%B %-d, %Y"))
-                        }
-                    }
 
                     div class="space-y-3" {
                         a href={"mailto:" (webmaster_email)}

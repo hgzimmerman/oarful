@@ -9,3 +9,4 @@ master.db
 *.db-wal
 .claude/
 tailwindcss-linux-*
+result

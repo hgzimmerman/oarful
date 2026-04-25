@@ -14,9 +14,6 @@ use serde::Deserialize;
 
 use crate::{state::AppState, templates, templates::signup::SignupPrefill};
 
-/// Trial period in days for new clubs.
-const TRIAL_DAYS: i64 = 30;
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignupInput {
     pub club_name: String,
@@ -134,7 +131,6 @@ pub(crate) async fn signup_handler(
     }
 
     let now = Utc::now().naive_utc();
-    let trial_expires = now + chrono::TimeDelta::try_days(TRIAL_DAYS).unwrap();
     let db_path = format!("{}/tenants/{slug}.db", state.data_dir);
 
     // Create tenant in master DB.
@@ -151,8 +147,7 @@ pub(crate) async fn signup_handler(
                     slug: slug_clone,
                     db_path: db_path_clone,
                     created_at: now,
-                    billing_status: BillingStatus::Trial,
-                    trial_expires_at: Some(trial_expires),
+                    billing_status: BillingStatus::Free,
                 },
             )
         })

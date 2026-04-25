@@ -170,7 +170,6 @@ async fn cmd_import(args: &[String]) -> Result<()> {
                         db_path: dest_for_closure,
                         created_at: now,
                         billing_status: lineup_master_db::tenant::BillingStatus::Active,
-                        trial_expires_at: None,
                     },
                 )?;
                 println!("Registered 'default' tenant in master DB.");
@@ -225,7 +224,6 @@ async fn cmd_seed() -> Result<()> {
                         db_path: db_path_for_closure,
                         created_at: now,
                         billing_status: lineup_master_db::tenant::BillingStatus::Active,
-                        trial_expires_at: None,
                     },
                 )?;
             }
@@ -244,13 +242,13 @@ async fn cmd_seed() -> Result<()> {
 }
 
 /// `cargo run -p lineup_server -- set-billing <slug> <status>`
-/// Set billing status for a tenant. Valid statuses: trial, active,
-/// grandfathered, suspended, cancelled.
+/// Set billing status for a tenant. Valid statuses: free, active,
+/// grandfathered.
 fn cmd_set_billing(args: &[String]) -> Result<()> {
     if args.len() < 2 {
         anyhow::bail!(
             "Usage: lineup_server set-billing <slug> <status>\n  \
-             Statuses: trial, active, grandfathered, suspended, cancelled\n  \
+             Statuses: free, active, grandfathered\n  \
              e.g. lineup_server set-billing riverside-rowing grandfathered"
         );
     }
@@ -258,14 +256,12 @@ fn cmd_set_billing(args: &[String]) -> Result<()> {
     let status_str = &args[1];
 
     let status = match status_str.as_str() {
-        "trial" => lineup_master_db::tenant::BillingStatus::Trial,
+        "free" => lineup_master_db::tenant::BillingStatus::Free,
         "active" => lineup_master_db::tenant::BillingStatus::Active,
         "grandfathered" => lineup_master_db::tenant::BillingStatus::Grandfathered,
-        "suspended" => lineup_master_db::tenant::BillingStatus::Suspended,
-        "cancelled" => lineup_master_db::tenant::BillingStatus::Cancelled,
         other => anyhow::bail!(
             "Unknown billing status '{other}'.\n  \
-             Valid: trial, active, grandfathered, suspended, cancelled"
+             Valid: free, active, grandfathered"
         ),
     };
 

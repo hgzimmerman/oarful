@@ -20,7 +20,6 @@ pub(crate) struct TenantConfig {
     pub(crate) tenant_name: String,
     pub(crate) tenant_slug: String,
     pub(crate) billing_status: BillingStatus,
-    pub(crate) trial_expires_at: Option<chrono::NaiveDateTime>,
     pub(crate) is_demo: bool,
 }
 
@@ -33,13 +32,12 @@ impl TenantConfig {
             tenant_name: t.name.clone(),
             tenant_slug: t.slug.clone(),
             billing_status: t.billing_status,
-            trial_expires_at: t.trial_expires_at,
             is_demo: t.is_demo(),
         }
     }
 
     /// Whether this tenant can send outbound emails (reminders, lineups,
-    /// invites). Trial and demo tenants cannot.
+    /// invites). Free and demo tenants cannot — upgrade to unlock.
     pub(crate) fn can_send_email(&self) -> bool {
         matches!(
             self.billing_status,
@@ -47,19 +45,10 @@ impl TenantConfig {
         )
     }
 
-    /// Whether this tenant has an active billing relationship.
+    /// Whether this tenant can access the app. Always true — billing
+    /// only gates email, not app access.
     pub(crate) fn is_billing_ok(&self) -> bool {
-        if self.is_demo {
-            return true;
-        }
-        match self.billing_status {
-            BillingStatus::Active | BillingStatus::Grandfathered => true,
-            BillingStatus::Trial => self
-                .trial_expires_at
-                .map(|exp| exp > chrono::Utc::now().naive_utc())
-                .unwrap_or(true),
-            BillingStatus::Suspended | BillingStatus::Cancelled => false,
-        }
+        true
     }
 }
 

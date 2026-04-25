@@ -836,7 +836,6 @@ pub(crate) async fn require_auth(
             return Html(
                 crate::templates::billing::suspended_page(
                     &config.tenant_name,
-                    &config,
                     &state.webmaster_email,
                 )
                 .into_string(),

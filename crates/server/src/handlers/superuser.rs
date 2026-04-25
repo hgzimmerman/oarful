@@ -274,7 +274,6 @@ pub(crate) async fn create_tenant_handler(
                     db_path: db_path_clone,
                     created_at: now,
                     billing_status: BillingStatus::Grandfathered,
-                    trial_expires_at: None,
                 },
             )
         })

@@ -11,22 +11,20 @@ use serde::{Deserialize, Serialize};
 #[DbValueStyle = "snake_case"]
 #[serde(rename_all = "snake_case")]
 pub enum BillingStatus {
-    Trial,
+    /// Default for new signups — full app access, email blocked.
+    Free,
+    /// Paid — email enabled.
     Active,
-    /// Permanently free — early adopters / beta testers.
+    /// Permanently free + email — early adopters / beta testers.
     Grandfathered,
-    Suspended,
-    Cancelled,
 }
 
 impl BillingStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Trial => "trial",
+            Self::Free => "free",
             Self::Active => "active",
             Self::Grandfathered => "grandfathered",
-            Self::Suspended => "suspended",
-            Self::Cancelled => "cancelled",
         }
     }
 
@@ -34,9 +32,7 @@ impl BillingStatus {
         match s {
             "active" => Self::Active,
             "grandfathered" => Self::Grandfathered,
-            "suspended" => Self::Suspended,
-            "cancelled" => Self::Cancelled,
-            _ => Self::Trial,
+            _ => Self::Free,
         }
     }
 }
@@ -106,11 +102,9 @@ pub struct Tenant {
     /// Whether email addresses are visible to members on the roster
     /// and rower detail pages. `0` = Coach+ only (default), `1` = visible.
     pub emails_visible: i32,
-    /// Billing status.
+    /// Billing status: Free (email blocked), Active (paid), or
+    /// Grandfathered (free + email).
     pub billing_status: BillingStatus,
-    /// When the trial period expires. `None` means no expiry (legacy
-    /// tenants or manually activated).
-    pub trial_expires_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -121,7 +115,6 @@ pub struct NewTenant {
     pub db_path: String,
     pub created_at: NaiveDateTime,
     pub billing_status: BillingStatus,
-    pub trial_expires_at: Option<NaiveDateTime>,
 }
 
 impl Tenant {
@@ -141,21 +134,11 @@ impl Tenant {
         self.demo_expires_at.is_some()
     }
 
-    /// Whether the tenant has an active billing relationship (not
-    /// expired trial, not suspended/cancelled). Demo tenants are
-    /// always considered active (they have their own expiry logic).
+    /// Whether the tenant can access the app. Always true — billing
+    /// only gates email, not app access. Demo tenants have their own
+    /// expiry logic handled separately.
     pub fn is_billing_ok(&self) -> bool {
-        if self.is_demo() {
-            return true;
-        }
-        match self.billing_status {
-            BillingStatus::Active | BillingStatus::Grandfathered => true,
-            BillingStatus::Trial => self
-                .trial_expires_at
-                .map(|exp| exp > chrono::Utc::now().naive_utc())
-                .unwrap_or(true), // no expiry = active
-            BillingStatus::Suspended | BillingStatus::Cancelled => false,
-        }
+        true
     }
 
     /// List all expired demo tenants (for cleanup).
@@ -211,11 +194,7 @@ impl Tenant {
         status: BillingStatus,
     ) -> Result<(), diesel::result::Error> {
         diesel::update(tenant::table.find(id))
-            .set((
-                tenant::billing_status.eq(status),
-                // Clear trial expiry when moving to a non-trial status.
-                tenant::trial_expires_at.eq::<Option<NaiveDateTime>>(None),
-            ))
+            .set(tenant::billing_status.eq(status))
             .execute(conn)?;
         Ok(())
     }
