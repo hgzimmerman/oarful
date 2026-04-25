@@ -392,16 +392,12 @@
     }
     .solver-rail {
       order: 3;
-      border-left: none !important;
-      border-top: 1px solid var(--rule);
       width: 100% !important;
       max-height: 50vh;
     }
     .solver-rail-closed {
       width: 100% !important;
       height: 32px;
-      border-left: none !important;
-      border-top: 1px solid var(--rule);
     }
     .solver-rail-closed .vert {
       writing-mode: horizontal-tb;
@@ -422,18 +418,18 @@
   /* Solver right rail */
   .solver-rail {
     width: 320px;
-    border-left: 1px solid var(--rule);
     background: var(--paper);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    flex: 1;
   }
   .solver-rail-closed {
     width: 32px;
     background: var(--paper);
     border: none;
-    border-left: 1px solid var(--rule);
     display: flex;
+    flex: 1;
     align-items: center;
     justify-content: center;
     cursor: pointer;

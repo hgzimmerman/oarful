@@ -49,7 +49,7 @@ pub(super) fn knobs_form(
         script {
             (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
-        div "x-data"="{ railOpen: true }" {
+        div "x-data"="{ railOpen: true }" class="flex flex-col flex-1" {
             // Collapsed state — thin vertical label
             button type="button"
                    class="solver-rail-closed"

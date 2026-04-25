@@ -350,7 +350,7 @@ pub(crate) fn landing_content(
                     }
                 }
                 // Right rail: solver
-                div class="no-print" {
+                div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
                     (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
                 }
             }
@@ -399,7 +399,7 @@ pub(crate) fn streaming_page(
                     }
                 }
                 // Right rail: solver
-                div class="no-print" {
+                div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
                     (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
                 }
             }
