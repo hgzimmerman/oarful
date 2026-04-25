@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+# Cancel in-progress runs for the same PR/branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Check formatting
+        run: nix develop -c cargo fmt --all -- --check
+
+      - name: Clippy
+        run: nix develop -c cargo clippy --workspace
+
+      - name: Tailwind CSS freshness
+        run: |
+          nix develop -c tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify
+          git diff --exit-code crates/server/public/tailwind.css
+
+  test-unit:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run tests (excluding e2e)
+        run: nix develop -c cargo test --workspace --exclude lineup_e2e
+
+  test-e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run e2e tests
+        run: nix develop -c cargo test -p lineup_e2e
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build Docker image
+        run: nix build .#docker

@@ -281,11 +281,14 @@ lifecycle events.
 Add pricing to the landing page once Stripe is wired up. Starting
 at $150/year. State it plainly, frame as annual not monthly.
 
-#### CI/CD
+#### CI/CD — shipped
 
-Build/test/lint pipelines for this repo (GitHub Actions or
-similar). Deployment pipelines (k3s/k8s rollout) live in the
-separate private infra repo.
+GitHub Actions workflow with 4 jobs: lint (fmt + clippy + tailwind
+CSS freshness), unit/integration tests (workspace minus e2e), e2e
+tests (Xvfb + WebKitWebDriver via nix), Docker image build (nix).
+All jobs use `nix develop` for consistent tooling. Clippy runs
+without `-D warnings` (pre-existing warnings to clean up later).
+Deployment pipelines live in separate infra repo.
 
 ### Long-term / parked
 
@@ -451,4 +454,3 @@ culprit) remains parked pending a Pumpkin API dive.
 
 1. **Per-team roles** — design + migration.
 2. **Stripe payment integration** — convert trials to paid tenants.
-3. **CI/CD** — GitHub Actions build/test/lint.
