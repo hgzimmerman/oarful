@@ -63,13 +63,34 @@ pub(crate) async fn unsubscribe_handler(
             };
             match email_type {
                 EmailType::Reminders => {
-                    AppUser::set_email_prefs(conn, user_id, false, user.wants_lineups())?;
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        false,
+                        user.wants_lineups(),
+                        user.wants_stale_alerts(),
+                    )?;
                 }
                 EmailType::Lineups => {
-                    AppUser::set_email_prefs(conn, user_id, user.wants_reminders(), false)?;
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        user.wants_reminders(),
+                        false,
+                        user.wants_stale_alerts(),
+                    )?;
+                }
+                EmailType::StaleAlerts => {
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        user.wants_reminders(),
+                        user.wants_lineups(),
+                        false,
+                    )?;
                 }
                 EmailType::All => {
-                    AppUser::set_email_prefs(conn, user_id, false, false)?;
+                    AppUser::set_email_prefs(conn, user_id, false, false, false)?;
                 }
             }
             Ok(true)
@@ -133,13 +154,34 @@ pub(crate) async fn unsubscribe_post_handler(
             };
             match email_type {
                 EmailType::Reminders => {
-                    AppUser::set_email_prefs(conn, user_id, false, user.wants_lineups())?;
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        false,
+                        user.wants_lineups(),
+                        user.wants_stale_alerts(),
+                    )?;
                 }
                 EmailType::Lineups => {
-                    AppUser::set_email_prefs(conn, user_id, user.wants_reminders(), false)?;
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        user.wants_reminders(),
+                        false,
+                        user.wants_stale_alerts(),
+                    )?;
+                }
+                EmailType::StaleAlerts => {
+                    AppUser::set_email_prefs(
+                        conn,
+                        user_id,
+                        user.wants_reminders(),
+                        user.wants_lineups(),
+                        false,
+                    )?;
                 }
                 EmailType::All => {
-                    AppUser::set_email_prefs(conn, user_id, false, false)?;
+                    AppUser::set_email_prefs(conn, user_id, false, false, false)?;
                 }
             }
             Ok(())

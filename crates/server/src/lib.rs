@@ -14,6 +14,7 @@ pub(crate) mod jwt;
 pub(crate) mod magic_link;
 pub mod mailer;
 pub(crate) mod request_id;
+pub mod stale_alert;
 pub(crate) mod state;
 pub(crate) mod templates;
 pub(crate) mod tenant_cache;
@@ -67,6 +68,17 @@ pub fn build_router(
         loop {
             interval.tick().await;
             audit::cleanup_all(&audit_state).await;
+        }
+    });
+
+    // Stale lineup alert polling — check every 5 minutes for
+    // availability changes affecting committed lineups.
+    let stale_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            stale_alert::poll_stale_alerts(&stale_state).await;
         }
     });
 

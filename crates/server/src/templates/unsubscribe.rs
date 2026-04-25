@@ -37,6 +37,7 @@ pub(crate) fn success_page(club_name: &str, email_type: EmailType) -> Markup {
     let type_label = match email_type {
         EmailType::Reminders => "availability reminder",
         EmailType::Lineups => "lineup notification",
+        EmailType::StaleAlerts => "lineup change alert",
         EmailType::All => "all",
     };
     standalone_page(

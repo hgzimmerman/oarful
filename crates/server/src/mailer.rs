@@ -30,6 +30,23 @@ pub struct EmailLineupSummary {
     pub benched: Vec<String>,
 }
 
+/// A team section in a stale lineup alert email.
+#[derive(Debug, Clone)]
+pub struct StaleAlertSection {
+    pub team_name: String,
+    pub practices: Vec<StaleAlertPractice>,
+}
+
+/// A single stale practice in an alert email.
+#[derive(Debug, Clone)]
+pub struct StaleAlertPractice {
+    pub date: NaiveDate,
+    pub time: Option<NaiveTime>,
+    pub urgent: bool,
+    /// Rower names that are now unavailable.
+    pub unavailable_rowers: Vec<String>,
+}
+
 /// Async-capable interface for delivering emails to users.
 ///
 /// Implementations must be `Send + Sync` so they can live on
@@ -84,6 +101,19 @@ pub trait Mailer: Send + Sync {
         unsubscribe_all_url: &str,
     ) -> Result<()>;
 
+    /// Send a stale lineup alert to a coach. `sections` groups changes
+    /// by team. `subject` is pre-built to include team names.
+    async fn send_stale_alert(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        subject: &str,
+        sections: &[StaleAlertSection],
+        magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
+    ) -> Result<()>;
+
     /// Send a password-reset email. `clubs` is a list of
     /// `(club_name, reset_url)` pairs (one per tenant the email
     /// belongs to).
@@ -130,6 +160,15 @@ pub enum MailMessage {
         to_email: String,
         to_name: String,
         clubs: Vec<(String, String)>,
+    },
+    StaleAlert {
+        to_email: String,
+        to_name: String,
+        subject: String,
+        sections: Vec<StaleAlertSection>,
+        magic_url: String,
+        unsubscribe_url: String,
+        unsubscribe_all_url: String,
     },
 }
 
@@ -210,6 +249,28 @@ impl Mailer for ChannelMailer {
             to_name: to_name.to_string(),
             team_name: team_name.to_string(),
             lineups: lineups.to_vec(),
+            magic_url: magic_url.to_string(),
+            unsubscribe_url: unsubscribe_url.to_string(),
+            unsubscribe_all_url: unsubscribe_all_url.to_string(),
+        });
+        Ok(())
+    }
+
+    async fn send_stale_alert(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        subject: &str,
+        sections: &[StaleAlertSection],
+        magic_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::StaleAlert {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            subject: subject.to_string(),
+            sections: sections.to_vec(),
             magic_url: magic_url.to_string(),
             unsubscribe_url: unsubscribe_url.to_string(),
             unsubscribe_all_url: unsubscribe_all_url.to_string(),
@@ -328,6 +389,30 @@ impl Mailer for LogMailer {
             "lineup notification (LogMailer — no email sent)"
         );
         tracing::trace!(html, "lineup email HTML");
+        Ok(())
+    }
+
+    async fn send_stale_alert(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        subject: &str,
+        sections: &[StaleAlertSection],
+        magic_url: &str,
+        _unsubscribe_url: &str,
+        _unsubscribe_all_url: &str,
+    ) -> Result<()> {
+        let teams: Vec<&str> = sections.iter().map(|s| s.team_name.as_str()).collect();
+        let total_practices: usize = sections.iter().map(|s| s.practices.len()).sum();
+        tracing::info!(
+            to_email,
+            to_name,
+            subject,
+            ?teams,
+            total_practices,
+            magic_url,
+            "stale lineup alert (LogMailer — no email sent)"
+        );
         Ok(())
     }
 

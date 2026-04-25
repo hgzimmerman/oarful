@@ -184,6 +184,17 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                     p class="text-xs text-slate-500 ml-6 -mt-2" {
                         "Receive an email when lineups are posted for an upcoming practice."
                     }
+                    div class="flex items-center gap-3" {
+                        input type="checkbox" id="opt_in_stale_alerts" name="opt_in_stale_alerts"
+                              value="1" checked[user.wants_stale_alerts()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        label for="opt_in_stale_alerts" class="text-sm font-medium text-slate-700" {
+                            "Lineup change alerts"
+                        }
+                    }
+                    p class="text-xs text-slate-500 ml-6 -mt-2" {
+                        "Receive an email when rower availability changes affect a committed lineup."
+                    }
                     div class="pt-2" {
                         button type="submit"
                                class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {

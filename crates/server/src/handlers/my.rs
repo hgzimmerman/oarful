@@ -529,6 +529,8 @@ pub(crate) struct EmailPrefsInput {
     pub(crate) opt_in_reminders: Option<String>,
     #[serde(default)]
     pub(crate) opt_in_lineups: Option<String>,
+    #[serde(default)]
+    pub(crate) opt_in_stale_alerts: Option<String>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -543,10 +545,13 @@ pub(crate) async fn email_prefs_update_handler(
         .ok_or_else(|| super::bad_request("Not available in superuser view."))?;
     let reminders = input.opt_in_reminders.is_some();
     let lineups = input.opt_in_lineups.is_some();
+    let stale_alerts = input.opt_in_stale_alerts.is_some();
 
     tenant
         .db
-        .with_conn(move |conn| AppUser::set_email_prefs(conn, user_id, reminders, lineups))
+        .with_conn(move |conn| {
+            AppUser::set_email_prefs(conn, user_id, reminders, lineups, stale_alerts)
+        })
         .await
         .map_err(internal_error)?;
 
@@ -556,7 +561,7 @@ pub(crate) async fn email_prefs_update_handler(
         "email_prefs.update",
         "user",
         &user_id.to_string(),
-        Some(serde_json::json!({"reminders": reminders, "lineups": lineups}).to_string()),
+        Some(serde_json::json!({"reminders": reminders, "lineups": lineups, "stale_alerts": stale_alerts}).to_string()),
     );
 
     // Re-render with updated state.

@@ -38,7 +38,7 @@ pub struct TestInstance {
     app_port: u16,
     driver_port: u16,
     temp_dir: PathBuf,
-    app_state: lineup_server::AppState,
+    pub app_state: lineup_server::AppState,
 }
 
 impl TestInstance {

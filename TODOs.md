@@ -210,6 +210,12 @@ can resume without re-deriving context.
   feet/inches. `erg_test` table with `(rower_id, distance_m,
   time_cs, rowed_at, created_at)` log. Erg test CRUD on rower
   detail page (Coach+). Split /500m displayed alongside time.
+- **Rower self-service guard rails** — replaced `SelfEditLevel`
+  (Low/Medium/High) with two orthogonal team-level controls:
+  `bucket_visibility` (off/view/edit) controls whether members see
+  categorical bucket labels; `member_raw_metrics` (bool) controls
+  whether members can input weight, height, and erg tests. Members
+  can add but not delete erg tests. `POST /my/erg-test` endpoint.
 
 ## Open work
 
@@ -239,11 +245,6 @@ locking all shipped. Categorical dropdowns are greyed out with
 "(auto)" label when a rower has raw values and the team has
 thresholds configured.
 
-#### Rower self-service guard rails (field locking)
-
-Under-specified. Mostly addressed by existing `SelfEditLevel`
-system. May be fully resolved by raw rower metrics (auto-derived
-buckets remove the ability to game categorical fields).
 
 ### Architecture / platform
 

@@ -260,3 +260,61 @@ pub(crate) fn password_reset_email(
         None,
     )
 }
+
+/// Stale lineup alert email: notifies coaches that rower availability
+/// changed for committed lineups. Grouped by team with per-practice details.
+pub(crate) fn stale_alert_email(
+    to_name: &str,
+    subject: &str,
+    sections: &[crate::mailer::StaleAlertSection],
+    magic_url: &str,
+    unsubscribe_url: &str,
+    unsubscribe_all_url: &str,
+) -> Markup {
+    email_wrapper(
+        subject,
+        html! {
+            div class="card" {
+                div class="header" { (subject) }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", rower availability has changed for committed lineups:"
+                }
+                @for section in sections {
+                    div style="margin-bottom: 20px;" {
+                        div class="subheader" { (section.team_name) }
+                        @for practice in &section.practices {
+                            div style="margin-bottom: 12px; padding: 8px 12px; background: #fef3c7; border-radius: 6px;" {
+                                div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;" {
+                                    (practice.date.format("%A")) " — " (practice.date)
+                                    @if let Some(t) = practice.time {
+                                        span style="color: #64748b; font-weight: normal;" {
+                                            " at " (t.format("%-I:%M %p"))
+                                        }
+                                    }
+                                    @if practice.urgent {
+                                        span style="color: #dc2626; font-weight: 700; margin-left: 8px;" {
+                                            "URGENT"
+                                        }
+                                    }
+                                }
+                                div style="font-size: 13px; color: #92400e;" {
+                                    "Now unavailable: "
+                                    (practice.unavailable_rowers.join(", "))
+                                }
+                            }
+                        }
+                    }
+                }
+                div style="margin-top: 20px; text-align: center;" {
+                    a href=(magic_url) class="btn" {
+                        "View practices"
+                    }
+                }
+            }
+        },
+        Some(UnsubFooter {
+            unsub_url: unsubscribe_url,
+            unsub_all_url: unsubscribe_all_url,
+        }),
+    )
+}

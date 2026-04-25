@@ -50,6 +50,7 @@ diesel::table! {
         opt_in_reminders -> Integer,
         opt_in_lineups -> Integer,
         rower_id -> Nullable<Integer>,
+        opt_in_stale_alerts -> Integer,
     }
 }
 
@@ -285,6 +286,13 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    stale_digest_log (id) {
+        id -> Integer,
+        last_sent_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(team_threshold -> team (team_id));
 diesel::joinable!(sync_source -> team (team_id));
@@ -332,4 +340,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     email_log,
     solver_profile,
     sync_source,
+    stale_digest_log,
 );

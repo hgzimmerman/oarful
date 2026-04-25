@@ -126,6 +126,7 @@ pub struct AppUser {
     pub opt_in_reminders: i32,
     pub opt_in_lineups: i32,
     pub rower_id: Option<RowerId>,
+    pub opt_in_stale_alerts: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -259,6 +260,11 @@ impl AppUser {
         self.opt_in_lineups != 0
     }
 
+    /// Whether this user has opted in to stale lineup alert emails.
+    pub fn wants_stale_alerts(&self) -> bool {
+        self.opt_in_stale_alerts != 0
+    }
+
     /// Link this user to a rower profile.
     pub fn set_rower_id(
         conn: &mut SqliteConnection,
@@ -294,12 +300,14 @@ impl AppUser {
         user_id: UserId,
         opt_in_reminders: bool,
         opt_in_lineups: bool,
+        opt_in_stale_alerts: bool,
     ) -> Result<(), diesel::result::Error> {
         let now = chrono::Utc::now().naive_utc();
         diesel::update(app_user::table.find(user_id))
             .set((
                 app_user::opt_in_reminders.eq(if opt_in_reminders { 1 } else { 0 }),
                 app_user::opt_in_lineups.eq(if opt_in_lineups { 1 } else { 0 }),
+                app_user::opt_in_stale_alerts.eq(if opt_in_stale_alerts { 1 } else { 0 }),
                 app_user::updated_at.eq(now),
             ))
             .execute(conn)?;
@@ -467,10 +475,12 @@ mod tests {
         // Defaults are opt-in (1) per migration
         assert!(user.wants_reminders());
         assert!(user.wants_lineups());
+        assert!(user.wants_stale_alerts());
 
-        AppUser::set_email_prefs(&mut conn, user.id, false, false).unwrap();
+        AppUser::set_email_prefs(&mut conn, user.id, false, false, false).unwrap();
         let fetched = AppUser::get(&mut conn, user.id).unwrap().unwrap();
         assert!(!fetched.wants_reminders());
         assert!(!fetched.wants_lineups());
+        assert!(!fetched.wants_stale_alerts());
     }
 }

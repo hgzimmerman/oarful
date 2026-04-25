@@ -18,6 +18,7 @@ type HmacSha256 = Hmac<Sha256>;
 pub(crate) enum EmailType {
     Reminders,
     Lineups,
+    StaleAlerts,
     All,
 }
 
@@ -26,6 +27,7 @@ impl EmailType {
         match s {
             "reminders" => Some(Self::Reminders),
             "lineups" => Some(Self::Lineups),
+            "stale_alerts" => Some(Self::StaleAlerts),
             "all" => Some(Self::All),
             _ => None,
         }
@@ -35,6 +37,7 @@ impl EmailType {
         match self {
             Self::Reminders => "reminders",
             Self::Lineups => "lineups",
+            Self::StaleAlerts => "stale_alerts",
             Self::All => "all",
         }
     }
