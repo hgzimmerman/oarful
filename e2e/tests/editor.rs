@@ -204,7 +204,7 @@ async fn transfer_between_boats() {
             var params = [];
             editor.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.rower && el.dataset.boat !== 'bench' && el.dataset.boat !== 'sculling') {
-                    params.push('seat=' + el.dataset.boat + ':' + el.dataset.seat + ':' + el.dataset.rower);
+                    params.push('seat=' + el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
                 }
             });
             editor.querySelectorAll('[data-editor-boat]').forEach(function(card) {
