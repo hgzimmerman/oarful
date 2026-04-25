@@ -233,6 +233,20 @@ can resume without re-deriving context.
 
 ### Quick wins
 
+#### Email send result modal
+
+After sending reminders/lineups, show a modal with the outcome
+instead of a raw HTML snippet. List recipient names with status
+(sent / skipped — opted out / skipped — no email). When billing
+blocks the send (trial/demo), show "Email is available on paid
+plans" with the list of who *would* have received it. Self-hosted
+LogMailer installs should see a normal "Sent to N recipients"
+result since emails go to the log successfully.
+
+Touches: reminder handler, lineup handler, send_result template.
+Replace the inline `send_result()` partial with a styled modal
+(same pattern as the existing confirmation modals).
+
 ### Coach features
 
 #### Raw rower metrics — fully shipped
