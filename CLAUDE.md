@@ -2,7 +2,7 @@
 
 ## Project Overview
 - Rust web app using Axum, HTMX, maud templates, and Alpine.js
-- Always run `cargo check` after edits and ensure all tests pass with `cargo test`
+- Run the quick pre-commit suite after edits (see Build & Test)
 
 ## Workflow Conventions
 - When the user says "check TODOs" or "review backlog", read `TODOs.md` in the project root — do NOT grep for TODO comments in source code
@@ -21,7 +21,7 @@
 
 ## Architecture
 - Rust workspace: db, master_db, solver, sheets, server, cli
-- Server: axum handlers → maud templates → HTMX + Alpine.js + Tailwind CDN
+- Server: axum handlers → maud templates → HTMX + Alpine.js + pre-built Tailwind CSS
 - Solver: Pumpkin CP with soft/hard constraints, greedy fleet pre-selection
 - DB: per-tenant SQLite (diesel ORM) + master tenant registry
 - Auth: JWT with roles (Member < Coach < ProgramDirector)
@@ -44,10 +44,8 @@
 - Responsive: grids start `grid-cols-1` and step up at `sm:`/`md:` breakpoints
 - Touch targets: minimum `py-2` on interactive elements (44px target)
 
-## Frontend Notes
-- For HTMX/Alpine.js integration: be careful with nested forms, hx-target conflicts, and Alpine init timing after HTMX swaps. Test interactions manually if unsure.
-
 ## Gotchas
+- HTMX/Alpine.js integration: watch for nested forms, hx-target conflicts, and Alpine init timing after HTMX swaps
 - Solver timeout (SolveStatus::Timeout) means zero results; timeout-with-best-result maps to Satisfied
 - Greedy fleet selection reserves min_seats (not total) per boat to avoid over-consumption
 - `SolveRequest.boats` when empty means "all sweep boats" — must explicitly pass boat IDs to restrict
