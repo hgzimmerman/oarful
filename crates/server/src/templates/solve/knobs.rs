@@ -37,16 +37,17 @@ pub(super) fn knobs_form(
         script {
             (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
-        section class="bg-white rounded-lg shadow" {
+        section class="solve-card" {
             @let preset_label = if knobs.preset.is_empty() { "Balanced" } else { &knobs.preset };
             @let initially_open = !has_generated;
             div "x-data"={"{ open: " (initially_open) " }"} {
                 button type="button"
                        "@click"="open = !open"
-                       class="w-full flex items-center justify-between px-6 py-4 cursor-pointer select-none hover:bg-slate-50 transition text-left" {
+                       class="w-full flex items-center justify-between px-6 py-4 cursor-pointer select-none transition text-left"
+                       style="color: var(--ink)" {
                     div class="flex items-center gap-3 flex-wrap" {
-                        h3 class="text-sm font-semibold text-slate-800" { "Solver settings" }
-                        span #knob-preset-label class="text-xs text-slate-500" { (preset_label) }
+                        h3 class="text-sm font-semibold font-serif-heading" { "Solver settings" }
+                        span #knob-preset-label class="text-xs font-mono-stat" style="color: var(--muted)" { (preset_label) }
                         @if let Some(result) = solve_result {
                             @if result.status == SolveStatus::Satisfied {
                                 @let elapsed_ms = result.elapsed.as_millis();
@@ -55,16 +56,17 @@ pub(super) fn knobs_form(
                                 } else {
                                     format!("{:.1}s", result.elapsed.as_secs_f64())
                                 };
-                                span #knob-metrics class="text-xs text-slate-400" {
-                                    "· " (elapsed_label)
+                                span #knob-metrics class="text-xs font-mono-stat" style="color: var(--muted)" {
+                                    "\u{00b7} " (elapsed_label)
                                     @if let Some(obj) = result.objective {
-                                        " · score " (obj)
+                                        " \u{00b7} score " (obj)
                                     }
                                 }
                             }
                         }
                     }
-                    span class="border-solid border-slate-400 border-r-2 border-b-2 border-t-0 border-l-0 inline-block w-2 h-2 transform transition-transform duration-200"
+                    span class="inline-block w-2 h-2 transform transition-transform duration-200"
+                         style="border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted)"
                          ":class"="open ? 'rotate-45' : 'rotate-[-45deg]'" {}
                 }
                 div "x-show"="open"
@@ -75,7 +77,7 @@ pub(super) fn knobs_form(
                     "x-transition:leave-start"="opacity-100 max-h-[2000px]"
                     "x-transition:leave-end"="opacity-0 max-h-0"
                     class="overflow-hidden" {
-                div class="px-6 pb-6 border-t border-slate-100 pt-4" {
+                div class="px-6 pb-6 pt-4" style="border-top: 1px solid var(--rule-2)" {
             form method="get" action=(action)
                  hx-get=(action)
                  hx-target="#solve-results"
@@ -88,7 +90,7 @@ pub(super) fn knobs_form(
                     div class="mb-4" {
                         div class="flex flex-wrap gap-4 items-end" {
                             fieldset class="flex-1" {
-                                legend class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                                legend class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
                                     "Based on"
                                 }
                                 div class="flex flex-wrap gap-3" {
@@ -96,7 +98,7 @@ pub(super) fn knobs_form(
                                         @let date_str = p.date.format("%Y-%m-%d").to_string();
                                         @let weekday = p.date.format("%a").to_string();
                                         @let checked = knobs.based_on.contains(&date_str);
-                                        label class="inline-flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer" {
+                                        label class="inline-flex items-center gap-1.5 text-sm cursor-pointer" style="color: var(--ink-2)" {
                                             input type="checkbox" name="based_on" value=(date_str)
                                                   checked[checked]
                                                   class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
@@ -121,7 +123,7 @@ pub(super) fn knobs_form(
 
                 // Solver preset selector
                 div #preset-bar class="mb-4" {
-                    div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+                    div class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
                         "Solver preset"
                     }
                     (preset_buttons(practice_id, knobs, custom_profiles))
@@ -133,16 +135,16 @@ pub(super) fn knobs_form(
                     // Partial fill — only relevant when the fleet has an 8+
                     @if has_eight {
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
                             "Partial fill"
                         }
-                        div class="inline-flex rounded border border-slate-300 overflow-hidden text-sm" {
+                        div class="seg-warm" {
                             @for (val, lbl) in &[(0, "Off"), (1, "1 empty"), (2, "2 empty")] {
                                 @let active = knobs.partial == *val;
                                 @let cls = if active {
-                                    "px-3 py-2 font-semibold bg-slate-800 text-white"
+                                    "seg-warm-btn seg-warm-btn-on"
                                 } else {
-                                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
+                                    "seg-warm-btn"
                                 };
                                 button type="button" class=(cls)
                                        onclick={"segmentedSelect(this, 'partial', " (val) ")"} {
@@ -151,22 +153,22 @@ pub(super) fn knobs_form(
                             }
                         }
                         input type="hidden" name="partial" value=(knobs.partial);
-                        p class="text-xs text-slate-500 mt-1" { "Empty optional seats per boat" }
+                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Empty optional seats per boat" }
                     }
                     }
 
                     // Alternatives — segmented (0 / 1 / 2 / 3)
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
                             "Alternatives"
                         }
-                        div class="inline-flex rounded border border-slate-300 overflow-hidden text-sm" {
+                        div class="seg-warm" {
                             @for n in 0..=3i64 {
                                 @let active = knobs.alts as i64 == n;
                                 @let cls = if active {
-                                    "px-3 py-2 font-semibold bg-slate-800 text-white"
+                                    "seg-warm-btn seg-warm-btn-on"
                                 } else {
-                                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
+                                    "seg-warm-btn"
                                 };
                                 button type="button" class=(cls)
                                        onclick={"segmentedSelect(this, 'alts', " (n) ")"} {
@@ -175,41 +177,41 @@ pub(super) fn knobs_form(
                             }
                         }
                         input type="hidden" name="alts" value=(knobs.alts);
-                        p class="text-xs text-slate-500 mt-1" { "Extra lineups to compare" }
+                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Extra lineups to compare" }
                     }
 
                     // Time budget — slider 1-10
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
                             "Time budget"
                         }
                         div class="flex items-center gap-2" {
                             input name="budget" type="range" min="1" max="10"
                                   value=(knobs.budget)
-                                  class="flex-1 accent-blue-600"
+                                  class="range-warm flex-1"
                                   oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
-                            span #budget-val class="text-sm font-mono text-slate-700 w-8" {
+                            span #budget-val class="text-sm font-mono-stat w-8" style="color: var(--ink-2)" {
                                 (knobs.budget) "s"
                             }
                         }
-                        p class="text-xs text-slate-500 mt-1" { "Time budget per alternative" }
+                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Time budget per alternative" }
                     }
 
                     // Novelty — slider 0-5
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
                             "Novelty"
                         }
                         div class="flex items-center gap-2" {
                             input name="novelty" type="range" min="0" max="5"
                                   value=(knobs.novelty)
-                                  class="flex-1 accent-blue-600"
+                                  class="range-warm flex-1"
                                   oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
-                            span #novelty-val class="text-sm font-mono text-slate-700 w-8" {
+                            span #novelty-val class="text-sm font-mono-stat w-8" style="color: var(--ink-2)" {
                                 @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
                             }
                         }
-                        p class="text-xs text-slate-500 mt-1" { "Avoid repeating recent lineups" }
+                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Avoid repeating recent lineups" }
                     }
                     input type="hidden" name="generate" value="1";
                     // Carry walk-ons and no-shows through re-solves.
@@ -244,14 +246,14 @@ pub(super) fn knobs_form(
                         }
                     }
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
+                        label class="block text-xs font-semibold uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
                         div class="flex items-center space-x-3" {
                             button type="submit"
-                                   class="whitespace-nowrap bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                                   class="btn-accent whitespace-nowrap shadow transition" {
                                 (button_label)
                             }
-                            span #solve-spinner class="htmx-indicator text-xs text-slate-500" {
-                                "Generating…"
+                            span #solve-spinner class="htmx-indicator text-xs" style="color: var(--muted)" {
+                                "Generating\u{2026}"
                             }
                         }
                         p class="text-xs mt-1 invisible" { "\u{00a0}" }
@@ -315,7 +317,7 @@ pub(crate) fn preset_bar(
     // For now, render the full bar inline.
     html! {
         div #preset-bar class="mb-4" {
-            div class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2" {
+            div class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
                 "Solver preset"
             }
             (preset_buttons(practice_id, knobs, custom_profiles))
@@ -333,7 +335,7 @@ fn preset_buttons(
 ) -> Markup {
     let current = &knobs.preset;
     html! {
-        div class="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm flex-wrap" {
+        div class="seg-warm flex-wrap" {
             @for (value, label) in &[
                 ("balanced", "Balanced"),
                 ("even_speed", "Even speed"),
@@ -342,9 +344,9 @@ fn preset_buttons(
             ] {
                 @let is_active = current == value || (current.is_empty() && *value == "balanced");
                 @let btn_class = if is_active {
-                    "px-3 py-2 font-semibold bg-slate-800 text-white"
+                    "seg-warm-btn seg-warm-btn-on"
                 } else {
-                    "px-3 py-2 text-slate-700 hover:bg-slate-100"
+                    "seg-warm-btn"
                 };
                 @let preset_url = preset_url_with(practice_id, knobs, value);
                 button type="button" class=(btn_class)
@@ -358,13 +360,14 @@ fn preset_buttons(
             @for (name, description) in custom_profiles {
                 @let is_active = current == name;
                 @let btn_class = if is_active {
-                    "px-3 py-2 font-semibold bg-violet-700 text-white"
+                    "seg-warm-btn seg-warm-btn-on"
                 } else {
-                    "px-3 py-2 text-violet-700 hover:bg-violet-50"
+                    "seg-warm-btn"
                 };
                 @let preset_url = preset_url_with(practice_id, knobs, name);
                 button type="button" class=(btn_class)
                        title=[description.as_deref()]
+                       style={"color: var(--accent)" }
                        hx-get=(preset_url)
                        hx-target="#preset-bar"
                        hx-swap="outerHTML"
@@ -377,16 +380,18 @@ fn preset_buttons(
             @let new_url = format!("/solver-profile/edit?basis={active_preset}");
             @let edit_url = format!("/solver-profile/edit?name={active_preset}");
             button type="button"
-                   class="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                   class="seg-warm-btn"
                    title="Create new preset"
+                   style="color: var(--muted)"
                    hx-get=(&new_url)
                    hx-target="body"
                    hx-swap="beforeend" {
                 "+"
             }
             button type="button"
-                   class="px-3 py-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                   class="seg-warm-btn"
                    title="View/edit active preset"
+                   style="color: var(--muted)"
                    hx-get=(&edit_url)
                    hx-target="body"
                    hx-swap="beforeend" {
@@ -399,15 +404,16 @@ fn preset_buttons(
 fn knob_input(name: &str, label: &str, value: i64, min: Option<i64>, help: Option<&str>) -> Markup {
     html! {
         div {
-            label for=(name) class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+            label for=(name) class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
                 (label)
             }
             input id=(name) name=(name) type="number"
                   value=(value)
                   min=[min.map(|m| m.to_string())]
-                  class="w-full border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
+                  class="w-full rounded px-3 py-2 font-mono-stat text-sm focus:outline-none"
+                  style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)";
             @if let Some(h) = help {
-                p class="text-xs text-slate-500 mt-1 whitespace-nowrap overflow-hidden text-ellipsis" title=(h) { (h) }
+                p class="text-xs mt-1 whitespace-nowrap overflow-hidden text-ellipsis italic" style="color: var(--muted)" title=(h) { (h) }
             }
         }
     }
@@ -419,7 +425,8 @@ pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
     match result.status {
         SolveStatus::Satisfied => html! {},
         SolveStatus::Unsatisfiable => html! {
-            div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
+            div class="px-4 py-3 rounded text-sm"
+                style="background: color-mix(in oklch, var(--bad) 10%, var(--paper)); border-left: 4px solid var(--bad); color: var(--ink)" {
                 strong { "Unsatisfiable." }
                 " No seat assignment exists under the current constraints for " (date) "."
                 @if result.diagnostics.is_empty() {
@@ -434,7 +441,8 @@ pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
             }
         },
         SolveStatus::Timeout => html! {
-            div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
+            div class="px-4 py-3 rounded text-sm"
+                style="background: color-mix(in oklch, var(--warn) 12%, var(--paper)); border-left: 4px solid var(--warn); color: var(--ink)" {
                 strong { "No result." }
                 " Ran out of time without finding a valid lineup. Try increasing the time budget or relaxing constraints."
             }

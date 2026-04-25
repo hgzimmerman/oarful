@@ -103,17 +103,23 @@ pub(crate) fn profile_editor_modal(
     html! {
         // Backdrop
         div id="profile-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 z-40"
+            style="background: color-mix(in oklch, var(--ink) 50%, transparent)"
             "@click"="document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {}
         // Modal
         div id="profile-modal"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto" {
+            div class="rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto"
+                style="background: var(--paper); border: 1px solid var(--rule)" {
                 // Header
-                div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between" {
-                    h2 class="text-lg font-bold text-slate-800" { (title) }
+                div class="sticky top-0 px-6 py-4 flex items-center justify-between"
+                    style="background: var(--paper); border-bottom: 1px solid var(--rule)" {
+                    h2 class="text-lg font-bold font-serif-heading" style="color: var(--ink)" {
+                        (title)
+                    }
                     button type="button"
-                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                           class="text-xl leading-none cursor-pointer"
+                           style="color: var(--muted)"
                            "@click"="document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {
                         "\u{00d7}"
                     }
@@ -127,7 +133,7 @@ pub(crate) fn profile_editor_modal(
                      class="px-6 py-4 space-y-6" {
 
                     @if is_builtin {
-                        p class="text-sm text-slate-500 italic" {
+                        p class="text-sm italic" style="color: var(--muted)" {
                             "Built-in presets are read-only. Duplicate to create an editable copy."
                         }
                     }
@@ -135,7 +141,7 @@ pub(crate) fn profile_editor_modal(
                     // Name + description
                     div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                         div {
-                            label for="profile-name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            label for="profile-name" class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
                                 "Name"
                             }
                             input id="profile-name" name="name" type="text"
@@ -143,27 +149,28 @@ pub(crate) fn profile_editor_modal(
                                   placeholder=(if is_builtin { format!("Copy of {basis_name}") } else { "My preset".to_string() })
                                   required[!is_builtin]
                                   disabled[false]
-                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                                  class="w-full rounded px-3 py-2 text-sm focus:outline-none"
+                                  style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)";
                         }
                         div {
-                            label for="profile-desc" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                            label for="profile-desc" class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
                                 "Description"
                             }
                             input id="profile-desc" name="description" type="text"
                                   value=[description]
                                   placeholder="Optional"
-                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                                  class="w-full rounded px-3 py-2 text-sm focus:outline-none"
+                                  style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)";
                         }
                     }
 
-                    // Hidden field to carry the basis preset name (used by
-                    // the save handler to resolve defaults for missing fields).
                     input type="hidden" name="preset" value=(basis_name);
 
                     // Weight groups
                     @for group in &groups {
                         div {
-                            h3 class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 border-b border-slate-100 pb-1" {
+                            h3 class="text-xs font-semibold uppercase tracking-wide mb-2 pb-1 font-mono-stat"
+                               style="color: var(--muted); border-bottom: 1px solid var(--rule)" {
                                 (group.label)
                             }
                             div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3" {
@@ -175,10 +182,12 @@ pub(crate) fn profile_editor_modal(
                     }
 
                     // Actions
-                    div class="sticky bottom-0 bg-white border-t border-slate-200 py-4 flex items-center justify-between" {
+                    div class="sticky bottom-0 py-4 flex items-center justify-between"
+                        style="background: var(--paper-2); border-top: 1px solid var(--rule)" {
                         @if !is_builtin && !name.is_empty() {
                             button type="button"
-                                   class="text-sm text-red-500 hover:text-red-700 font-medium"
+                                   class="text-sm font-medium cursor-pointer"
+                                   style="color: var(--bad)"
                                    hx-get={"/confirm?kind=delete-preset&name=" (name)}
                                    hx-target="body"
                                    hx-swap="beforeend" {
@@ -188,7 +197,7 @@ pub(crate) fn profile_editor_modal(
                             span {}
                         }
                         button type="submit"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-6 py-2 rounded shadow transition text-sm" {
+                               class="btn-accent font-semibold px-6 py-2 shadow transition text-sm" {
                             @if is_builtin { "Duplicate" } @else { "Save" }
                         }
                     }
@@ -203,10 +212,10 @@ fn weight_slider(field: &WeightField, readonly: bool) -> Markup {
     html! {
         div {
             div class="flex items-center justify-between mb-1" {
-                label for=(field.name) class="text-xs font-medium text-slate-700" title=(field.help) {
+                label for=(field.name) class="text-xs font-medium" style="color: var(--ink-2)" title=(field.help) {
                     (field.label)
                 }
-                span id=(&val_id) class="text-xs font-mono text-slate-500 w-6 text-right" {
+                span id=(&val_id) class="text-xs font-mono-stat w-6 text-right" style="color: var(--accent)" {
                     (field.value)
                 }
             }
@@ -214,7 +223,7 @@ fn weight_slider(field: &WeightField, readonly: bool) -> Markup {
                   min=(field.min) max=(field.max)
                   value=(field.value)
                   disabled[readonly]
-                  class="w-full accent-slate-700 h-1.5"
+                  class="range-warm"
                   title=(field.help)
                   oninput={"document.getElementById('" (&val_id) "').textContent = this.value"};
         }

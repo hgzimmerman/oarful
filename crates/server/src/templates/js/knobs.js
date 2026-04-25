@@ -6,9 +6,9 @@ function segmentedSelect(btn, name, value) {
     }
     var siblings = btn.parentElement.querySelectorAll('button');
     siblings.forEach(function(b) {
-        b.className = 'px-3 py-2 text-slate-700 hover:bg-slate-100';
+        b.className = 'seg-warm-btn';
     });
-    btn.className = 'px-3 py-2 font-semibold bg-slate-800 text-white';
+    btn.className = 'seg-warm-btn seg-warm-btn-on';
     knobChanged();
 }
 function knobChanged() {

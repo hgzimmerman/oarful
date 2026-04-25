@@ -79,12 +79,13 @@ pub(crate) fn alternative_block(
     };
 
     html! {
-        div class="border border-slate-200 rounded-lg p-4" {
+        div class="solve-card p-4" {
             div class="flex items-center justify-between mb-3" {
                 div class="flex items-center space-x-3" {
-                    h3 class="font-bold text-slate-700" { "Alternative #" (rank) }
+                    h3 class="font-bold font-serif-heading" style="color: var(--ink)" { "Alternative #" (rank) }
                     @if changed_count > 0 {
-                        span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" {
+                        span class="text-xs px-2 py-0.5 rounded-full font-mono-stat"
+                             style="background: color-mix(in oklch, var(--warn) 15%, var(--paper)); color: var(--warn); border: 1px solid color-mix(in oklch, var(--warn) 30%, var(--rule))" {
                             (changed_count) " seat"
                             @if changed_count != 1 { "s" }
                             " changed"
@@ -92,12 +93,13 @@ pub(crate) fn alternative_block(
                     }
                 }
                 a href=(promote_url)
-                  class="text-sm font-semibold text-emerald-700 hover:text-emerald-900 border border-emerald-300 px-3 py-1 rounded transition hover:bg-emerald-50" {
+                  class="btn-warm-ghost text-sm font-semibold transition"
+                  style="color: var(--accent); border-color: var(--accent)" {
                     "Use this"
                 }
             }
             @if used.is_empty() {
-                div class="text-slate-500 italic" { "No boats fielded." }
+                div class="italic" style="color: var(--muted)" { "No boats fielded." }
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
@@ -168,10 +170,10 @@ fn boat_card(
     sort_seats_for_display(&mut seats, cox_at_top);
 
     html! {
-        div class="border border-slate-200 rounded-lg overflow-hidden" {
-            div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
-                strong class="text-slate-800" { (lineup.boat_name) }
-                span class="text-xs text-slate-500 ml-2" {
+        div class="solve-card overflow-hidden" {
+            div class="px-4 py-2" style="border-bottom: 1px dashed var(--rule)" {
+                strong class="font-serif-heading" style="color: var(--ink)" { (lineup.boat_name) }
+                span class="text-xs font-mono-stat ml-2" style="color: var(--muted)" {
                     "(" (seat_count) "+"
                     @if let Some(b) = boat {
                         ", " (rig_label(b))
@@ -203,34 +205,34 @@ fn seat_row(
     let label = seat_label(seat, sc);
     let is_changed = matches!(diff, Some(SeatDiff::Changed { .. }) | Some(SeatDiff::New));
     let row_class = if is_changed {
-        "border-b border-slate-100 last:border-0 bg-amber-50"
+        "last:border-0 seat-changed"
     } else {
-        "border-b border-slate-100 last:border-0"
+        "last:border-0"
     };
     let rower = find_rower(snapshot, rower_id);
     html! {
-        tr class=(row_class) {
+        tr class=(row_class) style={"border-bottom: 1px solid var(--rule-2)"} {
             td class="px-4 py-2 w-12" {
                 (seat_badge(boat, seat, &label))
             }
             td class="px-4 py-2" {
                 @if let Some(r) = rower {
-                    div class="font-medium text-slate-800" {
+                    div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" {
                         (r.name)
                         @if is_changed {
-                            span class="ml-1 text-xs text-amber-700" { "●" }
+                            span class="ml-1 text-xs" style="color: var(--warn)" { "\u{25CF}" }
                         }
                     }
                     (rower_stats_line(r, flags.show_attributes))
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
-                            div class="text-xs text-amber-700 italic" {
+                            div class="text-xs font-mono-stat italic" style="color: var(--warn)" {
                                 "was " (prev.name)
                             }
                         }
                     }
                 } @else {
-                    span class="text-slate-400 italic" { "unknown rower #" (rower_id) }
+                    span class="italic font-mono-stat" style="color: var(--muted)" { "unknown rower #" (rower_id) }
                 }
             }
         }
@@ -242,10 +244,10 @@ fn unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Markup {
         return html! {};
     }
     html! {
-        div class="mt-4 pt-4 border-t border-slate-200 text-sm space-y-2" {
+        div class="mt-4 pt-4 text-sm space-y-2" style="border-top: 1px solid var(--rule)" {
             div {
-                strong class="text-slate-700" { "Benched: " }
-                span class="text-slate-600" {
+                strong class="font-mono-stat text-[10px] uppercase tracking-wide" style="color: var(--muted)" { "Benched: " }
+                span class="font-serif-heading" style="color: var(--ink-2)" {
                     (name_list(snapshot, &unplaced.benched))
                 }
             }

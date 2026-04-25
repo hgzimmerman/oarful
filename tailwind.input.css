@@ -1,3 +1,323 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Paper palette ────────────────────────────────────────────────── */
+:root {
+  --paper:   #f3eee3;
+  --paper-2: #ece4d2;
+  --paper-3: #e3d9c3;
+  --ink:     #15212d;
+  --ink-2:   #2b3947;
+  --ink-3:   #4a5563;
+  --muted:   #7a7666;
+  --rule:    #c9bfa6;
+  --rule-2:  #d8cdb4;
+  --accent:  #b65a2c;
+  --accent-2:#d77a4a;
+  --port:    #b22a2a;
+  --stbd:    #2f6a3e;
+  --cox:     #5b4a8a;
+  --either:  #7a7363;
+  --good:    #2f6a3e;
+  --warn:    #c5912a;
+  --bad:     #b22a2a;
+}
+
+/* ── Font stacks ──────────────────────────────────────────────────── */
+.font-serif-heading {
+  font-family: Charter, 'Bitstream Charter', Georgia, serif;
+}
+.font-mono-stat {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+}
+
+@layer components {
+  /* Solve page warm wrapper */
+  .solve-page {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* Warm card */
+  .solve-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+
+  /* Stat badge chip */
+  .stat-badge {
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+    padding: 1px 5px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    color: var(--ink-3);
+    background: var(--paper);
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  /* Seat tag — colored by side */
+  .seat-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    min-width: 2.5rem;
+    min-height: 2rem;
+    color: var(--ink-3);
+    background: var(--paper-2);
+    border-radius: 6px;
+    border: 1px solid var(--rule-2);
+  }
+  .seat-tag-port {
+    color: var(--port);
+    background: color-mix(in oklch, var(--port) 8%, var(--paper));
+    border-color: color-mix(in oklch, var(--port) 22%, var(--rule));
+  }
+  .seat-tag-stbd {
+    color: var(--stbd);
+    background: color-mix(in oklch, var(--stbd) 8%, var(--paper));
+    border-color: color-mix(in oklch, var(--stbd) 22%, var(--rule));
+  }
+  .seat-tag-cox {
+    color: var(--cox);
+    background: color-mix(in oklch, var(--cox) 8%, var(--paper));
+    border-color: color-mix(in oklch, var(--cox) 22%, var(--rule));
+  }
+
+  /* Fit pills */
+  .fit-pill {
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    letter-spacing: 0.04em;
+  }
+  .fit-pill-ok {
+    background: color-mix(in oklch, var(--good) 12%, var(--paper));
+    color: var(--good);
+    border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule));
+  }
+  .fit-pill-warn {
+    background: color-mix(in oklch, var(--warn) 14%, var(--paper));
+    color: var(--warn);
+    border: 1px solid color-mix(in oklch, var(--warn) 25%, var(--rule));
+  }
+  .fit-pill-bad {
+    background: color-mix(in oklch, var(--bad) 12%, var(--paper));
+    color: var(--bad);
+    border: 1px solid color-mix(in oklch, var(--bad) 30%, var(--rule));
+  }
+
+  /* Boat chip selector */
+  .boat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    min-height: 28px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .boat-chip:hover {
+    border-color: var(--ink-3);
+  }
+  .boat-chip-on {
+    background: color-mix(in oklch, var(--accent) 10%, var(--paper));
+    border-color: var(--accent);
+  }
+
+  /* Segmented control (warm) */
+  .seg-warm {
+    display: inline-flex;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .seg-warm-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--ink-2);
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--rule);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .seg-warm-btn:last-child {
+    border-right: none;
+  }
+  .seg-warm-btn:hover {
+    background: var(--paper-2);
+  }
+  .seg-warm-btn-on {
+    background: var(--ink);
+    color: var(--paper);
+    font-weight: 600;
+  }
+  .seg-warm-btn-on:hover {
+    background: var(--ink-2);
+  }
+
+  /* Lock button */
+  .lock-btn {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--muted);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    padding: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+  .lock-btn:hover {
+    background: var(--paper-2);
+    color: var(--ink);
+  }
+  .lock-btn-on {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .lock-btn-dirty {
+    background: color-mix(in oklch, var(--accent) 15%, var(--paper));
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .lock-btn-was-pinned {
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--accent);
+    border-style: dashed;
+  }
+
+  /* Accent button */
+  .btn-accent {
+    background: var(--accent);
+    color: var(--paper);
+    border: none;
+    padding: 9px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .btn-accent:hover {
+    background: var(--accent-2);
+  }
+
+  /* Warm ghost button */
+  .btn-warm-ghost {
+    background: transparent;
+    border: 1px solid var(--rule);
+    color: var(--ink-2);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .btn-warm-ghost:hover {
+    background: var(--paper-2);
+  }
+
+  /* Warm ink button */
+  .btn-warm-ink {
+    background: var(--ink);
+    color: var(--paper);
+    border: 1px solid var(--ink);
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .btn-warm-ink:hover {
+    background: var(--ink-2);
+  }
+
+  /* End cap (stern/bow) */
+  .end-cap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 4px 0;
+  }
+  .end-cap-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  /* Changed seat highlight (alternatives) */
+  .seat-changed {
+    background: color-mix(in oklch, oklch(0.92 0.12 95) 35%, var(--paper));
+    border-color: color-mix(in oklch, oklch(0.78 0.15 90) 50%, var(--rule));
+  }
+
+  /* Preset row */
+  .preset-row-on {
+    background: color-mix(in oklch, var(--accent) 10%, var(--paper));
+    border-color: var(--accent);
+  }
+
+  /* Range slider warm */
+  .range-warm {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--rule-2);
+    border-radius: 2px;
+    outline: none;
+  }
+  .range-warm::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--ink);
+    cursor: pointer;
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+  .range-warm::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--ink);
+    cursor: pointer;
+    border: 2px solid var(--paper);
+  }
+  .range-warm:disabled::-webkit-slider-thumb {
+    background: var(--muted);
+    box-shadow: 0 0 0 1px var(--muted);
+    cursor: not-allowed;
+  }
+}

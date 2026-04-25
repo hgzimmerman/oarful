@@ -16,6 +16,19 @@ use super::{
     side_indicator,
 };
 
+/// CSS inline style for a pool rower's side-colored right border.
+fn pool_side_border_style(r: &Rower) -> &'static str {
+    if r.is_designated_cox.as_bool() {
+        "border-right: 2px solid var(--cox)"
+    } else {
+        match r.side {
+            lineup_db::rower::types::Side::Port => "border-right: 2px solid var(--port)",
+            lineup_db::rower::types::Side::Starboard => "border-right: 2px solid var(--stbd)",
+            lineup_db::rower::types::Side::Either => "",
+        }
+    }
+}
+
 /// Display flags threaded through lineup card rendering.
 #[derive(Clone)]
 pub(crate) struct DisplayFlags {
@@ -235,13 +248,13 @@ pub(crate) fn lineup_editor(
     let editor_url = format!("/solve/{practice_id}/editor");
 
     html! {
-        section #lineup-editor class="bg-white rounded-lg shadow p-4 sm:p-6"
+        section #lineup-editor class="solve-card p-4 sm:p-6"
                data-practice-id=(practice_id)
                data-editor-url=(editor_url)
                x-data="lineupEditor()" {
 
             div class="flex items-center justify-between mb-1" {
-                h2 class="text-xl font-bold text-slate-800" { "Lineup" }
+                h2 class="text-xl font-bold font-serif-heading" style="color: var(--ink)" { "Lineup" }
                 div class="no-print" {
                     form method="post" action=(commit_action) {
                         // Server-rendered hidden inputs for commit.
@@ -256,7 +269,7 @@ pub(crate) fn lineup_editor(
                             }
                         }
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                               class="btn-accent font-semibold shadow transition whitespace-nowrap" {
                             "Commit lineup"
                         }
                     }
@@ -264,41 +277,52 @@ pub(crate) fn lineup_editor(
             }
             // Selection hint — fixed height so it doesn't cause reflow.
             div class="h-6 mb-2 no-print" {
-                span class="text-xs text-blue-600"
+                span class="text-xs"
+                     style="color: var(--accent)"
                      x-show="selected && !selectedBoat"
                      x-cloak {
-                    "Click another to swap · or click again to cancel"
+                    "Click another to swap \u{00b7} or click again to cancel"
                 }
-                span class="text-xs text-blue-600"
+                span class="text-xs"
+                     style="color: var(--accent)"
                      x-show="selectedBoat"
                      x-cloak {
-                    "Click a boat pill to transfer rowers · or click Transfer again to cancel"
+                    "Click a boat pill to transfer rowers \u{00b7} or click Transfer again to cancel"
                 }
             }
 
-            // Boat selector pills
+            // Boat selector chips
             div class="flex flex-wrap items-center gap-2 mb-4 no-print" {
                 @for eb in &editor.boats {
                     @let bid = eb.boat.id.as_int();
                     @let active_class = if eb.active {
-                        "px-4 py-2 rounded-full text-sm font-medium bg-slate-800 text-white cursor-pointer"
+                        "boat-chip boat-chip-on"
                     } else {
-                        "px-4 py-2 rounded-full text-sm font-medium bg-slate-200 text-slate-500 cursor-pointer"
+                        "boat-chip"
                     };
-                    @let pill_target_class = "px-4 py-2 rounded-full text-sm font-medium bg-blue-600 text-white cursor-pointer ring-2 ring-blue-400";
+                    @let pill_target_class = "boat-chip boat-chip-on";
+                    @let filled = eb.seats.iter().filter(|(_, r)| r.is_some()).count();
+                    @let total = eb.seats.len();
                     @let in_use_team = flags.boats_in_use_by.get(&eb.boat.id);
                     button type="button"
                            class=(active_class)
                            data-boat-id=(bid)
                            ":class"={"selectedBoat !== null && selectedBoat !== " (bid) " ? '" (pill_target_class) "' : '" (active_class) "'"}
                            "@click"={"boatPillClick(" (bid) ")"} {
-                        (eb.boat.name)
-                        " ("
-                        (eb.boat.seat_count)
-                        @if eb.boat.has_cox.as_bool() { "+" }
-                        ")"
+                        span class="font-serif-heading text-sm" style="color: var(--ink)" {
+                            (eb.boat.name)
+                        }
+                        span class="font-mono-stat text-[10px] px-1 rounded"
+                             style="border: 1px solid var(--rule); color: var(--muted)" {
+                            (eb.boat.seat_count)
+                            @if eb.boat.has_cox.as_bool() { "+" }
+                        }
+                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
+                            (filled) "/" (total)
+                        }
                         @if let Some(_team) = in_use_team {
-                            span class="ml-1 inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-amber-200 text-amber-800 rounded-full leading-none" {
+                            span class="ml-1 inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded-full leading-none"
+                                 style="background: color-mix(in oklch, var(--warn) 20%, var(--paper)); color: var(--warn)" {
                                 "In use"
                             }
                         }
@@ -306,13 +330,16 @@ pub(crate) fn lineup_editor(
                 }
                 @if editor.boats.len() > 2 {
                     span class="inline-flex items-center gap-1 ml-1" {
-                        span class="text-xs text-slate-400" { "|" }
+                        span class="text-xs" style="color: var(--rule)" { "\u{00b7}" }
                         button type="button"
-                               class="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-medium rounded"
-                               "@click"="selectAllBoats()" { "All" }
+                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer"
+                               style="color: var(--accent)"
+                               "@click"="selectAllBoats()" { "all" }
+                        span class="text-xs" style="color: var(--rule)" { "\u{00b7}" }
                         button type="button"
-                               class="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-medium rounded"
-                               "@click"="deselectAllBoats()" { "None" }
+                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer"
+                               style="color: var(--accent)"
+                               "@click"="deselectAllBoats()" { "none" }
                     }
                 }
             }
@@ -325,16 +352,17 @@ pub(crate) fn lineup_editor(
             }
 
             // Walk-on + Rower pool
-            div class="pt-4 border-t border-slate-200 text-sm space-y-2" {
+            div class="pt-4 text-sm space-y-2" style="border-top: 1px solid var(--rule)" {
                 // Walk-on: add unavailable rowers to the pool.
                 @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id));
                 @if has_addable || !walkon_ids.is_empty() {
                     div class="flex items-center gap-2 flex-wrap mb-2" {
                         @if !walkon_ids.is_empty() {
-                            span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Walk-ons:" }
+                            span class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ink-2)" { "Walk-ons:" }
                             @for id in walkon_ids {
                                 @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.name.as_str()).unwrap_or("?");
-                                span class="inline-block px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded-full" {
+                                span class="inline-block px-2 py-0.5 text-xs rounded-full"
+                                     style="background: color-mix(in oklch, var(--good) 15%, var(--paper)); color: var(--good)" {
                                     (name)
                                 }
                             }
@@ -346,13 +374,13 @@ pub(crate) fn lineup_editor(
                                  hx-target="#content"
                                  hx-push-url="true"
                                  class="inline-flex items-center gap-2" {
-                                // Carry existing knobs through.
                                 input type="hidden" name="partial" value="0";
                                 @for w in walkon_ids {
                                     input type="hidden" name="walkon" value=(w);
                                 }
                                 select name="walkon"
-                                       class="border border-slate-300 rounded px-2 py-1.5 text-sm focus:border-slate-500 focus:outline-none" {
+                                       class="rounded px-2 py-1.5 text-sm focus:outline-none"
+                                       style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)" {
                                     @for r in unavailable {
                                         @if !walkon_ids.contains(&r.id) {
                                             option value=(r.id) { (r.name) }
@@ -360,7 +388,8 @@ pub(crate) fn lineup_editor(
                                     }
                                 }
                                 button type="submit"
-                                       class="text-xs font-semibold text-emerald-700 hover:text-emerald-900 uppercase tracking-wide" {
+                                       class="text-xs font-semibold uppercase tracking-wide cursor-pointer"
+                                       style="color: var(--accent)" {
                                     "+ Walk-on"
                                 }
                             }
@@ -369,39 +398,30 @@ pub(crate) fn lineup_editor(
                 }
                 @if !editor.sculling.is_empty() {
                     div {
-                        strong class="text-slate-700" { "To sculling " }
+                        strong class="font-serif-heading" style="color: var(--ink)" { "To sculling " }
                     }
                     div class="flex flex-wrap gap-2 mt-1" {
                         @for r in &editor.sculling {
                             @let key = format!("sculling:{}", r.id);
-                            @let side_border = if r.is_designated_cox.as_bool() {
-                                "border-r-2 border-r-indigo-400"
-                            } else {
-                                match r.side {
-                                    lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
-                                    lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
-                                    lineup_db::rower::types::Side::Either => "",
-                                }
-                            };
+                            @let side_style = pool_side_border_style(r);
                             span data-key=(key)
                                  data-boat="sculling"
                                  data-seat="-1"
                                  data-rower=(r.id)
-                                 class={"inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50 " (side_border)}
-                                 ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                                 class="inline-block px-3 py-2 rounded cursor-pointer transition"
+                                 style={"border: 1px solid var(--rule); " (side_style)}
+                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid var(--rule); " (side_style) "'"}
                                  "@click"={"select('" (key) "')"} {
-                                div class="font-medium text-slate-800 text-sm" { (r.name) }
-                                div class="text-xs text-slate-500" {
-                                    (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
-                                }
+                                div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
+                                (rower_stats_line(r, true))
                             }
                         }
                     }
                 }
 
                 div {
-                    strong class="text-slate-700" { "Available " }
-                    span class="text-xs text-slate-500" { "(click to place in a seat)" }
+                    strong class="font-serif-heading" style="color: var(--ink)" { "Available " }
+                    span class="text-xs italic" style="color: var(--muted)" { "(click to place in a seat)" }
                 }
                 @let has_boated = editor.boats.iter().any(|eb| eb.active && eb.seats.iter().any(|(_, r)| r.is_some()));
                 div class="flex flex-wrap gap-2 mt-1" {
@@ -411,34 +431,26 @@ pub(crate) fn lineup_editor(
                              data-boat="bench"
                              data-seat="-1"
                              data-rower=""
-                             class="inline-block px-3 py-2 rounded border border-dashed border-slate-300 cursor-pointer transition hover:bg-slate-50"
-                             ":class"={"selected === 'bench:empty' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                             class="inline-block px-3 py-2 rounded cursor-pointer transition"
+                             style="border: 1px dashed var(--rule)"
+                             ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
                              "@click"="select('bench:empty')" {
-                            span class="text-slate-400 italic text-sm" { "\u{2014} bench \u{2014}" }
+                            span class="font-mono-stat italic text-sm" style="color: var(--muted)" { "\u{2014} bench \u{2014}" }
                         }
                     }
                     @for r in &editor.pool {
                         @let key = format!("bench:{}", r.id);
-                        @let side_border = if r.is_designated_cox.as_bool() {
-                            "border-r-2 border-r-indigo-400"
-                        } else {
-                            match r.side {
-                                lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
-                                lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
-                                lineup_db::rower::types::Side::Either => "",
-                            }
-                        };
+                        @let side_style = pool_side_border_style(r);
                         span data-key=(key)
                              data-boat="bench"
                              data-seat="-1"
                              data-rower=(r.id)
-                             class={"inline-block px-3 py-2 rounded border border-slate-200 cursor-pointer transition hover:bg-slate-50 " (side_border)}
-                             ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-blue-400 border-blue-400' : 'hover:bg-slate-50'"}
+                             class="inline-block px-3 py-2 rounded cursor-pointer transition"
+                             style={"border: 1px solid var(--rule); " (side_style)}
+                             ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid var(--rule); " (side_style) "'"}
                              "@click"={"select('" (key) "')"} {
-                            div class="font-medium text-slate-800 text-sm" { (r.name) }
-                            div class="text-xs text-slate-500" {
-                                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
-                            }
+                            div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
+                            (rower_stats_line(r, true))
                         }
                     }
                 }
@@ -446,29 +458,20 @@ pub(crate) fn lineup_editor(
                 // Available from other teams — informational only.
                 @if !other_team_rowers.is_empty() {
                     div class="mt-3" {
-                        strong class="text-amber-700" { "Available from other teams " }
-                        span class="text-xs text-slate-500" { "(use walk-on to pull in)" }
+                        strong style="color: var(--warn)" { "Available from other teams " }
+                        span class="text-xs italic" style="color: var(--muted)" { "(use walk-on to pull in)" }
                     }
                     div class="flex flex-wrap gap-2 mt-1" {
                         @for otr in other_team_rowers {
                             @let r = &otr.rower;
-                            @let side_border = if r.is_designated_cox.as_bool() {
-                                "border-r-2 border-r-indigo-400"
-                            } else {
-                                match r.side {
-                                    lineup_db::rower::types::Side::Port => "border-r-2 border-r-red-400",
-                                    lineup_db::rower::types::Side::Starboard => "border-r-2 border-r-green-500",
-                                    lineup_db::rower::types::Side::Either => "",
-                                }
-                            };
-                            span class={"inline-block px-3 py-2 rounded border border-amber-200 bg-amber-50 " (side_border)} {
-                                div class="font-medium text-amber-900 text-sm" {
+                            @let side_style = pool_side_border_style(r);
+                            span class="inline-block px-3 py-2 rounded"
+                                 style={"border: 1px solid var(--rule-2); background: color-mix(in oklch, var(--warn) 8%, var(--paper)); " (side_style)} {
+                                div class="font-medium text-sm" style="color: var(--ink)" {
                                     (r.name)
-                                    span class="ml-1 text-[10px] font-normal text-amber-600" { "(" (&otr.team_name) ")" }
+                                    span class="ml-1 text-[10px] font-normal" style="color: var(--warn)" { "(" (&otr.team_name) ")" }
                                 }
-                                div class="text-xs text-amber-700" {
-                                    (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
-                                }
+                                (rower_stats_line(r, true))
                             }
                         }
                     }
@@ -532,7 +535,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
     html! {
         @let hidden = if eb.active { "false" } else { "true" };
         @let hide_style = if eb.active { "" } else { "display:none" };
-        div class="border border-slate-200 rounded-lg overflow-hidden print-break"
+        div class="solve-card overflow-hidden print-break"
              data-editor-boat=(boat.id)
              data-hidden=(hidden)
              style=(hide_style) {
@@ -545,158 +548,176 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
             } else {
                 "clean"
             };
-            @let boat_icon_active = boat_pin_state == "locked" || boat_pin_state == "dirty";
-            @let boat_icon_bg = if boat_icon_active { "bg-blue-100 rounded-full w-6 h-6 inline-flex items-center justify-center" } else { "" };
             @let in_use_team = flags.boats_in_use_by.get(&boat.id);
             @if let Some(team) = in_use_team {
-                div class="bg-amber-50 border-b border-amber-200 px-4 py-1 text-xs font-medium text-amber-700" {
+                div class="px-4 py-1 text-xs font-medium"
+                    style="background: color-mix(in oklch, var(--warn) 15%, var(--paper)); border-bottom: 1px solid var(--rule-2); color: var(--warn)" {
                     "In use by " (team)
                 }
             }
-            div class="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center" {
-                strong class="text-slate-800" { (boat.name) }
-                span class="text-xs text-slate-500 ml-2" {
-                    "(" (seat_count) "+"
-                    ", " (rig_label(boat))
-                    ")"
+            // Card header
+            div class="px-4 py-3 flex items-center gap-3"
+                style="border-bottom: 1px dashed var(--rule)" {
+                div class="flex-1 min-w-0" {
+                    h3 class="font-serif-heading font-medium text-base" style="color: var(--ink)" {
+                        (boat.name)
+                    }
+                    div class="font-mono-stat text-[10px] flex flex-wrap gap-1 mt-0.5" style="color: var(--muted)" {
+                        span class="px-1 rounded" style="border: 1px solid var(--rule); color: var(--ink-2); background: var(--paper-2)" {
+                            (seat_count)
+                            @if boat.has_cox.as_bool() { "+" }
+                        }
+                        span { "\u{00b7}" }
+                        span { (rig_label(boat)) }
+                        span { "\u{00b7}" }
+                        @let filled = seats.iter().filter(|(_, r)| r.is_some()).count();
+                        span { (filled) "/" (seats.len()) " seated" }
+                    }
                 }
-                // Transfer button — select this boat to move rowers to another.
+                // Transfer button
                 button type="button"
-                       class="ml-auto mr-2 text-xs text-slate-400 hover:text-blue-600 no-print"
-                       ":class"={"selectedBoat === " (boat.id) " ? 'ml-auto mr-2 text-xs text-blue-600 font-semibold no-print' : 'ml-auto mr-2 text-xs text-slate-400 hover:text-blue-600 no-print'"}
+                       class="text-xs no-print cursor-pointer"
+                       style="color: var(--muted)"
+                       ":class"={"selectedBoat === " (boat.id) " ? 'text-xs no-print cursor-pointer font-semibold' : 'text-xs no-print cursor-pointer'"}
+                       ":style"={"selectedBoat === " (boat.id) " ? 'color: var(--accent)' : 'color: var(--muted)'"}
                        title="Transfer rowers to another boat"
                        "@click.stop"={"selectBoatForTransfer(" (boat.id) ")"} {
                     "Transfer"
                 }
+                // Lock/pin icon
                 span {
                     @if boat_pin_state == "locked" {
                         button type="button"
-                               class={"text-xs hover:text-violet-700 " (boat_icon_bg)}
-                               title="Unlock boat"
+                               class="lock-btn lock-btn-on"
+                               title="Boat locked \u{2014} solver keeps all seats. Click to unlock."
                                "@click.stop"={"cycleBoatState('locked'," (boat.id) ")"} {
-                            "\u{1F512}"
+                            "\u{25CF}"
                         }
                     } @else if boat_pin_state == "dirty" {
                         button type="button"
-                               class={"text-xs hover:text-amber-700 " (boat_icon_bg)}
-                               title="Unpin boat"
+                               class="lock-btn lock-btn-dirty"
+                               title="Boat pinned \u{2014} solver will honor this next run. Click to unpin."
                                "@click.stop"={"cycleBoatState('dirty'," (boat.id) ")"} {
-                            "\u{1F4CC}"
+                            "\u{25CF}"
                         }
                     } @else if boat_pin_state == "was_pinned" {
                         button type="button"
-                               class="text-xs hover:text-violet-700 rotate-[-45deg] inline-block"
-                               title="Lock boat"
+                               class="lock-btn lock-btn-was-pinned"
+                               title="Boat was pinned last run, now free. Click to lock."
                                "@click.stop"={"cycleBoatState('was_pinned'," (boat.id) ")"} {
-                            "\u{1F4CC}"
+                            "\u{25CB}"
                         }
                     } @else {
                         button type="button"
-                               class="text-xs text-slate-300 hover:text-violet-700"
-                               title="Lock boat"
+                               class="lock-btn"
+                               title="Click to lock this boat"
                                "@click.stop"={"cycleBoatState('clean'," (boat.id) ")"} {
-                            "\u{1F513}"
+                            "\u{25CB}"
                         }
                     }
                 }
             }
-            table class="w-full text-sm" {
-                tbody {
-                    @for (seat, maybe_rower) in &seats {
-                        @let key = format!("{}:{}", boat.id, seat);
-                        @let label = seat_label(*seat, seat_count);
-                        @let rower = maybe_rower.and_then(|id| find_rower(snapshot, id));
-                        @let rower_id_str = maybe_rower.map(|id| id.as_int().to_string()).unwrap_or_default();
-                        @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
-                        @let stats_text = rower.map(|r| format!(
-                            "{} · {} · {} · {}",
-                            r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
-                        )).unwrap_or_default();
-                        @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
-                        @let is_empty = maybe_rower.is_none();
-                        // Determine seat pin state: locked > dirty > was_pinned > clean.
-                        @let seat_triple = maybe_rower.map(|rid| (rid, boat.id, *seat));
-                        @let pin_state = if seat_triple.map(|t| flags.locked_seats.contains(&t)).unwrap_or(false) {
-                            "locked"
-                        } else if seat_triple.map(|t| flags.pinned_seats.contains(&t)).unwrap_or(false) {
-                            "dirty"
-                        } else if seat_triple.map(|t| flags.was_pinned_seats.contains(&t)).unwrap_or(false) {
-                            "was_pinned"
-                        } else {
-                            "clean"
-                        };
-                        @let row_base = if is_empty {
-                            "border-b border-slate-100 last:border-0 cursor-pointer transition bg-slate-50"
-                        } else if is_designated_cox {
-                            "border-b border-slate-100 last:border-0 cursor-pointer transition border-l-4 border-l-indigo-400"
-                        } else {
-                            "border-b border-slate-100 last:border-0 cursor-pointer transition"
-                        };
-                        // Icon gets a blue background ring when the state influences generation.
-                        @let icon_active = pin_state == "locked" || pin_state == "dirty";
-                        @let seat_key = format!("{}:{}:{}", rower_id_str, boat.id, seat);
-                        tr data-key=(key)
-                           data-boat=(boat.id)
-                           data-seat=(seat)
-                           data-rower=(rower_id_str)
-                           data-name=(rower_name)
-                           data-stats=(stats_text)
-                           data-pin-state=(pin_state)
-                           class=(row_base)
-                           ":class"={"selected === '" (key) "' ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-slate-50'"}
-                           "@click"={"select('" (key) "')"} {
-                            td class="px-4 py-2 w-12" {
-                                (seat_badge(Some(boat), *seat, &label))
+            // Seat rows
+            div class="px-2 py-1" {
+                // Stern end cap
+                div class="end-cap" {
+                    span class="end-cap-rule" {}
+                    span { "stern" }
+                    span class="end-cap-rule" {}
+                }
+                @for (seat, maybe_rower) in &seats {
+                    @let key = format!("{}:{}", boat.id, seat);
+                    @let label = seat_label(*seat, seat_count);
+                    @let rower = maybe_rower.and_then(|id| find_rower(snapshot, id));
+                    @let rower_id_str = maybe_rower.map(|id| id.as_int().to_string()).unwrap_or_default();
+                    @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
+                    @let stats_text = rower.map(|r| format!(
+                        "{} · {} · {} · {}",
+                        r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
+                    )).unwrap_or_default();
+                    @let is_empty = maybe_rower.is_none();
+                    @let seat_triple = maybe_rower.map(|rid| (rid, boat.id, *seat));
+                    @let pin_state = if seat_triple.map(|t| flags.locked_seats.contains(&t)).unwrap_or(false) {
+                        "locked"
+                    } else if seat_triple.map(|t| flags.pinned_seats.contains(&t)).unwrap_or(false) {
+                        "dirty"
+                    } else if seat_triple.map(|t| flags.was_pinned_seats.contains(&t)).unwrap_or(false) {
+                        "was_pinned"
+                    } else {
+                        "clean"
+                    };
+                    @let seat_key = format!("{}:{}:{}", rower_id_str, boat.id, seat);
+                    // Grid row: seat-tag | rower-cell | lock | side-indicator
+                    div data-key=(key)
+                        data-boat=(boat.id)
+                        data-seat=(seat)
+                        data-rower=(rower_id_str)
+                        data-name=(rower_name)
+                        data-stats=(stats_text)
+                        data-pin-state=(pin_state)
+                        class="grid gap-1 my-0.5 rounded cursor-pointer transition items-center"
+                        style={"grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" })}
+                        ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" }) "'"}
+                        "@click"={"select('" (key) "')"} {
+                        // Seat tag
+                        div class="flex items-center justify-center" {
+                            (seat_badge(Some(boat), *seat, &label))
+                        }
+                        // Rower content
+                        div class="py-2 px-2 min-w-0" {
+                            @if let Some(r) = rower {
+                                div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
+                                (rower_stats_line(r, flags.show_attributes))
+                            } @else if is_empty {
+                                span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "\u{2014} empty \u{2014}" }
+                            } @else {
+                                span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "unknown" }
                             }
-                            td class="px-4 py-2 rower-content" {
-                                @if let Some(r) = rower {
-                                    div class="font-medium text-slate-800" { (r.name) }
-                                    (rower_stats_line(r, flags.show_attributes))
-                                } @else if is_empty {
-                                    span class="text-slate-400 italic" { "\u{2014} empty \u{2014}" }
+                        }
+                        // Lock button
+                        @if !is_empty {
+                            div class="lock-cell" {
+                                @if pin_state == "locked" {
+                                    button type="button"
+                                           class="lock-btn lock-btn-on"
+                                           title="Locked \u{2014} solver always keeps this. Click to unlock."
+                                           "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
+                                        "\u{25CF}"
+                                    }
+                                } @else if pin_state == "dirty" {
+                                    button type="button"
+                                           class="lock-btn lock-btn-dirty"
+                                           title="Pinned \u{2014} solver will honor this next run. Click to unpin."
+                                           "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {
+                                        "\u{25CF}"
+                                    }
+                                } @else if pin_state == "was_pinned" {
+                                    button type="button"
+                                           class="lock-btn lock-btn-was-pinned"
+                                           title="Was pinned last run, now free. Click to lock."
+                                           "@click.stop"={"cycleSeatState('was_pinned','" (seat_key) "')"} {
+                                        "\u{25CB}"
+                                    }
                                 } @else {
-                                    span class="text-slate-400 italic" { "unknown" }
-                                }
-                            }
-                            @if !is_empty {
-                                @let icon_bg = if icon_active { "bg-blue-100 rounded-full w-6 h-6 inline-flex items-center justify-center" } else { "" };
-                                td class="w-8 text-center lock-cell" {
-                                    @if pin_state == "locked" {
-                                        button type="button"
-                                               class={"text-xs hover:text-violet-700 " (icon_bg)}
-                                               title="Unlock"
-                                               "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
-                                            "\u{1F512}"
-                                        }
-                                    } @else if pin_state == "dirty" {
-                                        button type="button"
-                                               class={"text-xs hover:text-amber-700 " (icon_bg)}
-                                               title="Unpin (let solver reassign)"
-                                               "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {
-                                            "\u{1F4CC}"
-                                        }
-                                    } @else if pin_state == "was_pinned" {
-                                        button type="button"
-                                               class="text-xs hover:text-violet-700 rotate-[-45deg] inline-block"
-                                               title="Lock (keep this placement)"
-                                               "@click.stop"={"cycleSeatState('was_pinned','" (seat_key) "')"} {
-                                            "\u{1F4CC}"
-                                        }
-                                    } @else {
-                                        button type="button"
-                                               class="text-xs text-slate-300 hover:text-violet-700"
-                                               title="Lock seat"
-                                               "@click.stop"={"cycleSeatState('clean','" (seat_key) "')"} {
-                                            "\u{1F513}"
-                                        }
+                                    button type="button"
+                                           class="lock-btn"
+                                           title="Click to lock this seat"
+                                           "@click.stop"={"cycleSeatState('clean','" (seat_key) "')"} {
+                                        "\u{25CB}"
                                     }
                                 }
-                            } @else {
-                                td class="w-8 lock-cell" {}
                             }
-                            (side_indicator(rower))
+                        } @else {
+                            div class="lock-cell" {}
                         }
+                        (side_indicator(rower))
                     }
+                }
+                // Bow end cap
+                div class="end-cap" {
+                    span class="end-cap-rule" {}
+                    span { "bow" }
+                    span class="end-cap-rule" {}
                 }
             }
         }

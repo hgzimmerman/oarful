@@ -23,7 +23,6 @@ use lineup_db::{
 };
 use maud::{html, Markup};
 
-use super::layout::page_header;
 use crate::handlers::solve::SolveKnobs;
 
 // ── Shared helpers (used across submodules and/or by other templates) ──
@@ -74,21 +73,91 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     }
 }
 
-/// Compact stats line for a rower. When `show_attributes` is false,
-/// only shows side preference (non-sensitive); otherwise shows the
-/// full weight class / skill / strength / side breakdown.
+/// Compact stats line for a rower rendered as monospace badge chips.
+/// When `show_attributes` is false, only shows side preference
+/// (non-sensitive); otherwise shows the full breakdown.
+///
+/// Shows actual weight (lbs) and height (ft'in") when the rower has
+/// real measurements on file, otherwise falls back to the bucket
+/// abbreviation. A single tooltip on the whole row shows all stats
+/// in a human-readable format.
 pub(super) fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
     if show_attributes {
+        // Weight: show real value when available, else bucket
+        let weight_label = if let Some(w) = r.weight_kg {
+            format!("{:.0}lb", w.to_lbs())
+        } else {
+            r.weight_class.short().to_string()
+        };
+        // Height: show real value when available, else bucket abbreviation
+        let height_label = if let Some(h) = r.height_m {
+            h.to_ft_in()
+        } else {
+            format!("{}", r.height)
+        };
+        let has_raw_weight = r.weight_kg.is_some();
+        let has_raw_height = r.height_m.is_some();
+
+        // Build a single human-readable tooltip for the whole stats row
+        let mut tip_parts = Vec::new();
+
+        // Weight
+        if let Some(w) = r.weight_kg {
+            tip_parts.push(format!(
+                "Weight: {:.0} lb ({:.1} kg, {})",
+                w.to_lbs(),
+                w.as_f64(),
+                r.weight_class
+            ));
+        } else {
+            tip_parts.push(format!(
+                "Weight: {} (no measurement on file)",
+                r.weight_class
+            ));
+        }
+
+        // Height
+        if let Some(h) = r.height_m {
+            tip_parts.push(format!(
+                "Height: {} ({:.2}m, {})",
+                h.to_ft_in(),
+                h.as_f64(),
+                r.height
+            ));
+        } else {
+            tip_parts.push(format!("Height: {} (no measurement on file)", r.height));
+        }
+
+        tip_parts.push(format!("Skill: {}", r.skill));
+        tip_parts.push(format!("Strength: {}", r.strength));
+        tip_parts.push(format!("Side: {}", compact_side(r)));
+
+        let tooltip = tip_parts.join(" \u{2022} ");
+
         html! {
-            div class="text-xs text-slate-500" {
-                (r.weight_class.short()) " · " (r.skill.short()) " · " (r.strength.short()) " · " (compact_side(r))
+            div class="flex gap-1 mt-0.5 flex-wrap cursor-help" title=(tooltip) {
+                @if has_raw_weight {
+                    span class="stat-badge" { (weight_label) }
+                } @else {
+                    span class="stat-badge italic" { (weight_label) }
+                }
+                span class="stat-badge" { (r.skill.short()) }
+                span class="stat-badge" { (r.strength.short()) }
+                @if has_raw_height {
+                    span class="stat-badge" { (height_label) }
+                } @else {
+                    span class="stat-badge italic" { (height_label) }
+                }
+                span class="stat-badge" { (compact_side(r)) }
             }
         }
     } else {
         use lineup_db::rower::types::Side;
         if r.side != Side::Either {
             html! {
-                div class="text-xs text-slate-500" { (compact_side(r)) }
+                div class="flex gap-1 mt-0.5" {
+                    span class="stat-badge" { (compact_side(r)) }
+                }
             }
         } else {
             html! {}
@@ -177,23 +246,23 @@ pub(crate) fn seat_label(seat: i32, seat_count: i32) -> String {
     }
 }
 
-/// Colored circle badge for a seat label. Port = red, starboard = green,
-/// cox = indigo (neutral). The label text is centered over the circle.
+/// Colored seat tag badge. Port = red tint, starboard = green tint,
+/// cox = purple tint. Rectangular with side-color background.
 pub(crate) fn seat_badge(boat: Option<&Boat>, seat: i32, label: &str) -> Markup {
-    let (bg, text_color) = if seat == 0 {
-        ("bg-indigo-100", "text-indigo-700")
+    let side_class = if seat == 0 {
+        "seat-tag seat-tag-cox"
     } else if let Some(b) = boat {
         use lineup_db::rower::types::Side;
         match b.seat_side(seat) {
-            Some(Side::Port) => ("bg-red-100", "text-red-700"),
-            Some(Side::Starboard) => ("bg-green-100", "text-green-700"),
-            _ => ("bg-slate-100", "text-slate-500"),
+            Some(Side::Port) => "seat-tag seat-tag-port",
+            Some(Side::Starboard) => "seat-tag seat-tag-stbd",
+            _ => "seat-tag",
         }
     } else {
-        ("bg-slate-100", "text-slate-500")
+        "seat-tag"
     };
     html! {
-        span class={"inline-flex items-center justify-center w-8 h-8 rounded-full font-mono text-xs font-semibold " (bg) " " (text_color)} {
+        span class=(side_class) {
             (label)
         }
     }
@@ -257,13 +326,22 @@ pub(crate) fn landing_content(
     };
 
     html! {
-        (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
-            div class="no-print" {
-                (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
+        div class="solve-page" {
+            header class="border-b px-4 sm:px-8 py-4 sm:py-6"
+                   style="border-color: var(--rule); background: var(--paper)" {
+                h1 class="text-2xl font-bold font-serif-heading"
+                   style="color: var(--ink)" {
+                    "Set Lineups \u{00b7} " (date)
+                }
+                p class="text-sm mt-1" style="color: var(--muted)" { (subtitle) }
             }
-            div #solve-results {
-                (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
+            div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
+                div class="no-print" {
+                    (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
+                }
+                div #solve-results {
+                    (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
+                }
             }
         }
     }
@@ -286,13 +364,22 @@ pub(crate) fn streaming_page(
     );
 
     html! {
-        (page_header(&format!("Set Lineups · {date}"), Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
-            div class="no-print" {
-                (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
+        div class="solve-page" {
+            header class="border-b px-4 sm:px-8 py-4 sm:py-6"
+                   style="border-color: var(--rule); background: var(--paper)" {
+                h1 class="text-2xl font-bold font-serif-heading"
+                   style="color: var(--ink)" {
+                    "Set Lineups \u{00b7} " (date)
+                }
+                p class="text-sm mt-1" style="color: var(--muted)" { (subtitle) }
             }
-            div #solve-results {
-                (streaming_skeleton(practice_id, knobs))
+            div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
+                div class="no-print" {
+                    (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
+                }
+                div #solve-results {
+                    (streaming_skeleton(practice_id, knobs))
+                }
             }
         }
     }

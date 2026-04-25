@@ -7,7 +7,7 @@ function lineupEditor() {
         gatherState() {
             var root = this.$root;
             var params = [];
-            root.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
+            root.querySelectorAll('[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
                 if (el.dataset.rower) {
                     params.push('seat=' + el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
@@ -203,7 +203,7 @@ function lineupEditor() {
                 card.dataset.hidden = 'false';
             } else {
                 var self = this;
-                card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                card.querySelectorAll('[data-rower]').forEach(function(row) {
                     self._clearSeatState(row);
                     row.dataset.rower = '';
                 });
@@ -228,7 +228,7 @@ function lineupEditor() {
         deselectAllBoats() {
             var self = this;
             this.$root.querySelectorAll('[data-editor-boat]').forEach(function(card) {
-                card.querySelectorAll('tr[data-rower]').forEach(function(row) {
+                card.querySelectorAll('[data-rower]').forEach(function(row) {
                     self._clearSeatState(row);
                     row.dataset.rower = '';
                 });
