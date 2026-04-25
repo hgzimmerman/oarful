@@ -223,6 +223,11 @@ can resume without re-deriving context.
   sections. Subject includes team names. `opt_in_stale_alerts` on
   `app_user`, `stale_digest_log` table, `EmailType::StaleAlerts`
   unsubscribe, "Lineup change alerts" on email preferences.
+- **CI/CD** — GitHub Actions with 4 jobs: lint (fmt + clippy -D
+  warnings + tailwind CSS freshness), unit/integration tests
+  (workspace minus e2e), e2e tests (Xvfb + WebKitWebDriver via
+  nix), Docker image build (nix). All jobs use `nix develop`.
+  Deployment pipelines live in separate infra repo.
 
 ## Open work
 
@@ -280,15 +285,6 @@ lifecycle events.
 
 Add pricing to the landing page once Stripe is wired up. Starting
 at $150/year. State it plainly, frame as annual not monthly.
-
-#### CI/CD — shipped
-
-GitHub Actions workflow with 4 jobs: lint (fmt + clippy + tailwind
-CSS freshness), unit/integration tests (workspace minus e2e), e2e
-tests (Xvfb + WebKitWebDriver via nix), Docker image build (nix).
-All jobs use `nix develop` for consistent tooling. Clippy runs
-without `-D warnings` (pre-existing warnings to clean up later).
-Deployment pipelines live in separate infra repo.
 
 ### Long-term / parked
 
