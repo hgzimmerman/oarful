@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+## Project Overview
+- Rust web app using Axum, HTMX, maud templates, and Alpine.js
+- Always run `cargo check` after edits and ensure all tests pass with `cargo test`
+
+## Workflow Conventions
+- When the user says "check TODOs" or "review backlog", read `TODOs.md` in the project root — do NOT grep for TODO comments in source code
+- Never use AI-marketing buzzwords or hype copy. Keep UI text plain, direct, and jargon-free. Match the tone of existing copy in the app.
+
 ## Build & Test
 - `cargo build -p lineup_server` — fast iteration (server + deps only)
 - `cargo test -p lineup_solver` — solver unit + baseline tests
@@ -34,6 +42,9 @@
 - Print CSS: `no-print` hides elements, `print-break` avoids page-break inside
 - Responsive: grids start `grid-cols-1` and step up at `sm:`/`md:` breakpoints
 - Touch targets: minimum `py-2` on interactive elements (44px target)
+
+## Frontend Notes
+- For HTMX/Alpine.js integration: be careful with nested forms, hx-target conflicts, and Alpine init timing after HTMX swaps. Test interactions manually if unsure.
 
 ## Gotchas
 - Solver timeout (SolveStatus::Timeout) means zero results; timeout-with-best-result maps to Satisfied
