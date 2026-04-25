@@ -44,5 +44,5 @@ pub mod sql_types {
         HeightMapping, RowerWeightClassMapping, SideMapping, SkillMapping, StrengthMapping,
     };
     pub use super::seat_affinity::SeatZoneMapping;
-    pub use super::team::SelfEditLevelMapping;
+    pub use super::team::BucketVisibilityMapping;
 }

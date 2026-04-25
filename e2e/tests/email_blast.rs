@@ -242,7 +242,7 @@ async fn send_reminders_blocked_for_demo() {
 
     let body = resp.text().await.unwrap();
     assert!(
-        body.contains("not available during the free trial"),
+        body.contains("Upgrade to unlock email"),
         "send reminders should be blocked for demo tenant, got: {}",
         &body[..body.len().min(500)]
     );
@@ -285,7 +285,7 @@ async fn send_lineups_blocked_for_demo() {
 
     let body = resp.text().await.unwrap();
     assert!(
-        body.contains("not available during the free trial"),
+        body.contains("Upgrade to unlock email"),
         "send lineups should be blocked for demo tenant, got: {}",
         &body[..body.len().min(500)]
     );

@@ -18,7 +18,7 @@ use lineup_db::rower::types::SweepBias;
 use lineup_db::rower::Rower;
 use serde::Deserialize;
 
-use lineup_db::team::{SelfEditLevel, Team};
+use lineup_db::team::{BucketVisibility, Team};
 
 use lineup_db::app_user::AppUser;
 
@@ -79,14 +79,20 @@ async fn profile_content(
     let rower_id = rower.id;
     let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
     let detail = load_detail(&tenant.db, rower_id).await?;
-    let level = tenant
+    let team = tenant
         .db
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
-        .map_err(internal_error)?
-        .map(|t| t.self_edit_level)
-        .unwrap_or(SelfEditLevel::Low);
-    let perms = templates::rowers::DetailPermissions::member(level);
+        .map_err(internal_error)?;
+    let bv = team
+        .as_ref()
+        .map(|t| t.bucket_visibility)
+        .unwrap_or(BucketVisibility::Off);
+    let mrm = team
+        .as_ref()
+        .map(|t| t.member_raw_metrics.as_bool())
+        .unwrap_or(false);
+    let perms = templates::rowers::DetailPermissions::member(bv, mrm);
     Ok(templates::rowers::detail_content(&detail, perms, true))
 }
 
@@ -100,14 +106,20 @@ pub(crate) async fn profile_update_handler(
     let mut rower = load_my_rower(&tenant).await?;
 
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let level = tenant
+    let team = tenant
         .db
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
-        .map_err(internal_error)?
-        .map(|t| t.self_edit_level)
-        .unwrap_or(SelfEditLevel::Low);
-    let perms = templates::rowers::DetailPermissions::member(level);
+        .map_err(internal_error)?;
+    let bv = team
+        .as_ref()
+        .map(|t| t.bucket_visibility)
+        .unwrap_or(BucketVisibility::Off);
+    let mrm = team
+        .as_ref()
+        .map(|t| t.member_raw_metrics.as_bool())
+        .unwrap_or(false);
+    let perms = templates::rowers::DetailPermissions::member(bv, mrm);
 
     // Parse and apply — same validation as the admin rower edit,
     // but scoped to the authenticated user's own record.
@@ -143,6 +155,26 @@ pub(crate) async fn profile_update_handler(
         rower.sweep_bias = SweepBias::new(parsed.sweep_bias);
     }
 
+    // Raw metrics — only when team allows member self-entry.
+    if perms.can_edit("weight_lbs") {
+        use lineup_db::types::WeightKg;
+        rower.weight_kg = input
+            .weight_lbs
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .and_then(|s| s.parse::<f64>().ok())
+            .map(|lbs| WeightKg::new(lbs / 2.20462));
+    }
+    if perms.can_edit("height_in") {
+        use lineup_db::types::HeightM;
+        rower.height_m = input
+            .height_in
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .and_then(|s| s.parse::<f64>().ok())
+            .map(|inches| HeightM::new(inches * 0.0254));
+    }
+
     let saved = tenant
         .db
         .with_conn(move |conn| Rower::save(conn, &rower))
@@ -174,6 +206,10 @@ pub(crate) struct ProfileInput {
     pub(crate) side_strength: i32,
     #[serde(default)]
     pub(crate) sweep_bias: i32,
+    #[serde(default)]
+    pub(crate) weight_lbs: Option<String>,
+    #[serde(default)]
+    pub(crate) height_in: Option<String>,
 }
 
 struct ParsedProfile {
@@ -537,6 +573,116 @@ pub(crate) async fn email_prefs_update_handler(
         hx,
         &tenant,
     ))
+}
+
+// =====================================================================
+// Erg tests (member self-entry)
+// =====================================================================
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ErgTestInput {
+    distance_m: i32,
+    time: String,
+    #[serde(default)]
+    rowed_at: Option<String>,
+}
+
+/// `POST /my/erg-test` — member adds an erg test to their own record.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn erg_test_add_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Form(input): Form<ErgTestInput>,
+) -> Result<Html<String>, ErrorResponse> {
+    let rower = load_my_rower(&tenant).await?;
+
+    // Check that the team allows member raw metric entry.
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let team = tenant
+        .db
+        .with_conn(move |conn| Team::get(conn, team_id))
+        .await
+        .map_err(internal_error)?;
+    if !team
+        .map(|t| t.member_raw_metrics.as_bool())
+        .unwrap_or(false)
+    {
+        return Err(bad_request(
+            "Raw metric entry is not enabled for this team.",
+        ));
+    }
+
+    let time_cs = parse_erg_time(&input.time)
+        .ok_or_else(|| bad_request("Invalid time format. Use M:SS.dd"))?;
+
+    let rowed_at = input
+        .rowed_at
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .and_then(|s| chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+
+    let rower_id = rower.id;
+    let now = chrono::Utc::now().naive_utc();
+    tenant
+        .db
+        .with_conn(move |conn| {
+            lineup_db::erg_test::ErgTest::create(
+                conn,
+                lineup_db::erg_test::NewErgTest {
+                    rower_id,
+                    distance_m: input.distance_m,
+                    time_cs,
+                    rowed_at,
+                    created_at: now,
+                },
+            )
+        })
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "erg_test.add",
+        "rower",
+        &rower_id.to_string(),
+        Some(
+            serde_json::json!({
+                "distance_m": input.distance_m,
+                "time_cs": time_cs,
+                "self_entry": true,
+            })
+            .to_string(),
+        ),
+    );
+
+    // Re-render erg section with member permissions (can add, cannot delete).
+    let perms = templates::rowers::DetailPermissions::member(
+        BucketVisibility::Off, // doesn't matter for erg section
+        true,                  // member_raw_metrics = true (we just checked)
+    );
+    let tests = tenant
+        .db
+        .with_conn(move |conn| lineup_db::erg_test::ErgTest::list_for_rower(conn, rower_id))
+        .await
+        .map_err(internal_error)?;
+    Ok(Html(
+        templates::rowers::erg_test_section_markup(&rower, &tests, &perms).into_string(),
+    ))
+}
+
+/// Parse "M:SS.dd" → centiseconds.
+fn parse_erg_time(s: &str) -> Option<i32> {
+    let (mins_str, rest) = s.split_once(':')?;
+    let (secs_str, frac_str) = rest.split_once('.')?;
+    let mins: i32 = mins_str.parse().ok()?;
+    let secs: i32 = secs_str.parse().ok()?;
+    let frac: i32 = if frac_str.len() == 1 {
+        frac_str.parse::<i32>().ok()? * 10
+    } else {
+        frac_str.parse().ok()?
+    };
+    Some(mins * 6000 + secs * 100 + frac)
 }
 
 // =====================================================================

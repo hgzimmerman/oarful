@@ -6,7 +6,7 @@ use lineup_db::boat::types::BoatId;
 use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
 use lineup_db::rower::Rower;
-use lineup_db::team::{PracticeDays, SelfEditLevel, Team, TeamId};
+use lineup_db::team::{BucketVisibility, PracticeDays, Team, TeamId};
 use maud::{html, Markup, PreEscaped};
 
 use super::layout::page_header;
@@ -98,7 +98,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                                     }
                                 }
                                 div class="text-sm text-slate-500" {
-                                    "Self-edit: " (t.self_edit_level)
+                                    "Buckets: " (t.bucket_visibility)
                                 }
                             }
                             span class="text-slate-400" { "→" }
@@ -139,23 +139,38 @@ pub(crate) fn detail_content(
                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
                 }
                 div {
-                    label for="self_edit_level" class="block text-sm font-semibold text-slate-700 mb-1" {
-                        "Member self-edit level"
+                    label for="bucket_visibility" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        "Bucket visibility for members"
                     }
-                    select id="self_edit_level" name="self_edit_level"
+                    select id="bucket_visibility" name="bucket_visibility"
                            class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
-                        option value="low" selected[team.self_edit_level == SelfEditLevel::Low] {
-                            "Low — side, cox, scull only"
+                        option value="off" selected[team.bucket_visibility == BucketVisibility::Off] {
+                            "Off — members don\u{2019}t see weight class, form, strength, height"
                         }
-                        option value="medium" selected[team.self_edit_level == SelfEditLevel::Medium] {
-                            "Medium — + height"
+                        option value="view" selected[team.bucket_visibility == BucketVisibility::View] {
+                            "View — members see buckets (read-only)"
                         }
-                        option value="high" selected[team.self_edit_level == SelfEditLevel::High] {
-                            "High — all attributes (except active)"
+                        option value="edit" selected[team.bucket_visibility == BucketVisibility::Edit] {
+                            "Edit — members can change their own buckets"
                         }
                     }
                     p class="text-xs text-slate-500 mt-1" {
-                        "Controls which attributes members can edit on their own profile. Coach+ always has full access."
+                        "Controls whether members see categorical attribute buckets on their profile. Coach+ always has full access."
+                    }
+                }
+                div {
+                    label class="flex items-center gap-3 cursor-pointer" {
+                        input type="checkbox" name="member_raw_metrics" value="1"
+                              checked[team.member_raw_metrics.as_bool()]
+                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                        div {
+                            div class="text-sm font-medium text-slate-800" {
+                                "Member raw metrics"
+                            }
+                            div class="text-xs text-slate-500" {
+                                "Allow members to enter their own weight, height, and erg test times. Members can add but not delete erg tests."
+                            }
+                        }
                     }
                 }
                 div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {

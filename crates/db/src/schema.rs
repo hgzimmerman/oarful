@@ -128,13 +128,14 @@ diesel::table! {
         id -> Integer,
         name -> Text,
         created_at -> Timestamp,
-        self_edit_level -> SelfEditLevelMapping,
         default_practice_time -> Nullable<Time>,
         default_practice_duration_minutes -> Nullable<Integer>,
         archived -> Integer,
         default_practice_days -> Nullable<Integer>,
         assume_available -> Integer,
         erg_threshold_distance_m -> Nullable<Integer>,
+        bucket_visibility -> BucketVisibilityMapping,
+        member_raw_metrics -> Integer,
     }
 }
 

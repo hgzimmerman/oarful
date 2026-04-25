@@ -9,7 +9,7 @@ use lineup_db::rower::{
     types::{Height, RowerWeightClass, Skill, Strength},
     Rower,
 };
-use lineup_db::team::SelfEditLevel;
+use lineup_db::team::BucketVisibility;
 
 /// Which categorical bucket fields are locked because they're auto-derived
 /// from raw values + team thresholds.
@@ -25,9 +25,12 @@ pub(crate) struct LockedBuckets {
 pub(crate) struct DetailPermissions {
     /// Can edit affinities (seat/pair preferences). Coach+ only.
     pub(crate) can_edit_affinities: bool,
-    /// Which attribute fields the user can edit. None = all (Coach+).
-    /// Some(level) = restricted by trust level (self-edit).
-    pub(crate) self_edit_level: Option<SelfEditLevel>,
+    /// Whether this is a member (true) or Coach+ (false).
+    pub(crate) is_member: bool,
+    /// Member bucket visibility: off/view/edit. Ignored for Coach+.
+    pub(crate) bucket_visibility: BucketVisibility,
+    /// Whether the member can input raw metrics (weight, height, erg add).
+    pub(crate) member_raw_metrics: bool,
 }
 
 impl DetailPermissions {
@@ -35,14 +38,18 @@ impl DetailPermissions {
     pub(crate) fn coach() -> Self {
         Self {
             can_edit_affinities: true,
-            self_edit_level: None,
+            is_member: false,
+            bucket_visibility: BucketVisibility::Edit,
+            member_raw_metrics: true,
         }
     }
     /// Member editing own profile.
-    pub(crate) fn member(level: SelfEditLevel) -> Self {
+    pub(crate) fn member(bucket_visibility: BucketVisibility, member_raw_metrics: bool) -> Self {
         Self {
             can_edit_affinities: false,
-            self_edit_level: Some(level),
+            is_member: true,
+            bucket_visibility,
+            member_raw_metrics,
         }
     }
     /// Whether a specific field is editable.
@@ -50,17 +57,29 @@ impl DetailPermissions {
         self.can_edit_field(field)
     }
     fn can_edit_field(&self, field: &str) -> bool {
-        match self.self_edit_level {
-            None => field != "active", // Coach+ can edit everything except active
-            Some(level) => match field {
-                "side" | "side_strength" | "sweep_bias" | "can_cox" | "is_designated_cox" => true,
-                "height" => level.can_edit_height(),
-                "weight_class" => level.can_edit_weight_class(),
-                "skill" => level.can_edit_skill(),
-                "strength" => level.can_edit_strength(),
-                _ => false,
-            },
+        if !self.is_member {
+            return field != "active"; // Coach+ can edit everything except active
         }
+        match field {
+            "side" | "side_strength" | "sweep_bias" | "can_cox" | "is_designated_cox" => true,
+            "weight_class" | "skill" | "strength" | "height" => {
+                self.bucket_visibility == BucketVisibility::Edit
+            }
+            "weight_lbs" | "height_in" => self.member_raw_metrics,
+            _ => false,
+        }
+    }
+    /// Whether bucket fields should be shown (read-only or editable).
+    pub(crate) fn show_buckets(&self) -> bool {
+        !self.is_member || self.bucket_visibility != BucketVisibility::Off
+    }
+    /// Whether the member can add raw metrics (weight, height, erg tests).
+    pub(crate) fn can_add_raw_metrics(&self) -> bool {
+        !self.is_member || self.member_raw_metrics
+    }
+    /// Whether the member can delete erg tests (Coach+ only).
+    pub(crate) fn can_delete_erg_tests(&self) -> bool {
+        !self.is_member
     }
 }
 use maud::{html, Markup};
@@ -207,10 +226,14 @@ pub(crate) fn detail_content(
     show_emails: bool,
 ) -> Markup {
     let r = &detail.rower;
-    let subtitle = format!(
-        "{} · {} · {} · {}",
-        r.weight_class, r.skill, r.strength, r.side,
-    );
+    let subtitle = if perms.show_buckets() {
+        format!(
+            "{} · {} · {} · {}",
+            r.weight_class, r.skill, r.strength, r.side,
+        )
+    } else {
+        format!("{}", r.side)
+    };
     html! {
         header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
@@ -231,7 +254,7 @@ pub(crate) fn detail_content(
         }
         div class="px-8 py-6 max-w-4xl mx-auto space-y-6" {
             (attribute_section(r, None, &perms))
-            (erg_test_section(r, &detail.erg_tests, perms.can_edit_affinities))
+            (erg_test_section(r, &detail.erg_tests, &perms))
             (seat_affinities_section(detail, None, perms.can_edit_affinities))
             (pair_affinities_section(detail, None, perms.can_edit_affinities))
 
@@ -271,19 +294,22 @@ pub(crate) fn detail_content(
 pub(crate) fn attribute_section(
     r: &Rower,
     error: Option<&str>,
-    _perms: &DetailPermissions,
+    perms: &DetailPermissions,
 ) -> Markup {
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
+    let has_editable = has_any_editable_field(perms);
     html! {
         section #attributes class="bg-white rounded-lg shadow p-6" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-slate-800" { "Attributes" }
-                button type="button"
-                       class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
-                       hx-get=(edit_url)
-                       hx-target="#attributes"
-                       hx-swap="outerHTML" {
-                    "Edit"
+                @if has_editable {
+                    button type="button"
+                           class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
+                           hx-get=(edit_url)
+                           hx-target="#attributes"
+                           hx-swap="outerHTML" {
+                        "Edit"
+                    }
                 }
             }
             @if let Some(msg) = error {
@@ -292,18 +318,22 @@ pub(crate) fn attribute_section(
                 }
             }
             dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
-                (kv("Weight", &r.weight_class.to_string()))
-                (kv("Form", &r.skill.to_string()))
-                (kv("Strength", &r.strength.to_string()))
-                (kv("Height", &r.height.to_string()))
+                @if perms.show_buckets() {
+                    (kv("Weight", &r.weight_class.to_string()))
+                    (kv("Form", &r.skill.to_string()))
+                    (kv("Strength", &r.strength.to_string()))
+                    (kv("Height", &r.height.to_string()))
+                }
                 (kv("Side", &side_display_label(r)))
                 (kv("Can cox", if r.can_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Designated", if r.is_designated_cox.as_bool() { "yes" } else { "—" }))
                 (kv("Sweep bias", &r.sweep_bias.to_string()))
-                (kv("Active", if r.active.as_bool() { "yes" } else { "no" }))
+                @if !perms.is_member {
+                    (kv("Active", if r.active.as_bool() { "yes" } else { "no" }))
+                }
             }
-            // Raw metrics (when present)
-            @if r.weight_kg.is_some() || r.height_m.is_some() {
+            // Raw metrics (when present and visible)
+            @if (r.weight_kg.is_some() || r.height_m.is_some()) && perms.can_add_raw_metrics() {
                 dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
                     @if let Some(w) = r.weight_kg {
                         (kv("Weight (actual)", &format!("{:.0} lbs", w.to_lbs())))
@@ -315,6 +345,15 @@ pub(crate) fn attribute_section(
             }
         }
     }
+}
+
+/// Whether there's at least one field the user can edit (to decide if Edit button shows).
+fn has_any_editable_field(perms: &DetailPermissions) -> bool {
+    if !perms.is_member {
+        return true;
+    }
+    // Members can always edit side/cox/sweep_bias
+    true
 }
 
 /// Editable attribute form. Save posts to `/rowers/{id}` and the
@@ -355,112 +394,119 @@ pub(crate) fn attribute_edit_section(
                 }
             }
             div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
-                // Weight class
-                @if locked.weight {
-                    div class="opacity-60" {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                        div class="text-xs text-slate-500 italic" { (r.weight_class) " (auto)" }
+                // Bucket fields — only shown when visible to user
+                @if perms.show_buckets() {
+                    // Weight class
+                    @if locked.weight {
+                        div class="opacity-60" {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                            div class="text-xs text-slate-500 italic" { (r.weight_class) " (auto)" }
+                        }
+                        input type="hidden" name="weight_class" value=(match r.weight_class {
+                            RowerWeightClass::Light => "Light",
+                            RowerWeightClass::Medium => "Medium",
+                            RowerWeightClass::Heavy => "Heavy",
+                            RowerWeightClass::VeryHeavy => "VeryHeavy",
+                        });
+                    } @else if perms.can_edit_field("weight_class") {
+                        div {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                            (enum_select("weight_class", &[
+                                ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
+                                ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
+                                ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
+                                ("VeryHeavy", "Very heavy", RowerWeightClass::VeryHeavy == r.weight_class),
+                            ]))
+                        }
+                    } @else {
+                        (kv("Weight", &r.weight_class.to_string()))
                     }
-                    input type="hidden" name="weight_class" value=(match r.weight_class {
-                        RowerWeightClass::Light => "Light",
-                        RowerWeightClass::Medium => "Medium",
-                        RowerWeightClass::Heavy => "Heavy",
-                        RowerWeightClass::VeryHeavy => "VeryHeavy",
-                    });
-                } @else if perms.can_edit_field("weight_class") {
-                    div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                        (enum_select("weight_class", &[
-                            ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
-                            ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
-                            ("Heavy", "Heavyweight", RowerWeightClass::Heavy == r.weight_class),
-                            ("VeryHeavy", "Very heavy", RowerWeightClass::VeryHeavy == r.weight_class),
-                        ]))
+                    // Form (skill)
+                    @if perms.can_edit_field("skill") {
+                        div {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
+                            (enum_select("skill", &[
+                                ("Novice", "Novice", Skill::Novice == r.skill),
+                                ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
+                                ("Master", "Master", Skill::Master == r.skill),
+                                ("Expert", "Expert", Skill::Expert == r.skill),
+                            ]))
+                        }
+                    } @else {
+                        (kv("Form", &r.skill.to_string()))
                     }
-                } @else {
-                    (kv("Weight", &r.weight_class.to_string()))
-                    input type="hidden" name="weight_class" value=(match r.weight_class {
-                        RowerWeightClass::Light => "Light",
-                        RowerWeightClass::Medium => "Medium",
-                        RowerWeightClass::Heavy => "Heavy",
-                        RowerWeightClass::VeryHeavy => "VeryHeavy",
-                    });
+                    // Strength
+                    @if locked.strength {
+                        div class="opacity-60" {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                            div class="text-xs text-slate-500 italic" { (r.strength) " (auto)" }
+                        }
+                        input type="hidden" name="strength" value=(match r.strength {
+                            Strength::Weak => "Weak",
+                            Strength::Intermediate => "Intermediate",
+                            Strength::Strong => "Strong",
+                            Strength::VeryStrong => "VeryStrong",
+                        });
+                    } @else if perms.can_edit_field("strength") {
+                        div {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                            (enum_select("strength", &[
+                                ("Weak", "Weak", Strength::Weak == r.strength),
+                                ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
+                                ("Strong", "Strong", Strength::Strong == r.strength),
+                                ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
+                            ]))
+                        }
+                    } @else {
+                        (kv("Strength", &r.strength.to_string()))
+                    }
+                    // Height
+                    @if locked.height {
+                        div class="opacity-60" {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                            div class="text-xs text-slate-500 italic" { (r.height) " (auto)" }
+                        }
+                        input type="hidden" name="height" value=(match r.height {
+                            Height::Short => "Short",
+                            Height::Medium => "Medium",
+                            Height::Tall => "Tall",
+                            Height::VeryTall => "VeryTall",
+                        });
+                    } @else if perms.can_edit_field("height") {
+                        div {
+                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                            (enum_select("height", &[
+                                ("Short", "Short", Height::Short == r.height),
+                                ("Medium", "Medium", Height::Medium == r.height),
+                                ("Tall", "Tall", Height::Tall == r.height),
+                                ("VeryTall", "Very tall", Height::VeryTall == r.height),
+                            ]))
+                        }
+                    } @else {
+                        (kv("Height", &r.height.to_string()))
+                    }
                 }
-                // Form (skill)
-                @if perms.can_edit_field("skill") {
-                    div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
-                        (enum_select("skill", &[
-                            ("Novice", "Novice", Skill::Novice == r.skill),
-                            ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
-                            ("Master", "Master", Skill::Master == r.skill),
-                            ("Expert", "Expert", Skill::Expert == r.skill),
-                        ]))
-                    }
-                } @else {
-                    (kv("Form", &r.skill.to_string()))
+                // Hidden inputs for bucket values when buckets are hidden
+                // (so the form POST doesn't clear them)
+                @if !perms.show_buckets() {
+                    input type="hidden" name="weight_class" value=(match r.weight_class {
+                        RowerWeightClass::Light => "Light",
+                        RowerWeightClass::Medium => "Medium",
+                        RowerWeightClass::Heavy => "Heavy",
+                        RowerWeightClass::VeryHeavy => "VeryHeavy",
+                    });
                     input type="hidden" name="skill" value=(match r.skill {
                         Skill::Novice => "Novice",
                         Skill::Intermediate => "Intermediate",
                         Skill::Master => "Master",
                         Skill::Expert => "Expert",
                     });
-                }
-                // Strength
-                @if locked.strength {
-                    div class="opacity-60" {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
-                        div class="text-xs text-slate-500 italic" { (r.strength) " (auto)" }
-                    }
                     input type="hidden" name="strength" value=(match r.strength {
                         Strength::Weak => "Weak",
                         Strength::Intermediate => "Intermediate",
                         Strength::Strong => "Strong",
                         Strength::VeryStrong => "VeryStrong",
                     });
-                } @else if perms.can_edit_field("strength") {
-                    div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
-                        (enum_select("strength", &[
-                            ("Weak", "Weak", Strength::Weak == r.strength),
-                            ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
-                            ("Strong", "Strong", Strength::Strong == r.strength),
-                            ("VeryStrong", "Very strong", Strength::VeryStrong == r.strength),
-                        ]))
-                    }
-                } @else {
-                    (kv("Strength", &r.strength.to_string()))
-                    input type="hidden" name="strength" value=(match r.strength {
-                        Strength::Weak => "Weak",
-                        Strength::Intermediate => "Intermediate",
-                        Strength::Strong => "Strong",
-                        Strength::VeryStrong => "VeryStrong",
-                    });
-                }
-                // Height
-                @if locked.height {
-                    div class="opacity-60" {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
-                        div class="text-xs text-slate-500 italic" { (r.height) " (auto)" }
-                    }
-                    input type="hidden" name="height" value=(match r.height {
-                        Height::Short => "Short",
-                        Height::Medium => "Medium",
-                        Height::Tall => "Tall",
-                        Height::VeryTall => "VeryTall",
-                    });
-                } @else if perms.can_edit_field("height") {
-                    div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
-                        (enum_select("height", &[
-                            ("Short", "Short", Height::Short == r.height),
-                            ("Medium", "Medium", Height::Medium == r.height),
-                        ("Tall", "Tall", Height::Tall == r.height),
-                        ("VeryTall", "Very tall", Height::VeryTall == r.height),
-                    ]))
-                    }
-                } @else {
-                    (kv("Height", &r.height.to_string()))
                     input type="hidden" name="height" value=(match r.height {
                         Height::Short => "Short",
                         Height::Medium => "Medium",
@@ -499,25 +545,27 @@ pub(crate) fn attribute_edit_section(
                     }
                 }
             }
-            // Raw metrics
-            div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight (lbs)" }
-                    @let weight_lbs = r.weight_kg.map(|w| format!("{:.1}", w.to_lbs())).unwrap_or_default();
-                    input type="number" name="weight_lbs" step="0.1" min="0"
-                          value=(weight_lbs)
-                          placeholder="e.g. 165"
-                          class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
-                    p class="text-[10px] text-slate-400 mt-0.5" { "Stored in kg, displayed in lbs." }
-                }
-                div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height (inches)" }
-                    @let height_in = r.height_m.map(|h| format!("{:.1}", h.to_inches())).unwrap_or_default();
-                    input type="number" name="height_in" step="0.5" min="0"
-                          value=(height_in)
-                          placeholder="e.g. 71"
-                          class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
-                    p class="text-[10px] text-slate-400 mt-0.5" { "Stored in metres, displayed in feet/inches." }
+            // Raw metrics — only when user has permission
+            @if perms.can_add_raw_metrics() {
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight (lbs)" }
+                        @let weight_lbs = r.weight_kg.map(|w| format!("{:.1}", w.to_lbs())).unwrap_or_default();
+                        input type="number" name="weight_lbs" step="0.1" min="0"
+                              value=(weight_lbs)
+                              placeholder="e.g. 165"
+                              class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                        p class="text-[10px] text-slate-400 mt-0.5" { "Stored in kg, displayed in lbs." }
+                    }
+                    div {
+                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height (inches)" }
+                        @let height_in = r.height_m.map(|h| format!("{:.1}", h.to_inches())).unwrap_or_default();
+                        input type="number" name="height_in" step="0.5" min="0"
+                              value=(height_in)
+                              placeholder="e.g. 71"
+                              class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                        p class="text-[10px] text-slate-400 mt-0.5" { "Stored in metres, displayed in feet/inches." }
+                    }
                 }
             }
         }
@@ -525,8 +573,19 @@ pub(crate) fn attribute_edit_section(
 }
 
 /// Erg test log section — displays recent tests and a form to add new ones.
-fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit: bool) -> Markup {
+fn erg_test_section(
+    r: &Rower,
+    tests: &[lineup_db::erg_test::ErgTest],
+    perms: &DetailPermissions,
+) -> Markup {
     use lineup_db::erg_test::{format_distance, format_time_cs};
+    let can_add = perms.can_add_raw_metrics();
+    let can_delete = perms.can_delete_erg_tests();
+    let erg_post_url = if perms.is_member {
+        "/my/erg-test".to_string()
+    } else {
+        format!("/rowers/{}/erg-test", r.id)
+    };
 
     html! {
         section #erg-tests class="bg-white rounded-lg shadow p-6" {
@@ -545,7 +604,7 @@ fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit:
                                 th class="text-left py-1 px-2" { "Time" }
                                 th class="text-left py-1 px-2" { "Split /500m" }
                                 th class="text-left py-1 px-2" { "Date" }
-                                @if can_edit {
+                                @if can_delete {
                                     th class="py-1 px-2" {}
                                 }
                             }
@@ -564,7 +623,7 @@ fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit:
                                             "—"
                                         }
                                     }
-                                    @if can_edit {
+                                    @if can_delete {
                                         td class="py-1.5 px-2 text-right" {
                                             button type="button"
                                                    hx-delete={"/rowers/" (r.id) "/erg-test/" (test.id)}
@@ -582,9 +641,9 @@ fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit:
                 }
             }
 
-            @if can_edit {
+            @if can_add {
                 form class="mt-4 flex flex-wrap items-end gap-2"
-                     hx-post={"/rowers/" (r.id) "/erg-test"}
+                     hx-post=(erg_post_url)
                      hx-target="#erg-tests"
                      hx-swap="outerHTML" {
                     div {
@@ -623,9 +682,9 @@ fn erg_test_section(r: &Rower, tests: &[lineup_db::erg_test::ErgTest], can_edit:
 pub(crate) fn erg_test_section_markup(
     r: &Rower,
     tests: &[lineup_db::erg_test::ErgTest],
-    can_edit: bool,
+    perms: &DetailPermissions,
 ) -> Markup {
-    erg_test_section(r, tests, can_edit)
+    erg_test_section(r, tests, perms)
 }
 
 fn kv(label: &str, value: &str) -> Markup {

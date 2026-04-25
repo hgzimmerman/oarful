@@ -142,8 +142,6 @@ pub struct Team {
     pub id: TeamId,
     pub name: String,
     pub created_at: NaiveDateTime,
-    /// Controls what members can self-edit on their profile.
-    pub self_edit_level: SelfEditLevel,
     /// Default time of day for new practices. None = not set.
     pub default_practice_time: Option<NaiveTime>,
     /// Default practice duration in minutes. None = not set.
@@ -158,57 +156,50 @@ pub struct Team {
     /// Which erg test distance (metres) the team uses for strength
     /// bucketing. None = not configured.
     pub erg_threshold_distance_m: Option<i32>,
+    /// Whether members can see/edit categorical bucket fields on their
+    /// own profile. Off = hidden, View = read-only, Edit = editable.
+    pub bucket_visibility: BucketVisibility,
+    /// Whether members can input their own raw metrics (weight, height,
+    /// erg tests). When true, members can add but not delete erg tests.
+    pub member_raw_metrics: IntBool,
 }
 
-/// What a non-coach member is allowed to edit on their own profile.
+/// Whether members can see/edit categorical bucket fields (weight class,
+/// form, strength, height) on their own profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, diesel_derive_enum::DbEnum)]
 #[DbValueStyle = "snake_case"]
 #[serde(rename_all = "snake_case")]
-pub enum SelfEditLevel {
-    /// Side, designated cox, can scull only.
-    Low,
-    /// Low + height.
-    Medium,
-    /// All attributes except active.
-    High,
+pub enum BucketVisibility {
+    /// Buckets are hidden from members entirely.
+    Off,
+    /// Members can see bucket values but not change them.
+    View,
+    /// Members can see and edit bucket values.
+    Edit,
 }
 
-impl std::fmt::Display for SelfEditLevel {
+impl std::fmt::Display for BucketVisibility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl SelfEditLevel {
+impl BucketVisibility {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
+            Self::Off => "off",
+            Self::View => "view",
+            Self::Edit => "edit",
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s {
-            "high" => Self::High,
-            "medium" => Self::Medium,
-            _ => Self::Low,
+            "view" => Self::View,
+            "edit" => Self::Edit,
+            _ => Self::Off,
         }
     }
-
-    pub fn can_edit_weight_class(self) -> bool {
-        self == Self::High
-    }
-    pub fn can_edit_skill(self) -> bool {
-        self == Self::High
-    }
-    pub fn can_edit_strength(self) -> bool {
-        self == Self::High
-    }
-    pub fn can_edit_height(self) -> bool {
-        matches!(self, Self::Medium | Self::High)
-    }
-    // Side, side_strength, can_scull, designated_cox, can_cox: always editable
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -557,45 +548,75 @@ mod tests {
         assert_eq!(result, Some(monday));
     }
 
-    // ── SelfEditLevel ───────────────────────────────────────────────
+    // ── BucketVisibility ─────────────────────────────────────────────
 
     #[test]
-    fn self_edit_level_round_trip() {
-        assert_eq!(SelfEditLevel::from_str("low"), SelfEditLevel::Low);
-        assert_eq!(SelfEditLevel::from_str("medium"), SelfEditLevel::Medium);
-        assert_eq!(SelfEditLevel::from_str("high"), SelfEditLevel::High);
-        assert_eq!(SelfEditLevel::from_str("bogus"), SelfEditLevel::Low); // default
+    fn bucket_visibility_round_trip() {
+        assert_eq!(BucketVisibility::from_str("off"), BucketVisibility::Off);
+        assert_eq!(BucketVisibility::from_str("view"), BucketVisibility::View);
+        assert_eq!(BucketVisibility::from_str("edit"), BucketVisibility::Edit);
+        assert_eq!(BucketVisibility::from_str("bogus"), BucketVisibility::Off);
     }
 
     #[test]
-    fn self_edit_level_as_str() {
-        assert_eq!(SelfEditLevel::Low.as_str(), "low");
-        assert_eq!(SelfEditLevel::Medium.as_str(), "medium");
-        assert_eq!(SelfEditLevel::High.as_str(), "high");
+    fn bucket_visibility_as_str() {
+        assert_eq!(BucketVisibility::Off.as_str(), "off");
+        assert_eq!(BucketVisibility::View.as_str(), "view");
+        assert_eq!(BucketVisibility::Edit.as_str(), "edit");
     }
 
     #[test]
-    fn self_edit_level_permissions() {
-        assert!(!SelfEditLevel::Low.can_edit_weight_class());
-        assert!(!SelfEditLevel::Medium.can_edit_weight_class());
-        assert!(SelfEditLevel::High.can_edit_weight_class());
+    fn bucket_visibility_db_round_trip() {
+        use crate::schema::team;
+        use crate::test_support::in_memory_conn;
+        use diesel::prelude::*;
 
-        assert!(!SelfEditLevel::Low.can_edit_height());
-        assert!(SelfEditLevel::Medium.can_edit_height());
-        assert!(SelfEditLevel::High.can_edit_height());
+        let mut conn = in_memory_conn();
+        let now = chrono::Utc::now().naive_utc();
+        let created = Team::create(
+            &mut conn,
+            NewTeam {
+                name: "Test".to_string(),
+                created_at: now,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            created.bucket_visibility,
+            BucketVisibility::Off,
+            "default should be Off"
+        );
 
-        assert!(!SelfEditLevel::Low.can_edit_skill());
-        assert!(!SelfEditLevel::Medium.can_edit_skill());
-        assert!(SelfEditLevel::High.can_edit_skill());
+        // Update to View.
+        diesel::update(team::table.find(created.id))
+            .set(team::bucket_visibility.eq(BucketVisibility::View))
+            .execute(&mut conn)
+            .unwrap();
 
-        assert!(!SelfEditLevel::Low.can_edit_strength());
-        assert!(!SelfEditLevel::Medium.can_edit_strength());
-        assert!(SelfEditLevel::High.can_edit_strength());
+        let reloaded = Team::get(&mut conn, created.id).unwrap().unwrap();
+        assert_eq!(
+            reloaded.bucket_visibility,
+            BucketVisibility::View,
+            "should be View after update"
+        );
+
+        // Update to Edit.
+        diesel::update(team::table.find(created.id))
+            .set(team::bucket_visibility.eq(BucketVisibility::Edit))
+            .execute(&mut conn)
+            .unwrap();
+
+        let reloaded = Team::get(&mut conn, created.id).unwrap().unwrap();
+        assert_eq!(
+            reloaded.bucket_visibility,
+            BucketVisibility::Edit,
+            "should be Edit after update"
+        );
     }
 
     #[test]
-    fn self_edit_level_display() {
-        assert_eq!(SelfEditLevel::Low.to_string(), "low");
-        assert_eq!(SelfEditLevel::High.to_string(), "high");
+    fn bucket_visibility_display() {
+        assert_eq!(BucketVisibility::Off.to_string(), "off");
+        assert_eq!(BucketVisibility::Edit.to_string(), "edit");
     }
 }

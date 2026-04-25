@@ -10,7 +10,7 @@ use lineup_db::boat::types::BoatId;
 use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
 use lineup_db::rower::Rower;
-use lineup_db::team::{SelfEditLevel, Team, TeamBoatDefault, TeamId, TeamMembership};
+use lineup_db::team::{BucketVisibility, Team, TeamBoatDefault, TeamId, TeamMembership};
 use serde::Deserialize;
 
 use crate::{
@@ -185,7 +185,9 @@ pub(crate) async fn detail_handler(
 #[derive(Debug, Deserialize)]
 pub(crate) struct TeamUpdateInput {
     name: String,
-    self_edit_level: SelfEditLevel,
+    bucket_visibility: BucketVisibility,
+    #[serde(default)]
+    member_raw_metrics: Option<String>,
     #[serde(default)]
     default_practice_time: Option<String>,
     #[serde(default)]
@@ -218,7 +220,12 @@ pub(crate) async fn update_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let name = input.name.trim().to_string();
-    let level = input.self_edit_level;
+    let bv = input.bucket_visibility;
+    let mrm: i32 = if input.member_raw_metrics.is_some() {
+        1
+    } else {
+        0
+    };
     if name.is_empty() {
         return Err(bad_request("Invalid request."));
     }
@@ -274,7 +281,8 @@ pub(crate) async fn update_handler(
             diesel::update(team::table.find(id))
                 .set((
                     team::name.eq(&name),
-                    team::self_edit_level.eq(level),
+                    team::bucket_visibility.eq(bv),
+                    team::member_raw_metrics.eq(mrm),
                     team::default_practice_time.eq(practice_time),
                     team::default_practice_duration_minutes.eq(practice_duration),
                     team::default_practice_days.eq(practice_days),

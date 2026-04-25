@@ -293,6 +293,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/my/email-preferences",
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
         )
+        .route("/my/erg-test", post(my::erg_test_add_handler))
         .route(
             "/reset-password",
             get(auth::reset_password_page).post(auth::reset_password_handler),

@@ -16,7 +16,7 @@ use lineup_db::types::{HeightM, WeightKg};
 use serde::Deserialize;
 
 use lineup_db::app_user::{AppUser, Role};
-use lineup_db::team::{SelfEditLevel, Team};
+use lineup_db::team::{BucketVisibility, Team};
 
 use crate::{
     handlers::{internal_error, not_found, ErrorResponse},
@@ -233,14 +233,20 @@ async fn resolve_perms(
         ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let level = tenant
+    let team = tenant
         .db
         .with_conn(move |conn| Team::get(conn, team_id))
         .await
-        .map_err(internal_error)?
-        .map(|t| t.self_edit_level)
-        .unwrap_or(SelfEditLevel::Low);
-    Ok(templates::rowers::DetailPermissions::member(level))
+        .map_err(internal_error)?;
+    let bv = team
+        .as_ref()
+        .map(|t| t.bucket_visibility)
+        .unwrap_or(BucketVisibility::Off);
+    let mrm = team
+        .as_ref()
+        .map(|t| t.member_raw_metrics.as_bool())
+        .unwrap_or(false);
+    Ok(templates::rowers::DetailPermissions::member(bv, mrm))
 }
 
 /// `GET /rowers/{id}` — full detail page.
@@ -633,7 +639,9 @@ async fn erg_section_response(db: &Db, id: RowerId) -> Result<Html<String>, Erro
         .with_conn(move |conn| lineup_db::erg_test::ErgTest::list_for_rower(conn, id))
         .await
         .map_err(internal_error)?;
+    // Erg add/delete handlers are Coach+-gated, so always render with coach perms.
+    let perms = templates::rowers::DetailPermissions::coach();
     Ok(Html(
-        templates::rowers::erg_test_section_markup(&rower, &tests, true).into_string(),
+        templates::rowers::erg_test_section_markup(&rower, &tests, &perms).into_string(),
     ))
 }
