@@ -153,7 +153,7 @@ pub(crate) async fn send_reminders_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if !tenant.config.can_send_email() {
         return Ok(Html(
-            templates::practices::send_result(
+            templates::practices::send_result_billing_gate(
                 "Upgrade to unlock email. Share availability links manually.",
             )
             .into_string(),
@@ -209,8 +209,7 @@ pub(crate) async fn send_reminders_handler(
         .map_err(internal_error)?;
 
     // Send emails (outside the DB transaction).
-    let mut sent_count = 0;
-    let mut sent_names: Vec<String> = Vec::new();
+    let mut results: Vec<templates::practices::SendResultRecipient> = Vec::new();
     for r in &recipients {
         // Magic link expires end-of-day of the last relevant date.
         let last_date = r.dates.iter().map(|(d, _)| *d).max().unwrap();
@@ -259,12 +258,22 @@ pub(crate) async fn send_reminders_handler(
             .await
         {
             tracing::warn!(?err, email = %r.email, "failed to send reminder");
+            results.push(templates::practices::SendResultRecipient {
+                name: r.name.clone(),
+                status: templates::practices::SendStatus::Failed,
+            });
         } else {
-            sent_count += 1;
-            sent_names.push(r.name.clone());
+            results.push(templates::practices::SendResultRecipient {
+                name: r.name.clone(),
+                status: templates::practices::SendStatus::Sent,
+            });
         }
     }
 
+    let sent_count = results
+        .iter()
+        .filter(|r| matches!(r.status, templates::practices::SendStatus::Sent))
+        .count();
     if sent_count > 0 {
         crate::audit::record(
             &tenant.db,
@@ -276,11 +285,7 @@ pub(crate) async fn send_reminders_handler(
         );
     }
 
-    let msg = if sent_count > 0 {
-        format!("Reminders sent to: {}", sent_names.join(", "))
-    } else {
-        "No reminders to send — everyone has responded or reminders were already sent today."
-            .to_string()
-    };
-    Ok(Html(templates::practices::send_result(&msg).into_string()))
+    Ok(Html(
+        templates::practices::send_result_modal("Reminders sent", &results).into_string(),
+    ))
 }

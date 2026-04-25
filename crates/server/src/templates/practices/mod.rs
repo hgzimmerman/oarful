@@ -6,9 +6,13 @@
 
 mod lineup_modal;
 mod reminder_modal;
+mod send_result_modal;
 
 pub(crate) use lineup_modal::{lineup_preview_modal, LineupRecipientPreview};
 pub(crate) use reminder_modal::{reminder_preview_modal, ReminderRecipientPreview};
+pub(crate) use send_result_modal::{
+    send_result_billing_gate, send_result_modal, SendResultRecipient, SendStatus,
+};
 
 use chrono::NaiveDate;
 use lineup_db::practice::PracticeId;
@@ -57,24 +61,6 @@ pub(crate) fn tabbed_page(active_tab: &str, tab_content: Markup, _is_coach: bool
 /// HTMX partial: tab content + OOB tab bar swap.
 pub(crate) fn tab_content_swap(active_tab: &str, content: Markup) -> Markup {
     tab_swap(PRACTICES_TABS, active_tab, PRACTICES_TARGET, content)
-}
-
-/// Result message after sending emails.
-pub(crate) fn send_result(message: &str) -> Markup {
-    html! {
-        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm" {
-            (message)
-        }
-    }
-}
-
-/// Warning/error message (amber instead of green).
-pub(crate) fn send_warning(message: &str) -> Markup {
-    html! {
-        div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-6 py-4 text-sm" {
-            (message)
-        }
-    }
 }
 
 pub(crate) fn planning_content(

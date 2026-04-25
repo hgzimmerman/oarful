@@ -59,7 +59,8 @@ pub(crate) fn lineup_preview_modal(
                     div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4" {
                         form method="post" action="/practices/send-lineups"
                              hx-post="/practices/send-lineups"
-                             hx-target="#practices-tab-content"
+                             hx-target="body"
+                             hx-swap="beforeend"
                              onclick=(PreEscaped(CLOSE_JS)) {
                             @for d in date_strs {
                                 input type="hidden" name="dates" value=(d);

@@ -182,7 +182,8 @@ pub(crate) async fn send_lineups_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     if !tenant.config.can_send_email() {
         return Ok(Html(
-            templates::practices::send_result("Upgrade to unlock email.").into_string(),
+            templates::practices::send_result_billing_gate("Upgrade to unlock email.")
+                .into_string(),
         ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
@@ -201,7 +202,7 @@ pub(crate) async fn send_lineups_handler(
         .collect();
     if dates.is_empty() {
         return Ok(Html(
-            templates::practices::send_warning(
+            templates::practices::send_result_billing_gate(
                 "No practices selected — check at least one to send lineups.",
             )
             .into_string(),
@@ -347,8 +348,7 @@ pub(crate) async fn send_lineups_handler(
         .map_err(internal_error)?;
 
     // Send emails.
-    let mut sent_count = 0;
-    let mut sent_names: Vec<String> = Vec::new();
+    let mut results: Vec<templates::practices::SendResultRecipient> = Vec::new();
     if !summaries.is_empty() {
         let last_date = summaries.iter().map(|s| s.date).max().unwrap();
         let expires_at = last_date.and_hms_opt(23, 59, 59).unwrap();
@@ -400,13 +400,23 @@ pub(crate) async fn send_lineups_handler(
                 .await
             {
                 tracing::warn!(?err, %email, "failed to send lineup");
+                results.push(templates::practices::SendResultRecipient {
+                    name: name.clone(),
+                    status: templates::practices::SendStatus::Failed,
+                });
             } else {
-                sent_count += 1;
-                sent_names.push(name.clone());
+                results.push(templates::practices::SendResultRecipient {
+                    name: name.clone(),
+                    status: templates::practices::SendStatus::Sent,
+                });
             }
         }
     }
 
+    let sent_count = results
+        .iter()
+        .filter(|r| matches!(r.status, templates::practices::SendStatus::Sent))
+        .count();
     if sent_count > 0 {
         let date_strs: Vec<String> = summaries.iter().map(|s| s.date.to_string()).collect();
         crate::audit::record(
@@ -419,10 +429,7 @@ pub(crate) async fn send_lineups_handler(
         );
     }
 
-    let msg = if sent_count > 0 {
-        format!("Lineups sent to: {}", sent_names.join(", "))
-    } else {
-        "No lineup notifications to send — lineups may have already been sent today.".to_string()
-    };
-    Ok(Html(templates::practices::send_result(&msg).into_string()))
+    Ok(Html(
+        templates::practices::send_result_modal("Lineups sent", &results).into_string(),
+    ))
 }

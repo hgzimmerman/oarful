@@ -69,7 +69,8 @@ pub(crate) fn reminder_preview_modal(
                     div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-end" {
                         form method="post" action="/practices/send-reminders"
                              hx-post="/practices/send-reminders"
-                             hx-target="#practices-tab-content"
+                             hx-target="body"
+                             hx-swap="beforeend"
                              onclick=(PreEscaped(CLOSE_JS)) {
                             @for id in practice_ids {
                                 input type="hidden" name="practice_ids" value=(id);
