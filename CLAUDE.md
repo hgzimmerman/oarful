@@ -3,6 +3,7 @@
 ## Project Overview
 - Rust web app using Axum, HTMX, maud templates, and Alpine.js
 - Run the quick pre-commit suite after edits (see Build & Test)
+- Python is not in the dev shell — if needed for a one-off task, use `nix shell nixpkgs#python3 -c python3 script.py`
 
 ## Workflow Conventions
 - When the user says "check TODOs" or "review backlog", read `TODOs.md` in the project root — do NOT grep for TODO comments in source code
