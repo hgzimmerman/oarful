@@ -65,6 +65,15 @@ sha2 = "0.10"
 hex = "0.4"
 test-case = "3"
 rand = "0.8"
+# Stripe payment integration (1.0 RC modular crates).
+# async-stripe: HTTP client (tokio + rustls)
+# subcrates: checkout sessions, billing portal, customers/events, webhook verification
+async-stripe = { version = "1.0.0-rc.5", default-features = false, features = ["rustls-tls-webpki-roots", "rustls-ring"] }
+async-stripe-core = { version = "1.0.0-rc.5", default-features = false, features = ["customer", "event"] }
+async-stripe-checkout = { version = "1.0.0-rc.5", default-features = false, features = ["checkout_session"] }
+async-stripe-billing = { version = "1.0.0-rc.5", default-features = false, features = ["billing_portal_session", "subscription"] }
+async-stripe-webhook = { version = "1.0.0-rc.5", default-features = false, features = ["async-stripe-core", "async-stripe-checkout", "async-stripe-billing"] }
+async-stripe-shared = { version = "1.0.0-rc.5" }
 
 # Local crates
 lineup_db = { path = "crates/db" }

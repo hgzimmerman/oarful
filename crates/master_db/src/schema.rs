@@ -13,5 +13,7 @@ diesel::table! {
         demo_expires_at -> Nullable<Timestamp>,
         emails_visible -> Integer,
         billing_status -> BillingStatusMapping,
+        stripe_customer_id -> Nullable<Text>,
+        stripe_subscription_id -> Nullable<Text>,
     }
 }

@@ -239,12 +239,13 @@ pub(crate) async fn audit_handler(
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn settings_handler(
     State(tdb): State<TenantDb>,
+    State(stripe_ctx): State<Option<crate::state::StripeCtx>>,
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let tab_content = settings_content(&tdb, &tenant).await?;
+    let tab_content = settings_content(&tdb, &tenant, stripe_ctx.is_some()).await?;
 
     if is_tab_swap(&headers) {
         return Ok(Html(
@@ -258,6 +259,7 @@ pub(crate) async fn settings_handler(
 async fn settings_content(
     tdb: &TenantDb,
     tenant: &TenantContext,
+    stripe_enabled: bool,
 ) -> Result<maud::Markup, ErrorResponse> {
     let tenant_id = tenant.tenant_id;
     let t = tdb
@@ -324,6 +326,40 @@ async fn settings_content(
                     "Save"
                 }
             }
+
+            // Billing plan section
+            div class="bg-white rounded-lg shadow p-6 mt-6" {
+                h3 class="text-sm font-semibold text-slate-800 mb-3" { "Plan" }
+                div class="flex items-center justify-between" {
+                    div {
+                        span class="text-sm text-slate-700 font-medium" {
+                            (match t.billing_status {
+                                lineup_master_db::tenant::BillingStatus::Free => "Free",
+                                lineup_master_db::tenant::BillingStatus::Active => "Active",
+                                lineup_master_db::tenant::BillingStatus::Grandfathered => "Grandfathered",
+                            })
+                        }
+                        @if !tenant.config.can_send_email() {
+                            span class="ml-2 text-xs text-slate-400" { "(email disabled)" }
+                        }
+                    }
+                    @if stripe_enabled {
+                        @if t.stripe_customer_id.is_some() {
+                            a href="/billing/portal"
+                              class="text-sm text-slate-600 hover:text-slate-800 underline transition" {
+                                "Manage subscription"
+                            }
+                        } @else if t.billing_status == lineup_master_db::tenant::BillingStatus::Free {
+                            form method="post" action="/billing/checkout" {
+                                button type="submit"
+                                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                                    "Upgrade"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     })
 }
@@ -342,6 +378,7 @@ pub(crate) struct SettingsInput {
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn settings_update_handler(
     State(tdb): State<TenantDb>,
+    State(stripe_ctx): State<Option<crate::state::StripeCtx>>,
     Extension(tenant): Extension<TenantContext>,
     Form(input): Form<SettingsInput>,
 ) -> Result<Html<String>, ErrorResponse> {
@@ -395,7 +432,7 @@ pub(crate) async fn settings_update_handler(
     );
 
     // Re-load and re-render with fresh config.
-    let tab_content = settings_content(&tdb, &tenant).await?;
+    let tab_content = settings_content(&tdb, &tenant, stripe_ctx.is_some()).await?;
     Ok(Html(
         tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
     ))

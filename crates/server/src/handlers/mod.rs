@@ -24,6 +24,7 @@ use crate::{
 pub(crate) mod admin;
 pub(crate) mod audit;
 pub(crate) mod auth;
+pub(crate) mod billing;
 pub(crate) mod boats;
 pub(crate) mod demo;
 pub(crate) mod history;
@@ -32,6 +33,7 @@ pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;
 pub(crate) mod solve;
+pub(crate) mod stripe_webhook;
 pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod team_hub;
@@ -76,8 +78,16 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route(
             "/unsubscribe/{slug}/{user_id}/{email_type}/{signature}",
             get(unsubscribe::unsubscribe_handler).post(unsubscribe::unsubscribe_post_handler),
-        )
-        .with_state(state.clone());
+        );
+
+    // Stripe webhook — public (no auth, Stripe signature is the auth).
+    let public = if state.stripe_ctx.is_some() {
+        public.route("/stripe/webhook", post(stripe_webhook::webhook_handler))
+    } else {
+        public
+    };
+
+    let public = public.with_state(state.clone());
 
     // Superuser routes — require superuser JWT (no tenant context).
     let su_routes = Router::new()
@@ -299,7 +309,20 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(auth::reset_password_page).post(auth::reset_password_handler),
         )
         .route("/switch-team", post(switch_team_handler))
-        .route("/confirm", get(confirm_handler))
+        .route("/confirm", get(confirm_handler));
+
+    // Stripe billing routes — only mounted when STRIPE_SECRET_KEY is set.
+    let protected = if state.stripe_ctx.is_some() {
+        protected
+            .route("/billing/checkout", post(billing::checkout_handler))
+            .route("/billing/success", get(billing::success_handler))
+            .route("/billing/status", get(billing::status_handler))
+            .route("/billing/portal", get(billing::portal_handler))
+    } else {
+        protected
+    };
+
+    let protected = protected
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth::require_auth,
@@ -321,7 +344,9 @@ async fn landing_handler(
             return Redirect::to("/practices").into_response();
         }
     }
-    Html(templates::landing::landing_page(state.signup_disabled).into_string()).into_response()
+    let stripe_enabled = state.stripe_ctx.is_some();
+    Html(templates::landing::landing_page(state.signup_disabled, stripe_enabled).into_string())
+        .into_response()
 }
 
 pub(crate) fn maybe_page_authed(

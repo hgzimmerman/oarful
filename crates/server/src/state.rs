@@ -46,6 +46,9 @@ pub struct AppState {
     /// When true, public signup is disabled. Existing accounts and demo
     /// still work. Set via `SIGNUP_DISABLED=1`.
     pub(crate) signup_disabled: bool,
+    /// Stripe billing context. `None` when `STRIPE_SECRET_KEY` is unset
+    /// (soft-launch mode — all payment UI hidden).
+    pub(crate) stripe_ctx: Option<StripeCtx>,
 }
 
 impl AppState {
@@ -164,6 +167,50 @@ impl FromRef<AppState> for TenantDb {
 impl FromRef<AppState> for JwtKeys {
     fn from_ref(state: &AppState) -> Self {
         state.jwt_keys.clone()
+    }
+}
+
+// ── Stripe billing context ─────────────────────────────────────
+
+/// Stripe publishable key (safe to embed in client-side HTML).
+pub(crate) struct StripePublishableKey(pub String);
+
+/// Stripe webhook signing secret for signature verification.
+pub(crate) struct StripeWebhookSecret(pub String);
+
+/// Stripe Price ID for the subscription product.
+pub(crate) struct StripePriceId(pub String);
+
+/// Stripe billing context. Present only when `STRIPE_SECRET_KEY` is set.
+#[derive(Clone)]
+pub(crate) struct StripeCtx {
+    pub(crate) client: stripe::Client,
+    /// Stored for future embedded checkout use.
+    #[allow(dead_code)]
+    pub(crate) publishable_key: StripePublishableKey,
+    pub(crate) webhook_secret: StripeWebhookSecret,
+    pub(crate) price_id: StripePriceId,
+}
+
+impl Clone for StripePublishableKey {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl Clone for StripeWebhookSecret {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl Clone for StripePriceId {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl FromRef<AppState> for Option<StripeCtx> {
+    fn from_ref(state: &AppState) -> Self {
+        state.stripe_ctx.clone()
     }
 }
 
@@ -298,6 +345,38 @@ impl AppState {
             tracing::info!("public signup is disabled");
         }
 
+        let stripe_ctx = match std::env::var("STRIPE_SECRET_KEY")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(secret_key) => {
+                let publishable_key = std::env::var("STRIPE_PUBLISHABLE_KEY").map_err(|_| {
+                    anyhow::anyhow!(
+                        "STRIPE_SECRET_KEY is set but STRIPE_PUBLISHABLE_KEY is missing"
+                    )
+                })?;
+                let webhook_secret = std::env::var("STRIPE_WEBHOOK_SECRET").map_err(|_| {
+                    anyhow::anyhow!("STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is missing")
+                })?;
+                let price_id = std::env::var("STRIPE_PRICE_ID").map_err(|_| {
+                    anyhow::anyhow!("STRIPE_SECRET_KEY is set but STRIPE_PRICE_ID is missing")
+                })?;
+
+                let client = stripe::Client::new(secret_key);
+                tracing::info!("Stripe billing enabled");
+                Some(StripeCtx {
+                    client,
+                    publishable_key: StripePublishableKey(publishable_key),
+                    webhook_secret: StripeWebhookSecret(webhook_secret),
+                    price_id: StripePriceId(price_id),
+                })
+            }
+            None => {
+                tracing::info!("STRIPE_SECRET_KEY not set — billing UI disabled");
+                None
+            }
+        };
+
         Ok(Self {
             master_db,
             tenant_cache,
@@ -311,6 +390,7 @@ impl AppState {
             superuser_email,
             webmaster_email,
             signup_disabled,
+            stripe_ctx,
         })
     }
 

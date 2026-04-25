@@ -146,6 +146,7 @@ pub(crate) struct SendRemindersInput {
 pub(crate) async fn send_reminders_handler(
     State(mailer_ctx): State<MailerCtx>,
     State(jwt_keys): State<JwtKeys>,
+    State(stripe_ctx): State<Option<crate::state::StripeCtx>>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendRemindersInput>,
@@ -155,6 +156,7 @@ pub(crate) async fn send_reminders_handler(
         return Ok(Html(
             templates::practices::send_result_billing_gate(
                 "Upgrade to unlock email. Share availability links manually.",
+                stripe_ctx.is_some(),
             )
             .into_string(),
         ));

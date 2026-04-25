@@ -105,6 +105,8 @@ pub struct Tenant {
     /// Billing status: Free (email blocked), Active (paid), or
     /// Grandfathered (free + email).
     pub billing_status: BillingStatus,
+    pub stripe_customer_id: Option<String>,
+    pub stripe_subscription_id: Option<String>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -207,5 +209,41 @@ impl Tenant {
             .values(new)
             .returning(Tenant::as_returning())
             .get_result(conn)
+    }
+
+    pub fn set_stripe_ids(
+        conn: &mut SqliteConnection,
+        id: TenantId,
+        customer_id: &str,
+        subscription_id: Option<&str>,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(tenant::table.find(id))
+            .set((
+                tenant::stripe_customer_id.eq(Some(customer_id)),
+                tenant::stripe_subscription_id.eq(subscription_id),
+            ))
+            .execute(conn)?;
+        Ok(())
+    }
+
+    pub fn find_by_stripe_customer_id(
+        conn: &mut SqliteConnection,
+        customer_id: &str,
+    ) -> Result<Option<Tenant>, diesel::result::Error> {
+        tenant::table
+            .filter(tenant::stripe_customer_id.eq(customer_id))
+            .select(Tenant::as_select())
+            .first(conn)
+            .optional()
+    }
+
+    pub fn clear_stripe_subscription(
+        conn: &mut SqliteConnection,
+        id: TenantId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(tenant::table.find(id))
+            .set(tenant::stripe_subscription_id.eq(None::<String>))
+            .execute(conn)?;
+        Ok(())
     }
 }

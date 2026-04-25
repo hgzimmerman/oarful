@@ -175,15 +175,20 @@ fn gather_lineup_recipients(
 pub(crate) async fn send_lineups_handler(
     State(mailer_ctx): State<MailerCtx>,
     State(jwt_keys): State<JwtKeys>,
+    State(stripe_ctx): State<Option<crate::state::StripeCtx>>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     HtmlForm(input): HtmlForm<SendLineupsInput>,
 ) -> Result<Html<String>, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let stripe_enabled = stripe_ctx.is_some();
     if !tenant.config.can_send_email() {
         return Ok(Html(
-            templates::practices::send_result_billing_gate("Upgrade to unlock email.")
-                .into_string(),
+            templates::practices::send_result_billing_gate(
+                "Upgrade to unlock email.",
+                stripe_enabled,
+            )
+            .into_string(),
         ));
     }
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
@@ -204,6 +209,7 @@ pub(crate) async fn send_lineups_handler(
         return Ok(Html(
             templates::practices::send_result_billing_gate(
                 "No practices selected — check at least one to send lineups.",
+                false,
             )
             .into_string(),
         ));

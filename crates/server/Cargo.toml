@@ -46,6 +46,12 @@ time.workspace = true
 sha2.workspace = true
 hex.workspace = true
 hmac = "0.12"
+async-stripe.workspace = true
+async-stripe-core.workspace = true
+async-stripe-checkout.workspace = true
+async-stripe-billing.workspace = true
+async-stripe-webhook.workspace = true
+async-stripe-shared.workspace = true
 
 [dev-dependencies]
 test-case = { workspace = true }

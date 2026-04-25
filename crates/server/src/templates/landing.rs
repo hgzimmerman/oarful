@@ -2,7 +2,7 @@
 
 use maud::{html, Markup, DOCTYPE};
 
-pub(crate) fn landing_page(signup_disabled: bool) -> Markup {
+pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Markup {
     let source_url = std::env::var("SOURCE_URL")
         .unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string());
 
@@ -75,6 +75,20 @@ pub(crate) fn landing_page(signup_disabled: bool) -> Markup {
                             (bullet("Multiple teams per club with boat sharing and double-booking detection"))
                             (bullet("Handle no-shows without redoing lineups from scratch"))
                             (bullet("Boat usage tracking across practices"))
+                        }
+                    }
+
+                    // Pricing
+                    @if stripe_enabled {
+                        div class="mt-16 max-w-md w-full" {
+                            h2 class="text-lg font-semibold text-slate-800 mb-4" { "Pricing" }
+                            div class="bg-white rounded-lg shadow p-6 text-center" {
+                                p class="text-3xl font-bold text-slate-800" { "$150" }
+                                p class="text-sm text-slate-500 mt-1" { "per year" }
+                                p class="text-sm text-slate-600 mt-3" {
+                                    "Unlimited rowers, teams, and lineups. Email reminders and lineup delivery included."
+                                }
+                            }
                         }
                     }
 

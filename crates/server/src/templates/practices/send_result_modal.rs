@@ -21,7 +21,8 @@ const CLOSE_JS: &str = "document.getElementById('send-result-modal').remove(); \
                          document.getElementById('send-result-modal-backdrop').remove()";
 
 /// Modal shown when email sending is blocked by billing status.
-pub(crate) fn send_result_billing_gate(message: &str) -> Markup {
+/// When `stripe_enabled` is true, shows an "Upgrade" button linking to checkout.
+pub(crate) fn send_result_billing_gate(message: &str, stripe_enabled: bool) -> Markup {
     result_modal_shell(
         "Email unavailable",
         html! {
@@ -29,6 +30,14 @@ pub(crate) fn send_result_billing_gate(message: &str) -> Markup {
                 div class="flex items-center gap-3 mb-3" {
                     span class="text-2xl" { "\u{1f512}" }
                     p class="text-sm text-slate-600" { (message) }
+                }
+                @if stripe_enabled {
+                    form method="post" action="/billing/checkout" class="mt-4" {
+                        button type="submit"
+                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                            "Upgrade"
+                        }
+                    }
                 }
             }
         },
