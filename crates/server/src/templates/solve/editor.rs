@@ -240,9 +240,6 @@ pub(crate) fn lineup_editor(
     practice_id: PracticeId,
     editor: &EditorData,
     flags: &DisplayFlags,
-    unavailable: &[&Rower],
-    walkon_ids: &[lineup_db::rower::types::RowerId],
-    other_team_rowers: &[OtherTeamRower],
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{practice_id}");
     let editor_url = format!("/solve/{practice_id}/editor");
@@ -250,8 +247,7 @@ pub(crate) fn lineup_editor(
     html! {
         section #lineup-editor class="solve-card p-4 sm:p-6"
                data-practice-id=(practice_id)
-               data-editor-url=(editor_url)
-               x-data="lineupEditor()" {
+               data-editor-url=(editor_url) {
 
             div class="flex items-center justify-between mb-1" {
                 h2 class="text-xl font-bold font-serif-heading" style="color: var(--ink)" { "Lineup" }
@@ -351,132 +347,6 @@ pub(crate) fn lineup_editor(
                 }
             }
 
-            // Walk-on + Rower pool
-            div class="pt-4 text-sm space-y-2" style="border-top: 1px solid var(--rule)" {
-                // Walk-on: add unavailable rowers to the pool.
-                @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id));
-                @if has_addable || !walkon_ids.is_empty() {
-                    div class="flex items-center gap-2 flex-wrap mb-2" {
-                        @if !walkon_ids.is_empty() {
-                            span class="text-xs font-semibold uppercase tracking-wide" style="color: var(--ink-2)" { "Walk-ons:" }
-                            @for id in walkon_ids {
-                                @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.name.as_str()).unwrap_or("?");
-                                span class="inline-block px-2 py-0.5 text-xs rounded-full"
-                                     style="background: color-mix(in oklch, var(--good) 15%, var(--paper)); color: var(--good)" {
-                                    (name)
-                                }
-                            }
-                        }
-                        @if has_addable {
-                            @let walkon_action = format!("/solve/{practice_id}");
-                            form method="get" action=(walkon_action)
-                                 hx-get=(walkon_action)
-                                 hx-target="#content"
-                                 hx-push-url="true"
-                                 class="inline-flex items-center gap-2" {
-                                input type="hidden" name="partial" value="0";
-                                @for w in walkon_ids {
-                                    input type="hidden" name="walkon" value=(w);
-                                }
-                                select name="walkon"
-                                       class="rounded px-2 py-1.5 text-sm focus:outline-none"
-                                       style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)" {
-                                    @for r in unavailable {
-                                        @if !walkon_ids.contains(&r.id) {
-                                            option value=(r.id) { (r.name) }
-                                        }
-                                    }
-                                }
-                                button type="submit"
-                                       class="text-xs font-semibold uppercase tracking-wide cursor-pointer"
-                                       style="color: var(--accent)" {
-                                    "+ Walk-on"
-                                }
-                            }
-                        }
-                    }
-                }
-                @if !editor.sculling.is_empty() {
-                    div {
-                        strong class="font-serif-heading" style="color: var(--ink)" { "To sculling " }
-                    }
-                    div class="flex flex-wrap gap-2 mt-1" {
-                        @for r in &editor.sculling {
-                            @let key = format!("sculling:{}", r.id);
-                            @let side_style = pool_side_border_style(r);
-                            span data-key=(key)
-                                 data-boat="sculling"
-                                 data-seat="-1"
-                                 data-rower=(r.id)
-                                 class="inline-block px-3 py-2 rounded cursor-pointer transition"
-                                 style={"border: 1px solid var(--rule); " (side_style)}
-                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid var(--rule); " (side_style) "'"}
-                                 "@click"={"select('" (key) "')"} {
-                                div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
-                                (rower_stats_line(r, true))
-                            }
-                        }
-                    }
-                }
-
-                div {
-                    strong class="font-serif-heading" style="color: var(--ink)" { "Available " }
-                    span class="text-xs italic" style="color: var(--muted)" { "(click to place in a seat)" }
-                }
-                @let has_boated = editor.boats.iter().any(|eb| eb.active && eb.seats.iter().any(|(_, r)| r.is_some()));
-                div class="flex flex-wrap gap-2 mt-1" {
-                    // Empty bench slot — drop target for moving a rower out of a boat.
-                    @if has_boated {
-                        span data-key="bench:empty"
-                             data-boat="bench"
-                             data-seat="-1"
-                             data-rower=""
-                             class="inline-block px-3 py-2 rounded cursor-pointer transition"
-                             style="border: 1px dashed var(--rule)"
-                             ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
-                             "@click"="select('bench:empty')" {
-                            span class="font-mono-stat italic text-sm" style="color: var(--muted)" { "\u{2014} bench \u{2014}" }
-                        }
-                    }
-                    @for r in &editor.pool {
-                        @let key = format!("bench:{}", r.id);
-                        @let side_style = pool_side_border_style(r);
-                        span data-key=(key)
-                             data-boat="bench"
-                             data-seat="-1"
-                             data-rower=(r.id)
-                             class="inline-block px-3 py-2 rounded cursor-pointer transition"
-                             style={"border: 1px solid var(--rule); " (side_style)}
-                             ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid var(--rule); " (side_style) "'"}
-                             "@click"={"select('" (key) "')"} {
-                            div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
-                            (rower_stats_line(r, true))
-                        }
-                    }
-                }
-
-                // Available from other teams — informational only.
-                @if !other_team_rowers.is_empty() {
-                    div class="mt-3" {
-                        strong style="color: var(--warn)" { "Available from other teams " }
-                        span class="text-xs italic" style="color: var(--muted)" { "(use walk-on to pull in)" }
-                    }
-                    div class="flex flex-wrap gap-2 mt-1" {
-                        @for otr in other_team_rowers {
-                            @let r = &otr.rower;
-                            @let side_style = pool_side_border_style(r);
-                            span class="inline-block px-3 py-2 rounded"
-                                 style={"border: 1px solid var(--rule-2); background: color-mix(in oklch, var(--warn) 8%, var(--paper)); " (side_style)} {
-                                div class="font-medium text-sm" style="color: var(--ink)" {
-                                    (r.name)
-                                    span class="ml-1 text-[10px] font-normal" style="color: var(--warn)" { "(" (&otr.team_name) ")" }
-                                }
-                                (rower_stats_line(r, true))
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         // Alpine editor logic — selection + HTMX re-render
@@ -728,6 +598,198 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
 /// `templates/js/lineup_editor.js` for IDE support.
 fn editor_js() -> &'static str {
     include_str!("../js/lineup_editor.js")
+}
+
+// ── Roster pool sidebar ──────────────────────────────────────────
+
+/// Render the roster pool sidebar content. Used both for initial page
+/// render and for OOB swaps when the editor re-renders.
+pub(crate) fn roster_pool(
+    snapshot: &DbSnapshot,
+    practice_id: PracticeId,
+    editor: &EditorData,
+    unavailable: &[&Rower],
+    walkon_ids: &[lineup_db::rower::types::RowerId],
+    other_team_rowers: &[OtherTeamRower],
+) -> Markup {
+    let pool_count = editor.pool.len();
+    let total_rowers = snapshot
+        .rowers
+        .iter()
+        .filter(|r| r.active.as_bool())
+        .count();
+    let has_boated = editor
+        .boats
+        .iter()
+        .any(|eb| eb.active && eb.seats.iter().any(|(_, r)| r.is_some()));
+
+    html! {
+        // Header
+        div class="rp-head" {
+            h2 class="font-serif-heading font-medium text-base m-0" style="color: var(--ink)" { "Roster" }
+            span class="font-mono-stat text-[10px] uppercase tracking-wide" style="color: var(--muted)" {
+                (pool_count) " avail \u{00b7} " (total_rowers) " total"
+            }
+        }
+
+        // Walk-on section
+        @let has_addable = unavailable.iter().any(|r| !walkon_ids.contains(&r.id));
+        @if has_addable || !walkon_ids.is_empty() {
+            div class="px-4 py-2 text-sm" style="border-bottom: 1px solid var(--rule-2)" {
+                div class="flex items-center gap-2 flex-wrap" {
+                    @if !walkon_ids.is_empty() {
+                        @for id in walkon_ids {
+                            @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.name.as_str()).unwrap_or("?");
+                            span class="inline-block px-2 py-0.5 text-xs rounded-full"
+                                 style="background: color-mix(in oklch, var(--good) 15%, var(--paper)); color: var(--good)" {
+                                (name)
+                            }
+                        }
+                    }
+                    @if has_addable {
+                        @let walkon_action = format!("/solve/{practice_id}");
+                        form method="get" action=(walkon_action)
+                             hx-get=(walkon_action)
+                             hx-target="#content"
+                             hx-push-url="true"
+                             class="inline-flex items-center gap-2" {
+                            input type="hidden" name="partial" value="0";
+                            @for w in walkon_ids {
+                                input type="hidden" name="walkon" value=(w);
+                            }
+                            select name="walkon"
+                                   class="rounded px-2 py-1.5 text-xs focus:outline-none"
+                                   style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)" {
+                                @for r in unavailable {
+                                    @if !walkon_ids.contains(&r.id) {
+                                        option value=(r.id) { (r.name) }
+                                    }
+                                }
+                            }
+                            button type="submit"
+                                   class="text-xs font-semibold uppercase tracking-wide cursor-pointer"
+                                   style="color: var(--accent)" {
+                                "+ Walk-on"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Rower list
+        div class="rp-section-list" {
+            // Sculling section
+            @if !editor.sculling.is_empty() {
+                div class="mt-2" {
+                    div class="pool-section-head" {
+                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--ink-2)" { "Sculling" }
+                    }
+                    div class="flex flex-col gap-0.5 mt-1" {
+                        @for r in &editor.sculling {
+                            @let key = format!("sculling:{}", r.id);
+                            @let side_style = pool_side_border_style(r);
+                            span data-key=(key)
+                                 data-boat="sculling"
+                                 data-seat="-1"
+                                 data-rower=(r.id)
+                                 class="px-2 py-1 rounded cursor-pointer transition"
+                                 style={"border: 1px solid transparent; " (side_style)}
+                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
+                                 "@click"={"select('" (key) "')"} {
+                                div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
+                                (rower_stats_line(r, true))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bench slot
+            @if has_boated {
+                div class="mt-2" {
+                    span data-key="bench:empty"
+                         data-boat="bench"
+                         data-seat="-1"
+                         data-rower=""
+                         class="block px-2 py-1.5 rounded cursor-pointer transition text-center"
+                         style="border: 1px dashed var(--rule)"
+                         ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
+                         "@click"="select('bench:empty')" {
+                        span class="font-mono-stat italic text-xs" style="color: var(--muted)" { "\u{2014} bench \u{2014}" }
+                    }
+                }
+            }
+
+            // Available rowers — grouped by side
+            @if !editor.pool.is_empty() {
+                div class="mt-2" {
+                    div class="pool-section-head" {
+                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--ink-2)" { "Available" }
+                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (pool_count) }
+                    }
+                    div class="flex flex-col gap-0.5 mt-1" {
+                        @for r in &editor.pool {
+                            @let key = format!("bench:{}", r.id);
+                            @let side_style = pool_side_border_style(r);
+                            span data-key=(key)
+                                 data-boat="bench"
+                                 data-seat="-1"
+                                 data-rower=(r.id)
+                                 class="px-2 py-1 rounded cursor-pointer transition"
+                                 style={"border: 1px solid transparent; " (side_style)}
+                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
+                                 "@click"={"select('" (key) "')"} {
+                                div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
+                                (rower_stats_line(r, true))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Other team rowers
+            @if !other_team_rowers.is_empty() {
+                div class="mt-3" {
+                    div class="pool-section-head" {
+                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--warn)" { "Other teams" }
+                    }
+                    div class="flex flex-col gap-0.5 mt-1" {
+                        @for otr in other_team_rowers {
+                            @let r = &otr.rower;
+                            @let side_style = pool_side_border_style(r);
+                            span class="px-2 py-1 rounded"
+                                 style={"border: 1px solid transparent; background: color-mix(in oklch, var(--warn) 5%, var(--paper)); " (side_style)} {
+                                div class="font-medium text-xs" style="color: var(--ink)" {
+                                    (r.name)
+                                    span class="ml-1 text-[9px] font-normal" style="color: var(--warn)" { "(" (&otr.team_name) ")" }
+                                }
+                                (rower_stats_line(r, true))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// OOB wrapper for roster_pool — used when the editor re-renders.
+/// Returns an `<aside>` with `hx-swap-oob="outerHTML"` that replaces
+/// the sidebar pool in place.
+pub(crate) fn roster_pool_oob(
+    snapshot: &DbSnapshot,
+    practice_id: PracticeId,
+    editor: &EditorData,
+    unavailable: &[&Rower],
+    walkon_ids: &[lineup_db::rower::types::RowerId],
+    other_team_rowers: &[OtherTeamRower],
+) -> Markup {
+    html! {
+        aside #roster-pool class="roster-sidebar" hx-swap-oob="outerHTML" {
+            (roster_pool(snapshot, practice_id, editor, unavailable, walkon_ids, other_team_rowers))
+        }
+    }
 }
 
 #[cfg(test)]

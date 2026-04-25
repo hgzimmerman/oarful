@@ -163,13 +163,18 @@ pub(crate) async fn stream_handler(
                         .filter(|r| unavailable.contains(&r.id))
                         .collect();
 
-                    let html = templates::solve::lineup_editor(
+                    let editor_html = templates::solve::lineup_editor(
                         &snapshot, practice_id, &editor, &render_flags,
+                    );
+                    let pool_oob = templates::solve::roster_pool_oob(
+                        &snapshot, practice_id, &editor,
                         &unavail_rowers, &knobs_clone.walkon, &[],
                     );
 
                     primary_solution = Some(solution);
-                    yield Ok(Event::default().event("primary").data(html.into_string()));
+                    yield Ok(Event::default().event("primary").data(
+                        format!("{}{}", editor_html.into_string(), pool_oob.into_string())
+                    ));
                 }
                 SolveStreamEvent::PrimaryFailed { status, diagnostics } => {
                     let result = lineup_solver::SolveResult {

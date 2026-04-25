@@ -202,16 +202,18 @@ pub(crate) async fn editor_handler(
         })
         .collect();
 
-    Ok(Html(
-        templates::solve::lineup_editor(
-            &snapshot,
-            practice_id,
-            &editor,
-            &flags,
-            &unavailable,
-            &walkon_ids,
-            &other_team_rower_display,
-        )
-        .into_string(),
-    ))
+    let editor_html = templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags);
+    let pool_oob = templates::solve::roster_pool_oob(
+        &snapshot,
+        practice_id,
+        &editor,
+        &unavailable,
+        &walkon_ids,
+        &other_team_rower_display,
+    );
+    Ok(Html(format!(
+        "{}{}",
+        editor_html.into_string(),
+        pool_oob.into_string()
+    )))
 }

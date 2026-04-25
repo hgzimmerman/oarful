@@ -8,7 +8,8 @@ pub(crate) mod knobs;
 pub(crate) mod profile_modal;
 
 pub(crate) use alternatives::alternative_block as stream_alternative_block;
-pub(crate) use editor::{lineup_editor, DisplayFlags, EditorData, OtherTeamRower};
+use editor::roster_pool;
+pub(crate) use editor::{lineup_editor, roster_pool_oob, DisplayFlags, EditorData, OtherTeamRower};
 use knobs::knobs_form;
 pub(crate) use knobs::preset_bar;
 
@@ -327,20 +328,30 @@ pub(crate) fn landing_content(
 
     html! {
         div class="solve-page" {
-            header class="border-b px-4 sm:px-8 py-4 sm:py-6"
+            header class="border-b px-4 sm:px-8 py-3"
                    style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-2xl font-bold font-serif-heading"
+                h1 class="text-xl font-bold font-serif-heading"
                    style="color: var(--ink)" {
                     "Set Lineups \u{00b7} " (date)
                 }
-                p class="text-sm mt-1" style="color: var(--muted)" { (subtitle) }
+                p class="text-xs mt-0.5" style="color: var(--muted)" { (subtitle) }
             }
-            div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
+            div class="solve-layout" x-data="lineupEditor()" {
+                // Left sidebar: roster pool
+                aside #roster-pool class="roster-sidebar" {
+                    (roster_pool(snapshot, practice_id, &editor, &unavailable, &knobs.walkon, &[]))
+                }
+                // Center: editor
+                div class="solve-center" {
+                    div class="px-4 sm:px-6 py-4 space-y-4" {
+                        div #solve-results {
+                            (lineup_editor(snapshot, practice_id, &editor, flags))
+                        }
+                    }
+                }
+                // Right rail: solver
                 div class="no-print" {
                     (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
-                }
-                div #solve-results {
-                    (lineup_editor(snapshot, practice_id, &editor, flags, &unavailable, &knobs.walkon, &[]))
                 }
             }
         }
@@ -363,22 +374,33 @@ pub(crate) fn streaming_page(
         boats = snapshot.boats.len(),
     );
 
+    // For the streaming page we need an empty editor to render the pool.
+    let empty_editor = EditorData::empty(snapshot, &HashSet::new());
+
     html! {
         div class="solve-page" {
-            header class="border-b px-4 sm:px-8 py-4 sm:py-6"
+            header class="border-b px-4 sm:px-8 py-3"
                    style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-2xl font-bold font-serif-heading"
+                h1 class="text-xl font-bold font-serif-heading"
                    style="color: var(--ink)" {
                     "Set Lineups \u{00b7} " (date)
                 }
-                p class="text-sm mt-1" style="color: var(--muted)" { (subtitle) }
+                p class="text-xs mt-0.5" style="color: var(--muted)" { (subtitle) }
             }
-            div class="px-4 sm:px-8 py-6 space-y-6 max-w-6xl mx-auto" {
+            div class="solve-layout" x-data="lineupEditor()" {
+                aside #roster-pool class="roster-sidebar" {
+                    (roster_pool(snapshot, practice_id, &empty_editor, &[], &knobs.walkon, &[]))
+                }
+                div class="solve-center" {
+                    div class="px-4 sm:px-6 py-4 space-y-4" {
+                        div #solve-results {
+                            (streaming_skeleton(practice_id, knobs))
+                        }
+                    }
+                }
+                // Right rail: solver
                 div class="no-print" {
                     (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
-                }
-                div #solve-results {
-                    (streaming_skeleton(practice_id, knobs))
                 }
             }
         }

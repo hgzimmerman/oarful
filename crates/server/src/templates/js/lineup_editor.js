@@ -30,8 +30,9 @@ function lineupEditor() {
         },
 
         rerender(params) {
-            var url = this.$root.dataset.editorUrl + '?' + params;
-            htmx.ajax('GET', url, {target: this.$root, swap: 'outerHTML'});
+            var editor = document.getElementById('lineup-editor');
+            var url = (editor || this.$root).dataset.editorUrl + '?' + params;
+            htmx.ajax('GET', url, {target: editor || this.$root, swap: 'outerHTML'});
         },
 
         select(key) {

@@ -25,203 +25,197 @@ pub(super) fn knobs_form(
     let button_label = if has_generated {
         "Re-generate"
     } else {
-        "Generate"
+        "Generate lineup"
     };
     let action = format!("/solve/{practice_id}");
+
+    // Last run summary
+    let last_run_label = if let Some(result) = solve_result {
+        if result.status == SolveStatus::Satisfied {
+            let ms = result.elapsed.as_millis();
+            if ms < 1000 {
+                format!("{ms} ms")
+            } else {
+                format!("{:.1}s", result.elapsed.as_secs_f64())
+            }
+        } else {
+            "\u{2014}".to_string()
+        }
+    } else {
+        "\u{2014}".to_string()
+    };
+
     html! {
-        // Segmented button helper: update hidden input + toggle active style.
-        // Knob helpers: segmentedSelect() updates hidden inputs +
-        // toggles button styling without form submission. knobChanged()
-        // clears stale solver metrics from the summary. presetClicked()
-        // updates the preset label in the summary.
         script {
             (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
-        section class="solve-card" {
-            @let preset_label = if knobs.preset.is_empty() { "Balanced" } else { &knobs.preset };
-            @let initially_open = !has_generated;
-            div "x-data"={"{ open: " (initially_open) " }"} {
-                button type="button"
-                       "@click"="open = !open"
-                       class="w-full flex items-center justify-between px-6 py-4 cursor-pointer select-none transition text-left"
-                       style="color: var(--ink)" {
-                    div class="flex items-center gap-3 flex-wrap" {
-                        h3 class="text-sm font-semibold font-serif-heading" { "Solver settings" }
-                        span #knob-preset-label class="text-xs font-mono-stat" style="color: var(--muted)" { (preset_label) }
-                        @if let Some(result) = solve_result {
-                            @if result.status == SolveStatus::Satisfied {
-                                @let elapsed_ms = result.elapsed.as_millis();
-                                @let elapsed_label = if elapsed_ms < 1000 {
-                                    format!("{elapsed_ms}ms")
-                                } else {
-                                    format!("{:.1}s", result.elapsed.as_secs_f64())
-                                };
-                                span #knob-metrics class="text-xs font-mono-stat" style="color: var(--muted)" {
-                                    "\u{00b7} " (elapsed_label)
-                                    @if let Some(obj) = result.objective {
-                                        " \u{00b7} score " (obj)
-                                    }
-                                }
-                            }
+        div "x-data"="{ railOpen: true }" {
+            // Collapsed state — thin vertical label
+            button type="button"
+                   class="solver-rail-closed"
+                   x-show="!railOpen"
+                   "@click"="railOpen = true"
+                   title="Open solver" {
+                span class="vert" { "SOLVER" }
+            }
+
+            // Open rail
+            aside class="solver-rail" x-show="railOpen" x-cloak {
+                // Header
+                div class="sr-head" {
+                    div {
+                        h2 class="font-serif-heading font-medium text-base m-0" style="color: var(--ink)" { "Solver" }
+                        div class="font-mono-stat text-[10px] mt-0.5" style="color: var(--muted)" {
+                            "Last run: " (last_run_label)
                         }
                     }
-                    span class="inline-block w-2 h-2 transform transition-transform duration-200"
-                         style="border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted)"
-                         ":class"="open ? 'rotate-45' : 'rotate-[-45deg]'" {}
+                    button type="button"
+                           class="text-xl leading-none cursor-pointer"
+                           style="color: var(--muted)"
+                           "@click"="railOpen = false" {
+                        "\u{00d7}"
+                    }
                 }
-                div "x-show"="open"
-                    "x-transition:enter"="transition-all ease-out duration-300"
-                    "x-transition:enter-start"="opacity-0 max-h-0"
-                    "x-transition:enter-end"="opacity-100 max-h-[2000px]"
-                    "x-transition:leave"="transition-all ease-in duration-300"
-                    "x-transition:leave-start"="opacity-100 max-h-[2000px]"
-                    "x-transition:leave-end"="opacity-0 max-h-0"
-                    class="overflow-hidden" {
-                div class="px-6 pb-6 pt-4" style="border-top: 1px solid var(--rule-2)" {
-            form method="get" action=(action)
-                 hx-get=(action)
-                 hx-target="#solve-results"
-                 hx-push-url="true"
-                 hx-indicator="#solve-spinner"
-                 "@htmx:before-request"="if ($event.detail.elt === $el) open = false" {
 
-                // Based-on checkbox list + similarity weight
-                @if !practices.is_empty() {
-                    div class="mb-4" {
-                        div class="flex flex-wrap gap-4 items-end" {
-                            fieldset class="flex-1" {
-                                legend class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
-                                    "Based on"
-                                }
-                                div class="flex flex-wrap gap-3" {
-                                    @for p in practices.iter().take(5) {
-                                        @let date_str = p.date.format("%Y-%m-%d").to_string();
-                                        @let weekday = p.date.format("%a").to_string();
-                                        @let checked = knobs.based_on.contains(&date_str);
-                                        label class="inline-flex items-center gap-1.5 text-sm cursor-pointer" style="color: var(--ink-2)" {
-                                            input type="checkbox" name="based_on" value=(date_str)
-                                                  checked[checked]
-                                                  class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                                  onchange="knobChanged()";
-                                            (p.date) " (" (weekday) ")"
+                form method="get" action=(action)
+                     hx-get=(action)
+                     hx-target="#solve-results"
+                     hx-push-url="true"
+                     hx-indicator="#solve-spinner" {
+
+                    // Preset section — vertical list via HTMX swap
+                    section class="sr-section" {
+                        div class="flex justify-between items-baseline mb-2" {
+                            span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Preset" }
+                            @let active_preset = if knobs.preset.is_empty() { "balanced" } else { &knobs.preset };
+                            @let new_url = format!("/solver-profile/edit?basis={active_preset}");
+                            button type="button"
+                                   class="text-xs cursor-pointer"
+                                   style="color: var(--accent)"
+                                   hx-get=(&new_url)
+                                   hx-target="body"
+                                   hx-swap="beforeend" {
+                                "+ New"
+                            }
+                        }
+                        (preset_bar(practice_id, knobs, custom_profiles))
+                    }
+
+                    // Partial fill + Alternatives (side-by-side)
+                    section class="sr-section" {
+                        div class="grid grid-cols-2 gap-3" {
+                            @if has_eight {
+                                div {
+                                    div class="text-[10px] font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                                        "Partial fill"
+                                    }
+                                    div class="seg-warm" {
+                                        @for (val, lbl) in &[(0, "Off"), (1, "1"), (2, "2")] {
+                                            @let active = knobs.partial == *val;
+                                            @let cls = if active { "seg-warm-btn seg-warm-btn-on" } else { "seg-warm-btn" };
+                                            button type="button" class=(cls)
+                                                   onclick={"segmentedSelect(this, 'partial', " (val) ")"} { (lbl) }
                                         }
                                     }
+                                    input type="hidden" name="partial" value=(knobs.partial);
                                 }
                             }
-                            div class="w-28" {
-                                (knob_input(
-                                    "similarity",
-                                    "Similarity",
-                                    knobs.similarity as i64,
-                                    Some(0),
-                                    Some("0 = off"),
-                                ))
+                            div {
+                                div class="text-[10px] font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                                    "Alternatives"
+                                }
+                                div class="seg-warm" {
+                                    @for n in 0..=3i64 {
+                                        @let active = knobs.alts as i64 == n;
+                                        @let cls = if active { "seg-warm-btn seg-warm-btn-on" } else { "seg-warm-btn" };
+                                        button type="button" class=(cls)
+                                               onclick={"segmentedSelect(this, 'alts', " (n) ")"} { (n) }
+                                    }
+                                }
+                                input type="hidden" name="alts" value=(knobs.alts);
                             }
                         }
                     }
-                }
 
-                // Solver preset selector
-                div #preset-bar class="mb-4" {
-                    div class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
-                        "Solver preset"
-                    }
-                    (preset_buttons(practice_id, knobs, custom_profiles))
-                    input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
-                }
-
-                // Solver knobs
-                div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end" {
-                    // Partial fill — only relevant when the fleet has an 8+
-                    @if has_eight {
-                    div {
-                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
-                            "Partial fill"
+                    // Similarity + Novelty (side-by-side sliders)
+                    section class="sr-section" {
+                        div class="grid grid-cols-2 gap-3" {
+                            // Similarity
+                            @if !practices.is_empty() {
+                                div {
+                                    div class="flex justify-between items-baseline" {
+                                        span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Similarity" }
+                                        span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (knobs.similarity) }
+                                    }
+                                    input name="similarity" type="range" min="0" max="10"
+                                          value=(knobs.similarity)
+                                          class="range-warm"
+                                          oninput="knobChanged()";
+                                    p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Stay close to last lineup" }
+                                }
+                            }
+                            // Novelty
+                            div {
+                                div class="flex justify-between items-baseline" {
+                                    span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Novelty" }
+                                    span #novelty-val class="font-mono-stat text-xs" style="color: var(--ink-2)" {
+                                        @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
+                                    }
+                                }
+                                input name="novelty" type="range" min="0" max="5"
+                                      value=(knobs.novelty)
+                                      class="range-warm"
+                                      oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
+                                p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Avoid recent lineups" }
+                            }
                         }
-                        div class="seg-warm" {
-                            @for (val, lbl) in &[(0, "Off"), (1, "1 empty"), (2, "2 empty")] {
-                                @let active = knobs.partial == *val;
-                                @let cls = if active {
-                                    "seg-warm-btn seg-warm-btn-on"
-                                } else {
-                                    "seg-warm-btn"
-                                };
-                                button type="button" class=(cls)
-                                       onclick={"segmentedSelect(this, 'partial', " (val) ")"} {
-                                    (lbl)
+                    }
+
+                    // Based-on checkboxes
+                    @if !practices.is_empty() {
+                        section class="sr-section" {
+                            div class="text-[10px] font-semibold uppercase tracking-wide mb-2" style="color: var(--muted)" { "Based on" }
+                            div class="flex flex-col gap-1" {
+                                @for p in practices.iter().take(5) {
+                                    @let date_str = p.date.format("%Y-%m-%d").to_string();
+                                    @let weekday = p.date.format("%a").to_string();
+                                    @let checked = knobs.based_on.contains(&date_str);
+                                    label class="inline-flex items-center gap-1.5 text-xs cursor-pointer" style="color: var(--ink-2)" {
+                                        input type="checkbox" name="based_on" value=(date_str)
+                                              checked[checked]
+                                              class="rounded"
+                                              style="border-color: var(--rule)"
+                                              onchange="knobChanged()";
+                                        (date_str) " (" (weekday) ")"
+                                    }
                                 }
                             }
                         }
-                        input type="hidden" name="partial" value=(knobs.partial);
-                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Empty optional seats per boat" }
-                    }
                     }
 
-                    // Alternatives — segmented (0 / 1 / 2 / 3)
-                    div {
-                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
-                            "Alternatives"
-                        }
-                        div class="seg-warm" {
-                            @for n in 0..=3i64 {
-                                @let active = knobs.alts as i64 == n;
-                                @let cls = if active {
-                                    "seg-warm-btn seg-warm-btn-on"
-                                } else {
-                                    "seg-warm-btn"
-                                };
-                                button type="button" class=(cls)
-                                       onclick={"segmentedSelect(this, 'alts', " (n) ")"} {
-                                    (n)
-                                }
-                            }
-                        }
-                        input type="hidden" name="alts" value=(knobs.alts);
-                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Extra lineups to compare" }
-                    }
-
-                    // Time budget — slider 1-10
-                    div {
-                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
-                            "Time budget"
-                        }
-                        div class="flex items-center gap-2" {
-                            input name="budget" type="range" min="1" max="10"
-                                  value=(knobs.budget)
-                                  class="range-warm flex-1"
-                                  oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
-                            span #budget-val class="text-sm font-mono-stat w-8" style="color: var(--ink-2)" {
+                    // Time budget
+                    section class="sr-section" {
+                        div class="flex justify-between items-baseline" {
+                            span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Time budget" }
+                            span #budget-val class="font-mono-stat text-xs" style="color: var(--ink-2)" {
                                 (knobs.budget) "s"
                             }
                         }
-                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Time budget per alternative" }
+                        input name="budget" type="range" min="1" max="10"
+                              value=(knobs.budget)
+                              class="range-warm"
+                              oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
+                        p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Per alternative" }
                     }
 
-                    // Novelty — slider 0-5
-                    div {
-                        label class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
-                            "Novelty"
-                        }
-                        div class="flex items-center gap-2" {
-                            input name="novelty" type="range" min="0" max="5"
-                                  value=(knobs.novelty)
-                                  class="range-warm flex-1"
-                                  oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
-                            span #novelty-val class="text-sm font-mono-stat w-8" style="color: var(--ink-2)" {
-                                @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
-                            }
-                        }
-                        p class="text-xs mt-1 italic" style="color: var(--muted)" { "Avoid repeating recent lineups" }
-                    }
+                    // Hidden state
                     input type="hidden" name="generate" value="1";
-                    // Carry walk-ons and no-shows through re-solves.
                     @for w in &knobs.walkon {
                         input type="hidden" name="walkon" value=(w);
                     }
                     @for ns in &knobs.no_show {
                         input type="hidden" name="no_show" value=(ns);
                     }
-                    // OOB target: editor injects pin state + active boats here.
                     div #editor-knob-state style="display:none" {
                         @for l in &knobs.lock {
                             input type="hidden" name="lock" value=(l);
@@ -245,24 +239,22 @@ pub(super) fn knobs_form(
                             input type="hidden" name="boat_lock" value=(bl);
                         }
                     }
-                    div {
-                        label class="block text-xs font-semibold uppercase tracking-wide mb-1 invisible" { "\u{00a0}" }
-                        div class="flex items-center space-x-3" {
-                            button type="submit"
-                                   class="btn-accent whitespace-nowrap shadow transition" {
-                                (button_label)
-                            }
-                            span #solve-spinner class="htmx-indicator text-xs" style="color: var(--muted)" {
-                                "Generating\u{2026}"
-                            }
+
+                    // Generate button — sticky at bottom
+                    div class="sr-run" {
+                        button type="submit"
+                               class="btn-accent w-full shadow transition" {
+                            (button_label)
                         }
-                        p class="text-xs mt-1 invisible" { "\u{00a0}" }
+                        span #solve-spinner class="htmx-indicator text-xs block mt-1 text-center" style="color: var(--muted)" {
+                            "Generating\u{2026}"
+                        }
+                        p class="text-[10px] italic mt-2" style="color: var(--muted)" {
+                            "Locked seats are preserved. Unavailable rowers are skipped."
+                        }
                     }
                 }
             }
-                } // div.px-6
-                } // div x-show
-            } // div x-data
         }
     }
 }
@@ -306,115 +298,80 @@ fn preset_url_with(practice_id: PracticeId, knobs: &SolveKnobs, new_preset: &str
     format!("/solve/{practice_id}/preset-bar?{}", parts.join("&"))
 }
 
-/// Render just the preset bar section for HTMX `outerHTML` swaps.
-/// Called by the `GET /solve/{id}/preset-bar` endpoint.
+/// Render the preset list for HTMX `outerHTML` swaps.
+/// Called by `GET /solve/{id}/preset-bar` and inline in the solver rail.
 pub(crate) fn preset_bar(
     practice_id: PracticeId,
     knobs: &SolveKnobs,
     custom_profiles: &[(String, Option<String>)],
 ) -> Markup {
-    // Re-use the knobs_form rendering but extract just the preset bar.
-    // For now, render the full bar inline.
+    let current = if knobs.preset.is_empty() {
+        "balanced"
+    } else {
+        &knobs.preset
+    };
     html! {
-        div #preset-bar class="mb-4" {
-            div class="block text-xs font-semibold uppercase tracking-wide mb-2" style="color: var(--ink-2)" {
-                "Solver preset"
-            }
-            (preset_buttons(practice_id, knobs, custom_profiles))
-            input type="hidden" name="preset" value=(if knobs.preset.is_empty() { "balanced" } else { &knobs.preset });
-        }
-    }
-}
-
-/// Shared preset button bar used by both the full knobs form and the
-/// HTMX partial preset-bar endpoint.
-fn preset_buttons(
-    practice_id: PracticeId,
-    knobs: &SolveKnobs,
-    custom_profiles: &[(String, Option<String>)],
-) -> Markup {
-    let current = &knobs.preset;
-    html! {
-        div class="seg-warm flex-wrap" {
-            @for (value, label) in &[
-                ("balanced", "Balanced"),
-                ("even_speed", "Even speed"),
-                ("tiered", "Tiered"),
-                ("random", "Random"),
-            ] {
-                @let is_active = current == value || (current.is_empty() && *value == "balanced");
-                @let btn_class = if is_active {
-                    "seg-warm-btn seg-warm-btn-on"
-                } else {
-                    "seg-warm-btn"
-                };
-                @let preset_url = preset_url_with(practice_id, knobs, value);
-                button type="button" class=(btn_class)
-                       hx-get=(preset_url)
-                       hx-target="#preset-bar"
-                       hx-swap="outerHTML"
-                       onclick={"presetClicked('" (label) "')"} {
-                    (label)
+        div #preset-bar {
+            div class="flex flex-col gap-0.5" {
+                @for (value, label) in &[
+                    ("balanced", "Balanced"),
+                    ("even_speed", "Even speed"),
+                    ("tiered", "Tiered"),
+                    ("random", "Random"),
+                ] {
+                    @let is_active = current == *value;
+                    @let row_cls = if is_active { "preset-row-on" } else { "" };
+                    @let preset_url = preset_url_with(practice_id, knobs, value);
+                    div class={"flex items-center justify-between px-2 py-1.5 rounded cursor-pointer " (row_cls)}
+                        style="border: 1px solid transparent"
+                        hx-get=(preset_url)
+                        hx-target="#preset-bar"
+                        hx-swap="outerHTML" {
+                        div class="flex items-baseline gap-2 min-w-0 flex-1" {
+                            span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" { (label) }
+                            span class="font-mono-stat text-[8px] px-1 rounded" style="color: var(--muted); border: 1px solid var(--rule)" { "built-in" }
+                        }
+                        div class="flex gap-0.5 opacity-60" {
+                            @let edit_url = format!("/solver-profile/edit?name={value}");
+                            button type="button"
+                                   class="text-[10px] px-1 rounded cursor-pointer"
+                                   style="border: 1px solid var(--rule); color: var(--ink-2)"
+                                   hx-get=(&edit_url)
+                                   hx-target="body"
+                                   hx-swap="beforeend"
+                                   onclick="event.stopPropagation()" {
+                                "\u{21E2}"
+                            }
+                        }
+                    }
+                }
+                @for (name, description) in custom_profiles {
+                    @let is_active = current == name;
+                    @let row_cls = if is_active { "preset-row-on" } else { "" };
+                    @let preset_url = preset_url_with(practice_id, knobs, name);
+                    div class={"flex items-center justify-between px-2 py-1.5 rounded cursor-pointer " (row_cls)}
+                        style="border: 1px solid transparent"
+                        title=[description.as_deref()]
+                        hx-get=(preset_url)
+                        hx-target="#preset-bar"
+                        hx-swap="outerHTML" {
+                        span class="font-serif-heading font-medium text-sm" style="color: var(--accent)" { (name) }
+                        div class="flex gap-0.5 opacity-60" {
+                            @let edit_url = format!("/solver-profile/edit?name={name}");
+                            button type="button"
+                                   class="text-[10px] px-1 rounded cursor-pointer"
+                                   style="border: 1px solid var(--rule); color: var(--ink-2)"
+                                   hx-get=(&edit_url)
+                                   hx-target="body"
+                                   hx-swap="beforeend"
+                                   onclick="event.stopPropagation()" {
+                                "\u{270E}"
+                            }
+                        }
+                    }
                 }
             }
-            @for (name, description) in custom_profiles {
-                @let is_active = current == name;
-                @let btn_class = if is_active {
-                    "seg-warm-btn seg-warm-btn-on"
-                } else {
-                    "seg-warm-btn"
-                };
-                @let preset_url = preset_url_with(practice_id, knobs, name);
-                button type="button" class=(btn_class)
-                       title=[description.as_deref()]
-                       style={"color: var(--accent)" }
-                       hx-get=(preset_url)
-                       hx-target="#preset-bar"
-                       hx-swap="outerHTML"
-                       onclick={"presetClicked('" (name) "')"} {
-                    (name)
-                }
-            }
-            // "+" and gear — static, always visible, no jumping
-            @let active_preset = if knobs.preset.is_empty() { "balanced" } else { &knobs.preset };
-            @let new_url = format!("/solver-profile/edit?basis={active_preset}");
-            @let edit_url = format!("/solver-profile/edit?name={active_preset}");
-            button type="button"
-                   class="seg-warm-btn"
-                   title="Create new preset"
-                   style="color: var(--muted)"
-                   hx-get=(&new_url)
-                   hx-target="body"
-                   hx-swap="beforeend" {
-                "+"
-            }
-            button type="button"
-                   class="seg-warm-btn"
-                   title="View/edit active preset"
-                   style="color: var(--muted)"
-                   hx-get=(&edit_url)
-                   hx-target="body"
-                   hx-swap="beforeend" {
-                "\u{2699}"
-            }
-        }
-    }
-}
-
-fn knob_input(name: &str, label: &str, value: i64, min: Option<i64>, help: Option<&str>) -> Markup {
-    html! {
-        div {
-            label for=(name) class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--ink-2)" {
-                (label)
-            }
-            input id=(name) name=(name) type="number"
-                  value=(value)
-                  min=[min.map(|m| m.to_string())]
-                  class="w-full rounded px-3 py-2 font-mono-stat text-sm focus:outline-none"
-                  style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)";
-            @if let Some(h) = help {
-                p class="text-xs mt-1 whitespace-nowrap overflow-hidden text-ellipsis italic" style="color: var(--muted)" title=(h) { (h) }
-            }
+            input type="hidden" name="preset" value=(current);
         }
     }
 }
