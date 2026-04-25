@@ -4,6 +4,7 @@
 
 use crate::rower::types::RowerId;
 use crate::schema::{app_user, user_role};
+use crate::types::IntBool;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::SqliteConnection;
@@ -123,10 +124,10 @@ pub struct AppUser {
     pub status: UserStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    pub opt_in_reminders: i32,
-    pub opt_in_lineups: i32,
+    pub opt_in_reminders: IntBool,
+    pub opt_in_lineups: IntBool,
     pub rower_id: Option<RowerId>,
-    pub opt_in_stale_alerts: i32,
+    pub opt_in_stale_alerts: IntBool,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -252,17 +253,17 @@ impl AppUser {
 
     /// Whether this user has opted in to availability reminder emails.
     pub fn wants_reminders(&self) -> bool {
-        self.opt_in_reminders != 0
+        self.opt_in_reminders.as_bool()
     }
 
     /// Whether this user has opted in to lineup notification emails.
     pub fn wants_lineups(&self) -> bool {
-        self.opt_in_lineups != 0
+        self.opt_in_lineups.as_bool()
     }
 
     /// Whether this user has opted in to stale lineup alert emails.
     pub fn wants_stale_alerts(&self) -> bool {
-        self.opt_in_stale_alerts != 0
+        self.opt_in_stale_alerts.as_bool()
     }
 
     /// Link this user to a rower profile.
@@ -305,9 +306,9 @@ impl AppUser {
         let now = chrono::Utc::now().naive_utc();
         diesel::update(app_user::table.find(user_id))
             .set((
-                app_user::opt_in_reminders.eq(if opt_in_reminders { 1 } else { 0 }),
-                app_user::opt_in_lineups.eq(if opt_in_lineups { 1 } else { 0 }),
-                app_user::opt_in_stale_alerts.eq(if opt_in_stale_alerts { 1 } else { 0 }),
+                app_user::opt_in_reminders.eq(IntBool::new(opt_in_reminders)),
+                app_user::opt_in_lineups.eq(IntBool::new(opt_in_lineups)),
+                app_user::opt_in_stale_alerts.eq(IntBool::new(opt_in_stale_alerts)),
                 app_user::updated_at.eq(now),
             ))
             .execute(conn)?;
