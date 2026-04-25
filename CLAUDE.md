@@ -15,6 +15,7 @@
 - `cargo test --workspace` — full test suite
 - `cargo test --workspace --exclude lineup_e2e` — unit/integration tests only (no browser deps)
 - `cargo test -p lineup_e2e` — e2e tests (needs Xvfb + WebKitWebDriver from nix shell)
+- Quick pre-commit suite (~3s): `cargo test --workspace --exclude lineup_e2e --exclude lineup_solver && cargo test -p lineup_solver --test constraints`
 - `cargo clippy --workspace -- -D warnings` — lint (enforced in CI)
 - `cargo fmt --all -- --check` — format check (enforced in CI)
 
