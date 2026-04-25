@@ -18,8 +18,8 @@ const CLOSE_JS: &str =
 /// - `message`: body text explaining the consequence
 /// - `confirm_label`: text on the confirm button (e.g. "Archive", "Delete", "Deactivate")
 /// - `action_markup`: the inner form/button that performs the actual action.
-///    Typically a `<form hx-post="..." hx-target="...">` with a submit button.
-///    The modal provides the shell; this slot provides the action.
+///   Typically a `<form hx-post="..." hx-target="...">` with a submit button.
+///   The modal provides the shell; this slot provides the action.
 pub(crate) fn confirm_modal(title: &str, message: &str, action_markup: Markup) -> Markup {
     html! {
         div id="confirm-modal-backdrop"

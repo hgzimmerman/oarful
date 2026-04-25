@@ -399,11 +399,20 @@ impl Mailer for LogMailer {
         subject: &str,
         sections: &[StaleAlertSection],
         magic_url: &str,
-        _unsubscribe_url: &str,
-        _unsubscribe_all_url: &str,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
     ) -> Result<()> {
         let teams: Vec<&str> = sections.iter().map(|s| s.team_name.as_str()).collect();
         let total_practices: usize = sections.iter().map(|s| s.practices.len()).sum();
+        let html = crate::templates::email::stale_alert_email(
+            to_name,
+            subject,
+            sections,
+            magic_url,
+            unsubscribe_url,
+            unsubscribe_all_url,
+        )
+        .into_string();
         tracing::info!(
             to_email,
             to_name,
@@ -413,6 +422,7 @@ impl Mailer for LogMailer {
             magic_url,
             "stale lineup alert (LogMailer — no email sent)"
         );
+        tracing::trace!(html, "stale alert email HTML");
         Ok(())
     }
 

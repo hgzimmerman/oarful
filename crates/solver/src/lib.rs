@@ -268,12 +268,12 @@ pub struct SolverConfig {
     /// light — mixed-height pairs row fine, this is just a gentle
     /// preference. Default **1**.
     pub height_balance_weight: i32,
-    /// S11 skill-gradient multiplier. Applies a tapering skill
-    /// reward across all seats: full weight on end pairs (bow pair
-    /// + stern pair zones), with a gradient into the engine room
-    /// (3/4, 1/2, 1/4 by distance from the nearest end). This
-    /// creates a skill ordering within the engine room — seats 5/6
-    /// in an 8+ attract more skilled rowers than 3/4.
+    /// S11 skill-gradient multiplier. Applies a tapering skill reward
+    /// across all seats: full weight on end pairs (bow pair + stern
+    /// pair zones), with a gradient into the engine room (3/4, 1/2,
+    /// 1/4 by distance from the nearest end). This creates a skill
+    /// ordering within the engine room — seats 5/6 in an 8+ attract
+    /// more skilled rowers than 3/4.
     ///
     /// The gradient uses integer arithmetic with a `max(1, …)`
     /// floor, so **weights below 4 produce a flat reward** across
