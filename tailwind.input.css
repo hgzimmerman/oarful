@@ -61,6 +61,46 @@
     line-height: 1.4;
   }
 
+  /* Stat badge tier colors — consistent 4-level ramp across all categories.
+     Tier 1 = lowest (novice/light/weak/short), tier 4 = highest. */
+  .stat-tier-1 {
+    color: var(--ink-3);
+    background: var(--paper);
+    border-color: var(--rule);
+  }
+  .stat-tier-2 {
+    color: var(--ink-2);
+    background: var(--paper-2);
+    border-color: var(--rule);
+  }
+  .stat-tier-3 {
+    color: oklch(0.50 0.10 60);
+    background: color-mix(in oklch, oklch(0.65 0.12 70) 12%, var(--paper));
+    border-color: color-mix(in oklch, oklch(0.65 0.12 70) 28%, var(--rule));
+  }
+  .stat-tier-4 {
+    color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 10%, var(--paper));
+    border-color: color-mix(in oklch, var(--accent) 28%, var(--rule));
+  }
+
+  /* Stat badge side colors */
+  .stat-side-port {
+    color: var(--port);
+    background: color-mix(in oklch, var(--port) 10%, var(--paper));
+    border-color: color-mix(in oklch, var(--port) 25%, var(--rule));
+  }
+  .stat-side-stbd {
+    color: var(--stbd);
+    background: color-mix(in oklch, var(--stbd) 10%, var(--paper));
+    border-color: color-mix(in oklch, var(--stbd) 25%, var(--rule));
+  }
+  .stat-side-either {
+    color: var(--either);
+    background: var(--paper);
+    border-color: var(--rule);
+  }
+
   /* Seat tag — colored by side */
   .seat-tag {
     display: inline-flex;

@@ -74,90 +74,90 @@ pub(crate) fn side_indicator(rower: Option<&Rower>) -> Markup {
     }
 }
 
+/// CSS class for a 1–4 ordinal tier.
+fn tier_class(ordinal: i32) -> &'static str {
+    match ordinal {
+        1 => "stat-tier-1",
+        2 => "stat-tier-2",
+        3 => "stat-tier-3",
+        _ => "stat-tier-4",
+    }
+}
+
+/// CSS class for side preference badge coloring.
+fn side_class(r: &Rower) -> &'static str {
+    use lineup_db::rower::types::Side;
+    match r.side {
+        Side::Port => "stat-side-port",
+        Side::Starboard => "stat-side-stbd",
+        Side::Either => "stat-side-either",
+    }
+}
+
 /// Compact stats line for a rower rendered as monospace badge chips.
-/// When `show_attributes` is false, only shows side preference
-/// (non-sensitive); otherwise shows the full breakdown.
-///
-/// Shows actual weight (lbs) and height (ft'in") when the rower has
-/// real measurements on file, otherwise falls back to the bucket
-/// abbreviation. A single tooltip on the whole row shows all stats
-/// in a human-readable format.
+/// Each badge has its own tooltip and is tinted by tier (1–4 ordinal)
+/// so the color is consistent across categories.
 pub(super) fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
     if show_attributes {
-        // Weight: show real value when available, else bucket
-        let weight_label = if let Some(w) = r.weight_kg {
-            format!("{:.0}lb", w.to_lbs())
-        } else {
-            r.weight_class.short().to_string()
-        };
-        // Height: show real value when available, else bucket abbreviation
-        let height_label = if let Some(h) = r.height_m {
-            h.to_ft_in()
-        } else {
-            format!("{}", r.height)
-        };
-        let has_raw_weight = r.weight_kg.is_some();
-        let has_raw_height = r.height_m.is_some();
-
-        // Build a single human-readable tooltip for the whole stats row
-        let mut tip_parts = Vec::new();
-
-        // Weight
-        if let Some(w) = r.weight_kg {
-            tip_parts.push(format!(
-                "Weight: {:.0} lb ({:.1} kg, {})",
+        let (weight_label, weight_tip, has_raw_weight) = if let Some(w) = r.weight_kg {
+            let lbs = format!("{:.0}lb", w.to_lbs());
+            let tip = format!(
+                "Weight: {:.0} lb ({:.1} kg, {} class)",
                 w.to_lbs(),
                 w.as_f64(),
                 r.weight_class
-            ));
+            );
+            (lbs, tip, true)
         } else {
-            tip_parts.push(format!(
-                "Weight: {} (no measurement on file)",
-                r.weight_class
-            ));
-        }
+            let tip = format!("Weight: {} (no measurement on file)", r.weight_class);
+            (r.weight_class.short().to_string(), tip, false)
+        };
+        let wt = tier_class(r.weight_class.ordinal());
 
-        // Height
-        if let Some(h) = r.height_m {
-            tip_parts.push(format!(
-                "Height: {} ({:.2}m, {})",
-                h.to_ft_in(),
-                h.as_f64(),
-                r.height
-            ));
+        let (height_label, height_tip, has_raw_height) = if let Some(h) = r.height_m {
+            let label = h.to_ft_in();
+            let tip = format!("Height: {} ({:.2}m, {})", label, h.as_f64(), r.height);
+            (label, tip, true)
         } else {
-            tip_parts.push(format!("Height: {} (no measurement on file)", r.height));
-        }
+            let tip = format!("Height: {} (no measurement on file)", r.height);
+            (format!("{}", r.height), tip, false)
+        };
+        let ht = tier_class(r.height.ordinal());
 
-        tip_parts.push(format!("Skill: {}", r.skill));
-        tip_parts.push(format!("Strength: {}", r.strength));
-        tip_parts.push(format!("Side: {}", compact_side(r)));
+        let skill_tip = format!("Skill: {}", r.skill);
+        let st = tier_class(r.skill.ordinal());
 
-        let tooltip = tip_parts.join(" \u{2022} ");
+        let strength_tip = format!("Strength: {}", r.strength);
+        let srt = tier_class(r.strength.ordinal());
+
+        let side_tip = format!("Side: {}", compact_side(r));
+        let sc = side_class(r);
 
         html! {
-            div class="flex gap-1 mt-0.5 flex-wrap cursor-help" title=(tooltip) {
+            div class="flex gap-1 mt-0.5 flex-wrap" {
                 @if has_raw_weight {
-                    span class="stat-badge" { (weight_label) }
+                    span class={"stat-badge cursor-help " (wt)} title=(weight_tip) { (weight_label) }
                 } @else {
-                    span class="stat-badge italic" { (weight_label) }
+                    span class={"stat-badge italic cursor-help " (wt)} title=(weight_tip) { (weight_label) }
                 }
-                span class="stat-badge" { (r.skill.short()) }
-                span class="stat-badge" { (r.strength.short()) }
+                span class={"stat-badge cursor-help " (st)} title=(skill_tip) { (r.skill.short()) }
+                span class={"stat-badge cursor-help " (srt)} title=(strength_tip) { (r.strength.short()) }
                 @if has_raw_height {
-                    span class="stat-badge" { (height_label) }
+                    span class={"stat-badge cursor-help " (ht)} title=(height_tip) { (height_label) }
                 } @else {
-                    span class="stat-badge italic" { (height_label) }
+                    span class={"stat-badge italic cursor-help " (ht)} title=(height_tip) { (height_label) }
                 }
-                span class="stat-badge" { (compact_side(r)) }
+                span class={"stat-badge cursor-help " (sc)} title=(side_tip) { (compact_side(r)) }
             }
         }
     } else {
         use lineup_db::rower::types::Side;
         if r.side != Side::Either {
+            let side_tip = format!("Side: {}", compact_side(r));
+            let sc = side_class(r);
             html! {
                 div class="flex gap-1 mt-0.5" {
-                    span class="stat-badge" { (compact_side(r)) }
+                    span class={"stat-badge cursor-help " (sc)} title=(side_tip) { (compact_side(r)) }
                 }
             }
         } else {

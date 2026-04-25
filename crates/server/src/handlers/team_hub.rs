@@ -197,7 +197,7 @@ pub(crate) struct AttendanceToggleInput {
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn attendance_toggle_handler(
     Extension(tenant): Extension<TenantContext>,
-    axum::Json(input): axum::Json<AttendanceToggleInput>,
+    axum::Form(input): axum::Form<AttendanceToggleInput>,
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
 
