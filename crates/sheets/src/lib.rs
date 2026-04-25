@@ -60,20 +60,15 @@ use lineup_db::rower::{NewRower, Rower};
 /// the Sweep/Scull column. Allows two teams to share the same
 /// spreadsheet with different sync sources — one importing sweep
 /// rowers, the other importing scullers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum RowFilter {
     /// Import all rows regardless of Sweep/Scull value.
+    #[default]
     All,
     /// Import only rows where column 0 is "Sweep" (or anything other than "Sculling").
     Sweep,
     /// Import only rows where column 0 is "Sculling".
     Sculling,
-}
-
-impl Default for RowFilter {
-    fn default() -> Self {
-        Self::All
-    }
 }
 
 /// Count summary returned from a sync run, intended for logging /
@@ -467,7 +462,7 @@ fn parse_side(s: &str) -> Side {
     }
 }
 
-fn field<'a>(record: &'a csv::StringRecord, idx: usize) -> &'a str {
+fn field(record: &csv::StringRecord, idx: usize) -> &str {
     record.get(idx).unwrap_or("").trim()
 }
 

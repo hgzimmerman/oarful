@@ -470,7 +470,7 @@ impl<'a> ModelBuilder<'a> {
         let n_rowers = self.available.len() as i32;
         let mut pairs_constrained = 0usize;
 
-        for (_key, indices) in &groups {
+        for indices in groups.values() {
             if indices.len() < 2 {
                 continue;
             }

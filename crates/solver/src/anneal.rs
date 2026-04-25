@@ -563,7 +563,7 @@ impl<'a> EvalContext<'a> {
                 }
                 if let Some(last_date) = snapshot.last_coxed.get(&rower.id) {
                     let days_since = (request.date - *last_date).num_days();
-                    if days_since >= 0 && days_since < COX_COOLDOWN_DAYS {
+                    if (0..COX_COOLDOWN_DAYS).contains(&days_since) {
                         let numerator =
                             cfg.cox_cooldown_penalty as i64 * (COX_COOLDOWN_DAYS - days_since);
                         let effective =
@@ -585,7 +585,7 @@ impl<'a> EvalContext<'a> {
                 }
                 if let Some(last_date) = snapshot.last_benched.get(&rower.id) {
                     let days_since = (request.date - *last_date).num_days();
-                    if days_since >= 0 && days_since < BENCH_COOLDOWN_DAYS {
+                    if (0..BENCH_COOLDOWN_DAYS).contains(&days_since) {
                         let numerator =
                             cfg.bench_cooldown_penalty as i64 * (BENCH_COOLDOWN_DAYS - days_since);
                         let effective =
@@ -915,7 +915,7 @@ pub(crate) fn evaluate_breakdown(a: &Assignment, ctx: &EvalContext) -> ObjBreakd
             let skip_optional = ctx.partial_fill.max_empty() > 0;
             let opt = optional_seats(boat);
             let mut s_lo = 1i32;
-            while s_lo + 1 <= n {
+            while s_lo < n {
                 let s_hi = s_lo + 1;
                 if skip_optional && (opt.contains(&s_lo) || opt.contains(&s_hi)) {
                     s_lo += 2;
@@ -955,7 +955,7 @@ pub(crate) fn evaluate_breakdown(a: &Assignment, ctx: &EvalContext) -> ObjBreakd
             let skip_optional = ctx.partial_fill.max_empty() > 0;
             let opt = optional_seats(boat);
             let mut s_lo = 1i32;
-            while s_lo + 1 <= n {
+            while s_lo < n {
                 let s_hi = s_lo + 1;
                 if skip_optional && (opt.contains(&s_lo) || opt.contains(&s_hi)) {
                     s_lo += 2;
@@ -1104,6 +1104,7 @@ pub(crate) fn evaluate_breakdown(a: &Assignment, ctx: &EvalContext) -> ObjBreakd
             }
         } else {
             // Even speed
+            #[allow(clippy::needless_range_loop)]
             for b_idx in 1..boats.len() {
                 let boat = boats[b_idx];
                 let factor = ctx.stacking_factors[b_idx];

@@ -233,8 +233,7 @@ async fn cmd_seed() -> Result<()> {
 
     // Connect to tenant DB (runs migrations), seed fixture.
     let db = lineup_db::state::Db::connect(&db_path)?;
-    db.with_conn(|conn| lineup_db::fixture::seed_fleet_only(conn))
-        .await?;
+    db.with_conn(lineup_db::fixture::seed_fleet_only).await?;
 
     println!("Default tenant seeded (fleet + dev coach account).");
     println!("  Login: coach@test.com / 12345");

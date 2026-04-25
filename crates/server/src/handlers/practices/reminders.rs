@@ -72,15 +72,15 @@ fn gather_reminder_recipients(
         let mut missing = Vec::new();
         for practice in &pending {
             let responses = Availability::map_for_practice(conn, practice.id)?;
-            if !responses.contains_key(rower_id) {
-                if !EmailLog::already_sent_today(
+            if !responses.contains_key(rower_id)
+                && !EmailLog::already_sent_today(
                     conn,
                     team_id,
                     &EmailLogType::new("reminder"),
                     practice.date,
-                )? {
-                    missing.push((practice.date, practice.time));
-                }
+                )?
+            {
+                missing.push((practice.date, practice.time));
             }
         }
         if !missing.is_empty() {

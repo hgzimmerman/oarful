@@ -28,7 +28,7 @@ impl BillingStatus {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_str_or_default(s: &str) -> Self {
         match s {
             "active" => Self::Active,
             "grandfathered" => Self::Grandfathered,

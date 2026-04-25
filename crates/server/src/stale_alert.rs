@@ -34,7 +34,7 @@ const STALE_DIGEST_TYPE: &str = "stale_digest";
 pub async fn poll_stale_alerts(state: &crate::AppState) {
     let tenants = match state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
     {
         Ok(t) => t,
@@ -125,7 +125,7 @@ async fn poll_tenant(
                     }
 
                     // Classify urgency.
-                    let urgent = practice.time.map_or(false, |t| {
+                    let urgent = practice.time.is_some_and(|t| {
                         let start = practice.date.and_time(t);
                         let hours_until = (start - now_naive).num_hours();
                         hours_until < URGENT_HOURS

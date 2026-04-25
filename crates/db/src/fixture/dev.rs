@@ -22,7 +22,7 @@ pub fn seed_if_empty(conn: &mut SqliteConnection) -> Result<(), diesel::result::
         tracing::info!("Fixture already seeded, skipping");
         return Ok(());
     }
-    conn.transaction(|conn| seed_all(conn))
+    conn.transaction(seed_all)
 }
 
 /// Seed only the fleet (boats) + team + coach account, no rowers.

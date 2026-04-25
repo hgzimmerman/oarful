@@ -315,10 +315,10 @@ fn lineup_block_with_noshow(
                                 }
                             }
                             @if is_coach {
-                                @if maybe_seat.is_some() {
+                                @if let Some(seat) = maybe_seat {
                                     td class="px-2 sm:px-4 py-1.5 sm:py-2 text-right w-20 no-print whitespace-nowrap" {
                                         label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
-                                            input type="checkbox" name="no_show" value=(maybe_seat.unwrap().rower_id)
+                                            input type="checkbox" name="no_show" value=(seat.rower_id)
                                                   class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
                                             "No-show"
                                         }

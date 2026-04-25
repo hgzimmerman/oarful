@@ -137,7 +137,7 @@ pub(crate) async fn login_handler(
     // Scan all tenant DBs for this email.
     let tenants = state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 
@@ -400,7 +400,7 @@ pub(crate) async fn magic_login_handler(
     // confirmation page (don't leak account existence).
     let tenants = state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 
@@ -595,11 +595,10 @@ pub(crate) async fn superuser_magic_link_handler(
     jar: CookieJar,
     Path(token): Path<String>,
 ) -> impl IntoResponse {
-    let claims = match state.jwt_keys.verify(&token) {
+    let _claims = match state.jwt_keys.verify(&token) {
         Ok(c) if c.is_superuser() => c,
         _ => return (jar, Redirect::to("/login")).into_response(),
     };
-    drop(claims);
 
     // Issue a full 24h superuser session token.
     let jwt = match state.jwt_keys.issue_superuser() {
@@ -661,7 +660,7 @@ pub(crate) async fn forgot_password_handler(
 
     let tenants = state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 

@@ -224,7 +224,7 @@ impl<'a> ModelBuilder<'a> {
             for (boat_idx, boat) in boats.iter().enumerate() {
                 // Iterate pair partitions: (1,2), (3,4), (5,6), (7,8) ...
                 let mut s_lo = 1;
-                while s_lo + 1 <= boat.seat_count.as_int() {
+                while s_lo < boat.seat_count.as_int() {
                     let s_hi = s_lo + 1;
 
                     // A_in_part and B_in_part: each a Vec of up to 2 x vars.
@@ -424,7 +424,7 @@ impl<'a> ModelBuilder<'a> {
             }
 
             let mut s_lo = 1i32;
-            while s_lo + 1 <= n_rowing {
+            while s_lo < n_rowing {
                 let s_hi = s_lo + 1;
 
                 // Strength diff (weight 2)
@@ -561,7 +561,7 @@ impl<'a> ModelBuilder<'a> {
             }
 
             let mut s_lo = 1i32;
-            while s_lo + 1 <= n_rowing {
+            while s_lo < n_rowing {
                 let s_hi = s_lo + 1;
                 let (lo_var, hi_var) = match (
                     seat_height_by_seat.get(&(b_idx, s_lo)).copied(),
@@ -784,6 +784,7 @@ impl<'a> ModelBuilder<'a> {
             // Even speed: reward placing strong rowers in boats 1+
             // (spreading talent away from the top boat), decaying so
             // the solver still prefers boat 1 over boat 2.
+            #[allow(clippy::needless_range_loop)]
             for b_idx in 1..self.boats.len() {
                 let boat = self.boats[b_idx];
                 let factor = factors[b_idx];

@@ -67,7 +67,7 @@ async fn preset_bar_inner(
         .collect();
 
     Ok(Html(
-        templates::solve::preset_bar(practice_id, &knobs, &profile_names).into_string(),
+        templates::solve::preset_bar(practice_id, knobs, &profile_names).into_string(),
     ))
 }
 

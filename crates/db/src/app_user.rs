@@ -63,13 +63,16 @@ impl UserStatus {
             Self::Disabled => "disabled",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for UserStatus {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "invited" => Some(Self::Invited),
-            "active" => Some(Self::Active),
-            "disabled" => Some(Self::Disabled),
-            _ => None,
+            "invited" => Ok(Self::Invited),
+            "active" => Ok(Self::Active),
+            "disabled" => Ok(Self::Disabled),
+            _ => Err(()),
         }
     }
 }
@@ -91,15 +94,6 @@ impl Role {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "Member" => Some(Self::Member),
-            "Coach" => Some(Self::Coach),
-            "ProgramDirector" => Some(Self::ProgramDirector),
-            _ => None,
-        }
-    }
-
     /// Returns true if `self` is at least as privileged as `min`.
     pub fn at_least(&self, min: Role) -> bool {
         self.ordinal() >= min.ordinal()
@@ -110,6 +104,18 @@ impl Role {
             Self::Member => 0,
             Self::Coach => 1,
             Self::ProgramDirector => 2,
+        }
+    }
+}
+
+impl std::str::FromStr for Role {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Member" => Ok(Self::Member),
+            "Coach" => Ok(Self::Coach),
+            "ProgramDirector" => Ok(Self::ProgramDirector),
+            _ => Err(()),
         }
     }
 }
@@ -341,14 +347,14 @@ mod tests {
     fn role_from_str_round_trip() {
         for role in [Role::Member, Role::Coach, Role::ProgramDirector] {
             let s = role.as_str();
-            assert_eq!(Role::from_str(s), Some(role));
+            assert_eq!(s.parse::<Role>(), Ok(role));
         }
     }
 
     #[test]
     fn role_from_str_unknown() {
-        assert!(Role::from_str("Admin").is_none());
-        assert!(Role::from_str("").is_none());
+        assert!("Admin".parse::<Role>().is_err());
+        assert!("".parse::<Role>().is_err());
     }
 
     // ── UserStatus ──────────────────────────────────────────────────
@@ -361,13 +367,13 @@ mod tests {
             UserStatus::Disabled,
         ] {
             let s = status.as_str();
-            assert_eq!(UserStatus::from_str(s), Some(status));
+            assert_eq!(s.parse::<UserStatus>(), Ok(status));
         }
     }
 
     #[test]
     fn user_status_from_str_unknown() {
-        assert!(UserStatus::from_str("banned").is_none());
+        assert!("banned".parse::<UserStatus>().is_err());
     }
 
     #[test]

@@ -410,7 +410,7 @@ pub(crate) async fn active_team(
         return Ok(c.team_id());
     }
     let team = db
-        .with_conn(|conn| lineup_db::team::Team::first(conn))
+        .with_conn(lineup_db::team::Team::first)
         .await
         .map_err(internal_error)?;
     team.map(|t| t.id).ok_or_else(|| {

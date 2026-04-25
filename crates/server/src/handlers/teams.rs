@@ -148,7 +148,7 @@ pub(crate) async fn create_handler(
 pub(crate) async fn teams_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let teams = tenant
         .db
-        .with_conn(|conn| Team::list_all(conn))
+        .with_conn(Team::list_all)
         .await
         .map_err(internal_error)?;
     Ok(templates::teams::list_content(&teams))

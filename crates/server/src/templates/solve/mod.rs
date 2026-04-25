@@ -120,12 +120,12 @@ pub(super) fn compact_side(r: &Rower) -> String {
         Side::Either => "Either".to_string(),
         Side::Port => {
             let s = r.side_strength.as_int();
-            let bias = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
+            let bias = if s == 0 { 5 } else { (6 - s).clamp(1, 5) };
             format!("Port({bias})")
         }
         Side::Starboard => {
             let s = r.side_strength.as_int();
-            let bias = if s == 0 { 5 } else { (6 - s).min(5).max(1) };
+            let bias = if s == 0 { 5 } else { (6 - s).clamp(1, 5) };
             format!("Starboard({bias})")
         }
     }
@@ -148,7 +148,7 @@ pub(super) fn cox_first(snapshot: &DbSnapshot, boat_id: BoatId, force_cox_stern:
 /// Sort seats for display: stern → bow. When `cox_first` is true,
 /// cox (seat 0) comes before all numbered seats; otherwise it comes
 /// after them.
-pub(super) fn sort_seats_for_display(seats: &mut Vec<(i32, RowerId)>, cox_at_top: bool) {
+pub(super) fn sort_seats_for_display(seats: &mut [(i32, RowerId)], cox_at_top: bool) {
     seats.sort_by_key(|(s, _)| {
         if *s == 0 {
             if cox_at_top {

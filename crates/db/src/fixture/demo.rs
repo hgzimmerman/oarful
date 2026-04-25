@@ -32,7 +32,7 @@ pub struct DemoSeed {
 /// Seed a demo tenant with a rich fixture.
 #[tracing::instrument(level = "info", skip(conn), err)]
 pub fn seed_demo(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::result::Error> {
-    conn.transaction(|conn| seed_demo_inner(conn))
+    conn.transaction(seed_demo_inner)
 }
 
 fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::result::Error> {

@@ -108,7 +108,7 @@ pub(crate) async fn signup_handler(
     let email_for_check = email.clone();
     let tenants = state
         .master_db
-        .with_conn(|conn| Tenant::list_all(conn))
+        .with_conn(Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 

@@ -346,6 +346,7 @@ impl std::fmt::Display for SideStrength {
     Serialize,
     Deserialize,
     diesel_derive_newtype::DieselNewType,
+    Default,
 )]
 pub struct SweepBias(i32);
 
@@ -365,12 +366,6 @@ impl SweepBias {
     /// considered for sweep seating.
     pub fn is_hard_sculler(self) -> bool {
         self.0 == -2
-    }
-}
-
-impl Default for SweepBias {
-    fn default() -> Self {
-        Self(0)
     }
 }
 

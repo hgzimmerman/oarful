@@ -570,22 +570,17 @@ impl Default for SolverConfig {
 /// no optional seats (partial-filling a 4 is too structurally unbalanced
 /// to be useful). The `Allowed(k)` variant sets the maximum number of
 /// those optional seats that may be empty per boat.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PartialFillPolicy {
     /// No partial fills. Every seat of every fielded boat must be
     /// filled exactly once. This is the current/default behaviour.
+    #[default]
     Strict,
     /// Each fielded boat may have up to `k` of its optional seats
     /// empty. For an 8+ with optional seats `[3, 4]`, `Allowed(1)`
     /// permits "missing seat 3" or "missing seat 4" but not both;
     /// `Allowed(2)` permits any combination including both empty.
     Allowed(i32),
-}
-
-impl Default for PartialFillPolicy {
-    fn default() -> Self {
-        Self::Strict
-    }
 }
 
 impl PartialFillPolicy {
@@ -1079,84 +1074,84 @@ pub fn solve_streaming(
     };
 
     // Alternatives
-    if request.wants_alternatives() {
-        if post_tabu_constraint(
+    if request.wants_alternatives()
+        && post_tabu_constraint(
             &mut builder.solver,
             &primary_placements,
             request.tabu_min_diff,
-        )? {
-            let mut alt_index = 0usize;
-            for alt_i in 1..request.top_n {
-                let alt_tracker = ProgressTracker::new(objective);
-                let next = {
-                    let cb = alt_tracker.callback();
-                    match request.time_budget {
-                        None => {
-                            let mut termination = Indefinite;
-                            let procedure =
-                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
-                            builder.solver.optimise(
-                                &mut brancher,
-                                &mut termination,
-                                &mut resolver,
-                                procedure,
-                            )
-                        }
-                        Some(budget) => {
-                            let mut termination = TimeBudget::starting_now(budget);
-                            let procedure =
-                                LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
-                            builder.solver.optimise(
-                                &mut brancher,
-                                &mut termination,
-                                &mut resolver,
-                                procedure,
-                            )
-                        }
+        )?
+    {
+        let mut alt_index = 0usize;
+        for alt_i in 1..request.top_n {
+            let alt_tracker = ProgressTracker::new(objective);
+            let next = {
+                let cb = alt_tracker.callback();
+                match request.time_budget {
+                    None => {
+                        let mut termination = Indefinite;
+                        let procedure =
+                            LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                        builder.solver.optimise(
+                            &mut brancher,
+                            &mut termination,
+                            &mut resolver,
+                            procedure,
+                        )
                     }
-                };
-                alt_tracker.log(&format!("streaming alt {alt_i}"));
-                let sol = match next {
-                    OptimisationResult::Optimal(sol)
-                    | OptimisationResult::Satisfiable(sol)
-                    | OptimisationResult::Stopped(sol, _) => sol,
-                    OptimisationResult::Unsatisfiable | OptimisationResult::Unknown => break,
-                };
-
-                let alt_lineups = decode_solution(
-                    &builder.x,
-                    &builder.use_b,
-                    &builder.boats,
-                    &builder.available,
-                    |v| sol.get_integer_value(v),
-                );
-                let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
-                let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
-
-                if tx
-                    .send(SolveStreamEvent::Alternative {
-                        index: alt_index,
-                        solution: ProposedSolution {
-                            lineups: alt_lineups,
-                            unplaced: alt_unplaced,
-                        },
-                    })
-                    .is_err()
-                {
-                    // Receiver dropped — client disconnected.
-                    return Ok(());
+                    Some(budget) => {
+                        let mut termination = TimeBudget::starting_now(budget);
+                        let procedure =
+                            LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
+                        builder.solver.optimise(
+                            &mut brancher,
+                            &mut termination,
+                            &mut resolver,
+                            procedure,
+                        )
+                    }
                 }
+            };
+            alt_tracker.log(&format!("streaming alt {alt_i}"));
+            let sol = match next {
+                OptimisationResult::Optimal(sol)
+                | OptimisationResult::Satisfiable(sol)
+                | OptimisationResult::Stopped(sol, _) => sol,
+                OptimisationResult::Unsatisfiable | OptimisationResult::Unknown => break,
+            };
 
-                alt_index += 1;
-                if alt_index + 1 < request.top_n
-                    && !post_tabu_constraint(
-                        &mut builder.solver,
-                        &alt_placements,
-                        request.tabu_min_diff,
-                    )?
-                {
-                    break;
-                }
+            let alt_lineups = decode_solution(
+                &builder.x,
+                &builder.use_b,
+                &builder.boats,
+                &builder.available,
+                |v| sol.get_integer_value(v),
+            );
+            let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
+            let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
+
+            if tx
+                .send(SolveStreamEvent::Alternative {
+                    index: alt_index,
+                    solution: ProposedSolution {
+                        lineups: alt_lineups,
+                        unplaced: alt_unplaced,
+                    },
+                })
+                .is_err()
+            {
+                // Receiver dropped — client disconnected.
+                return Ok(());
+            }
+
+            alt_index += 1;
+            if alt_index + 1 < request.top_n
+                && !post_tabu_constraint(
+                    &mut builder.solver,
+                    &alt_placements,
+                    request.tabu_min_diff,
+                )?
+            {
+                break;
             }
         }
     }
@@ -1355,16 +1350,14 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
                 .map(|(r_idx, _)| *r_idx)
                 .filter(|r_idx| !assigned_rowers.contains(r_idx))
                 .filter(|r_idx| builder.available[*r_idx].is_designated_cox.as_bool())
-                .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
-                .next()
+                .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
                 .or_else(|| {
                     // Fallback: any can_cox rower
                     rower_quality
                         .iter()
                         .map(|(r_idx, _)| *r_idx)
                         .filter(|r_idx| !assigned_rowers.contains(r_idx))
-                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
-                        .next()
+                        .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
                 });
             if let Some(r_idx) = cox {
                 if let Some(&var) = builder.x.get(&(r_idx, b_idx, 0)) {
@@ -1395,8 +1388,7 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
                 .copied()
                 .filter(|r_idx| !assigned_rowers.contains(r_idx))
                 .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
-                .filter(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
-                .next()
+                .find(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
                 .or_else(|| {
                     // Fallback: correct-side from any boat
                     rower_quality
@@ -1405,10 +1397,9 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
                         .filter(|r_idx| !assigned_rowers.contains(r_idx))
                         .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
                         .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
-                        .filter(|r_idx| {
+                        .find(|r_idx| {
                             wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0
                         })
-                        .next()
                 })
                 .or_else(|| {
                     // Last resort: any eligible rower (wrong side OK)
@@ -1417,8 +1408,7 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
                         .map(|(r_idx, _)| *r_idx)
                         .filter(|r_idx| !assigned_rowers.contains(r_idx))
                         .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
-                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
-                        .next()
+                        .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
                 });
             if let Some(r_idx) = candidate {
                 if let Some(&var) = builder.x.get(&(r_idx, b_idx, seat)) {

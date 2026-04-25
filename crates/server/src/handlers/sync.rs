@@ -254,7 +254,7 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
     // List all tenants from the master DB.
     let tenants = match state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
     {
         Ok(t) => t,
@@ -279,7 +279,7 @@ pub async fn poll_sync_sources(state: &crate::AppState) {
         };
 
         let sources = match db
-            .with_conn(|conn| lineup_db::sync_source::SyncSource::list_pollable(conn))
+            .with_conn(lineup_db::sync_source::SyncSource::list_pollable)
             .await
         {
             Ok(s) => s,

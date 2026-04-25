@@ -477,7 +477,7 @@ async fn find_invite_tenant(
 
     let tenants = tdb
         .master_db
-        .with_conn(|conn| Tenant::list_all(conn))
+        .with_conn(Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 
@@ -552,7 +552,7 @@ pub(crate) async fn toggle_status_handler(
                 .get_results(conn)?;
             let roles: HashMap<UserId, Role> =
                 role_rows.into_iter().map(|r| (r.user_id, r.role)).collect();
-            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = vec![user.clone()]
+            let user_rower: HashMap<UserId, lineup_db::rower::types::RowerId> = [user.clone()]
                 .iter()
                 .filter_map(|u| u.rower_id.map(|rid| (u.id, rid)))
                 .collect();

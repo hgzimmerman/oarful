@@ -162,7 +162,7 @@ impl<'a> ModelBuilder<'a> {
                 continue; // never coxed → no cooldown to enforce
             };
             let days_since = (date - *last_date).num_days();
-            if days_since < 0 || days_since >= COX_COOLDOWN_DAYS {
+            if !(0..COX_COOLDOWN_DAYS).contains(&days_since) {
                 continue; // outside cooldown window (or in the future; ignore)
             }
 
@@ -676,7 +676,7 @@ impl<'a> ModelBuilder<'a> {
                 continue;
             };
             let days_since = (date - *last_date).num_days();
-            if days_since < 0 || days_since >= BENCH_COOLDOWN_DAYS {
+            if !(0..BENCH_COOLDOWN_DAYS).contains(&days_since) {
                 continue;
             }
 

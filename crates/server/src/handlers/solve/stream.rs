@@ -62,7 +62,7 @@ pub(crate) async fn stream_handler(
     let config = custom_profiles
         .iter()
         .find(|p| p.name == preset_name)
-        .map(|p| profile_to_config(p))
+        .map(profile_to_config)
         .unwrap_or_else(|| knobs.resolve_config());
 
     let mut request = knobs.to_request(date, &snapshot, baselines);

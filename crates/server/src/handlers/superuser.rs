@@ -59,7 +59,7 @@ pub(crate) async fn index_handler(
 ) -> Result<Html<String>, super::ErrorResponse> {
     let tenants = state
         .master_db
-        .with_conn(|conn| Tenant::list_all(conn))
+        .with_conn(Tenant::list_all)
         .await
         .map_err(super::internal_error)?;
 

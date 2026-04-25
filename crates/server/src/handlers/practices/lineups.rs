@@ -301,12 +301,11 @@ pub(crate) async fn send_lineups_handler(
                     if let Some(practice) = Practice::find_by_date(conn, team_id, *date)? {
                         let responses = Availability::map_for_practice(conn, practice.id)?;
                         for r in &all_rowers {
-                            if !recipient_rower_ids.contains(&r.id) {
-                                if AppUser::find_by_rower_id(conn, r.id)?.is_some()
-                                    && !responses.contains_key(&r.id)
-                                {
-                                    recipient_rower_ids.insert(r.id);
-                                }
+                            if !recipient_rower_ids.contains(&r.id)
+                                && AppUser::find_by_rower_id(conn, r.id)?.is_some()
+                                && !responses.contains_key(&r.id)
+                            {
+                                recipient_rower_ids.insert(r.id);
                             }
                         }
                     }
@@ -390,8 +389,8 @@ pub(crate) async fn send_lineups_handler(
             if let Err(err) = mailer_ctx
                 .mailer
                 .send_lineup(
-                    &email,
-                    &name,
+                    email,
+                    name,
                     &team_name,
                     &summaries,
                     &magic_url,

@@ -90,7 +90,7 @@ pub(crate) async fn create_demo_handler(
 
     // Seed the demo fixture.
     let demo_seed = db
-        .with_conn(|conn| lineup_db::fixture::seed_demo(conn))
+        .with_conn(lineup_db::fixture::seed_demo)
         .await
         .map_err(super::internal_error)?;
 
@@ -202,11 +202,7 @@ pub(crate) async fn resume_demo_handler(
 /// Delete expired demo tenants and their SQLite files. Called at
 /// startup and optionally on a timer.
 pub async fn cleanup_expired_demos(state: &AppState) {
-    let expired = match state
-        .master_db
-        .with_conn(|conn| Tenant::list_expired_demos(conn))
-        .await
-    {
+    let expired = match state.master_db.with_conn(Tenant::list_expired_demos).await {
         Ok(list) => list,
         Err(e) => {
             tracing::error!(?e, "failed to list expired demos");

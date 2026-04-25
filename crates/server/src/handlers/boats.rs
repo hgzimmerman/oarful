@@ -34,7 +34,7 @@ use crate::{
 pub(crate) async fn fleet_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
     let boats = tenant
         .db
-        .with_conn(|conn| Boat::list_all(conn))
+        .with_conn(Boat::list_all)
         .await
         .map_err(internal_error)?;
     let can_export = tenant.claims.role().at_least(Role::ProgramDirector);
@@ -176,7 +176,7 @@ pub(crate) async fn usage_matrix_csv_handler(
     // Header row: "Boat", date1, date2, ...
     let mut header = vec!["Boat".to_string()];
     header.extend(dates.iter().map(|d| d.to_string()));
-    wtr.write_record(&header).map_err(|e| internal_error(e))?;
+    wtr.write_record(&header).map_err(internal_error)?;
 
     // Data rows.
     for boat in &boats {
@@ -188,11 +188,11 @@ pub(crate) async fn usage_matrix_csv_handler(
                 row.push(String::new());
             }
         }
-        wtr.write_record(&row).map_err(|e| internal_error(e))?;
+        wtr.write_record(&row).map_err(internal_error)?;
     }
 
-    let body = String::from_utf8(wtr.into_inner().map_err(|e| internal_error(e))?)
-        .map_err(|e| internal_error(e))?;
+    let body =
+        String::from_utf8(wtr.into_inner().map_err(internal_error)?).map_err(internal_error)?;
 
     Ok((
         [
@@ -363,10 +363,7 @@ async fn redirect_or_list(
     HxRequest(is_htmx): HxRequest,
 ) -> Result<axum::response::Response, ErrorResponse> {
     if is_htmx {
-        let boats = db
-            .with_conn(|conn| Boat::list_all(conn))
-            .await
-            .map_err(internal_error)?;
+        let boats = db.with_conn(Boat::list_all).await.map_err(internal_error)?;
         // Only PDs can create/update boats, so can_export is always true here.
         Ok(Html(templates::boats::list_content(&boats, true).into_string()).into_response())
     } else {

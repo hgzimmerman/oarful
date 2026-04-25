@@ -118,18 +118,9 @@ pub(crate) fn signup_closed_page() -> Markup {
 }
 
 /// Prefill values for re-rendering the form after validation errors.
+#[derive(Default)]
 pub(crate) struct SignupPrefill {
     pub club_name: String,
     pub name: String,
     pub email: String,
-}
-
-impl Default for SignupPrefill {
-    fn default() -> Self {
-        Self {
-            club_name: String::new(),
-            name: String::new(),
-            email: String::new(),
-        }
-    }
 }

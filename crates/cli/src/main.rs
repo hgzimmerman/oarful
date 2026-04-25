@@ -51,9 +51,9 @@ async fn main() -> Result<()> {
     let db = Db::connect(&db_path)?;
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--fleet-only") {
-        db.with_conn(|conn| fixture::seed_fleet_only(conn)).await?;
+        db.with_conn(fixture::seed_fleet_only).await?;
     } else {
-        db.with_conn(|conn| fixture::seed_if_empty(conn)).await?;
+        db.with_conn(fixture::seed_if_empty).await?;
     }
 
     // Resolve team: use the first team in the DB. A real deployment

@@ -958,7 +958,7 @@ fn side_slider(r: &Rower) -> Markup {
             if s == 0 {
                 -5
             } else {
-                -(6 - s).min(5).max(1)
+                -(6 - s).clamp(1, 5)
             }
         }
         Side::Starboard => {
@@ -966,7 +966,7 @@ fn side_slider(r: &Rower) -> Markup {
             if s == 0 {
                 5
             } else {
-                (6 - s).min(5).max(1)
+                (6 - s).clamp(1, 5)
             }
         }
     };
@@ -1030,7 +1030,7 @@ fn side_display_label(r: &Rower) -> String {
             if s == 0 {
                 -5
             } else {
-                -(6 - s).min(5).max(1)
+                -(6 - s).clamp(1, 5)
             }
         }
         Side::Starboard => {
@@ -1038,7 +1038,7 @@ fn side_display_label(r: &Rower) -> String {
             if s == 0 {
                 5
             } else {
-                (6 - s).min(5).max(1)
+                (6 - s).clamp(1, 5)
             }
         }
     };

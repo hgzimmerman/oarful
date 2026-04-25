@@ -23,7 +23,7 @@ jobs:
         run: nix develop -c cargo fmt --all -- --check
 
       - name: Clippy
-        run: nix develop -c cargo clippy --workspace
+        run: nix develop -c cargo clippy --workspace -- -D warnings -A clippy::doc_lazy_continuation -A clippy::doc_overindented_list_items -A dead_code
 
       - name: Tailwind CSS freshness
         run: |

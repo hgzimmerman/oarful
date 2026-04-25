@@ -36,8 +36,8 @@ pub fn run() -> Result<()> {
     // the model scales with ROWER count on a simple 3-boat problem.
     println!("-- axis A: vary rowers, 3-boat fleet --");
     println!(
-        "{:<10} {:<18} {:<12} {}",
-        "N rowers", "solve time", "status", "notes"
+        "{:<10} {:<18} {:<12} notes",
+        "N rowers", "solve time", "status"
     );
     println!("{}", "-".repeat(70));
     std::io::stdout().flush().ok();
@@ -50,8 +50,8 @@ pub fn run() -> Result<()> {
     // selection search space.
     println!("\n-- axis B: vary boats, 20-rower roster --");
     println!(
-        "{:<10} {:<18} {:<12} {}",
-        "N boats", "solve time", "status", "notes"
+        "{:<10} {:<18} {:<12} notes",
+        "N boats", "solve time", "status"
     );
     println!("{}", "-".repeat(70));
     std::io::stdout().flush().ok();

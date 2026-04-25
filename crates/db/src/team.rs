@@ -192,12 +192,16 @@ impl BucketVisibility {
             Self::Edit => "edit",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
+impl std::str::FromStr for BucketVisibility {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "view" => Self::View,
-            "edit" => Self::Edit,
-            _ => Self::Off,
+            "off" => Ok(Self::Off),
+            "view" => Ok(Self::View),
+            "edit" => Ok(Self::Edit),
+            _ => Err(()),
         }
     }
 }
@@ -564,10 +568,16 @@ mod tests {
 
     #[test]
     fn bucket_visibility_round_trip() {
-        assert_eq!(BucketVisibility::from_str("off"), BucketVisibility::Off);
-        assert_eq!(BucketVisibility::from_str("view"), BucketVisibility::View);
-        assert_eq!(BucketVisibility::from_str("edit"), BucketVisibility::Edit);
-        assert_eq!(BucketVisibility::from_str("bogus"), BucketVisibility::Off);
+        assert_eq!("off".parse::<BucketVisibility>(), Ok(BucketVisibility::Off));
+        assert_eq!(
+            "view".parse::<BucketVisibility>(),
+            Ok(BucketVisibility::View)
+        );
+        assert_eq!(
+            "edit".parse::<BucketVisibility>(),
+            Ok(BucketVisibility::Edit)
+        );
+        assert!("bogus".parse::<BucketVisibility>().is_err());
     }
 
     #[test]

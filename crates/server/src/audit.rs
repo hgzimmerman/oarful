@@ -40,7 +40,7 @@ pub(crate) async fn cleanup_all(state: &crate::AppState) {
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(90)).naive_utc();
     let tenants = match state
         .master_db
-        .with_conn(|conn| lineup_master_db::tenant::Tenant::list_all(conn))
+        .with_conn(lineup_master_db::tenant::Tenant::list_all)
         .await
     {
         Ok(t) => t,
