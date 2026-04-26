@@ -600,6 +600,25 @@ fn editor_js() -> &'static str {
     include_str!("../js/lineup_editor.js")
 }
 
+/// Render a single rower row in the pool sidebar.
+fn pool_rower_row(r: &Rower, boat_kind: &str) -> Markup {
+    let key = format!("{boat_kind}:{}", r.id);
+    let side_style = pool_side_border_style(r);
+    html! {
+        span data-key=(key)
+             data-boat=(boat_kind)
+             data-seat="-1"
+             data-rower=(r.id)
+             class="px-2 py-1 rounded cursor-pointer transition"
+             style={"border: 1px solid transparent; " (side_style)}
+             ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
+             "@click"={"select('" (key) "')"} {
+            div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
+            (rower_stats_line(r, true))
+        }
+    }
+}
+
 // ── Roster pool sidebar ──────────────────────────────────────────
 
 /// Render the roster pool sidebar content. Used both for initial page
@@ -684,22 +703,11 @@ pub(crate) fn roster_pool(
                 div class="mt-2" {
                     div class="pool-section-head" {
                         span class="font-serif-heading italic font-medium text-xs" style="color: var(--ink-2)" { "Sculling" }
+                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (editor.sculling.len()) }
                     }
                     div class="flex flex-col gap-0.5 mt-1" {
                         @for r in &editor.sculling {
-                            @let key = format!("sculling:{}", r.id);
-                            @let side_style = pool_side_border_style(r);
-                            span data-key=(key)
-                                 data-boat="sculling"
-                                 data-seat="-1"
-                                 data-rower=(r.id)
-                                 class="px-2 py-1 rounded cursor-pointer transition"
-                                 style={"border: 1px solid transparent; " (side_style)}
-                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
-                                 "@click"={"select('" (key) "')"} {
-                                div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
-                                (rower_stats_line(r, true))
-                            }
+                            (pool_rower_row(r, "sculling"))
                         }
                     }
                 }
@@ -723,25 +731,59 @@ pub(crate) fn roster_pool(
 
             // Available rowers — grouped by side
             @if !editor.pool.is_empty() {
-                div class="mt-2" {
-                    div class="pool-section-head" {
-                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--ink-2)" { "Available" }
-                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (pool_count) }
+                @let coxes: Vec<_> = editor.pool.iter().filter(|r| r.is_designated_cox.as_bool()).collect();
+                @let ports: Vec<_> = editor.pool.iter().filter(|r| !r.is_designated_cox.as_bool() && r.side == lineup_db::rower::types::Side::Port).collect();
+                @let stbds: Vec<_> = editor.pool.iter().filter(|r| !r.is_designated_cox.as_bool() && r.side == lineup_db::rower::types::Side::Starboard).collect();
+                @let eithers: Vec<_> = editor.pool.iter().filter(|r| !r.is_designated_cox.as_bool() && r.side == lineup_db::rower::types::Side::Either).collect();
+
+                @if !coxes.is_empty() {
+                    div class="mt-2" {
+                        div class="pool-section-head" {
+                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--cox)" { "Coxswains" }
+                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (coxes.len()) }
+                        }
+                        div class="flex flex-col gap-0.5 mt-1" {
+                            @for r in &coxes {
+                                (pool_rower_row(r, "bench"))
+                            }
+                        }
                     }
-                    div class="flex flex-col gap-0.5 mt-1" {
-                        @for r in &editor.pool {
-                            @let key = format!("bench:{}", r.id);
-                            @let side_style = pool_side_border_style(r);
-                            span data-key=(key)
-                                 data-boat="bench"
-                                 data-seat="-1"
-                                 data-rower=(r.id)
-                                 class="px-2 py-1 rounded cursor-pointer transition"
-                                 style={"border: 1px solid transparent; " (side_style)}
-                                 ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
-                                 "@click"={"select('" (key) "')"} {
-                                div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
-                                (rower_stats_line(r, true))
+                }
+                @if !ports.is_empty() {
+                    div class="mt-2" {
+                        div class="pool-section-head" {
+                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--port)" { "Port" }
+                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (ports.len()) }
+                        }
+                        div class="flex flex-col gap-0.5 mt-1" {
+                            @for r in &ports {
+                                (pool_rower_row(r, "bench"))
+                            }
+                        }
+                    }
+                }
+                @if !stbds.is_empty() {
+                    div class="mt-2" {
+                        div class="pool-section-head" {
+                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--stbd)" { "Starboard" }
+                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (stbds.len()) }
+                        }
+                        div class="flex flex-col gap-0.5 mt-1" {
+                            @for r in &stbds {
+                                (pool_rower_row(r, "bench"))
+                            }
+                        }
+                    }
+                }
+                @if !eithers.is_empty() {
+                    div class="mt-2" {
+                        div class="pool-section-head" {
+                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--either)" { "Either" }
+                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (eithers.len()) }
+                        }
+                        div class="flex flex-col gap-0.5 mt-1" {
+                            @for r in &eithers {
+                                (pool_rower_row(r, "bench"))
                             }
                         }
                     }
