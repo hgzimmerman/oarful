@@ -351,33 +351,10 @@ pub(crate) fn lineup_editor(
         // Alpine editor logic is in the global layout script
         // (lineup_editor.js) so it's defined before Alpine init.
 
-        // OOB swap: inject active boats + carry through pin state.
-        // Does NOT auto-lock placements — only explicit state is preserved.
-        div #editor-knob-state hx-swap-oob="innerHTML" {
-            @for eb in &editor.boats {
-                @if eb.active {
-                    input type="hidden" name="boat" value=(eb.boat.id);
-                }
-            }
-            @for &(rid, bid, seat) in &flags.locked_seats {
-                input type="hidden" name="lock" value={(rid) ":" (bid) ":" (seat)};
-            }
-            @for &(rid, bid, seat) in &flags.pinned_seats {
-                input type="hidden" name="pin" value={(rid) ":" (bid) ":" (seat)};
-            }
-            @for &(rid, bid, seat) in &flags.was_pinned_seats {
-                input type="hidden" name="was_pin" value={(rid) ":" (bid) ":" (seat)};
-            }
-            @for bid in &flags.pinned_boats {
-                input type="hidden" name="boat_pin" value=(bid);
-            }
-            @for bid in &flags.was_pinned_boats {
-                input type="hidden" name="boat_was_pin" value=(bid);
-            }
-            @for bid in &flags.locked_boats {
-                input type="hidden" name="boat_lock" value=(bid);
-            }
-        }
+        // Pin/lock/boat state lives in #editor-knob-state inside the
+        // knobs form. JS manages it via _addKnobInput/_removeKnobInput;
+        // gatherState() round-trips it as query params on each rerender.
+        // No OOB swap — JS is the sole owner after initial page load.
     }
 }
 

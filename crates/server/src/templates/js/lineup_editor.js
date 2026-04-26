@@ -52,20 +52,20 @@ function lineupEditor() {
 
         // Helper: remove all knobs form inputs matching name + value.
         _removeKnobInput(name, value) {
-            var form = document.querySelector('form[hx-get]');
-            if (!form) return;
-            form.querySelectorAll('input[name="' + name + '"][value="' + value + '"]').forEach(function(el) {
+            var container = document.getElementById('editor-knob-state');
+            if (!container) return;
+            container.querySelectorAll('input[name="' + name + '"][value="' + value + '"]').forEach(function(el) {
                 el.remove();
             });
         },
 
         // Helper: add a knobs form hidden input.
         _addKnobInput(name, value) {
-            var form = document.querySelector('form[hx-get]');
-            if (!form) return;
+            var container = document.getElementById('editor-knob-state');
+            if (!container) return;
             var inp = document.createElement('input');
             inp.type = 'hidden'; inp.name = name; inp.value = value;
-            form.appendChild(inp);
+            container.appendChild(inp);
         },
 
         // Helper: mark a seat as dirty (pinned) after a manual move.
@@ -74,13 +74,13 @@ function lineupEditor() {
         _markDirty(el) {
             if (!el.dataset.rower || el.dataset.boat === 'bench' || el.dataset.boat === 'sculling') return;
             var key = el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat;
-            var form = document.querySelector('form[hx-get]');
+            var container = document.getElementById('editor-knob-state');
             // Check if this rower had a lock at their previous position.
             // Lock keys are rower:boat:seat — match on rower ID prefix.
             var rowerId = el.dataset.rower;
             var hadLock = false;
-            if (form) {
-                form.querySelectorAll('input[name="lock"]').forEach(function(inp) {
+            if (container) {
+                container.querySelectorAll('input[name="lock"]').forEach(function(inp) {
                     if (inp.value.startsWith(rowerId + ':')) {
                         hadLock = true;
                         inp.remove();
@@ -96,8 +96,7 @@ function lineupEditor() {
             }
             // Also mark the boat as dirty (if not already locked).
             var boatId = el.dataset.boat;
-            var form = document.querySelector('form[hx-get]');
-            var isBoatLocked = form && form.querySelector('input[name="boat_lock"][value="' + boatId + '"]');
+            var isBoatLocked = container && container.querySelector('input[name="boat_lock"][value="' + boatId + '"]');
             if (!isBoatLocked) {
                 ['boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(n) {
                     this._removeKnobInput(n, boatId);
@@ -148,8 +147,8 @@ function lineupEditor() {
                 }
                 // Pin the boat too (if not already locked).
                 var boatId = el.dataset.boat;
-                var form = document.querySelector('form[hx-get]');
-                var isBoatLocked = form && form.querySelector('input[name="boat_lock"][value="' + boatId + '"]');
+                var container = document.getElementById('editor-knob-state');
+                var isBoatLocked = container && container.querySelector('input[name="boat_lock"][value="' + boatId + '"]');
                 if (!isBoatLocked) {
                     ['boat_pin', 'boat_was_pin'].forEach(function(n) {
                         self._removeKnobInput(n, boatId);
@@ -241,10 +240,10 @@ function lineupEditor() {
                 card.dataset.hidden = 'true';
             });
             // Clear all boat pin state.
-            var form = document.querySelector('form[hx-get]');
-            if (form) {
+            var container = document.getElementById('editor-knob-state');
+            if (container) {
                 ['boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(n) {
-                    form.querySelectorAll('input[name="' + n + '"]').forEach(function(el) { el.remove(); });
+                    container.querySelectorAll('input[name="' + n + '"]').forEach(function(el) { el.remove(); });
                 });
             }
             this.selected = null;
