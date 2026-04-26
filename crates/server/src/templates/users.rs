@@ -96,7 +96,7 @@ pub(crate) fn user_row(
                       hx-get={"/rowers/" (rid)}
                       hx-target="#content"
                       hx-push-url="true"
-                      class="text-blue-600 hover:text-blue-800 hover:underline" {
+                      class="text-link hover:text-link-2 hover:underline" {
                         (u.name)
                     }
                 } @else {
@@ -124,7 +124,7 @@ pub(crate) fn user_row(
                          hx-swap="outerHTML"
                          class="inline" {
                         button type="submit"
-                               class="text-xs text-blue-600 hover:text-blue-800 font-medium" {
+                               class="text-xs text-link hover:text-link-2 font-medium" {
                             "Resend invite"
                         }
                     }

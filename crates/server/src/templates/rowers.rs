@@ -156,7 +156,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
           hx-push-url="true"
           class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
             div {
-                div class="font-medium text-blue-700" { (r.name) }
+                div class="font-medium text-link" { (r.name) }
                 div class="text-xs text-ink-3" {
                     (side_display_label(r))
                     @if show_emails {
@@ -182,7 +182,7 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                   hx-get={"/rowers/" (r.id)}
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-blue-700 hover:text-blue-900 underline" {
+                  class="text-link hover:text-link-2 underline" {
                     (r.name)
                 }
             }

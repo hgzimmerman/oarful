@@ -23,6 +23,7 @@ module.exports = {
         good:    'var(--good)',
         warn:    'var(--warn)',
         bad:     'var(--bad)',
+        link:    { DEFAULT: 'var(--link)', 2: 'var(--link-2)' },
       },
     },
   },

@@ -106,7 +106,7 @@ fn boat_row(b: &Boat) -> Markup {
                   hx-get=(href)
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-blue-700 hover:text-blue-900 underline" {
+                  class="text-link hover:text-link-2 underline" {
                     (b.name)
                 }
             }
@@ -163,7 +163,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
                           hx-get=(format!("/boats/{}/edit", boat.id))
                           hx-target="#content"
                           hx-push-url="true"
-                          class="text-sm font-semibold text-blue-700 hover:text-blue-900" {
+                          class="text-sm font-semibold text-link hover:text-link-2" {
                             "Edit"
                         }
                     }
@@ -213,7 +213,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
                               hx-get=(format!("/history/{pid}"))
                               hx-target="#content"
                               hx-push-url="true"
-                              class="block px-2 py-1.5 hover:bg-paper-2 text-blue-700 hover:text-blue-900" {
+                              class="block px-2 py-1.5 hover:bg-paper-2 text-link hover:text-link-2" {
                                 (date.format("%A, %b %-d, %Y"))
                             }
                         }

@@ -141,7 +141,7 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
                   hx-get=(format!("/history/{pid}"))
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-blue-700 hover:text-blue-900" {
+                  class="text-link hover:text-link-2" {
                     div class="text-[10px] uppercase" { (date.format("%a")) }
                     div { (date.format("%b")) }
                     div class="text-sm font-bold" { (date.format("%-d")) }

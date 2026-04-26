@@ -744,7 +744,7 @@ fn roster_matrix_inner(
                                               hx-get={"/rowers/" (rower.id)}
                                               hx-target="#content"
                                               hx-push-url="true"
-                                              class="text-blue-700 hover:text-blue-900" {
+                                              class="text-link hover:text-link-2" {
                                                 (rower.name)
                                             }
                                         }
@@ -852,7 +852,7 @@ fn fleet_matrix_inner(
                                               hx-get={"/boats/" (boat.id)}
                                               hx-target="#content"
                                               hx-push-url="true"
-                                              class="text-blue-700 hover:text-blue-900" {
+                                              class="text-link hover:text-link-2" {
                                                 (boat.name)
                                             }
                                             span class="text-muted ml-1" {
