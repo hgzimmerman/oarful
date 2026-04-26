@@ -1290,9 +1290,10 @@ impl Brancher for WarmDefaultBrancher {
     }
 
     fn synchronise(&mut self, context: &mut pumpkin_core::branching::SelectionContext) {
-        if !self.ws_done {
-            self.ws_index = 0;
-        }
+        // Don't reset ws_index — once a warm-start hint has been
+        // tried (and possibly rejected via conflict), don't retry it.
+        // The brancher will naturally fall through to VSIDS once all
+        // hints are consumed or skipped.
         self.default.synchronise(context);
     }
 
