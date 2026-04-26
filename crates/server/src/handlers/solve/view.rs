@@ -11,6 +11,54 @@ use crate::templates;
 
 use super::*;
 
+/// Tab metadata parsed from the `editor_tabs` cookie. Passed to
+/// templates so the tab bar can be server-rendered.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub(crate) struct EditorTabsMeta {
+    #[serde(default)]
+    pub(crate) tabs: Vec<TabEntry>,
+    #[serde(default)]
+    pub(crate) active: i32,
+    #[serde(default = "default_next_id")]
+    #[serde(rename = "nextId")]
+    pub(crate) next_id: i32,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub(crate) struct TabEntry {
+    pub(crate) id: i32,
+    pub(crate) label: String,
+}
+
+fn default_next_id() -> i32 {
+    1
+}
+
+impl Default for EditorTabsMeta {
+    fn default() -> Self {
+        Self {
+            tabs: vec![TabEntry {
+                id: 0,
+                label: "Lineup 1".into(),
+            }],
+            active: 0,
+            next_id: 1,
+        }
+    }
+}
+
+fn parse_tab_cookies(jar: &CookieJar) -> (EditorTabsMeta, String) {
+    let meta: EditorTabsMeta = jar
+        .get("editor_tabs")
+        .and_then(|c| serde_json::from_str(c.value()).ok())
+        .unwrap_or_default();
+    let active_state = jar
+        .get(&format!("tab_{}", meta.active))
+        .map(|c| c.value().to_string())
+        .unwrap_or_default();
+    (meta, active_state)
+}
+
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn view_handler(
     jar: CookieJar,
@@ -110,6 +158,24 @@ pub(crate) async fn view_handler(
         }
     };
 
+    // Parse tab cookies — active tab state overrides URL params and drafts.
+    let (tab_meta, tab_state) = parse_tab_cookies(&jar);
+    let has_tabs_with_content = tab_meta.tabs.iter().any(|t| {
+        !jar.get(&format!("tab_{}", t.id))
+            .map(|c| c.value().is_empty())
+            .unwrap_or(true)
+    });
+
+    // If the active tab cookie has seat data, parse it into knobs-style
+    // overrides so the editor loads from tab state.
+    let effective_knobs = if !tab_state.is_empty() {
+        // Parse the tab state (gatherState format) into a SolveKnobs-like
+        // struct to extract seat and boat params.
+        serde_html_form::from_str::<SolveKnobs>(&tab_state).unwrap_or_else(|_| knobs.clone())
+    } else {
+        knobs.clone()
+    };
+
     // Landing page: show knobs + "Generate" / "Re-generate" button.
     let profile_names: Vec<(String, Option<String>)> = custom_profiles
         .iter()
@@ -118,25 +184,27 @@ pub(crate) async fn view_handler(
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
-        locked_seats: SolveKnobs::triples_to_set(&knobs.lock),
-        pinned_seats: SolveKnobs::triples_to_set(&knobs.pin),
-        was_pinned_seats: SolveKnobs::triples_to_set(&knobs.was_pin),
-        pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_pin),
-        was_pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_was_pin),
-        locked_boats: SolveKnobs::boat_id_set(&knobs.boat_lock),
+        locked_seats: SolveKnobs::triples_to_set(&effective_knobs.lock),
+        pinned_seats: SolveKnobs::triples_to_set(&effective_knobs.pin),
+        was_pinned_seats: SolveKnobs::triples_to_set(&effective_knobs.was_pin),
+        pinned_boats: SolveKnobs::boat_id_set(&effective_knobs.boat_pin),
+        was_pinned_boats: SolveKnobs::boat_id_set(&effective_knobs.boat_was_pin),
+        locked_boats: SolveKnobs::boat_id_set(&effective_knobs.boat_lock),
         boats_in_use_by: std::collections::HashMap::new(),
     };
     let content = templates::solve::landing_content(
         &snapshot,
         practice_id,
         date,
-        &knobs,
+        &effective_knobs,
         &committed_practices,
         has_committed,
         &profile_names,
         &flags,
         &default_boats,
         &draft_lineups,
+        &tab_meta,
+        has_tabs_with_content,
     );
     Ok(crate::handlers::maybe_page_authed(
         &format!("Set Lineups · {date}"),

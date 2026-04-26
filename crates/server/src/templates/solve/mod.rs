@@ -7,7 +7,6 @@ mod editor;
 pub(crate) mod knobs;
 pub(crate) mod profile_modal;
 
-pub(crate) use alternatives::alternative_block as stream_alternative_block;
 use editor::roster_pool;
 pub(crate) use editor::{lineup_editor, roster_pool_oob, DisplayFlags, EditorData, OtherTeamRower};
 use knobs::knobs_form;
@@ -24,7 +23,7 @@ use lineup_db::{
 };
 use maud::{html, Markup};
 
-use crate::handlers::solve::SolveKnobs;
+use crate::handlers::solve::{EditorTabsMeta, SolveKnobs};
 
 // ── Shared helpers (used across submodules and/or by other templates) ──
 
@@ -333,12 +332,47 @@ pub(super) fn find_rower(snapshot: &DbSnapshot, id: RowerId) -> Option<&Rower> {
     snapshot.rowers.iter().find(|r| r.id == id)
 }
 
+// ── Tab bar ──
+
+fn tab_bar(meta: &EditorTabsMeta) -> Markup {
+    html! {
+        nav #tab-bar
+            class="flex items-stretch gap-0 border-b no-print sticky top-0 z-10"
+            style="min-height: 45px; border-color: var(--rule-2); background: var(--paper)" {
+            @for tab in &meta.tabs {
+                @let is_active = tab.id == meta.active;
+                button class={
+                    "tab-pill inline-flex items-center gap-1 px-3 text-sm font-medium transition border-b-2"
+                    @if is_active { " text-ink border-ink" }
+                    @else { " text-ink-3 border-transparent hover:text-ink hover:border-rule" }
+                }
+                data-tab-id=(tab.id)
+                onclick=(format!("switchTab({})", tab.id)) {
+                    span class="tab-label" { (tab.label) }
+                    @if meta.tabs.len() > 1 {
+                        span class="tab-close text-ink-3 hover:text-red-600 ml-1 text-xs"
+                             onclick=(format!("event.stopPropagation(); removeTab({})", tab.id)) {
+                            "\u{00d7}"
+                        }
+                    }
+                }
+            }
+            button class="inline-flex items-center px-3 text-sm text-ink-3 hover:text-ink transition"
+                   data-tab-add
+                   onclick="addTab()" {
+                "+ New"
+            }
+        }
+    }
+}
+
 // ── Page-level content functions ──
 
 /// Landing page before the solver runs. Shows knobs with a
 /// "Generate" button (or "Re-generate" if lineups already exist),
 /// plus a manual lineup builder with boat selection and an
 /// available rower pool.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn landing_content(
     snapshot: &DbSnapshot,
     practice_id: PracticeId,
@@ -350,6 +384,8 @@ pub(crate) fn landing_content(
     flags: &DisplayFlags,
     default_boats: &HashSet<BoatId>,
     draft_lineups: &[lineup_db::lineup::CommittedLineup],
+    tab_meta: &EditorTabsMeta,
+    _has_tabs_with_content: bool,
 ) -> Markup {
     let has_draft = !draft_lineups.is_empty();
     let available_count = snapshot.available_rowers().count();
@@ -439,8 +475,9 @@ pub(crate) fn landing_content(
             aside #roster-pool class="roster-sidebar" {
                 (roster_pool(snapshot, practice_id, &editor, &unavailable, &knobs.walkon, &[]))
             }
-            // Center: editor
+            // Center: tab bar + editor
             div class="solve-center" {
+                (tab_bar(tab_meta))
                 div class="px-4 sm:px-6 py-4 space-y-4" {
                     div #solve-results {
                         (lineup_editor(snapshot, practice_id, &editor, flags, has_draft))
@@ -523,11 +560,12 @@ pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) ->
             div "sse-swap"="error"
                 hx-swap="innerHTML" {}
 
-            // Alternatives container — each alternative is appended.
-            div "sse-swap"="alternative"
-                hx-swap="beforeend"
+            // Tab events — SSE delivers a <script> that calls
+            // createTabFromSSE() to add an alternative as a new tab.
+            div "sse-swap"="tab"
+                hx-swap="innerHTML"
                 hx-disinherit="hx-ext"
-                class="space-y-4 mt-6" {}
+                class="hidden" {}
 
             // Single spinner at the bottom — pushed down as results
             // stream in above it. Replaced by elapsed time on "done".

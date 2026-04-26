@@ -30,6 +30,11 @@ function lineupEditor() {
         },
 
         rerender(params) {
+            // Persist active tab state to cookie before re-rendering.
+            if (typeof setTabState === 'function') {
+                var meta = getEditorTabs();
+                setTabState(meta.active, params);
+            }
             var editor = document.getElementById('lineup-editor');
             var url = (editor || this.$root).dataset.editorUrl + '?' + params;
             htmx.ajax('GET', url, {target: editor || this.$root, swap: 'outerHTML'});
@@ -278,3 +283,19 @@ function lineupEditor() {
         }
     };
 }
+
+// After the primary SSE event swaps in the editor, save the new
+// state to the active tab cookie so tab switching preserves it.
+document.addEventListener('htmx:afterSettle', function(evt) {
+    if (typeof getEditorTabs !== 'function') return;
+    var target = evt.detail.target;
+    // Check if this settle was for the primary SSE swap (the
+    // sse-swap="primary" container's child).
+    if (!target || !target.querySelector || !target.querySelector('#lineup-editor')) return;
+    var editor = target.querySelector('[x-data]') || document.querySelector('[x-data]');
+    if (editor && editor.__x) {
+        var state = editor.__x.$data.gatherState();
+        var meta = getEditorTabs();
+        setTabState(meta.active, state);
+    }
+});

@@ -21,7 +21,7 @@ pub(crate) use profiles::{
     delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler,
 };
 pub(crate) use stream::stream_handler;
-pub(crate) use view::view_handler;
+pub(crate) use view::{view_handler, EditorTabsMeta};
 
 use std::time::Duration;
 

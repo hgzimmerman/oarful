@@ -284,15 +284,12 @@ pub(crate) fn lineup_editor(
              hx-push-url="true"
              class="hidden" {}
 
-        section #lineup-editor class="solve-card p-4 sm:p-6"
+        section #lineup-editor class="solve-card pt-1 pb-4 px-4 sm:pb-6 sm:px-6"
                data-practice-id=(practice_id)
                data-editor-url=(editor_url) {
 
-            div class="flex items-center justify-between mb-1" {
-                h2 class="text-xl font-bold font-serif-heading text-ink" { "Lineup" }
-            }
-            // Selection hint — fixed height so it doesn't cause reflow.
-            div class="h-6 mb-2 no-print" {
+            // Selection hint — collapses when nothing is selected.
+            div class="no-print" x-show="selected || selectedBoat" x-cloak {
                 span class="text-xs text-accent"
                      x-show="selected && !selectedBoat"
                      x-cloak {
@@ -365,10 +362,8 @@ pub(crate) fn lineup_editor(
 
         }
 
-        // Alpine editor logic — selection + HTMX re-render
-        script {
-            (maud::PreEscaped(editor_js()))
-        }
+        // Alpine editor logic is in the global layout script
+        // (lineup_editor.js) so it's defined before Alpine init.
 
         // OOB swap: inject active boats + carry through pin state.
         // Does NOT auto-lock placements — only explicit state is preserved.
@@ -612,12 +607,6 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
             }
         }
     }
-}
-
-/// Alpine JS for the lineup editor. Source lives in
-/// `templates/js/lineup_editor.js` for IDE support.
-fn editor_js() -> &'static str {
-    include_str!("../js/lineup_editor.js")
 }
 
 /// Render a single rower row in the pool sidebar.

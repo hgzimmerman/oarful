@@ -239,6 +239,53 @@ can resume without re-deriving context.
 
 ### Coach features
 
+#### Tabbed lineup editor
+
+Replace the current primary + appended-alternatives layout with a
+tabbed editing experience. Each tab is an independent lineup that the
+coach can generate into, manually edit, and compare.
+
+**Current pain points:**
+- The "Lineup" card header is wasted space — only useful to
+  distinguish from "Alternative #2" etc.
+- Alternatives load below the primary and the coach must "Use this"
+  to swap one in before committing. Awkward two-step.
+- The alternatives count knob only makes sense on the first generate.
+
+**Proposed behavior:**
+- Tabs are first-class: each is an empty set of boats until the
+  coach clicks "Generate" (which fills the *active* tab).
+- Whichever tab is selected is what gets committed / saved as draft.
+- If no lineups exist yet, the alternatives count selector appears
+  in the knobs (batch-generate N tabs at once). Otherwise "Generate"
+  targets the current tab only.
+- Future: a diff view between any two tabs showing who moved where
+  (similar to current alt-vs-primary diff highlighting, but
+  selectable).
+
+**Tab lifecycle:** Page loads with one default tab and a "+ New tab"
+button. Coaches can add tabs freely. Cannot delete the last tab
+(always at least one).
+
+**Tab persistence:** Only the active (selected) tab is persisted on
+commit or save-draft. Unselected tabs are discarded. Long-term we
+may want to persist all tabs as drafts.
+
+**Tab states & visual distinction:**
+- *Active* — currently selected tab, will be committed/saved. Bold
+  or highlighted tab label.
+- *Saved* — tab contents match what's persisted as a draft. Subtle
+  indicator (e.g. dot or checkmark on the tab).
+- *Saved & dirty* — tab was loaded from a draft but the coach has
+  since edited it. Different indicator (e.g. dot changes color or
+  asterisk appears).
+- *Unsaved* — tab has content but has never been saved. No saved
+  indicator.
+
+**Design reference:** Claude design mockup exists (ask for it if
+needed). The mockup had a tabbed interface but didn't fully account
+for the generate-per-tab and commit semantics described above.
+
 #### Raw rower metrics — fully shipped
 
 Phase 1 (raw fields + display), Phase 2 (threshold config +

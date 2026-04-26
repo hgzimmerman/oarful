@@ -132,7 +132,6 @@ pub(crate) async fn stream_handler(
     let knobs_clone = knobs.clone();
     let stream = async_stream::stream! {
         let _permit = permit; // hold semaphore until stream ends
-        let mut primary_solution: Option<lineup_solver::ProposedSolution> = None;
 
         while let Some(event) = tokio_rx.recv().await {
             match event {
@@ -171,7 +170,6 @@ pub(crate) async fn stream_handler(
                         &unavail_rowers, &knobs_clone.walkon, &[],
                     );
 
-                    primary_solution = Some(solution);
                     yield Ok(Event::default().event("primary").data(
                         format!("{}{}", editor_html.into_string(), pool_oob.into_string())
                     ));
@@ -190,12 +188,28 @@ pub(crate) async fn stream_handler(
                     yield Ok(Event::default().event("error").data(html.into_string()));
                 }
                 SolveStreamEvent::Alternative { index, solution } => {
-                    if let Some(ref primary) = primary_solution {
-                        let html = templates::solve::stream_alternative_block(
-                            &snapshot, practice_id, primary, index + 2, &solution, &flags,
-                        );
-                        yield Ok(Event::default().event("alternative").data(html.into_string()));
+                    // Emit a "tab" event with a <script> that creates a
+                    // new tab from the alternative's seat data.
+                    let used: Vec<&lineup_solver::ProposedLineup> =
+                        solution.lineups.iter().filter(|l| l.used).collect();
+                    let mut params = Vec::new();
+                    for lineup in &used {
+                        params.push(format!("boat={}", lineup.boat_id));
+                        for (seat, rower_id) in &lineup.seats {
+                            params.push(format!(
+                                "seat={}:{}:{}",
+                                rower_id, lineup.boat_id, seat
+                            ));
+                        }
                     }
+                    let label = format!("Alt {}", index + 1);
+                    let seat_params = params.join("&");
+                    let script = format!(
+                        "<script>createTabFromSSE({}, {})</script>",
+                        serde_json::json!(label),
+                        serde_json::json!(seat_params),
+                    );
+                    yield Ok(Event::default().event("tab").data(script));
                 }
                 SolveStreamEvent::Done { elapsed } => {
                     let html = maud::html! {

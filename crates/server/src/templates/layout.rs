@@ -103,6 +103,12 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 script {
                     (maud::PreEscaped(include_str!("js/success_toast.js")))
                 }
+                script {
+                    (maud::PreEscaped(include_str!("js/tab_cookies.js")))
+                }
+                script {
+                    (maud::PreEscaped(include_str!("js/lineup_editor.js")))
+                }
             }
         }
     }
