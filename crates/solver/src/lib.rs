@@ -974,7 +974,7 @@ pub fn solve_streaming(
     let (mut builder, objective) =
         build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
-    let (ws_vars, ws_vals) = build_warm_start(&builder);
+    let (ws_vars, ws_vals) = build_warm_start(&builder, request.partial_fill);
     let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 
@@ -1344,7 +1344,10 @@ impl Brancher for WarmDefaultBrancher {
 /// fine — `WarmStart` skips assignments that conflict with propagation,
 /// and `AlternatingBrancher` falls back to VSIDS after the first
 /// solution.
-fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
+fn build_warm_start(
+    builder: &ModelBuilder<'_>,
+    partial_fill: PartialFillPolicy,
+) -> (Vec<DomainId>, Vec<i32>) {
     let mut vars: Vec<DomainId> = Vec::new();
     let mut values: Vec<i32> = Vec::new();
     let mut assigned_rowers: std::collections::HashSet<usize> = std::collections::HashSet::new();
@@ -1368,88 +1371,151 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
         .collect();
     rower_quality.sort_by(|a, b| b.1.cmp(&a.1));
 
-    // Interleave rowers across boats by quality rank instead of
-    // greedily filling boat 0 first. This gives the solver a feasible
-    // but deliberately imperfect initial solution — both boats get a
-    // mix of strong and weak rowers. The solver then optimizes the
-    // stacking via S16, exploring a wider search space than if we
-    // pre-committed all talent to boat 0.
-    let n_boats = builder.boats.len();
-    let mut boat_assignment: Vec<Vec<usize>> = vec![Vec::new(); n_boats];
-    {
-        let non_cox_ranked: Vec<usize> = rower_quality
+    // Pass 1: assign coxes to ALL coxed boats first, before any
+    // rowing seats. This ensures every boat gets a cox even when
+    // designated coxswains are scarce.
+    for (b_idx, boat) in builder.boats.iter().enumerate() {
+        if !boat.has_cox.as_bool() {
+            continue;
+        }
+        let cox = rower_quality
             .iter()
             .map(|(r_idx, _)| *r_idx)
-            .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
-            .collect();
-        for (rank, &r_idx) in non_cox_ranked.iter().enumerate() {
-            let target_boat = rank % n_boats;
-            boat_assignment[target_boat].push(r_idx);
+            .filter(|r_idx| !assigned_rowers.contains(r_idx))
+            .filter(|r_idx| builder.available[*r_idx].is_designated_cox.as_bool())
+            .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
+            .or_else(|| {
+                // Fallback: any can_cox rower
+                rower_quality
+                    .iter()
+                    .map(|(r_idx, _)| *r_idx)
+                    .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                    .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
+            });
+        if let Some(r_idx) = cox {
+            if let Some(&var) = builder.x.get(&(r_idx, b_idx, 0)) {
+                vars.push(var);
+                values.push(1);
+                assigned_rowers.insert(r_idx);
+            }
+        } else {
+            let can_cox_count = builder
+                .available
+                .iter()
+                .filter(|r| r.can_cox.as_bool() && !r.is_designated_cox.as_bool())
+                .count();
+            let unassigned_can_cox = rower_quality
+                .iter()
+                .filter(|(r_idx, _)| !assigned_rowers.contains(r_idx))
+                .filter(|(r_idx, _)| builder.available[*r_idx].can_cox.as_bool())
+                .count();
+            let has_x_var = rower_quality
+                .iter()
+                .filter(|(r_idx, _)| !assigned_rowers.contains(r_idx))
+                .filter(|(r_idx, _)| builder.x.contains_key(&(*r_idx, b_idx, 0)))
+                .count();
+            tracing::warn!(
+                boat = %boat.name,
+                can_cox_count,
+                unassigned_can_cox,
+                has_x_var,
+                "warm-start: no cox found for boat"
+            );
         }
     }
 
-    // For each boat, assign rowers to seats.
-    for (b_idx, boat) in builder.boats.iter().enumerate() {
-        // Cox seat first: prefer designated coxes.
-        if boat.has_cox.as_bool() {
-            let cox = rower_quality
+    // Pass 2: fill rowing seats. Two sub-passes:
+    //   a) Fill all boats to their min_seats (mandatory seats first).
+    //   b) Fill optional seats with remaining rowers.
+    // This ensures every boat reaches its minimum fill before any
+    // boat gets optional extras — preventing large boats from
+    // starving small boats of rowers.
+
+    // Build per-boat seat lists.
+    let boat_seats: Vec<Vec<i32>> = builder
+        .boats
+        .iter()
+        .enumerate()
+        .map(|(b_idx, boat)| {
+            if builder.cfg.top_boat_stacking_weight > 0 && b_idx == 0 {
+                (1..=boat.seat_count.as_int()).rev().collect()
+            } else {
+                (1..=boat.seat_count.as_int()).collect()
+            }
+        })
+        .collect();
+
+    // Compute min_seats per boat (mandatory rowing seats only, cox handled in pass 1).
+    let min_rowing: Vec<usize> = builder
+        .boats
+        .iter()
+        .map(|boat| {
+            let total = boat.seat_count.as_int() as usize;
+            let n_opt = model::optional_seats(boat).len();
+            let k = partial_fill.max_empty() as usize;
+            total - n_opt.min(k)
+        })
+        .collect();
+
+    // Sub-pass a: fill mandatory seats round-robin across boats.
+    let mut filled_per_boat: Vec<usize> = vec![0; builder.boats.len()];
+    let mut progress = true;
+    while progress {
+        progress = false;
+        for (b_idx, boat) in builder.boats.iter().enumerate() {
+            if filled_per_boat[b_idx] >= min_rowing[b_idx] {
+                continue;
+            }
+            let seat_idx = filled_per_boat[b_idx];
+            if seat_idx >= boat_seats[b_idx].len() {
+                continue;
+            }
+            let seat = boat_seats[b_idx][seat_idx];
+            use model::wrong_side_penalty;
+            let candidate = rower_quality
                 .iter()
                 .map(|(r_idx, _)| *r_idx)
                 .filter(|r_idx| !assigned_rowers.contains(r_idx))
-                .filter(|r_idx| builder.available[*r_idx].is_designated_cox.as_bool())
-                .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
-                .or_else(|| {
-                    // Fallback: any can_cox rower
-                    rower_quality
-                        .iter()
-                        .map(|(r_idx, _)| *r_idx)
-                        .filter(|r_idx| !assigned_rowers.contains(r_idx))
-                        .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, 0)))
-                });
-            if let Some(r_idx) = cox {
-                if let Some(&var) = builder.x.get(&(r_idx, b_idx, 0)) {
-                    vars.push(var);
-                    values.push(1);
-                    assigned_rowers.insert(r_idx);
-                }
-            }
-        }
-
-        // When top-boat stacking is active, fill stern-first (stroke→bow)
-        // so the strongest rowers land in the most impactful seats of the
-        // top boat. For other presets, bow-first is fine.
-        let seats: Vec<i32> = if builder.cfg.top_boat_stacking_weight > 0 && b_idx == 0 {
-            (1..=boat.seat_count.as_int()).rev().collect()
-        } else {
-            (1..=boat.seat_count.as_int()).collect()
-        };
-        for seat in seats {
-            use model::wrong_side_penalty;
-            // Prefer rowers pre-assigned to this boat, correct-side first.
-            // Fall back to any unassigned rower if the boat's pool is
-            // exhausted (can happen when the interleave doesn't account
-            // for side constraints).
-            let boat_pool = &boat_assignment[b_idx];
-            let candidate = boat_pool
-                .iter()
-                .copied()
-                .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
                 .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
                 .find(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
                 .or_else(|| {
-                    // Fallback: correct-side from any boat
                     rower_quality
                         .iter()
                         .map(|(r_idx, _)| *r_idx)
                         .filter(|r_idx| !assigned_rowers.contains(r_idx))
                         .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
-                        .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
-                        .find(|r_idx| {
-                            wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0
-                        })
-                })
+                        .find(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
+                });
+            if let Some(r_idx) = candidate {
+                if let Some(&var) = builder.x.get(&(r_idx, b_idx, seat)) {
+                    vars.push(var);
+                    values.push(1);
+                    assigned_rowers.insert(r_idx);
+                    filled_per_boat[b_idx] += 1;
+                    progress = true;
+                }
+            } else {
+                // Can't fill this seat — skip it.
+                filled_per_boat[b_idx] += 1;
+                progress = true;
+            }
+        }
+    }
+
+    // Sub-pass b: fill remaining optional seats with leftover rowers.
+    for (b_idx, boat) in builder.boats.iter().enumerate() {
+        let start = filled_per_boat[b_idx];
+        for &seat in &boat_seats[b_idx][start..] {
+            use model::wrong_side_penalty;
+            let candidate = rower_quality
+                .iter()
+                .map(|(r_idx, _)| *r_idx)
+                .filter(|r_idx| !assigned_rowers.contains(r_idx))
+                .filter(|r_idx| !builder.available[*r_idx].is_designated_cox.as_bool())
+                .filter(|r_idx| builder.x.contains_key(&(*r_idx, b_idx, seat)))
+                .find(|r_idx| wrong_side_penalty(builder.available[*r_idx], boat, seat) == 0)
                 .or_else(|| {
-                    // Last resort: any eligible rower (wrong side OK)
                     rower_quality
                         .iter()
                         .map(|(r_idx, _)| *r_idx)
@@ -1467,6 +1533,29 @@ fn build_warm_start(builder: &ModelBuilder<'_>) -> (Vec<DomainId>, Vec<i32>) {
         }
     }
 
+    // Log per-boat assignment counts for debugging.
+    for (b_idx, boat) in builder.boats.iter().enumerate() {
+        let rowing_seats = boat.seat_count.as_int();
+        let has_cox = boat.has_cox.as_bool();
+        let assigned_to_boat = vars
+            .iter()
+            .zip(values.iter())
+            .filter(|(&var, &val)| val == 1 && var != builder.use_b[b_idx])
+            .filter(|(&var, _)| {
+                builder
+                    .x
+                    .iter()
+                    .any(|(&(_, bi, _), &v)| v == var && bi == b_idx)
+            })
+            .count();
+        tracing::debug!(
+            boat = %boat.name,
+            assigned = assigned_to_boat,
+            rowing_seats,
+            has_cox,
+            "warm-start: boat assignment"
+        );
+    }
     tracing::debug!(
         warm_start_vars = vars.len(),
         assigned_rowers = assigned_rowers.len(),
@@ -1864,7 +1953,7 @@ fn search_lineups(
     request: &SolveRequest,
     diagnostics: Vec<Diagnostic>,
 ) -> Result<SolveResult> {
-    let (ws_vars, ws_vals) = build_warm_start(&builder);
+    let (ws_vars, ws_vals) = build_warm_start(&builder, request.partial_fill);
     let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
 

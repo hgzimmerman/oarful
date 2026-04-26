@@ -559,10 +559,6 @@ pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) ->
                 hx-swap="innerHTML"
                 hx-disinherit="hx-ext" {}
 
-            // Error placeholder — shown if primary fails.
-            div "sse-swap"="error"
-                hx-swap="innerHTML" {}
-
             // Tab events — SSE delivers a <script> that calls
             // createTabFromSSE() to add an alternative as a new tab.
             div "sse-swap"="tab"

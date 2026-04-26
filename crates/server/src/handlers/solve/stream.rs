@@ -109,8 +109,18 @@ pub(crate) async fn stream_handler(
                 }
             }
         });
-        if let Err(e) = lineup_solver::solve_streaming(&snapshot_for_solve, &request, std_tx) {
+        if let Err(e) =
+            lineup_solver::solve_streaming(&snapshot_for_solve, &request, std_tx.clone())
+        {
             tracing::error!(?e, "streaming solver error");
+            // Send a failure event so the SSE stream can close cleanly.
+            let _ = std_tx.send(SolveStreamEvent::PrimaryFailed {
+                status: lineup_solver::SolveStatus::Unsatisfiable,
+                diagnostics: vec![],
+            });
+            let _ = std_tx.send(SolveStreamEvent::Done {
+                elapsed: std::time::Duration::ZERO,
+            });
         }
         let _ = fwd_handle.join();
     });
@@ -218,11 +228,15 @@ pub(crate) async fn stream_handler(
                         _ =>
                             "Ran out of time without finding a valid lineup. Try increasing the time budget or relaxing constraints.",
                     };
+                    // Send as a "done" event so sse-close="done" cleanly
+                    // closes the connection. The script stops the button
+                    // animation and shows the error toast.
                     let script = format!(
                         "<script>stopGenerating(); showErrorToast({});</script>",
                         serde_json::json!(status_msg),
                     );
-                    yield Ok(Event::default().event("error").data(script));
+                    yield Ok(Event::default().event("done").data(script));
+                    break;
                 }
                 SolveStreamEvent::Alternative { index, solution } => {
                     // Emit a "tab" event with a <script> that creates a
