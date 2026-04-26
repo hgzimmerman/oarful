@@ -293,9 +293,9 @@ fn source_url() -> String {
 pub(crate) fn page_header(title: &str, subtitle: Option<&str>) -> Markup {
     html! {
         header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
-            h1 class="text-2xl font-bold text-ink" { (title) }
+            h1 class="text-2xl font-bold text-ink font-serif-heading" { (title) }
             @if let Some(sub) = subtitle {
-                p class="text-sm text-ink-3 mt-1" { (sub) }
+                p class="text-sm text-muted mt-1" { (sub) }
             }
         }
     }
