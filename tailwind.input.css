@@ -4,6 +4,7 @@
 
 /* ── Paper palette ────────────────────────────────────────────────── */
 :root {
+  --input-bg:#faf9f5;
   --paper:   #f3eee3;
   --paper-2: #ece4d2;
   --paper-3: #e3d9c3;
@@ -512,4 +513,24 @@
   .input-warm::placeholder {
     color: var(--muted);
   }
+}
+
+/* Checkbox/radio accent — use warm accent instead of browser default blue */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* Form input background — after all Tailwind layers to beat preflight reset */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="url"],
+input[type="search"],
+select,
+textarea {
+  background-color: var(--input-bg);
 }
