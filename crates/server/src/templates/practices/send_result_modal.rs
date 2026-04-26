@@ -29,12 +29,12 @@ pub(crate) fn send_result_billing_gate(message: &str, stripe_enabled: bool) -> M
             div class="px-6 py-4" {
                 div class="flex items-center gap-3 mb-3" {
                     span class="text-2xl" { "\u{1f512}" }
-                    p class="text-sm text-slate-600" { (message) }
+                    p class="text-sm text-ink-2" { (message) }
                 }
                 @if stripe_enabled {
                     form method="post" action="/billing/checkout" class="mt-4" {
                         button type="submit"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Upgrade"
                         }
                     }
@@ -60,11 +60,11 @@ pub(crate) fn send_result_modal(title: &str, recipients: &[SendResultRecipient])
         html! {
             div class="px-6 py-4" {
                 @if recipients.is_empty() {
-                    p class="text-sm text-slate-500 italic" {
+                    p class="text-sm text-ink-3 italic" {
                         "No recipients to email."
                     }
                 } @else {
-                    p class="text-sm text-slate-600 mb-3" {
+                    p class="text-sm text-ink-2 mb-3" {
                         @if sent_count > 0 && failed_count == 0 {
                             "Sent to " strong { (sent_count) } " recipient(s)."
                         } @else if sent_count > 0 {
@@ -77,7 +77,7 @@ pub(crate) fn send_result_modal(title: &str, recipients: &[SendResultRecipient])
                     div class="space-y-1 max-h-60 overflow-y-auto" {
                         @for r in recipients {
                             div class="flex items-center justify-between text-sm py-1" {
-                                span class="text-slate-800" { (r.name) }
+                                span class="text-ink" { (r.name) }
                                 @match r.status {
                                     SendStatus::Sent => {
                                         span class="text-xs text-emerald-600 font-medium" { "\u{2713} Sent" }
@@ -102,19 +102,19 @@ fn result_modal_shell(title: &str, body: Markup) -> Markup {
             onclick=(CLOSE_JS) {}
         div id="send-result-modal"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
-                div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between" {
-                    h2 class="text-lg font-bold text-slate-800" { (title) }
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
+                div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
+                    h2 class="text-lg font-bold text-ink" { (title) }
                     button type="button"
-                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                           class="text-muted hover:text-ink-2 text-xl leading-none"
                            onclick=(CLOSE_JS) {
                         "\u{00d7}"
                     }
                 }
                 (body)
-                div class="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-end" {
+                div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-3 flex justify-end" {
                     button type="button"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm"
+                           class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm"
                            onclick=(CLOSE_JS) {
                         "Close"
                     }

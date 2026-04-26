@@ -18,7 +18,7 @@ use super::layout::page_header;
 pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>) -> Markup {
     let tenant_prefix = tenant_name.map(|n| {
         html! {
-            span class="text-xs text-slate-400 mr-2 hidden 2xl:inline" { (n) " ·" }
+            span class="text-xs text-muted mr-2 hidden 2xl:inline" { (n) " ·" }
         }
     });
 
@@ -27,7 +27,7 @@ pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>
         return html! {
             span class="flex items-center" {
                 @if let Some(prefix) = tenant_prefix { (prefix) }
-                span class="text-sm text-slate-300" { (name) }
+                span class="text-sm text-muted" { (name) }
             }
         };
     }
@@ -36,10 +36,10 @@ pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>
         form method="post" action="/switch-team"
              class="flex items-center space-x-2" {
             @if let Some(prefix) = tenant_prefix { (prefix) }
-            label class="text-xs text-slate-400 uppercase tracking-wide" { "Team" }
+            label class="text-xs text-muted uppercase tracking-wide" { "Team" }
             select name="team_id"
                    onchange="this.form.submit()"
-                   class="bg-slate-700 text-white text-sm rounded px-2 py-1 border border-slate-600 focus:border-slate-400 focus:outline-none cursor-pointer" {
+                   class="bg-ink-2 text-white text-sm rounded px-2 py-1 border border-ink-3 focus:border-rule focus:outline-none cursor-pointer" {
                 @for t in teams {
                     @if t.id == active {
                         option value=(t.id) selected { (t.name) }
@@ -68,40 +68,40 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                  hx-push-url="true"
                  class="flex items-end gap-3" {
                 div {
-                    label for="team_name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                    label for="team_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
                         "New team"
                     }
                     input id="team_name" name="name" type="text" required placeholder="Team name"
-                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                          class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                       class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Create"
                 }
             }
 
             @if teams.is_empty() {
-                div class="text-slate-500 italic" { "No teams." }
+                div class="text-ink-3 italic" { "No teams." }
             } @else {
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
                     @for t in teams {
                         a href={"/teams/" (t.id)}
                           hx-get={"/teams/" (t.id)}
                           hx-target="#content"
                           hx-push-url="true"
-                          class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition cursor-pointer" {
+                          class="flex items-center justify-between px-6 py-4 hover:bg-paper-2 transition cursor-pointer" {
                             div {
-                                div class="font-semibold text-slate-800" {
+                                div class="font-semibold text-ink" {
                                     (t.name)
                                     @if t.archived.as_bool() {
                                         span class="ml-2 text-xs font-normal text-red-500" { "(archived)" }
                                     }
                                 }
-                                div class="text-sm text-slate-500" {
+                                div class="text-sm text-ink-3" {
                                     "Buckets: " (t.bucket_visibility)
                                 }
                             }
-                            span class="text-slate-400" { "→" }
+                            span class="text-muted" { "→" }
                         }
                     }
                 }
@@ -122,28 +122,28 @@ pub(crate) fn detail_content(
               hx-get="/teams"
               hx-target="#content"
               hx-push-url="true"
-              class="text-sm text-slate-500 hover:text-slate-800" {
+              class="text-sm text-ink-3 hover:text-ink" {
                 "← back to teams"
             }
 
             form method="post" action=(action)
                  hx-post=(action)
                  hx-target="#content"
-                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
                 div {
-                    label for="name" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="name" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Team name"
                     }
                     input id="name" name="name" type="text" required
                           value=(team.name)
-                          class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                          class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 div {
-                    label for="bucket_visibility" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="bucket_visibility" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Bucket visibility for members"
                     }
                     select id="bucket_visibility" name="bucket_visibility"
-                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                         option value="off" selected[team.bucket_visibility == BucketVisibility::Off] {
                             "Off — members don\u{2019}t see weight class, form, strength, height"
                         }
@@ -154,7 +154,7 @@ pub(crate) fn detail_content(
                             "Edit — members can change their own buckets"
                         }
                     }
-                    p class="text-xs text-slate-500 mt-1" {
+                    p class="text-xs text-ink-3 mt-1" {
                         "Controls whether members see categorical attribute buckets on their profile. Coach+ always has full access."
                     }
                 }
@@ -162,12 +162,12 @@ pub(crate) fn detail_content(
                     label class="flex items-center gap-3 cursor-pointer" {
                         input type="checkbox" name="member_raw_metrics" value="1"
                               checked[team.member_raw_metrics.as_bool()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                              class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-medium text-slate-800" {
+                            div class="text-sm font-medium text-ink" {
                                 "Member raw metrics"
                             }
-                            div class="text-xs text-slate-500" {
+                            div class="text-xs text-ink-3" {
                                 "Allow members to enter their own weight, height, and erg test times. Members can add but not delete erg tests."
                             }
                         }
@@ -175,19 +175,19 @@ pub(crate) fn detail_content(
                 }
                 div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                     div {
-                        label for="default_practice_time" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        label for="default_practice_time" class="block text-sm font-semibold text-ink-2 mb-1" {
                             "Default practice time"
                         }
                         @let time_value = team.default_practice_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
                         input id="default_practice_time" name="default_practice_time" type="time"
                               value=(time_value)
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
-                        p class="text-xs text-slate-500 mt-1" {
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                        p class="text-xs text-ink-3 mt-1" {
                             "Pre-fills the time when creating new practices."
                         }
                     }
                     div {
-                        label for="default_practice_duration" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        label for="default_practice_duration" class="block text-sm font-semibold text-ink-2 mb-1" {
                             "Default duration (minutes)"
                         }
                         @let dur_value = team.default_practice_duration_minutes.map(|m| m.to_string()).unwrap_or_default();
@@ -195,8 +195,8 @@ pub(crate) fn detail_content(
                               min="1" step="1"
                               value=(dur_value)
                               placeholder="e.g. 90"
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
-                        p class="text-xs text-slate-500 mt-1" {
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                        p class="text-xs text-ink-3 mt-1" {
                             "Used to detect double-booked practices across teams."
                         }
                     }
@@ -205,19 +205,19 @@ pub(crate) fn detail_content(
                     label class="flex items-center gap-3 cursor-pointer" {
                         input type="checkbox" name="assume_available" value="1"
                               checked[team.assume_available.as_bool()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                              class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-semibold text-slate-700" {
+                            div class="text-sm font-semibold text-ink-2" {
                                 "Assume available by default"
                             }
-                            p class="text-xs text-slate-500" {
+                            p class="text-xs text-ink-3" {
                                 "When on, rowers who haven't responded are included in lineups. When off (default), no response means excluded."
                             }
                         }
                     }
                 }
                 div {
-                    label class="block text-sm font-semibold text-slate-700 mb-2" {
+                    label class="block text-sm font-semibold text-ink-2 mb-2" {
                         "Default practice days"
                     }
                     @let days = team.default_practice_days.unwrap_or(PracticeDays::EMPTY);
@@ -234,12 +234,12 @@ pub(crate) fn detail_content(
                             label class="flex items-center gap-1.5 text-sm cursor-pointer" {
                                 input type="checkbox" name=(name) value="1"
                                       checked[days.contains(*weekday)]
-                                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                                      class="rounded border-rule text-ink focus:ring-ink-3";
                                 (abbr)
                             }
                         }
                     }
-                    p class="text-xs text-slate-500 mt-1" {
+                    p class="text-xs text-ink-3 mt-1" {
                         "Pre-fills the next practice date on the Planning page."
                     }
                 }
@@ -332,16 +332,16 @@ fn threshold_section(
         .unwrap_or((125.0, 115.0, 105.0));
 
     html! {
-        section class="bg-white rounded-lg shadow p-6 space-y-2" {
+        section class="bg-paper rounded-lg shadow p-6 space-y-2" {
             div class="flex items-center justify-between mb-1" {
-                h3 class="text-sm font-semibold text-slate-700" { "Rower attribute thresholds" }
+                h3 class="text-sm font-semibold text-ink-2" { "Rower attribute thresholds" }
                 button type="button"
                        onclick="window.dispatchEvent(new CustomEvent('save-thresholds'))"
                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Save"
                 }
             }
-            p class="text-xs text-slate-500 mb-4" {
+            p class="text-xs text-ink-3 mb-4" {
                 "Drag the markers to set where each category starts and ends. "
                 "Rowers with recorded values will be automatically categorized on save."
             }
@@ -389,23 +389,23 @@ fn threshold_slider(
                 "thresholdSlider('{metric}', '{save_url}', '{hist_url}', {range_min}, {range_max}, {default_low}, {default_mid}, {default_high}, {labels}, {is_descending})"
             ))) {
             div class="mb-1" {
-                span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { (label) }
+                span class="text-xs font-semibold text-ink-2 uppercase tracking-wide" { (label) }
             }
             // Slider track with y-axis + histogram + carets
             div class="flex items-end" {
                 // Y-axis labels
-                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-slate-400 text-right w-6 shrink-0" {
+                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-muted text-right w-6 shrink-0" {
                     span "x-text"="maxCount() || ''" {}
                     span "x-text"="maxCount() > 2 ? Math.round(maxCount()/2) : ''" {}
                     span "x-show"="maxCount() > 0" { "0" }
                 }
-                div class="relative h-24 bg-slate-100 rounded select-none touch-none flex-1"
+                div class="relative h-24 bg-paper-2 rounded select-none touch-none flex-1"
                     "x-ref"="track"
                     "@mousedown"="startDrag($event)"
                     "@touchstart.passive"="startDrag($event)" {
                     // Histogram bars (rendered from fetched data)
                     template "x-for"="bar in bars" {
-                        div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
+                        div class="absolute bottom-0 bg-paper-3 rounded-t-sm"
                             ":style"="barStyle(bar)" {}
                     }
                     // Colored zone backgrounds
@@ -417,20 +417,20 @@ fn threshold_slider(
                     }
                     // Caret lines
                     template "x-for"="(v, i) in [v1, v2, v3]" {
-                        div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
+                        div class="absolute top-0 bottom-0 w-0.5 bg-ink-3 cursor-ew-resize"
                             ":style"="'left:'+pct(v)+'%'"
                             ":data-caret"="i" {}
                     }
                     // Caret handles (larger touch targets)
                     template "x-for"="(v, i) in [v1, v2, v3]" {
-                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
+                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-ink-2 rounded cursor-ew-resize shadow"
                             ":style"="'left:'+pct(v)+'%'"
                             ":data-caret"="i" {}
                     }
                 }
             }
             // Bucket labels with live counts
-            div class="flex text-[10px] text-slate-500 mt-1 ml-6" {
+            div class="flex text-[10px] text-ink-3 mt-1 ml-6" {
                 template "x-for"="(lbl, i) in labels" {
                     div class="text-center truncate" ":style"="zoneStyle(i)" {
                         span "x-text"="lbl + ' (' + zoneCount(i) + ')'" {}
@@ -438,7 +438,7 @@ fn threshold_slider(
                 }
             }
             // Value readout
-            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5 ml-6" {
+            div class="flex gap-4 text-[10px] text-muted mt-0.5 ml-6" {
                 span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v1)" {} }
                 span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
                 span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v3)" {} }
@@ -476,12 +476,12 @@ fn threshold_slider_with_distance(
                 "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
             ))) {
             div class="flex items-center gap-2 mb-1" {
-                span class="text-xs font-semibold text-slate-700 uppercase tracking-wide" { "Erg split (sec/500m)" }
+                span class="text-xs font-semibold text-ink-2 uppercase tracking-wide" { "Erg split (sec/500m)" }
                 select "x-model"="ergDist"
                        "@change"=(PreEscaped(format!(
                            "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
                        )))
-                       class="border border-slate-300 rounded px-2 py-0.5 text-xs focus:border-slate-500 focus:outline-none" {
+                       class="border border-rule rounded px-2 py-0.5 text-xs focus:border-ink-3 focus:outline-none" {
                     option value="1000" selected[erg_dist == 1000] { "1k" }
                     option value="2000" selected[erg_dist == 2000] { "2k" }
                     option value="5000" selected[erg_dist == 5000] { "5k" }
@@ -490,17 +490,17 @@ fn threshold_slider_with_distance(
             }
             // Slider track with y-axis
             div class="flex items-end" {
-                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-slate-400 text-right w-6 shrink-0" {
+                div class="flex flex-col justify-between h-24 pr-1 text-[9px] text-muted text-right w-6 shrink-0" {
                     span "x-text"="maxCount() || ''" {}
                     span "x-text"="maxCount() > 2 ? Math.round(maxCount()/2) : ''" {}
                     span "x-show"="maxCount() > 0" { "0" }
                 }
-                div class="relative h-24 bg-slate-100 rounded select-none touch-none flex-1"
+                div class="relative h-24 bg-paper-2 rounded select-none touch-none flex-1"
                     "x-ref"="track"
                     "@mousedown"="startDrag($event)"
                     "@touchstart.passive"="startDrag($event)" {
                     template "x-for"="bar in bars" {
-                        div class="absolute bottom-0 bg-slate-300 rounded-t-sm"
+                        div class="absolute bottom-0 bg-paper-3 rounded-t-sm"
                             ":style"="barStyle(bar)" {}
                     }
                     div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
@@ -510,25 +510,25 @@ fn threshold_slider_with_distance(
                         div class="bg-red-100/60" ":style"="zoneStyle(3)" {}
                     }
                     template "x-for"="(v, i) in [v1, v2, v3]" {
-                        div class="absolute top-0 bottom-0 w-0.5 bg-slate-600 cursor-ew-resize"
+                        div class="absolute top-0 bottom-0 w-0.5 bg-ink-3 cursor-ew-resize"
                             ":style"="'left:'+pct(v)+'%'"
                             ":data-caret"="i" {}
                     }
                     template "x-for"="(v, i) in [v1, v2, v3]" {
-                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-slate-700 rounded cursor-ew-resize shadow"
+                        div class="absolute top-1/2 -translate-y-1/2 w-4 h-8 -ml-2 bg-ink-2 rounded cursor-ew-resize shadow"
                             ":style"="'left:'+pct(v)+'%'"
                             ":data-caret"="i" {}
                     }
                 }
             }
-            div class="flex text-[10px] text-slate-500 mt-1 ml-6" {
+            div class="flex text-[10px] text-ink-3 mt-1 ml-6" {
                 template "x-for"="(lbl, i) in labels" {
                     div class="text-center truncate" ":style"="zoneStyle(i)" {
                         span "x-text"="lbl + ' (' + zoneCount(i) + ')'" {}
                     }
                 }
             }
-            div class="flex gap-4 text-[10px] text-slate-400 mt-0.5 ml-6" {
+            div class="flex gap-4 text-[10px] text-muted mt-0.5 ml-6" {
                 span { span "x-text"="labels[0]+'/'+labels[1]" {} ": " span "x-text"="fmt(v3)" {} }
                 span { span "x-text"="labels[1]+'/'+labels[2]" {} ": " span "x-text"="fmt(v2)" {} }
                 span { span "x-text"="labels[2]+'/'+labels[3]" {} ": " span "x-text"="fmt(v1)" {} }
@@ -709,9 +709,9 @@ fn roster_matrix_inner(
                 }
             }
             @if teams.is_empty() {
-                div class="text-slate-500 italic" { "No teams. Create teams first." }
+                div class="text-ink-3 italic" { "No teams. Create teams first." }
             } @else if rowers.is_empty() {
-                div class="text-slate-500 italic" { "No active rowers." }
+                div class="text-ink-3 italic" { "No active rowers." }
             } @else {
                 form method="post" action="/admin/roster"
                      hx-post="/admin/roster"
@@ -722,15 +722,15 @@ fn roster_matrix_inner(
                             "Save"
                         }
                     }
-                    div class="overflow-auto bg-white rounded-lg shadow max-h-[75vh]" {
+                    div class="overflow-auto bg-paper rounded-lg shadow max-h-[75vh]" {
                         table class="text-xs border-collapse" {
                             thead {
                                 tr {
-                                    th class="sticky top-0 left-0 z-20 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700 border-b border-r border-slate-200 min-w-[160px]" {
+                                    th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
                                         "Rower"
                                     }
                                     @for team in teams {
-                                        th class="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[80px]" {
+                                        th class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
                                             (team.name)
                                         }
                                     }
@@ -738,8 +738,8 @@ fn roster_matrix_inner(
                             }
                             tbody {
                                 @for rower in rowers {
-                                    tr class="border-t border-slate-100 hover:bg-slate-50" {
-                                        td class="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-slate-800 border-r border-slate-200 whitespace-nowrap" {
+                                    tr class="border-t border-rule-2 hover:bg-paper-2" {
+                                        td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-r border-rule-2 whitespace-nowrap" {
                                             a href={"/rowers/" (rower.id)}
                                               hx-get={"/rowers/" (rower.id)}
                                               hx-target="#content"
@@ -749,7 +749,7 @@ fn roster_matrix_inner(
                                             }
                                         }
                                         @for team in teams {
-                                            td class="text-center border-slate-100 px-1" {
+                                            td class="text-center border-rule-2 px-1" {
                                                 @let field_name = format!("m_{}_{}", team.id, rower.id);
                                                 @let checked = memberships.contains(&(team.id, rower.id));
                                                 input type="checkbox"
@@ -812,14 +812,14 @@ fn fleet_matrix_inner(
                     (msg)
                 }
             }
-            p class="text-sm text-slate-500 mb-4" {
+            p class="text-sm text-ink-3 mb-4" {
                 "Select which boats are pre-selected in the generation pool for each team. "
                 "Single-team clubs default to all boats if none are selected."
             }
             @if teams.is_empty() {
-                div class="text-slate-500 italic" { "No teams. Create teams first." }
+                div class="text-ink-3 italic" { "No teams. Create teams first." }
             } @else if boats.is_empty() {
-                div class="text-slate-500 italic" { "No sweep boats in the fleet." }
+                div class="text-ink-3 italic" { "No sweep boats in the fleet." }
             } @else {
                 form method="post" action="/admin/fleet/defaults"
                      hx-post="/admin/fleet/defaults"
@@ -830,15 +830,15 @@ fn fleet_matrix_inner(
                             "Save"
                         }
                     }
-                    div class="overflow-auto bg-white rounded-lg shadow max-h-[75vh]" {
+                    div class="overflow-auto bg-paper rounded-lg shadow max-h-[75vh]" {
                         table class="text-xs border-collapse" {
                             thead {
                                 tr {
-                                    th class="sticky top-0 left-0 z-20 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700 border-b border-r border-slate-200 min-w-[160px]" {
+                                    th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
                                         "Boat"
                                     }
                                     @for team in teams {
-                                        th class="sticky top-0 z-10 bg-slate-100 px-3 py-2 text-center font-semibold text-slate-700 border-b border-slate-200 whitespace-nowrap min-w-[80px]" {
+                                        th class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
                                             (team.name)
                                         }
                                     }
@@ -846,8 +846,8 @@ fn fleet_matrix_inner(
                             }
                             tbody {
                                 @for boat in boats {
-                                    tr class="border-t border-slate-100 hover:bg-slate-50" {
-                                        td class="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-slate-800 border-r border-slate-200 whitespace-nowrap" {
+                                    tr class="border-t border-rule-2 hover:bg-paper-2" {
+                                        td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-r border-rule-2 whitespace-nowrap" {
                                             a href={"/boats/" (boat.id)}
                                               hx-get={"/boats/" (boat.id)}
                                               hx-target="#content"
@@ -855,14 +855,14 @@ fn fleet_matrix_inner(
                                               class="text-blue-700 hover:text-blue-900" {
                                                 (boat.name)
                                             }
-                                            span class="text-slate-400 ml-1" {
+                                            span class="text-muted ml-1" {
                                                 "(" (boat.seat_count)
                                                 @if boat.has_cox.as_bool() { "+" }
                                                 ")"
                                             }
                                         }
                                         @for team in teams {
-                                            td class="text-center border-slate-100 px-1" {
+                                            td class="text-center border-rule-2 px-1" {
                                                 @let field_name = format!("b_{}_{}", team.id, boat.id);
                                                 @let checked = defaults.contains(&(team.id, boat.id));
                                                 input type="checkbox"

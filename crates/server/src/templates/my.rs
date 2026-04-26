@@ -85,13 +85,13 @@ pub(crate) fn availability_content(
             }
             // Upcoming practice dates with inline status dropdowns
             @if rows.is_empty() {
-                div class="text-slate-500 italic" {
+                div class="text-ink-3 italic" {
                     "No upcoming practices scheduled."
                 }
             } @else {
-                div class="bg-white rounded-lg shadow overflow-hidden" {
+                div class="bg-paper rounded-lg shadow overflow-hidden" {
                     table class="w-full text-sm" {
-                        thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
+                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th class="px-4 py-2" { "Date" }
                                 th class="px-4 py-2" { "Status" }
@@ -113,11 +113,11 @@ pub(crate) fn availability_content(
 fn availability_row(row: &AvailabilityRow) -> Markup {
     let weekday = row.date.format("%A").to_string();
     html! {
-        tr class="border-t border-slate-100" {
+        tr class="border-t border-rule-2" {
             td class="px-4 py-2" {
                 div class="flex items-center gap-2" {
-                    span class="font-medium text-slate-800" { (row.date) }
-                    span class="text-xs text-slate-500" { (weekday) }
+                    span class="font-medium text-ink" { (row.date) }
+                    span class="text-xs text-ink-3" { (weekday) }
                     @if row.has_committed {
                         a href={"/history/" (row.practice_id)}
                           hx-get={"/history/" (row.practice_id)}
@@ -137,7 +137,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
                     input type="hidden" name="practice_id" value=(row.practice_id);
                     (status_select(&format!("status-{}", row.date), row.status))
                     button type="submit"
-                           class="text-xs text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide" {
+                           class="text-xs text-ink-3 hover:text-ink font-semibold uppercase tracking-wide" {
                         "Save"
                     }
                 }
@@ -153,51 +153,51 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
 pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
     html! {
         div class="space-y-6" {
-            div class="bg-white rounded-lg shadow p-6" {
+            div class="bg-paper rounded-lg shadow p-6" {
                 form method="post" action="/my/email-preferences"
                      hx-post="/my/email-preferences"
                      hx-target="#content"
                      hx-push-url="true"
                      class="space-y-4" {
-                    p class="text-sm text-slate-600 mb-4" {
+                    p class="text-sm text-ink-2 mb-4" {
                         "Choose which emails you'd like to receive from your coach."
                     }
                     div class="flex items-center gap-3" {
                         input type="checkbox" id="opt_in_reminders" name="opt_in_reminders"
                               value="1" checked[user.wants_reminders()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
-                        label for="opt_in_reminders" class="text-sm font-medium text-slate-700" {
+                              class="rounded border-rule text-ink focus:ring-ink-3";
+                        label for="opt_in_reminders" class="text-sm font-medium text-ink-2" {
                             "Availability reminders"
                         }
                     }
-                    p class="text-xs text-slate-500 ml-6 -mt-2" {
+                    p class="text-xs text-ink-3 ml-6 -mt-2" {
                         "Receive an email when you haven't responded to upcoming practices."
                     }
                     div class="flex items-center gap-3" {
                         input type="checkbox" id="opt_in_lineups" name="opt_in_lineups"
                               value="1" checked[user.wants_lineups()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
-                        label for="opt_in_lineups" class="text-sm font-medium text-slate-700" {
+                              class="rounded border-rule text-ink focus:ring-ink-3";
+                        label for="opt_in_lineups" class="text-sm font-medium text-ink-2" {
                             "Lineup notifications"
                         }
                     }
-                    p class="text-xs text-slate-500 ml-6 -mt-2" {
+                    p class="text-xs text-ink-3 ml-6 -mt-2" {
                         "Receive an email when lineups are posted for an upcoming practice."
                     }
                     div class="flex items-center gap-3" {
                         input type="checkbox" id="opt_in_stale_alerts" name="opt_in_stale_alerts"
                               value="1" checked[user.wants_stale_alerts()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
-                        label for="opt_in_stale_alerts" class="text-sm font-medium text-slate-700" {
+                              class="rounded border-rule text-ink focus:ring-ink-3";
+                        label for="opt_in_stale_alerts" class="text-sm font-medium text-ink-2" {
                             "Lineup change alerts"
                         }
                     }
-                    p class="text-xs text-slate-500 ml-6 -mt-2" {
+                    p class="text-xs text-ink-3 ml-6 -mt-2" {
                         "Receive an email when rower availability changes affect a committed lineup."
                     }
                     div class="pt-2" {
                         button type="submit"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save preferences"
                         }
                     }
@@ -211,7 +211,7 @@ fn status_select(id: &str, current: Option<AvailabilityStatus>) -> Markup {
     let is = |s: AvailabilityStatus| current == Some(s);
     html! {
         select id=(id) name="status"
-               class="border border-slate-300 rounded px-2 py-1 text-sm focus:border-slate-500 focus:outline-none" {
+               class="border border-rule rounded px-2 py-1 text-sm focus:border-ink-3 focus:outline-none" {
             @if current.is_none() {
                 option value="" disabled selected { "— no response —" }
             }

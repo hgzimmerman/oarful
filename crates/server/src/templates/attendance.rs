@@ -34,11 +34,11 @@ pub(crate) fn grid_content(
     );
 
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center justify-between" {
                 div {
-                    h1 class="text-2xl font-bold text-slate-800" { "Attendance" }
-                    p class="text-sm text-slate-500 mt-1" { (subtitle) }
+                    h1 class="text-2xl font-bold text-ink" { "Attendance" }
+                    p class="text-sm text-ink-3 mt-1" { (subtitle) }
                 }
                 div {
                     @if show_past {
@@ -46,7 +46,7 @@ pub(crate) fn grid_content(
                           hx-get="/team/attendance"
                           hx-target="#team-tab-content"
                           hx-push-url="true"
-                          class="text-sm font-semibold text-slate-600 border border-slate-300 px-3 py-1.5 rounded transition hover:bg-slate-50" {
+                          class="text-sm font-semibold text-ink-2 border border-rule px-3 py-1.5 rounded transition hover:bg-paper-2" {
                             "Future only"
                         }
                     } @else {
@@ -54,7 +54,7 @@ pub(crate) fn grid_content(
                           hx-get="/team/attendance?show_past=1"
                           hx-target="#team-tab-content"
                           hx-push-url="true"
-                          class="text-sm font-semibold text-slate-600 border border-slate-300 px-3 py-1.5 rounded transition hover:bg-slate-50" {
+                          class="text-sm font-semibold text-ink-2 border border-rule px-3 py-1.5 rounded transition hover:bg-paper-2" {
                             "Show past year"
                         }
                     }
@@ -64,19 +64,19 @@ pub(crate) fn grid_content(
 
         div class="px-4 sm:px-8 py-6" {
             @if columns.is_empty() {
-                div class="text-center text-slate-500 italic py-12" {
+                div class="text-center text-ink-3 italic py-12" {
                     "No practices scheduled."
                 }
             } @else if rowers.is_empty() {
-                div class="text-center text-slate-500 italic py-12" {
+                div class="text-center text-ink-3 italic py-12" {
                     "No roster members."
                 }
             } @else {
-                div class="overflow-auto bg-white rounded-lg shadow max-h-[75vh]" {
+                div class="overflow-auto bg-paper rounded-lg shadow max-h-[75vh]" {
                     table class="text-xs border-collapse" {
                         thead {
                             tr {
-                                th class="sticky top-0 left-0 z-20 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700 border-b border-r border-slate-200 min-w-[140px]" {
+                                th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[140px]" {
                                     "Rower"
                                 }
                                 @for col in columns {
@@ -87,7 +87,7 @@ pub(crate) fn grid_content(
                         tbody {
                             @for rower in rowers {
                                 tr {
-                                    td class="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-slate-800 border-b border-r border-slate-200 whitespace-nowrap" {
+                                    td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-b border-r border-rule-2 whitespace-nowrap" {
                                         (rower.name)
                                     }
                                     @for col in columns {
@@ -105,7 +105,7 @@ pub(crate) fn grid_content(
                 }
 
                 // Legend
-                div class="flex items-center gap-4 mt-3 text-xs text-slate-500" {
+                div class="flex items-center gap-4 mt-3 text-xs text-ink-3" {
                     span class="flex items-center gap-1" {
                         span class="inline-block w-3 h-3 rounded-sm bg-emerald-400" {}
                         "Present"
@@ -115,7 +115,7 @@ pub(crate) fn grid_content(
                         "Absent"
                     }
                     span class="flex items-center gap-1" {
-                        span class="inline-block w-3 h-3 rounded-sm border border-slate-200" {}
+                        span class="inline-block w-3 h-3 rounded-sm border border-rule-2" {}
                         "No response"
                     }
                 }
@@ -130,12 +130,8 @@ pub(crate) fn grid_content(
 
 fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&PracticeId>) -> Markup {
     let is_today = *date == today;
-    let bg = if is_today {
-        "bg-blue-50"
-    } else {
-        "bg-slate-100"
-    };
-    let base_class = format!("sticky top-0 z-10 {bg} px-1.5 py-2 text-center font-medium border-b border-slate-200 whitespace-nowrap min-w-[44px]");
+    let bg = if is_today { "bg-blue-50" } else { "bg-paper-2" };
+    let base_class = format!("sticky top-0 z-10 {bg} px-1.5 py-2 text-center font-medium border-b border-rule-2 whitespace-nowrap min-w-[44px]");
     let full_date = date.format("%A, %B %-d, %Y").to_string();
 
     html! {
@@ -151,9 +147,9 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
                     div class="text-sm font-bold" { (date.format("%-d")) }
                 }
             } @else {
-                div class="text-[10px] text-slate-400 uppercase" { (date.format("%a")) }
-                div class="text-slate-600" { (date.format("%b")) }
-                div class="text-sm font-bold text-slate-600" { (date.format("%-d")) }
+                div class="text-[10px] text-muted uppercase" { (date.format("%a")) }
+                div class="text-ink-2" { (date.format("%b")) }
+                div class="text-sm font-bold text-ink-2" { (date.format("%-d")) }
             }
         }
     }
@@ -166,7 +162,7 @@ fn status_cell(status: Option<&AvailabilityStatus>) -> Markup {
         None => ("", "No response"),
     };
     html! {
-        td class=(format!("{bg} border-b border-r border-slate-100 min-w-[44px] h-7"))
+        td class=(format!("{bg} border-b border-r border-rule-2 min-w-[44px] h-7"))
            title=(title) {}
     }
 }
@@ -182,7 +178,7 @@ fn editable_status_cell(
         None => ("", "No response → click: Present", "Yes"),
     };
     html! {
-        td class=(format!("{bg} border-b border-r border-slate-100 min-w-[44px] h-7 cursor-pointer select-none"))
+        td class=(format!("{bg} border-b border-r border-rule-2 min-w-[44px] h-7 cursor-pointer select-none"))
            title=(title)
            id=(format!("c-{rower_id}-{practice_id}"))
            data-rower=(rower_id.to_string())

@@ -18,9 +18,9 @@ pub(crate) fn list_content(
     has_more: bool,
 ) -> Markup {
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
-            h1 class="text-2xl font-bold text-slate-800" { "Audit log" }
-            p class="text-sm text-slate-500 mt-1" { "90-day history of changes" }
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
+            h1 class="text-2xl font-bold text-ink" { "Audit log" }
+            p class="text-sm text-ink-3 mt-1" { "90-day history of changes" }
         }
 
         div class="px-4 sm:px-8 py-6 space-y-4 max-w-6xl mx-auto" {
@@ -29,13 +29,13 @@ pub(crate) fn list_content(
 
             // Table
             @if entries.is_empty() && offset == 0 {
-                div class="text-center text-slate-500 italic py-12" {
+                div class="text-center text-ink-3 italic py-12" {
                     "No audit entries found."
                 }
             } @else {
-                div class="bg-white rounded-lg shadow overflow-hidden" {
+                div class="bg-paper rounded-lg shadow overflow-hidden" {
                     table class="w-full text-sm" {
-                        thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
+                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th class="px-4 py-2" { "When" }
                                 th class="px-4 py-2" { "User" }
@@ -87,28 +87,28 @@ pub(crate) fn rows_and_load_more(
 fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Markup {
     html! {
         @for entry in entries {
-            tr class="border-t border-slate-100 hover:bg-slate-50" {
-                td class="px-4 py-2 text-xs text-slate-500 whitespace-nowrap" {
+            tr class="border-t border-rule-2 hover:bg-paper-2" {
+                td class="px-4 py-2 text-xs text-ink-3 whitespace-nowrap" {
                     (entry.timestamp.format("%Y-%m-%d %H:%M"))
                 }
                 td class="px-4 py-2" {
                     @if let Some(uid) = entry.user_id {
                         @if let Some(name) = user_map.get(&uid) {
-                            span class="text-slate-800" { (name) }
+                            span class="text-ink" { (name) }
                         } @else {
-                            span class="text-slate-400" { "user #" (uid) }
+                            span class="text-muted" { "user #" (uid) }
                         }
                     } @else {
-                        span class="text-slate-400 italic" { "system" }
+                        span class="text-muted italic" { "system" }
                     }
                 }
                 td class="px-4 py-2" {
                     (action_badge(entry.action.as_str()))
                 }
-                td class="px-4 py-2 text-xs font-mono text-slate-600" {
+                td class="px-4 py-2 text-xs font-mono text-ink-2" {
                     (entry.resource_type) "/" (entry.resource_id)
                 }
-                td class="px-4 py-2 text-xs text-slate-500 max-w-xs truncate" {
+                td class="px-4 py-2 text-xs text-ink-3 max-w-xs truncate" {
                     @if let Some(ref d) = entry.detail {
                         (d)
                     }
@@ -129,7 +129,7 @@ fn action_badge(action: &str) -> Markup {
         "solver_profile" => ("bg-orange-100", "text-orange-800"),
         "team" => ("bg-indigo-100", "text-indigo-800"),
         "availability" => ("bg-teal-100", "text-teal-800"),
-        _ => ("bg-slate-100", "text-slate-800"),
+        _ => ("bg-paper-2", "text-ink"),
     };
     html! {
         span class=(format!("{bg} {text} text-xs px-1.5 py-0.5 rounded-full")) {
@@ -173,9 +173,9 @@ fn filter_bar(
              class="flex flex-wrap items-end gap-3" {
 
             div {
-                label class="block text-xs text-slate-500 mb-1" { "Action" }
+                label class="block text-xs text-ink-3 mb-1" { "Action" }
                 select name="action"
-                       class="border border-slate-300 rounded px-2 py-1.5 text-sm" {
+                       class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All actions" }
                     @for a in actions {
                         @if a.as_str() == sel_action {
@@ -188,9 +188,9 @@ fn filter_bar(
             }
 
             div {
-                label class="block text-xs text-slate-500 mb-1" { "User" }
+                label class="block text-xs text-ink-3 mb-1" { "User" }
                 select name="user_id"
-                       class="border border-slate-300 rounded px-2 py-1.5 text-sm" {
+                       class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All users" }
                     option value="-1" selected[sel_user == "-1"] { "System" }
                     @for (uid, name) in &users {
@@ -204,9 +204,9 @@ fn filter_bar(
             }
 
             div {
-                label class="block text-xs text-slate-500 mb-1" { "Resource" }
+                label class="block text-xs text-ink-3 mb-1" { "Resource" }
                 select name="resource_type"
-                       class="border border-slate-300 rounded px-2 py-1.5 text-sm" {
+                       class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All resources" }
                     @for rt in &resource_types {
                         @if *rt == sel_resource {
@@ -219,7 +219,7 @@ fn filter_bar(
             }
 
             button type="submit"
-                   class="bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-4 py-1.5 rounded transition" {
+                   class="bg-ink-2 hover:bg-ink text-white text-sm font-semibold px-4 py-1.5 rounded transition" {
                 "Filter"
             }
 
@@ -228,7 +228,7 @@ fn filter_bar(
                   hx-get="/admin/audit"
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-sm text-slate-500 hover:text-slate-800" {
+                  class="text-sm text-ink-3 hover:text-ink" {
                     "Clear"
                 }
             }
@@ -265,7 +265,7 @@ fn load_more_button(query: &AuditQuery, offset: i64) -> Markup {
                    hx-get=(url)
                    hx-target="#audit-rows"
                    hx-swap="beforeend"
-                   class="text-sm font-semibold text-slate-600 hover:text-slate-800 border border-slate-300 px-4 py-2 rounded transition" {
+                   class="text-sm font-semibold text-ink-2 hover:text-ink border border-rule px-4 py-2 rounded transition" {
                 "Load more"
             }
         }

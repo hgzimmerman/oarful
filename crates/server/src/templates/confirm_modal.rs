@@ -27,21 +27,21 @@ pub(crate) fn confirm_modal(title: &str, message: &str, action_markup: Markup) -
             onclick=(CLOSE_JS) {}
         div id="confirm-modal"
             class="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 pointer-events-none" {
-            div class="bg-white rounded-lg shadow-xl w-full max-w-md pointer-events-auto" {
-                div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between" {
-                    h2 class="text-lg font-bold text-slate-800" { (title) }
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto" {
+                div class="px-6 py-4 border-b border-rule-2 flex items-center justify-between" {
+                    h2 class="text-lg font-bold text-ink" { (title) }
                     button type="button"
-                           class="text-slate-400 hover:text-slate-600 text-xl leading-none"
+                           class="text-muted hover:text-ink-2 text-xl leading-none"
                            onclick=(CLOSE_JS) {
                         "\u{00d7}"
                     }
                 }
                 div class="px-6 py-4" {
-                    p class="text-sm text-slate-600" { (message) }
+                    p class="text-sm text-ink-2" { (message) }
                 }
-                div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3" {
+                div class="px-6 py-4 border-t border-rule-2 flex justify-end gap-3" {
                     button type="button"
-                           class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition"
+                           class="px-4 py-2 text-sm font-medium text-ink-2 hover:text-ink transition"
                            onclick=(CLOSE_JS) {
                         "Cancel"
                     }

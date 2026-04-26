@@ -23,7 +23,7 @@ pub(crate) fn form_content(
         ))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             @if let Some(ts) = last_synced {
-                div class="text-xs text-slate-500" {
+                div class="text-xs text-ink-3" {
                     "Last synced: "
                     time datetime=(ts.format("%Y-%m-%dT%H:%M:%S").to_string()) {
                         (ts.format("%b %d, %Y at %H:%M UTC").to_string())
@@ -41,40 +41,40 @@ pub(crate) fn form_content(
                  hx-target="#content"
                  hx-push-url="false"
                  hx-indicator="#sync-spinner"
-                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
                 div {
-                    label for="spreadsheet_id" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="spreadsheet_id" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Spreadsheet ID"
                     }
                     input id="spreadsheet_id" name="spreadsheet_id" type="text" required
                           value=(id_value)
                           placeholder="1AbCDeFgHiJkLmNoPqRsTuVwXyZ..."
-                          class="w-full border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
-                    p class="text-xs text-slate-500 mt-1" {
+                          class="w-full border border-rule rounded px-3 py-2 font-mono text-sm focus:border-ink-3 focus:outline-none";
+                    p class="text-xs text-ink-3 mt-1" {
                         "From the sheet URL: "
-                        code class="bg-slate-100 px-1" { "/spreadsheets/d/" strong { "ID" } "/edit" }
+                        code class="bg-paper-2 px-1" { "/spreadsheets/d/" strong { "ID" } "/edit" }
                         ". The sheet must be set to 'Anyone with the link can view'."
                     }
                 }
                 div {
-                    label for="gid" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="gid" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Tab ID (gid)"
                     }
                     input id="gid" name="gid" type="number" min="0" value=(gid_value)
-                          class="w-32 border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
-                    p class="text-xs text-slate-500 mt-1" {
+                          class="w-32 border border-rule rounded px-3 py-2 font-mono text-sm focus:border-ink-3 focus:outline-none";
+                    p class="text-xs text-ink-3 mt-1" {
                         "0 for the first tab. Otherwise the "
-                        code class="bg-slate-100 px-1" { "gid=" }
+                        code class="bg-paper-2 px-1" { "gid=" }
                         " value in the tab's URL."
                     }
                 }
                 div {
                     @let current_filter = prev.map(|p| p.row_filter.as_str()).unwrap_or("");
-                    label for="row_filter" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="row_filter" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Row filter"
                     }
                     select id="row_filter" name="row_filter" required
-                           class="w-48 border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                           class="w-48 border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                         @if current_filter.is_empty() {
                             option value="" disabled selected { "Select…" }
                         }
@@ -82,20 +82,20 @@ pub(crate) fn form_content(
                         option value="Sweep" selected[current_filter == "Sweep"] { "Sweep only" }
                         option value="Sculling" selected[current_filter == "Sculling"] { "Sculling only" }
                     }
-                    p class="text-xs text-slate-500 mt-1" {
+                    p class="text-xs text-ink-3 mt-1" {
                         "Which rows to import. Must be set before syncing."
                     }
                 }
                 div {
-                    label for="poll_interval_minutes" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="poll_interval_minutes" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Auto-sync interval (minutes)"
                     }
                     input id="poll_interval_minutes" name="poll_interval_minutes" type="number"
                           min="0" step="1"
                           value=(prev.and_then(|p| p.poll_interval_minutes).map(|m| m.to_string()).unwrap_or_default())
                           placeholder="Off"
-                          class="w-32 border border-slate-300 rounded px-3 py-2 font-mono text-sm focus:border-slate-500 focus:outline-none";
-                    p class="text-xs text-slate-500 mt-1" {
+                          class="w-32 border border-rule rounded px-3 py-2 font-mono text-sm focus:border-ink-3 focus:outline-none";
+                    p class="text-xs text-ink-3 mt-1" {
                         "Leave empty or 0 to disable. When set, the sheet is re-synced automatically on this interval."
                     }
                 }
@@ -104,7 +104,7 @@ pub(crate) fn form_content(
                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
                         "Sync"
                     }
-                    span #sync-spinner class="htmx-indicator text-sm text-slate-500" {
+                    span #sync-spinner class="htmx-indicator text-sm text-ink-3" {
                         "Fetching and syncing…"
                     }
                 }
@@ -119,8 +119,8 @@ pub(crate) fn form_content(
 
 fn summary_panel(s: &SyncSummary) -> Markup {
     html! {
-        section class="bg-white rounded-lg shadow p-6 space-y-4" {
-            h2 class="text-xl font-bold text-slate-800" { "Sync complete" }
+        section class="bg-paper rounded-lg shadow p-6 space-y-4" {
+            h2 class="text-xl font-bold text-ink" { "Sync complete" }
 
             div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm" {
                 (stat("Rows read", s.rows_read))
@@ -132,14 +132,14 @@ fn summary_panel(s: &SyncSummary) -> Markup {
             }
 
             @if s.rows_skipped_no_email > 0 {
-                p class="text-xs text-slate-500" {
+                p class="text-xs text-ink-3" {
                     "Skipped " (s.rows_skipped_no_email) " row(s) without an email."
                 }
             }
 
             @if !s.warnings.is_empty() {
                 div {
-                    h3 class="font-semibold text-slate-700 mb-2" {
+                    h3 class="font-semibold text-ink-2 mb-2" {
                         "Warnings (" (s.warnings.len()) ")"
                     }
                     ul class="list-disc pl-5 space-y-1 text-sm text-amber-800" {
@@ -150,7 +150,7 @@ fn summary_panel(s: &SyncSummary) -> Markup {
                 }
             }
 
-            div class="pt-2 border-t border-slate-200" {
+            div class="pt-2 border-t border-rule-2" {
                 a href="/practices"
                   hx-get="/practices"
                   hx-target="#content"
@@ -165,9 +165,9 @@ fn summary_panel(s: &SyncSummary) -> Markup {
 
 fn stat(label: &str, value: usize) -> Markup {
     html! {
-        div class="bg-slate-50 rounded p-3" {
-            div class="text-xs text-slate-500 uppercase tracking-wide" { (label) }
-            div class="text-2xl font-bold text-slate-800" { (value) }
+        div class="bg-paper rounded p-3" {
+            div class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
+            div class="text-2xl font-bold text-ink" { (value) }
         }
     }
 }

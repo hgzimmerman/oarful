@@ -19,24 +19,24 @@ pub(crate) fn list_content(
         (page_header("Users", Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
             // Invite form
-            section class="bg-white rounded-lg shadow p-6" {
-                h2 class="text-lg font-bold text-slate-800 mb-4" { "Invite a new user" }
+            section class="bg-paper rounded-lg shadow p-6" {
+                h2 class="text-lg font-bold text-ink mb-4" { "Invite a new user" }
                 form method="post" action="/users/invite"
                      class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end" {
                     div {
-                        label for="invite_name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Name" }
+                        label for="invite_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Name" }
                         input id="invite_name" name="name" type="text" required
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="invite_email" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Email" }
+                        label for="invite_email" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Email" }
                         input id="invite_email" name="email" type="email" required
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="invite_role" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Role" }
+                        label for="invite_role" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Role" }
                         select id="invite_role" name="role"
-                               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                             option value="Member" { "Member" }
                             option value="Coach" { "Coach" }
                             option value="ProgramDirector" { "Program Director" }
@@ -51,9 +51,9 @@ pub(crate) fn list_content(
 
             // User table
             @if !users.is_empty() {
-                div class="bg-white rounded-lg shadow overflow-x-auto" {
+                div class="bg-paper rounded-lg shadow overflow-x-auto" {
                     table class="w-full text-sm min-w-[480px]" {
-                        thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
+                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th class="px-4 py-2" { "Name" }
                                 th class="px-4 py-2" { "Email" }
@@ -89,8 +89,8 @@ pub(crate) fn user_row(
         .unwrap_or("—");
     let rower_id = user_rower_map.get(&u.id);
     html! {
-        tr id={"user-" (u.id)} class="border-t border-slate-100" {
-            td class="px-4 py-2 font-medium text-slate-800" {
+        tr id={"user-" (u.id)} class="border-t border-rule-2" {
+            td class="px-4 py-2 font-medium text-ink" {
                 @if let Some(rid) = rower_id {
                     a href={"/rowers/" (rid)}
                       hx-get={"/rowers/" (rid)}
@@ -103,13 +103,13 @@ pub(crate) fn user_row(
                     (u.name)
                 }
             }
-            td class="px-4 py-2 text-slate-600" { (u.email) }
-            td class="px-4 py-2 text-slate-600" { (role_label) }
+            td class="px-4 py-2 text-ink-2" { (u.email) }
+            td class="px-4 py-2 text-ink-2" { (role_label) }
             td class="px-4 py-2" {
                 @let badge_class = match u.status {
                     UserStatus::Active => "bg-emerald-100 text-emerald-800",
                     UserStatus::Invited => "bg-amber-100 text-amber-800",
-                    UserStatus::Disabled => "bg-slate-200 text-slate-600",
+                    UserStatus::Disabled => "bg-paper-3 text-ink-2",
                 };
                 span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
                     (u.status)
@@ -137,7 +137,7 @@ pub(crate) fn user_row(
                          hx-swap="outerHTML"
                          class="inline" {
                         button type="submit"
-                               class="text-xs text-slate-400 hover:text-red-600 font-medium" {
+                               class="text-xs text-muted hover:text-red-600 font-medium" {
                             "Disable"
                         }
                     }
@@ -174,7 +174,7 @@ pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Ma
                 div class="bg-emerald-50 border-l-4 border-emerald-500 px-4 py-3 rounded text-sm text-emerald-900 mb-4" {
                     p class="font-semibold mb-2" { "Invite created." }
                     p { "Share this link with the user:" }
-                    code class="block mt-2 bg-white px-3 py-2 rounded border border-emerald-200 font-mono text-xs break-all" {
+                    code class="block mt-2 bg-paper px-3 py-2 rounded border border-emerald-200 font-mono text-xs break-all" {
                         (url)
                     }
                     p class="text-xs mt-2 text-emerald-700" {
@@ -202,11 +202,11 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                 title { "Set password · Oarful" }
                 script src="/tailwindcss.js" {}
             }
-            body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center" {
+            body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
                     div class="text-center mb-8" {
-                        h1 class="text-2xl font-bold text-slate-800" { "Oarful" }
-                        p class="text-sm text-slate-500 mt-1" { "Set your password to activate your account" }
+                        h1 class="text-2xl font-bold text-ink" { "Oarful" }
+                        p class="text-sm text-ink-3 mt-1" { "Set your password to activate your account" }
                     }
 
                     @if let Some(msg) = error {
@@ -216,19 +216,19 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                     }
 
                     form method="post" action=(action)
-                         class="bg-white rounded-lg shadow p-6 space-y-4" {
+                         class="bg-paper rounded-lg shadow p-6 space-y-4" {
                         div {
-                            label for="password" class="block text-sm font-semibold text-slate-700 mb-1" { "Password" }
+                            label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
                             input id="password" name="password" type="password" required minlength="8"
-                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                                  class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
-                            label for="password_confirm" class="block text-sm font-semibold text-slate-700 mb-1" { "Confirm password" }
+                            label for="password_confirm" class="block text-sm font-semibold text-ink-2 mb-1" { "Confirm password" }
                             input id="password_confirm" name="password_confirm" type="password" required
-                                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                                  class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"
-                               class="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2 rounded shadow transition" {
+                               class="w-full bg-ink hover:bg-ink-2 text-white font-semibold py-2 rounded shadow transition" {
                             "Activate account"
                         }
                     }

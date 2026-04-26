@@ -96,32 +96,32 @@ pub(crate) fn planning_content(
                  hx-push-url="true"
                  class="flex items-end gap-3 flex-wrap mb-6" {
                 div {
-                    label for="date" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                    label for="date" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
                         "Add practice"
                     }
                     input id="date" name="date" type="date"
                           min=(min_date)
                           value=(date_value)
-                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                          class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 div {
-                    label for="time" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                    label for="time" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
                         "Start"
                     }
                     input id="time" name="time" type="time"
                           value=(time_value)
-                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                          class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 div {
-                    label for="end_time" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" {
+                    label for="end_time" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
                         "End"
                     }
                     input id="end_time" name="end_time" type="time"
                           value=(end_time_value)
-                          class="border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                          class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                       class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Create"
                 }
             }
@@ -132,7 +132,7 @@ pub(crate) fn planning_content(
         } @else if is_coach {
             @let initial_checked = rows.iter().filter(|r| !r.cancelled && r.non_respondent_count > 0).count();
             div "x-data"={"{ checked: " (initial_checked) " }"} {
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
                     @for row in rows {
                         (planning_row_card(row, is_coach))
                     }
@@ -147,14 +147,14 @@ pub(crate) fn planning_content(
                                hx-include="[name='practice_ids']:checked"
                                hx-target="body"
                                hx-swap="beforeend"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Send reminders"
                         }
                     }
                 }
             }
         } @else {
-            div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+            div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
                 @for row in rows {
                     (planning_row_card(row, is_coach))
                 }
@@ -174,13 +174,13 @@ fn planning_row_card(row: &PracticeRow, is_coach: bool) -> Markup {
     let opacity = if row.cancelled { " opacity-40" } else { "" };
 
     html! {
-        div class={"flex items-center px-6 py-3 hover:bg-slate-50 transition" (opacity)} {
+        div class={"flex items-center px-6 py-3 hover:bg-paper-2 transition" (opacity)} {
             @if is_coach && !row.cancelled && row.non_respondent_count > 0 {
                 input type="checkbox" name="practice_ids"
                       value=(row.practice_id)
                       checked
                       "@change"="checked += $el.checked ? 1 : -1"
-                      class="rounded border-slate-300 text-slate-800 focus:ring-slate-500 mr-3 shrink-0";
+                      class="rounded border-rule text-ink focus:ring-ink-3 mr-3 shrink-0";
             } @else if is_coach {
                 div class="w-4 mr-3 shrink-0" {}
             }
@@ -211,20 +211,20 @@ fn planning_row_inner(
         div {
             div class="flex items-center gap-2" {
                 @if row.cancelled {
-                    span class="font-semibold text-slate-800 line-through" { (row.date) }
+                    span class="font-semibold text-ink line-through" { (row.date) }
                     span class="text-xs bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full" {
                         "Cancelled"
                     }
                 } @else {
-                    span class="font-semibold text-slate-800" { (row.date) }
+                    span class="font-semibold text-ink" { (row.date) }
                 }
                 @if row.already_sent_today {
-                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                    span class="text-xs bg-paper-2 text-ink-3 px-1.5 py-0.5 rounded-full" {
                         "Reminded today"
                     }
                 }
             }
-            div class="text-sm text-slate-500" {
+            div class="text-sm text-ink-3" {
                 (weekday)
                 @if let Some(t) = row.time {
                     " \u{00b7} " (t.format("%-I:%M %p"))
@@ -242,7 +242,7 @@ fn planning_row_inner(
                         (row.yes_count) " available"
                     }
                     @if row.total_responses > 0 {
-                        div class="text-xs text-slate-500" {
+                        div class="text-xs text-ink-3" {
                             (row.total_responses) " responses"
                         }
                     }
@@ -259,7 +259,7 @@ fn planning_row_inner(
                      hx-target="#content"
                      onclick="event.stopPropagation(); event.preventDefault(); this.requestSubmit();" {
                     button type="submit"
-                           class="text-xs text-slate-400 hover:text-red-600 font-medium no-print" {
+                           class="text-xs text-muted hover:text-red-600 font-medium no-print" {
                         @if row.cancelled { "Restore" } @else { "Cancel" }
                     }
                 }
@@ -277,7 +277,7 @@ pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup 
 
     html! {
         div class="space-y-4" {
-            div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+            div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
                 @for row in rows {
                     (committed_row(row, is_coach))
                 }
@@ -290,7 +290,7 @@ pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup 
                            hx-include="[name='dates']:checked"
                            hx-target="body"
                            hx-swap="beforeend"
-                           class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                           class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
                         "Send lineups"
                     }
                 }
@@ -304,11 +304,11 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
     let href = format!("/history/{}", row.practice_id);
 
     html! {
-        div class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition" {
+        div class="flex items-center justify-between px-6 py-3 hover:bg-paper-2 transition" {
             div class="flex items-center gap-3" {
                 @if show_checkbox {
                     input type="checkbox" name="dates" value=(row.date)
-                          class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                          class="rounded border-rule text-ink focus:ring-ink-3";
                 }
                 a href=(href)
                   hx-get=(href)
@@ -316,10 +316,10 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
                   hx-push-url="true"
                   class="cursor-pointer" {
                     div {
-                        span class="font-semibold text-slate-800" { (row.date) }
-                        span class="text-sm text-slate-500 ml-2" { (weekday) }
+                        span class="font-semibold text-ink" { (row.date) }
+                        span class="text-sm text-ink-3 ml-2" { (weekday) }
                         @if let Some(t) = row.time {
-                            span class="text-sm text-slate-500 ml-2" {
+                            span class="text-sm text-ink-3 ml-2" {
                                 (t.format("%-I:%M %p"))
                                 @if let Some(dur) = row.duration_minutes {
                                     @let end = t + chrono::TimeDelta::minutes(dur.as_int() as i64);
@@ -331,11 +331,11 @@ fn committed_row(row: &PracticeRow, show_checkbox: bool) -> Markup {
                 }
             }
             div class="flex items-center gap-3" {
-                span class="text-sm text-slate-600" {
+                span class="text-sm text-ink-2" {
                     (row.boat_count) " boat(s)"
                 }
                 @if row.already_sent_today {
-                    span class="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full" {
+                    span class="text-xs bg-paper-2 text-ink-3 px-1.5 py-0.5 rounded-full" {
                         "Sent today"
                     }
                 }

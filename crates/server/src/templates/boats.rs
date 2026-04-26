@@ -17,20 +17,20 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
     );
 
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center justify-between" {
                 div {
-                    h1 class="text-2xl font-bold text-slate-800" { "Fleet" }
-                    p class="text-sm text-slate-500 mt-1" { (subtitle) }
+                    h1 class="text-2xl font-bold text-ink" { "Fleet" }
+                    p class="text-sm text-ink-3 mt-1" { (subtitle) }
                 }
                 div class="flex items-center gap-2" {
                     @if can_export {
                         a href="/boats/export.csv"
-                          class="text-slate-500 hover:text-slate-800 text-sm font-semibold border border-slate-300 px-4 py-2 rounded transition" {
+                          class="text-ink-3 hover:text-ink text-sm font-semibold border border-rule px-4 py-2 rounded transition" {
                             "Fleet CSV"
                         }
                         a href="/boats/usage-matrix.csv"
-                          class="text-slate-500 hover:text-slate-800 text-sm font-semibold border border-slate-300 px-4 py-2 rounded transition" {
+                          class="text-ink-3 hover:text-ink text-sm font-semibold border border-rule px-4 py-2 rounded transition" {
                             "Usage CSV"
                         }
                     }
@@ -63,10 +63,10 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
 fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
     html! {
         div class="max-w-5xl mx-auto" {
-            h2 class="text-lg font-bold text-slate-800 mb-2" { (heading) }
-            div class="bg-white rounded-lg shadow overflow-hidden" {
+            h2 class="text-lg font-bold text-ink mb-2" { (heading) }
+            div class="bg-paper rounded-lg shadow overflow-hidden" {
                 table class="w-full text-sm" {
-                    thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
+                    thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                         tr {
                             th class="px-4 py-2" { "Name" }
                             th class="px-4 py-2" { "Type" }
@@ -100,7 +100,7 @@ fn boat_row(b: &Boat) -> Markup {
     };
     let href = format!("/boats/{}", b.id);
     html! {
-        tr class="border-t border-slate-100 hover:bg-slate-50" {
+        tr class="border-t border-rule-2 hover:bg-paper-2" {
             td class="px-4 py-2 font-medium" {
                 a href=(href)
                   hx-get=(href)
@@ -136,17 +136,17 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
     };
 
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
                 a href="/admin/fleet"
                   onclick="if (history.length > 1) { history.back(); return false; }"
-                  class="text-slate-400 hover:text-slate-700"
+                  class="text-muted hover:text-ink-2"
                   title="Back" {
                     "←"
                 }
                 div {
-                    h1 class="text-2xl font-bold text-slate-800" { (boat.name) }
-                    p class="text-sm text-slate-500 mt-1" {
+                    h1 class="text-2xl font-bold text-ink" { (boat.name) }
+                    p class="text-sm text-ink-3 mt-1" {
                         (type_label) " · " (seats) " · " (rig)
                     }
                 }
@@ -155,9 +155,9 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
 
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-3xl mx-auto" {
             // Boat info
-            div class="bg-white rounded-lg shadow p-6" {
+            div class="bg-paper rounded-lg shadow p-6" {
                 div class="flex items-center justify-between mb-4" {
-                    h2 class="text-lg font-bold text-slate-800" { "Details" }
+                    h2 class="text-lg font-bold text-ink" { "Details" }
                     @if can_edit {
                         a href=(format!("/boats/{}/edit", boat.id))
                           hx-get=(format!("/boats/{}/edit", boat.id))
@@ -185,40 +185,40 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
             }
 
             // Usage stats
-            div class="bg-white rounded-lg shadow p-6" {
-                h2 class="text-lg font-bold text-slate-800 mb-4" { "Usage" }
+            div class="bg-paper rounded-lg shadow p-6" {
+                h2 class="text-lg font-bold text-ink mb-4" { "Usage" }
 
                 @if usage.total_uses == 0 {
-                    p class="text-sm text-slate-500 italic" {
+                    p class="text-sm text-ink-3 italic" {
                         "No committed lineups found for this boat."
                     }
                 } @else {
                     div class="flex gap-8 mb-4" {
                         div {
-                            div class="text-3xl font-bold text-slate-800" { (usage.total_uses) }
-                            div class="text-xs text-slate-500 uppercase tracking-wide" { "Total outings" }
+                            div class="text-3xl font-bold text-ink" { (usage.total_uses) }
+                            div class="text-xs text-ink-3 uppercase tracking-wide" { "Total outings" }
                         }
                         @if let Some(last) = usage.last_used {
                             div {
-                                div class="text-3xl font-bold text-slate-800" { (last.format("%b %-d")) }
-                                div class="text-xs text-slate-500 uppercase tracking-wide" { "Last used" }
+                                div class="text-3xl font-bold text-ink" { (last.format("%b %-d")) }
+                                div class="text-xs text-ink-3 uppercase tracking-wide" { "Last used" }
                             }
                         }
                     }
 
-                    h3 class="text-sm font-semibold text-slate-700 mb-2" { "Recent outings" }
-                    div class="divide-y divide-slate-100 text-sm" {
+                    h3 class="text-sm font-semibold text-ink-2 mb-2" { "Recent outings" }
+                    div class="divide-y divide-rule-2 text-sm" {
                         @for (pid, date) in usage.recent_uses.iter().take(20) {
                             a href=(format!("/history/{pid}"))
                               hx-get=(format!("/history/{pid}"))
                               hx-target="#content"
                               hx-push-url="true"
-                              class="block px-2 py-1.5 hover:bg-slate-50 text-blue-700 hover:text-blue-900" {
+                              class="block px-2 py-1.5 hover:bg-paper-2 text-blue-700 hover:text-blue-900" {
                                 (date.format("%A, %b %-d, %Y"))
                             }
                         }
                         @if usage.recent_uses.len() > 20 {
-                            p class="px-2 py-1.5 text-slate-500 text-xs" {
+                            p class="px-2 py-1.5 text-ink-3 text-xs" {
                                 (format!("… and {} more", usage.recent_uses.len() - 20))
                             }
                         }
@@ -232,8 +232,8 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
 fn detail_item(label: &str, value: &str) -> Markup {
     html! {
         div {
-            dt class="text-xs text-slate-500 uppercase tracking-wide" { (label) }
-            dd class="font-medium text-slate-800" { (value) }
+            dt class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
+            dd class="font-medium text-ink" { (value) }
         }
     }
 }
@@ -276,17 +276,17 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                  hx-post=(action)
                  hx-target="#content"
                  hx-push-url="/admin/fleet"
-                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
                 // Name
                 (text_field("name", "Name", &data.name, true))
 
                 // Boat type
                 div {
-                    label for="boat_type" class="block text-sm font-semibold text-slate-700 mb-1" {
+                    label for="boat_type" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Boat type"
                     }
                     select id="boat_type" name="boat_type"
-                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                         (type_option("Eight", "Eight (8+, sweep)", &data.boat_type))
                         (type_option("CoxlessEight", "Coxless Eight (8-, sweep)", &data.boat_type))
                         (type_option("FourPlus", "Coxed Four (4+, sweep)", &data.boat_type))
@@ -297,7 +297,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                         (type_option("Double", "Double (2x, scull)", &data.boat_type))
                         (type_option("Single", "Single (1x, scull)", &data.boat_type))
                     }
-                    p class="text-xs text-slate-500 mt-1" {
+                    p class="text-xs text-ink-3 mt-1" {
                         "Determines seat count, cox presence, and sweep vs scull."
                     }
                 }
@@ -307,11 +307,11 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                      x-data={"{ isSweep: !['Quad','QuadPlus','Double','Single'].includes(document.getElementById('boat_type')?.value || '" (&data.boat_type) "') }"}
                      x-init={"$watch('isSweep', () => {}); document.getElementById('boat_type')?.addEventListener('change', (e) => { isSweep = !['Quad','QuadPlus','Double','Single'].includes(e.target.value) })"} {
                     div {
-                        label for="weight_class" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        label for="weight_class" class="block text-sm font-semibold text-ink-2 mb-1" {
                             "Weight class"
                         }
                         select id="weight_class" name="weight_class"
-                               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                             (sel_opt("Light", &data.weight_class))
                             (sel_opt("Medium", &data.weight_class))
                             (sel_opt("Heavy", &data.weight_class))
@@ -319,15 +319,15 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                         }
                     }
                     div x-show="isSweep" x-cloak {
-                        label for="stroke_side" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        label for="stroke_side" class="block text-sm font-semibold text-ink-2 mb-1" {
                             "Stroke side (rig)"
                         }
                         select id="stroke_side" name="stroke_side"
-                               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                             (sel_opt("Starboard", &data.stroke_side))
                             (sel_opt("Port", &data.stroke_side))
                         }
-                        p class="text-xs text-slate-500 mt-1" {
+                        p class="text-xs text-ink-3 mt-1" {
                             "Which side stroke seat rows on. Alternates from there toward bow."
                         }
                     }
@@ -337,15 +337,15 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                 div x-data={"{ hasCox: ['Eight','FourPlus','QuadPlus'].includes(document.getElementById('boat_type')?.value || '" (&data.boat_type) "') }"}
                     x-init={"document.getElementById('boat_type')?.addEventListener('change', (e) => { hasCox = ['Eight','FourPlus','QuadPlus'].includes(e.target.value) })"} {
                     div x-show="hasCox" x-cloak {
-                        label for="cox_position" class="block text-sm font-semibold text-slate-700 mb-1" {
+                        label for="cox_position" class="block text-sm font-semibold text-ink-2 mb-1" {
                             "Cox position"
                         }
                         select id="cox_position" name="cox_position"
-                               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" {
+                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                             (sel_opt("Bow", &data.cox_position))
                             (sel_opt("Stern", &data.cox_position))
                         }
-                        p class="text-xs text-slate-500 mt-1" {
+                        p class="text-xs text-ink-3 mt-1" {
                             "Bow-loader or stern-loader. Eights are always stern."
                         }
                     }
@@ -370,7 +370,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                       hx-get=(cancel_href)
                       hx-target="#content"
                       hx-push-url="true"
-                      class="text-slate-500 hover:text-slate-800 text-sm font-semibold" {
+                      class="text-ink-3 hover:text-ink text-sm font-semibold" {
                         "Cancel"
                     }
                 }
@@ -382,13 +382,13 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
 fn text_field(name: &str, label: &str, value: &str, required: bool) -> Markup {
     html! {
         div {
-            label for=(name) class="block text-sm font-semibold text-slate-700 mb-1" { (label) }
+            label for=(name) class="block text-sm font-semibold text-ink-2 mb-1" { (label) }
             @if required {
                 input id=(name) name=(name) type="text" value=(value) required
-                      class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                      class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
             } @else {
                 input id=(name) name=(name) type="text" value=(value)
-                      class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                      class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
             }
         }
     }
@@ -397,9 +397,9 @@ fn text_field(name: &str, label: &str, value: &str, required: bool) -> Markup {
 fn date_field(name: &str, label: &str, value: &str) -> Markup {
     html! {
         div {
-            label for=(name) class="block text-sm font-semibold text-slate-700 mb-1" { (label) }
+            label for=(name) class="block text-sm font-semibold text-ink-2 mb-1" { (label) }
             input id=(name) name=(name) type="date" value=(value)
-                  class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                  class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
         }
     }
 }

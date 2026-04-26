@@ -15,12 +15,12 @@ fn su_shell(title: &str, content: Markup) -> Markup {
                 link rel="stylesheet" href="/tailwind.css";
                 script src="/htmx.min.js" {}
             }
-            body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
-                nav class="bg-slate-800 text-white px-6 py-3 flex items-center justify-between" {
+            body class="bg-paper text-ink min-h-screen flex flex-col" {
+                nav class="bg-ink text-white px-6 py-3 flex items-center justify-between" {
                     span class="font-bold text-lg" { "Oarful Admin" }
                     form method="post" action="/logout" class="inline" {
                         button type="submit"
-                               class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                               class="px-3 py-2 rounded hover:bg-paper-2/10 transition text-sm" {
                             "Logout"
                         }
                     }
@@ -38,53 +38,53 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
     su_shell(
         "Tenants",
         html! {
-            h1 class="text-2xl font-bold text-slate-800 mb-6" { "Tenants" }
+            h1 class="text-2xl font-bold text-ink mb-6" { "Tenants" }
 
             // Create tenant form
-            details class="mb-8 bg-white rounded-lg shadow" {
-                summary class="px-4 py-3 cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900" {
+            details class="mb-8 bg-paper rounded-lg shadow" {
+                summary class="px-4 py-3 cursor-pointer text-sm font-semibold text-ink-2 hover:text-ink" {
                     "Create grandfathered tenant"
                 }
                 form method="post" action="/su/create-tenant"
                      class="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-4" {
                     div {
-                        label for="club_name" class="block text-sm font-medium text-slate-700 mb-1" { "Club name" }
+                        label for="club_name" class="block text-sm font-medium text-ink-2 mb-1" { "Club name" }
                         input id="club_name" name="club_name" type="text" required
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="admin_name" class="block text-sm font-medium text-slate-700 mb-1" { "Admin name" }
+                        label for="admin_name" class="block text-sm font-medium text-ink-2 mb-1" { "Admin name" }
                         input id="admin_name" name="admin_name" type="text" required
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="admin_email" class="block text-sm font-medium text-slate-700 mb-1" { "Admin email" }
+                        label for="admin_email" class="block text-sm font-medium text-ink-2 mb-1" { "Admin email" }
                         input id="admin_email" name="admin_email" type="email" required
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="admin_password" class="block text-sm font-medium text-slate-700 mb-1" { "Password" }
+                        label for="admin_password" class="block text-sm font-medium text-ink-2 mb-1" { "Password" }
                         input id="admin_password" name="admin_password" type="password" required minlength="8"
-                              class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div class="sm:col-span-2" {
                         button type="submit"
-                               class="bg-slate-800 hover:bg-slate-900 text-white font-semibold text-sm px-4 py-2 rounded shadow transition" {
+                               class="bg-ink hover:bg-ink-2 text-white font-semibold text-sm px-4 py-2 rounded shadow transition" {
                             "Create tenant"
                         }
                     }
                 }
             }
 
-            div class="bg-white rounded-lg shadow overflow-x-auto" {
+            div class="bg-paper rounded-lg shadow overflow-x-auto" {
                 table class="w-full text-sm" {
-                    thead class="bg-slate-50 border-b border-slate-200" {
+                    thead class="bg-paper border-b border-rule-2" {
                         tr {
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Name" }
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Slug" }
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Status" }
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Created" }
-                            th class="text-left px-4 py-3 font-semibold text-slate-600" { "Actions" }
+                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Name" }
+                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Slug" }
+                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Status" }
+                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Created" }
+                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Actions" }
                         }
                     }
                     tbody {
@@ -106,7 +106,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
     let is_demo = tenant.is_demo();
 
     html! {
-        tr id=(row_id) class="border-b border-slate-100 hover:bg-slate-50" {
+        tr id=(row_id) class="border-b border-rule-2 hover:bg-paper-2" {
             td class="px-4 py-3" {
                 (tenant.name)
                 @if is_demo {
@@ -115,14 +115,14 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                     }
                 }
             }
-            td class="px-4 py-3 font-mono text-xs text-slate-500" { (tenant.slug) }
+            td class="px-4 py-3 font-mono text-xs text-ink-3" { (tenant.slug) }
             td class="px-4 py-3" {
                 form hx-post=(format!("/su/billing/{}", tenant.id))
                      hx-target=(format!("#{row_id}"))
                      hx-swap="outerHTML"
                      class="flex items-center gap-2" {
                     select name="status"
-                           class="border border-slate-300 rounded px-2 py-1 text-sm" {
+                           class="border border-rule rounded px-2 py-1 text-sm" {
                         @for s in &[BillingStatus::Free, BillingStatus::Active, BillingStatus::Grandfathered] {
                             option value=(s.as_str()) selected[*s == status] {
                                 (s.as_str())
@@ -130,12 +130,12 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                         }
                     }
                     button type="submit"
-                           class="text-xs bg-slate-700 text-white px-2 py-1 rounded hover:bg-slate-800 transition" {
+                           class="text-xs bg-ink-2 text-white px-2 py-1 rounded hover:bg-ink transition" {
                         "Save"
                     }
                 }
             }
-            td class="px-4 py-3 text-xs text-slate-500" {
+            td class="px-4 py-3 text-xs text-ink-3" {
                 (tenant.created_at.format("%Y-%m-%d"))
             }
             td class="px-4 py-3" {
@@ -143,7 +143,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                     form method="post" action=(format!("/su/impersonate/{}", tenant.id))
                          class="inline" {
                         button type="submit"
-                               class="text-xs border border-slate-300 hover:border-slate-400 text-slate-600 hover:text-slate-800 px-3 py-1 rounded transition" {
+                               class="text-xs border border-rule hover:border-rule text-ink-2 hover:text-ink px-3 py-1 rounded transition" {
                             "Impersonate"
                         }
                     }

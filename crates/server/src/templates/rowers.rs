@@ -96,8 +96,8 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 // Mobile: compact card list (wider breakpoint when emails shown)
-                @let mobile_class = if show_emails { "lg:hidden bg-white rounded-lg shadow divide-y divide-slate-200" } else { "md:hidden bg-white rounded-lg shadow divide-y divide-slate-200" };
-                @let desktop_class = if show_emails { "hidden lg:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-white rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" };
+                @let mobile_class = if show_emails { "lg:hidden bg-paper rounded-lg shadow divide-y divide-rule-2" } else { "md:hidden bg-paper rounded-lg shadow divide-y divide-rule-2" };
+                @let desktop_class = if show_emails { "hidden lg:block bg-paper rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-paper rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" };
                 div class=(mobile_class) {
                     @for row in rows {
                         (mobile_row(&row.rower, row.email.as_deref(), show_emails))
@@ -106,7 +106,7 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                 // Desktop: full table
                 div class=(desktop_class) {
                     table class="w-full text-sm" {
-                        thead class="bg-slate-100 text-left text-xs uppercase text-slate-600" {
+                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th class="px-4 py-2" { "Name" }
                                 @if show_emails {
@@ -154,10 +154,10 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
           hx-get={"/rowers/" (r.id)}
           hx-target="#content"
           hx-push-url="true"
-          class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition" {
+          class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
             div {
                 div class="font-medium text-blue-700" { (r.name) }
-                div class="text-xs text-slate-500" {
+                div class="text-xs text-ink-3" {
                     (side_display_label(r))
                     @if show_emails {
                         @if let Some(e) = email {
@@ -167,7 +167,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                 }
             }
             div class="flex items-center gap-2" {
-                span class="text-slate-400" { "→" }
+                span class="text-muted" { "→" }
             }
         }
     }
@@ -176,7 +176,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
 /// Read-only `<tr>` for one rower.
 fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
-        tr class="border-t border-slate-100 hover:bg-slate-50" {
+        tr class="border-t border-rule-2 hover:bg-paper-2" {
             td class="px-4 py-2 font-medium" {
                 a href={"/rowers/" (r.id)}
                   hx-get={"/rowers/" (r.id)}
@@ -187,7 +187,7 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                 }
             }
             @if show_emails {
-                td class="px-4 py-2 text-slate-500" {
+                td class="px-4 py-2 text-ink-3" {
                     @if let Some(e) = email { (e) }
                 }
             }
@@ -235,20 +235,20 @@ pub(crate) fn detail_content(
         format!("{}", r.side)
     };
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center gap-3" {
                 a href="/team/roster"
                   onclick="if (history.length > 1) { history.back(); return false; }"
-                  class="text-slate-400 hover:text-slate-700"
+                  class="text-muted hover:text-ink-2"
                   title="Back" {
                     "←"
                 }
-                h1 class="text-2xl font-bold text-slate-800" { (r.name) }
+                h1 class="text-2xl font-bold text-ink" { (r.name) }
             }
-            p class="text-sm text-slate-500 mt-1" { (subtitle) }
+            p class="text-sm text-ink-3 mt-1" { (subtitle) }
             @if show_emails {
                 @if let Some(email) = &detail.email {
-                    p class="text-sm text-slate-400 mt-0.5" { (email) }
+                    p class="text-sm text-muted mt-0.5" { (email) }
                 }
             }
         }
@@ -299,12 +299,12 @@ pub(crate) fn attribute_section(
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     let has_editable = has_any_editable_field(perms);
     html! {
-        section #attributes class="bg-white rounded-lg shadow p-6" {
+        section #attributes class="bg-paper rounded-lg shadow p-6" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-slate-800" { "Attributes" }
+                h2 class="text-lg font-bold text-ink" { "Attributes" }
                 @if has_editable {
                     button type="button"
-                           class="text-sm text-slate-500 hover:text-slate-800 font-semibold uppercase tracking-wide"
+                           class="text-sm text-ink-3 hover:text-ink font-semibold uppercase tracking-wide"
                            hx-get=(edit_url)
                            hx-target="#attributes"
                            hx-swap="outerHTML" {
@@ -334,7 +334,7 @@ pub(crate) fn attribute_section(
             }
             // Raw metrics (when present and visible)
             @if (r.weight_kg.is_some() || r.height_m.is_some()) && perms.can_add_raw_metrics() {
-                dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
+                dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm mt-3 pt-3 border-t border-rule-2" {
                     @if let Some(w) = r.weight_kg {
                         (kv("Weight (actual)", &format!("{:.0} lbs", w.to_lbs())))
                     }
@@ -367,9 +367,9 @@ pub(crate) fn attribute_edit_section(
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
-        section #attributes class="bg-white rounded-lg shadow p-6 bg-amber-50/50" {
+        section #attributes class="bg-paper rounded-lg shadow p-6 bg-amber-50/50" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-slate-800" { "Edit attributes" }
+                h2 class="text-lg font-bold text-ink" { "Edit attributes" }
                 div class="flex items-center gap-2" {
                     button type="button"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded"
@@ -380,7 +380,7 @@ pub(crate) fn attribute_edit_section(
                         "Save"
                     }
                     button type="button"
-                           class="text-slate-500 hover:text-slate-800 text-sm font-semibold"
+                           class="text-ink-3 hover:text-ink text-sm font-semibold"
                            hx-get=(cancel_url)
                            hx-target="#attributes"
                            hx-swap="outerHTML" {
@@ -399,8 +399,8 @@ pub(crate) fn attribute_edit_section(
                     // Weight class
                     @if locked.weight {
                         div class="opacity-60" {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
-                            div class="text-xs text-slate-500 italic" { (r.weight_class) " (auto)" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Weight" }
+                            div class="text-xs text-ink-3 italic" { (r.weight_class) " (auto)" }
                         }
                         input type="hidden" name="weight_class" value=(match r.weight_class {
                             RowerWeightClass::Light => "Light",
@@ -410,7 +410,7 @@ pub(crate) fn attribute_edit_section(
                         });
                     } @else if perms.can_edit_field("weight_class") {
                         div {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Weight" }
                             (enum_select("weight_class", &[
                                 ("Light", "Lightweight", RowerWeightClass::Light == r.weight_class),
                                 ("Medium", "Middleweight", RowerWeightClass::Medium == r.weight_class),
@@ -424,7 +424,7 @@ pub(crate) fn attribute_edit_section(
                     // Form (skill)
                     @if perms.can_edit_field("skill") {
                         div {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Form" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Form" }
                             (enum_select("skill", &[
                                 ("Novice", "Novice", Skill::Novice == r.skill),
                                 ("Intermediate", "Intermediate", Skill::Intermediate == r.skill),
@@ -438,8 +438,8 @@ pub(crate) fn attribute_edit_section(
                     // Strength
                     @if locked.strength {
                         div class="opacity-60" {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
-                            div class="text-xs text-slate-500 italic" { (r.strength) " (auto)" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Strength" }
+                            div class="text-xs text-ink-3 italic" { (r.strength) " (auto)" }
                         }
                         input type="hidden" name="strength" value=(match r.strength {
                             Strength::Weak => "Weak",
@@ -449,7 +449,7 @@ pub(crate) fn attribute_edit_section(
                         });
                     } @else if perms.can_edit_field("strength") {
                         div {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Strength" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Strength" }
                             (enum_select("strength", &[
                                 ("Weak", "Weak", Strength::Weak == r.strength),
                                 ("Intermediate", "Intermediate", Strength::Intermediate == r.strength),
@@ -463,8 +463,8 @@ pub(crate) fn attribute_edit_section(
                     // Height
                     @if locked.height {
                         div class="opacity-60" {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
-                            div class="text-xs text-slate-500 italic" { (r.height) " (auto)" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Height" }
+                            div class="text-xs text-ink-3 italic" { (r.height) " (auto)" }
                         }
                         input type="hidden" name="height" value=(match r.height {
                             Height::Short => "Short",
@@ -474,7 +474,7 @@ pub(crate) fn attribute_edit_section(
                         });
                     } @else if perms.can_edit_field("height") {
                         div {
-                            label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height" }
+                            label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Height" }
                             (enum_select("height", &[
                                 ("Short", "Short", Height::Short == r.height),
                                 ("Medium", "Medium", Height::Medium == r.height),
@@ -519,14 +519,14 @@ pub(crate) fn attribute_edit_section(
                     (side_slider(r))
                 }
                 div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Cox" }
+                    label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Cox" }
                     (checkbox("can_cox", "can cox", r.can_cox.as_bool()))
                     (checkbox("is_designated_cox", "designated", r.is_designated_cox.as_bool()))
                 }
                 div {
-                    label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Sweep bias" }
+                    label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Sweep bias" }
                     select name="sweep_bias"
-                           class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
+                           class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none" {
                         @for val in [-2, -1, 0, 1, 2].iter() {
                             @let label_text = match val {
                                 -2 => "Scull only (-2)",
@@ -547,24 +547,24 @@ pub(crate) fn attribute_edit_section(
             }
             // Raw metrics — only when user has permission
             @if perms.can_add_raw_metrics() {
-                div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-slate-100" {
+                div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mt-3 pt-3 border-t border-rule-2" {
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Weight (lbs)" }
+                        label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Weight (lbs)" }
                         @let weight_lbs = r.weight_kg.map(|w| format!("{:.1}", w.to_lbs())).unwrap_or_default();
                         input type="number" name="weight_lbs" step="0.1" min="0"
                               value=(weight_lbs)
                               placeholder="e.g. 165"
-                              class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
-                        p class="text-[10px] text-slate-400 mt-0.5" { "Stored in kg, displayed in lbs." }
+                              class="w-full border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none";
+                        p class="text-[10px] text-muted mt-0.5" { "Stored in kg, displayed in lbs." }
                     }
                     div {
-                        label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Height (inches)" }
+                        label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Height (inches)" }
                         @let height_in = r.height_m.map(|h| format!("{:.1}", h.to_inches())).unwrap_or_default();
                         input type="number" name="height_in" step="0.5" min="0"
                               value=(height_in)
                               placeholder="e.g. 71"
-                              class="w-full border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
-                        p class="text-[10px] text-slate-400 mt-0.5" { "Stored in metres, displayed in feet/inches." }
+                              class="w-full border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none";
+                        p class="text-[10px] text-muted mt-0.5" { "Stored in metres, displayed in feet/inches." }
                     }
                 }
             }
@@ -588,18 +588,18 @@ fn erg_test_section(
     };
 
     html! {
-        section #erg-tests class="bg-white rounded-lg shadow p-6" {
+        section #erg-tests class="bg-paper rounded-lg shadow p-6" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-slate-800" { "Erg tests" }
+                h2 class="text-lg font-bold text-ink" { "Erg tests" }
             }
 
             @if tests.is_empty() {
-                p class="text-sm text-slate-400 italic" { "No erg tests recorded." }
+                p class="text-sm text-muted italic" { "No erg tests recorded." }
             } @else {
                 div class="overflow-auto" {
                     table class="w-full text-sm" {
                         thead {
-                            tr class="text-xs text-slate-500 uppercase tracking-wide" {
+                            tr class="text-xs text-ink-3 uppercase tracking-wide" {
                                 th class="text-left py-1 px-2" { "Distance" }
                                 th class="text-left py-1 px-2" { "Time" }
                                 th class="text-left py-1 px-2" { "Split /500m" }
@@ -612,11 +612,11 @@ fn erg_test_section(
                         tbody {
                             @for test in tests {
                                 @let split_cs = (test.time_cs as f64 / (test.distance_m as f64 / 500.0)) as i32;
-                                tr class="border-t border-slate-100" {
+                                tr class="border-t border-rule-2" {
                                     td class="py-1.5 px-2 font-medium" { (format_distance(test.distance_m)) }
                                     td class="py-1.5 px-2" { (format_time_cs(test.time_cs)) }
-                                    td class="py-1.5 px-2 text-slate-500" { (format_time_cs(split_cs)) }
-                                    td class="py-1.5 px-2 text-slate-500" {
+                                    td class="py-1.5 px-2 text-ink-3" { (format_time_cs(split_cs)) }
+                                    td class="py-1.5 px-2 text-ink-3" {
                                         @if let Some(d) = test.rowed_at {
                                             (d.format("%b %-d, %Y"))
                                         } @else {
@@ -647,9 +647,9 @@ fn erg_test_section(
                      hx-target="#erg-tests"
                      hx-swap="outerHTML" {
                     div {
-                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Distance (m)" }
+                        label class="block text-xs font-semibold text-ink-2 mb-1" { "Distance (m)" }
                         select name="distance_m"
-                               class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
+                               class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none" {
                             option value="2000" { "2000m" }
                             option value="5000" { "5000m" }
                             option value="6000" { "6000m" }
@@ -657,16 +657,16 @@ fn erg_test_section(
                         }
                     }
                     div {
-                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Time (M:SS.dd)" }
+                        label class="block text-xs font-semibold text-ink-2 mb-1" { "Time (M:SS.dd)" }
                         input type="text" name="time" required
                               placeholder="7:03.50"
                               pattern="[0-9]+:[0-5][0-9]\\.[0-9]{1,2}"
-                              class="border border-slate-300 rounded px-2 py-1 text-xs w-24 focus:border-slate-500 focus:outline-none";
+                              class="border border-rule rounded px-2 py-1 text-xs w-24 focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label class="block text-xs font-semibold text-slate-700 mb-1" { "Date rowed" }
+                        label class="block text-xs font-semibold text-ink-2 mb-1" { "Date rowed" }
                         input type="date" name="rowed_at"
-                              class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none";
+                              class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none";
                     }
                     button type="submit"
                            class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded" {
@@ -689,9 +689,9 @@ pub(crate) fn erg_test_section_markup(
 
 fn kv(label: &str, value: &str) -> Markup {
     html! {
-        div class="bg-slate-50 rounded p-2" {
-            div class="text-xs text-slate-500 uppercase tracking-wide" { (label) }
-            div class="font-medium text-slate-800" { (value) }
+        div class="bg-paper rounded p-2" {
+            div class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
+            div class="font-medium text-ink" { (value) }
         }
     }
 }
@@ -707,10 +707,10 @@ pub(crate) fn seat_affinities_section(
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
     let delete_url = format!("/rowers/{}/seat-affinity/delete", r.id);
     html! {
-        section #seat-affinities class="bg-white rounded-lg shadow p-6" {
+        section #seat-affinities class="bg-paper rounded-lg shadow p-6" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-slate-800" { "Seat preferences" }
-                span class="text-xs text-slate-500" {
+                h2 class="text-lg font-bold text-ink" { "Seat preferences" }
+                span class="text-xs text-ink-3" {
                     "Per-seat reward / penalty (S3)"
                 }
             }
@@ -720,10 +720,10 @@ pub(crate) fn seat_affinities_section(
                 }
             }
             @if detail.seat_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic mb-3" { "No seat preferences on file." }
+                div class="text-sm text-ink-3 italic mb-3" { "No seat preferences on file." }
             } @else {
                 table class="w-full text-sm mb-3" {
-                    thead class="text-left text-xs uppercase text-slate-500" {
+                    thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
                             th class="py-1 w-24" { "Seat" }
                             th class="py-1" { "Preference" }
@@ -732,7 +732,7 @@ pub(crate) fn seat_affinities_section(
                     }
                     tbody {
                         @for aff in &detail.seat_affinities {
-                            tr class="border-t border-slate-100" {
+                            tr class="border-t border-rule-2" {
                                 td class="py-1" { (aff.zone.display_name()) }
                                 td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
                                 @if can_edit {
@@ -754,7 +754,7 @@ pub(crate) fn seat_affinities_section(
             }
 
             @if !can_edit && detail.seat_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic" { "No seat preferences set by your coach." }
+                div class="text-sm text-ink-3 italic" { "No seat preferences set by your coach." }
             }
 
             // Add form — only for coaches
@@ -762,11 +762,11 @@ pub(crate) fn seat_affinities_section(
             form hx-post=(upsert_url)
                  hx-target="#seat-affinities"
                  hx-swap="outerHTML"
-                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-slate-200" {
+                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-rule-2" {
                 div {
-                    label for="zone" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Zone" }
+                    label for="zone" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Zone" }
                     select id="zone" name="zone"
-                           class="border border-slate-300 rounded px-3 py-2 text-sm" {
+                           class="border border-rule rounded px-3 py-2 text-sm" {
                         @for z in lineup_db::seat_affinity::SeatZone::ALL {
                             option value=(z.as_str()) { (z.display_name()) }
                         }
@@ -806,10 +806,10 @@ pub(crate) fn pair_affinities_section(
         }
     };
     html! {
-        section #pair-affinities class="bg-white rounded-lg shadow p-6" {
+        section #pair-affinities class="bg-paper rounded-lg shadow p-6" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-slate-800" { "Pair preferences" }
-                span class="text-xs text-slate-500" {
+                h2 class="text-lg font-bold text-ink" { "Pair preferences" }
+                span class="text-xs text-ink-3" {
                     "Same-partition reward / penalty (S2)"
                 }
             }
@@ -819,10 +819,10 @@ pub(crate) fn pair_affinities_section(
                 }
             }
             @if detail.pair_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic mb-3" { "No pair preferences on file." }
+                div class="text-sm text-ink-3 italic mb-3" { "No pair preferences on file." }
             } @else {
                 table class="w-full text-sm mb-3" {
-                    thead class="text-left text-xs uppercase text-slate-500" {
+                    thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
                             th class="py-1" { "Partner" }
                             th class="py-1" { "Preference" }
@@ -832,7 +832,7 @@ pub(crate) fn pair_affinities_section(
                     tbody {
                         @for aff in &detail.pair_affinities {
                             @let partner_id = if aff.rower_a_id == r.id { aff.rower_b_id } else { aff.rower_a_id };
-                            tr class="border-t border-slate-100" {
+                            tr class="border-t border-rule-2" {
                                 td class="py-1" { (lookup(partner_id)) }
                                 td class="py-1 text-sm" { (format_weight(aff.weight.as_int())) }
                                 @if can_edit {
@@ -854,18 +854,18 @@ pub(crate) fn pair_affinities_section(
             }
 
             @if !can_edit && detail.pair_affinities.is_empty() {
-                div class="text-sm text-slate-500 italic" { "No pair preferences set by your coach." }
+                div class="text-sm text-ink-3 italic" { "No pair preferences set by your coach." }
             }
 
             @if can_edit {
             form hx-post=(upsert_url)
                  hx-target="#pair-affinities"
                  hx-swap="outerHTML"
-                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-slate-200" {
+                 class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-rule-2" {
                 div class="flex-grow" {
-                    label for="partner_id" class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1" { "Partner" }
+                    label for="partner_id" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Partner" }
                     select id="partner_id" name="partner_id"
-                           class="w-full border border-slate-300 rounded px-3 py-2 text-sm" {
+                           class="w-full border border-rule rounded px-3 py-2 text-sm" {
                         @for o in &detail.other_rowers {
                             option value=(o.id) { (o.name) }
                         }
@@ -886,7 +886,7 @@ pub(crate) fn pair_affinities_section(
 fn enum_select(name: &str, options: &[(&str, &str, bool)]) -> Markup {
     html! {
         select name=(name)
-               class="border border-slate-300 rounded px-2 py-1 text-xs focus:border-slate-500 focus:outline-none" {
+               class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none" {
             @for (value, label, selected) in options {
                 @if *selected {
                     option value=(value) selected { (label) }
@@ -930,7 +930,7 @@ fn weight_slider(id: &str, default: i32) -> Markup {
         div class="flex-1 min-w-[12rem]" {
             div class="flex items-center justify-between mb-1" {
                 span class="text-xs text-red-600 font-semibold" { "Avoid" }
-                span #(format!("{id}-label")) class="text-xs font-semibold text-slate-700" {
+                span #(format!("{id}-label")) class="text-xs font-semibold text-ink-2" {
                     (default_label)
                 }
                 span class="text-xs text-emerald-600 font-semibold" { "Prefer" }
@@ -976,7 +976,7 @@ fn side_slider(r: &Rower) -> Markup {
         div {
             div class="flex items-center justify-between mb-1" {
                 span class="text-xs text-red-600 font-semibold" { "Port" }
-                span #side-slider-label class="text-xs font-semibold text-slate-700" {
+                span #side-slider-label class="text-xs font-semibold text-ink-2" {
                     (default_label)
                 }
                 span class="text-xs text-green-600 font-semibold" { "Starboard" }
@@ -1104,7 +1104,7 @@ fn weight_label(slider_pos: i32) -> &'static str {
 
 fn checkbox(name: &str, label: &str, checked: bool) -> Markup {
     html! {
-        label class="flex items-center space-x-1 text-xs text-slate-700" {
+        label class="flex items-center space-x-1 text-xs text-ink-2" {
             @if checked {
                 input type="checkbox" name=(name) checked;
             } @else {

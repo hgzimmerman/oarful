@@ -39,7 +39,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                         nav, .no-print { display: none !important; }
                         body { background: white !important; }
                         main { padding: 0 !important; }
-                        .bg-white { box-shadow: none !important; }
+                        .bg-paper { box-shadow: none !important; }
                         /* Page-break between boat cards */
                         .print-break { break-inside: avoid; page-break-inside: avoid; }
                         /* Remove sticky positioning */
@@ -98,7 +98,7 @@ fn navbar(role: Role) -> Markup {
     let is_pd = r.at_least(Role::ProgramDirector);
 
     html! {
-        nav class="bg-slate-800 text-white px-4 sm:px-6 py-3 sticky top-0 z-40 shadow"
+        nav class="bg-ink text-paper px-4 sm:px-6 py-3 sticky top-0 z-40 shadow"
              x-data="{ open: false }" {
             // Top bar: team name + hamburger on mobile, full links on desktop
             div class="flex items-center justify-between" {
@@ -122,7 +122,7 @@ fn navbar(role: Role) -> Markup {
                     (nav_link("/my", "My"))
                     li {
                         form method="post" action="/logout" class="inline" {
-                            button type="submit" class="px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                            button type="submit" class="px-3 py-2 rounded hover:bg-paper/10 transition text-sm" {
                                 "Logout"
                             }
                         }
@@ -130,13 +130,13 @@ fn navbar(role: Role) -> Markup {
                 }
 
                 // Hamburger button (mobile only)
-                button class="lg:hidden p-2 rounded hover:bg-white/10"
+                button class="lg:hidden p-2 rounded hover:bg-paper/10"
                        "@click"="open = !open"
                        aria-label="Menu" {
                     // Hamburger icon
-                    div class="w-5 h-0.5 bg-white mb-1" {}
-                    div class="w-5 h-0.5 bg-white mb-1" {}
-                    div class="w-5 h-0.5 bg-white" {}
+                    div class="w-5 h-0.5 bg-paper mb-1" {}
+                    div class="w-5 h-0.5 bg-paper mb-1" {}
+                    div class="w-5 h-0.5 bg-paper" {}
                 }
             }
 
@@ -152,11 +152,11 @@ fn navbar(role: Role) -> Markup {
                 @if is_pd {
                     (nav_link("/admin", "Admin"))
                 }
-                li class="border-t border-slate-700 my-1 pt-1" {}
+                li class="border-t border-ink-3 my-1 pt-1" {}
                 (nav_link("/my", "My"))
                 li {
                     form method="post" action="/logout" class="inline" {
-                        button type="submit" class="block w-full text-left px-3 py-2 rounded hover:bg-white/10 transition text-sm" {
+                        button type="submit" class="block w-full text-left px-3 py-2 rounded hover:bg-paper/10 transition text-sm" {
                             "Logout"
                         }
                     }
@@ -170,7 +170,7 @@ fn nav_link(href: &str, label: &str) -> Markup {
     html! {
         li {
             a href=(href)
-              class="px-3 py-2 rounded hover:bg-white/10 transition cursor-pointer"
+              class="px-3 py-2 rounded hover:bg-paper/10 transition cursor-pointer"
               data-nav=(href)
               hx-get=(href)
               hx-target="#content"
@@ -184,7 +184,7 @@ fn nav_link_with_badge(href: &str, label: &str, show_badge: bool) -> Markup {
     html! {
         li {
             a href=(href)
-              class="px-3 py-2 rounded hover:bg-white/10 transition cursor-pointer inline-flex items-center"
+              class="px-3 py-2 rounded hover:bg-paper/10 transition cursor-pointer inline-flex items-center"
               data-nav=(href)
               hx-get=(href)
               hx-target="#content"
@@ -222,7 +222,7 @@ pub(crate) fn tabbed_section(
     let bar_id = format!("{target_id}-bar");
     html! {
         div id=(bar_id)
-            class="border-b border-slate-200 bg-white px-4 sm:px-8 pt-3" {
+            class="border-b border-rule-2 bg-paper px-4 sm:px-8 pt-3" {
             div class="flex gap-1" {
                 @for tab in tabs {
                     (section_tab(tab, active_tab, target_id))
@@ -250,7 +250,7 @@ pub(crate) fn tab_swap(
         (tab_content)
         // OOB swap: updates the tab bar with new active state
         div id=(bar_id) hx-swap-oob="true"
-            class="border-b border-slate-200 bg-white px-4 sm:px-8 pt-3" {
+            class="border-b border-rule-2 bg-paper px-4 sm:px-8 pt-3" {
             div class="flex gap-1" {
                 @for tab in tabs {
                     (section_tab(tab, active_tab, target_id))
@@ -264,11 +264,9 @@ fn section_tab(tab: &TabDef, active: &str, target_id: &str) -> Markup {
     let is_active = tab.id == active;
     let base = "px-4 py-2 text-sm font-medium border-b-2 transition cursor-pointer";
     let classes = if is_active {
-        format!("{base} border-slate-800 text-slate-800")
+        format!("{base} border-ink text-ink")
     } else {
-        format!(
-            "{base} border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-        )
+        format!("{base} border-transparent text-ink-3 hover:text-ink-2 hover:border-rule")
     };
     html! {
         button hx-get=(tab.url)
@@ -283,7 +281,7 @@ fn section_tab(tab: &TabDef, active: &str, target_id: &str) -> Markup {
 /// Tiny empty-state helper used by a few list views.
 pub(crate) fn empty_state(message: &str) -> Markup {
     html! {
-        div class="text-center text-slate-500 italic py-12" { (message) }
+        div class="text-center text-ink-3 italic py-12" { (message) }
     }
 }
 
@@ -294,10 +292,10 @@ fn source_url() -> String {
 /// Generic page header: large title + optional subtitle.
 pub(crate) fn page_header(title: &str, subtitle: Option<&str>) -> Markup {
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
-            h1 class="text-2xl font-bold text-slate-800" { (title) }
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
+            h1 class="text-2xl font-bold text-ink" { (title) }
             @if let Some(sub) = subtitle {
-                p class="text-sm text-slate-500 mt-1" { (sub) }
+                p class="text-sm text-ink-3 mt-1" { (sub) }
             }
         }
     }

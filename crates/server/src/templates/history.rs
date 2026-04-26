@@ -21,7 +21,7 @@ pub(crate) fn list_content(practices: &[Practice], stale_ids: &HashSet<PracticeI
             @if practices.is_empty() {
                 (empty_state("No practices committed yet."))
             } @else {
-                div class="bg-white rounded-lg shadow divide-y divide-slate-200" {
+                div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
                     @for p in practices {
                         (row(p, stale_ids.contains(&p.id)))
                     }
@@ -36,25 +36,25 @@ fn row(p: &Practice, is_stale: bool) -> Markup {
     let weekday = p.date.format("%A").to_string();
     html! {
         a href=(href)
-          class="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition cursor-pointer"
+          class="flex items-center justify-between px-6 py-4 hover:bg-paper-2 transition cursor-pointer"
           hx-get=(href)
           hx-target="#content"
           hx-push-url="true" {
             div {
                 div class="flex items-center gap-2" {
-                    span class="font-semibold text-slate-800" { (p.date) }
+                    span class="font-semibold text-ink" { (p.date) }
                     @if is_stale {
                         span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" {
                             "Availability changed"
                         }
                     }
                 }
-                div class="text-sm text-slate-500" {
+                div class="text-sm text-ink-3" {
                     (weekday)
                     @if let Some(ref notes) = p.notes {
                         @if !notes.is_empty() {
                             " — "
-                            span class="text-slate-400 italic" {
+                            span class="text-muted italic" {
                                 @if notes.len() > 60 {
                                     (&notes[..60]) "…"
                                 } @else {
@@ -65,7 +65,7 @@ fn row(p: &Practice, is_stale: bool) -> Markup {
                     }
                 }
             }
-            span class="text-slate-400" { "→" }
+            span class="text-muted" { "→" }
         }
     }
 }
@@ -97,9 +97,9 @@ pub(crate) fn detail_content(
     let cancel_action = format!("/practices/{practice_id}/cancel");
 
     html! {
-        header class="bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
             div class="flex items-center justify-between" {
-                h1 class="text-2xl font-bold text-slate-800" {
+                h1 class="text-2xl font-bold text-ink" {
                     "Lineups \u{00b7} " (date)
                 }
                 @if is_coach && !committed.is_empty() && !is_cancelled {
@@ -108,12 +108,12 @@ pub(crate) fn detail_content(
                              hx-post=(cancel_action)
                              hx-target="#content" {
                             button type="submit"
-                                   class="text-xs text-slate-400 hover:text-red-600 font-medium py-2" {
+                                   class="text-xs text-muted hover:text-red-600 font-medium py-2" {
                                 "Cancel practice"
                             }
                         }
                         button type="button"
-                               class="px-4 py-2 text-sm bg-slate-700 text-white rounded hover:bg-slate-800 transition font-semibold"
+                               class="px-4 py-2 text-sm bg-ink-2 text-white rounded hover:bg-ink transition font-semibold"
                                onclick=(edit_lineup_js(practice_id, committed, snapshot)) {
                             "Edit lineup"
                         }
@@ -209,16 +209,16 @@ fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
             hx-post=(action)
             hx-target="#practice-notes"
             hx-swap="outerHTML"
-            class="bg-white rounded-lg shadow p-4"
+            class="bg-paper rounded-lg shadow p-4"
         {
-            label class="block text-sm font-medium text-slate-700 mb-1" {
+            label class="block text-sm font-medium text-ink-2 mb-1" {
                 "Practice notes"
             }
             textarea
                 name="notes"
                 rows="3"
                 placeholder="Add notes for this practice…"
-                class="w-full border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full border border-rule rounded px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             {
                 (notes)
             }
@@ -276,10 +276,10 @@ fn lineup_block_with_noshow(
     });
 
     html! {
-        div class="bg-white rounded-lg shadow overflow-hidden print-break" {
-            div class="bg-slate-100 px-4 py-2 border-b border-slate-200" {
+        div class="bg-paper rounded-lg shadow overflow-hidden print-break" {
+            div class="bg-paper-2 px-4 py-2 border-b border-rule-2" {
                 strong { (boat_name) }
-                span class="text-xs text-slate-500 ml-2" {
+                span class="text-xs text-ink-3 ml-2" {
                     "committed " (committed.lineup.created_at)
                 }
             }
@@ -292,17 +292,17 @@ fn lineup_block_with_noshow(
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
                         @let is_stale = maybe_seat.map(|s| stale_rowers.contains(&s.rower_id)).unwrap_or(false);
                         @let row_class = if is_stale {
-                            "border-b border-slate-100 last:border-0 bg-amber-50 border-l-4 border-l-amber-400"
+                            "border-b border-rule-2 last:border-0 bg-amber-50 border-l-4 border-l-amber-400"
                         } else if is_designated_cox {
-                            "border-b border-slate-100 last:border-0 border-l-4 border-l-indigo-400"
+                            "border-b border-rule-2 last:border-0 border-l-4 border-l-indigo-400"
                         } else {
-                            "border-b border-slate-100 last:border-0"
+                            "border-b border-rule-2 last:border-0"
                         };
                         tr class=(row_class) {
                             td class="px-2 sm:px-4 py-1.5 sm:py-2 w-10 sm:w-12" {
                                 (seat_badge(boat, *pos, &label))
                             }
-                            td class="px-2 sm:px-4 py-1.5 sm:py-2 text-slate-800 truncate" {
+                            td class="px-2 sm:px-4 py-1.5 sm:py-2 text-ink truncate" {
                                 @if let Some(r) = rower {
                                     (r.name)
                                     @if is_stale {
@@ -311,15 +311,15 @@ fn lineup_block_with_noshow(
                                         }
                                     }
                                 } @else {
-                                    span class="text-slate-400 italic" { "\u{2014} empty \u{2014}" }
+                                    span class="text-muted italic" { "\u{2014} empty \u{2014}" }
                                 }
                             }
                             @if is_coach {
                                 @if let Some(seat) = maybe_seat {
                                     td class="px-2 sm:px-4 py-1.5 sm:py-2 text-right w-20 no-print whitespace-nowrap" {
-                                        label class="inline-flex items-center gap-1 text-xs text-slate-500 cursor-pointer" {
+                                        label class="inline-flex items-center gap-1 text-xs text-ink-3 cursor-pointer" {
                                             input type="checkbox" name="no_show" value=(seat.rower_id)
-                                                  class="rounded border-slate-300 text-amber-600 focus:ring-amber-500";
+                                                  class="rounded border-rule text-amber-600 focus:ring-amber-500";
                                             "No-show"
                                         }
                                     }
@@ -406,10 +406,10 @@ fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Mar
     }
 
     html! {
-        div class="bg-white rounded-lg shadow p-4 text-sm space-y-2" {
+        div class="bg-paper rounded-lg shadow p-4 text-sm space-y-2" {
             div {
-                strong class="text-slate-700" { "Benched: " }
-                span class="text-slate-600" {
+                strong class="text-ink-2" { "Benched: " }
+                span class="text-ink-2" {
                     @for (i, r) in benched.iter().enumerate() {
                         @if i > 0 { ", " }
                         (r.name)
