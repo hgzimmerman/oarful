@@ -43,7 +43,7 @@ pub(crate) fn list_content(
                         }
                     }
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
+                           class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
                         "Send invite"
                     }
                 }
@@ -107,8 +107,8 @@ pub(crate) fn user_row(
             td class="px-4 py-2 text-ink-2" { (role_label) }
             td class="px-4 py-2" {
                 @let badge_class = match u.status {
-                    UserStatus::Active => "bg-emerald-100 text-emerald-800",
-                    UserStatus::Invited => "bg-amber-100 text-amber-800",
+                    UserStatus::Active => "bg-good/15 text-good",
+                    UserStatus::Invited => "bg-warn/15 text-warn",
                     UserStatus::Disabled => "bg-paper-3 text-ink-2",
                 };
                 span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
@@ -166,7 +166,7 @@ pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Ma
         (page_header("Invite", None))
         div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
             @if let Some(msg) = error {
-                div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900 mb-4" {
+                div class="bg-bad/10 border-l-4 border-bad px-4 py-3 rounded text-sm text-ink mb-4" {
                     strong { "Error. " } (msg)
                 }
             }
@@ -210,7 +210,7 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                     }
 
                     @if let Some(msg) = error {
-                        div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
+                        div class="mb-4 bg-bad/10 border-l-4 border-bad px-4 py-3 rounded text-sm text-ink" {
                             (msg)
                         }
                     }

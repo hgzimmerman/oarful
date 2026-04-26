@@ -123,7 +123,7 @@ pub(crate) fn detail_content(
         }
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-4" {
             @if is_cancelled {
-                div class="bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900 flex items-center justify-between" {
+                div class="bg-bad/10 border-l-4 border-bad px-4 py-3 rounded text-sm text-ink flex items-center justify-between" {
                     div {
                         strong { "Cancelled. " }
                         "This practice has been cancelled."
@@ -134,7 +134,7 @@ pub(crate) fn detail_content(
                              hx-target="#content"
                              class="no-print" {
                             button type="submit"
-                                   class="text-sm font-semibold text-red-700 hover:text-red-900 underline" {
+                                   class="text-sm font-semibold text-bad hover:text-ink underline" {
                                 "Restore"
                             }
                         }

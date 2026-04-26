@@ -140,7 +140,7 @@ pub(crate) fn batch_invite_result(
     show_emails: bool,
 ) -> Markup {
     html! {
-        div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
+        div class="bg-good/10 border border-good/25 text-good rounded-lg px-6 py-4 text-sm mx-4 sm:mx-8 mt-4" {
             (message)
         }
         (list_content(rows, is_coach, show_emails))
@@ -277,7 +277,7 @@ pub(crate) fn detail_content(
                                  hx-post={"/rowers/" (r.id) "/toggle-active"}
                                  hx-target="#content" {
                                 button type="submit"
-                                       class="text-sm text-emerald-600 hover:text-emerald-800 font-medium py-2" {
+                                       class="text-sm text-emerald-600 hover:text-good font-medium py-2" {
                                     "Reactivate"
                                 }
                             }
@@ -313,7 +313,7 @@ pub(crate) fn attribute_section(
                 }
             }
             @if let Some(msg) = error {
-                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
                 }
             }
@@ -367,12 +367,12 @@ pub(crate) fn attribute_edit_section(
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6 bg-amber-50/50" {
+        section #attributes class="bg-paper rounded-lg shadow-soft p-6 bg-warn/5" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Edit attributes" }
                 div class="flex items-center gap-2" {
                     button type="button"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-3 py-1.5 rounded"
+                           class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-3 py-1.5 rounded"
                            hx-post=(post_url)
                            hx-include="#attributes"
                            hx-target="#attributes"
@@ -389,7 +389,7 @@ pub(crate) fn attribute_edit_section(
                 }
             }
             @if let Some(msg) = error {
-                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
                 }
             }
@@ -629,7 +629,7 @@ fn erg_test_section(
                                                    hx-delete={"/rowers/" (r.id) "/erg-test/" (test.id)}
                                                    hx-target="#erg-tests"
                                                    hx-swap="outerHTML"
-                                                   class="text-xs text-red-500 hover:text-red-700" {
+                                                   class="text-xs text-red-500 hover:text-bad" {
                                                 "×"
                                             }
                                         }
@@ -669,7 +669,7 @@ fn erg_test_section(
                               class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none";
                     }
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-xs font-semibold px-3 py-1.5 rounded" {
+                           class="bg-good hover:opacity-90 text-paper text-xs font-semibold px-3 py-1.5 rounded" {
                         "Add"
                     }
                 }
@@ -715,7 +715,7 @@ pub(crate) fn seat_affinities_section(
                 }
             }
             @if let Some(msg) = error {
-                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
                 }
             }
@@ -774,7 +774,7 @@ pub(crate) fn seat_affinities_section(
                 }
                 (weight_slider("seat_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded" {
+                       class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }
@@ -814,7 +814,7 @@ pub(crate) fn pair_affinities_section(
                 }
             }
             @if let Some(msg) = error {
-                div class="mb-3 text-xs text-red-700 bg-red-50 border-l-4 border-red-500 px-3 py-2 rounded" {
+                div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
                 }
             }
@@ -873,7 +873,7 @@ pub(crate) fn pair_affinities_section(
                 }
                 (weight_slider("pair_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded" {
+                       class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }

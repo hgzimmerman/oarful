@@ -120,15 +120,15 @@ fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Ma
 
 fn action_badge(action: &str) -> Markup {
     let (bg, text) = match action.split('.').next().unwrap_or("") {
-        "lineup" => ("bg-blue-100", "text-blue-800"),
-        "rower" => ("bg-emerald-100", "text-emerald-800"),
-        "boat" => ("bg-amber-100", "text-amber-800"),
-        "practice" => ("bg-violet-100", "text-violet-800"),
-        "invite" => ("bg-pink-100", "text-pink-800"),
-        "sync" => ("bg-cyan-100", "text-cyan-800"),
-        "solver_profile" => ("bg-orange-100", "text-orange-800"),
-        "team" => ("bg-indigo-100", "text-indigo-800"),
-        "availability" => ("bg-teal-100", "text-teal-800"),
+        "lineup" => ("bg-blue-100/80", "text-blue-700"),
+        "rower" => ("bg-emerald-100/80", "text-emerald-700"),
+        "boat" => ("bg-amber-100/80", "text-amber-700"),
+        "practice" => ("bg-violet-100/80", "text-violet-700"),
+        "invite" => ("bg-pink-100/80", "text-pink-700"),
+        "sync" => ("bg-cyan-100/80", "text-cyan-700"),
+        "solver_profile" => ("bg-orange-100/80", "text-orange-700"),
+        "team" => ("bg-indigo-100/80", "text-indigo-700"),
+        "availability" => ("bg-teal-100/80", "text-teal-700"),
         _ => ("bg-paper-2", "text-ink"),
     };
     html! {

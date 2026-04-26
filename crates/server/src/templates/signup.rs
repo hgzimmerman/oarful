@@ -23,7 +23,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                     }
 
                     @if let Some(msg) = error {
-                        div class="mb-4 bg-red-50 border-l-4 border-red-500 px-4 py-3 rounded text-sm text-red-900" {
+                        div class="mb-4 bg-bad/10 border-l-4 border-bad px-4 py-3 rounded text-sm text-ink" {
                             (msg)
                         }
                     }

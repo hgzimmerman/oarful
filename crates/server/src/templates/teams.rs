@@ -244,7 +244,7 @@ pub(crate) fn detail_content(
                     }
                 }
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition" {
+                       class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition" {
                     "Save"
                 }
             }
@@ -337,7 +337,7 @@ fn threshold_section(
                 h3 class="text-sm font-semibold text-ink-2" { "Rower attribute thresholds" }
                 button type="button"
                        onclick="window.dispatchEvent(new CustomEvent('save-thresholds'))"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                       class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                     "Save"
                 }
             }
@@ -718,7 +718,7 @@ fn roster_matrix_inner(
                      hx-target="#admin-tab-content" {
                     div class="flex justify-end mb-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Save"
                         }
                     }
@@ -766,7 +766,7 @@ fn roster_matrix_inner(
                     }
                     div class="flex justify-end mt-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Save"
                         }
                     }
@@ -826,7 +826,7 @@ fn fleet_matrix_inner(
                      hx-target="#admin-fleet-content" {
                     div class="flex justify-end mb-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Save"
                         }
                     }
@@ -879,7 +879,7 @@ fn fleet_matrix_inner(
                     }
                     div class="flex justify-end mt-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Save"
                         }
                     }
