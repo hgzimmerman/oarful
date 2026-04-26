@@ -43,7 +43,7 @@ pub(crate) fn list_content(
                         }
                     }
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow transition" {
                         "Send invite"
                     }
                 }
@@ -228,7 +228,7 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"
-                               class="w-full bg-ink hover:bg-ink-2 text-white font-semibold py-2 rounded shadow transition" {
+                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
                             "Activate account"
                         }
                     }

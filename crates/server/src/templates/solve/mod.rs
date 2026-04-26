@@ -387,31 +387,29 @@ pub(crate) fn landing_content(
     };
 
     html! {
-        div class="solve-page" {
-            header class="border-b px-4 sm:px-8 py-3"
-                   style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-xl font-bold font-serif-heading text-ink" {
-                    "Set Lineups \u{00b7} " (date)
-                }
-                p class="text-xs mt-0.5 text-muted" { (subtitle) }
+        header class="border-b px-4 sm:px-8 py-3"
+               style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="text-xl font-bold font-serif-heading text-ink" {
+                "Set Lineups \u{00b7} " (date)
             }
-            div class="solve-layout" x-data="lineupEditor()" {
-                // Left sidebar: roster pool
-                aside #roster-pool class="roster-sidebar" {
-                    (roster_pool(snapshot, practice_id, &editor, &unavailable, &knobs.walkon, &[]))
-                }
-                // Center: editor
-                div class="solve-center" {
-                    div class="px-4 sm:px-6 py-4 space-y-4" {
-                        div #solve-results {
-                            (lineup_editor(snapshot, practice_id, &editor, flags))
-                        }
+            p class="text-xs mt-0.5 text-muted" { (subtitle) }
+        }
+        div class="solve-layout" x-data="lineupEditor()" {
+            // Left sidebar: roster pool
+            aside #roster-pool class="roster-sidebar" {
+                (roster_pool(snapshot, practice_id, &editor, &unavailable, &knobs.walkon, &[]))
+            }
+            // Center: editor
+            div class="solve-center" {
+                div class="px-4 sm:px-6 py-4 space-y-4" {
+                    div #solve-results {
+                        (lineup_editor(snapshot, practice_id, &editor, flags))
                     }
                 }
-                // Right rail: solver
-                div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
-                    (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
-                }
+            }
+            // Right rail: solver
+            div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
+                (knobs_form(practice_id, knobs, committed_practices, has_committed, custom_profiles, snapshot, None))
             }
         }
     }
@@ -437,29 +435,27 @@ pub(crate) fn streaming_page(
     let empty_editor = EditorData::empty(snapshot, &HashSet::new());
 
     html! {
-        div class="solve-page" {
-            header class="border-b px-4 sm:px-8 py-3"
-                   style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-xl font-bold font-serif-heading text-ink" {
-                    "Set Lineups \u{00b7} " (date)
-                }
-                p class="text-xs mt-0.5 text-muted" { (subtitle) }
+        header class="border-b px-4 sm:px-8 py-3"
+               style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="text-xl font-bold font-serif-heading text-ink" {
+                "Set Lineups \u{00b7} " (date)
             }
-            div class="solve-layout" x-data="lineupEditor()" {
-                aside #roster-pool class="roster-sidebar" {
-                    (roster_pool(snapshot, practice_id, &empty_editor, &[], &knobs.walkon, &[]))
-                }
-                div class="solve-center" {
-                    div class="px-4 sm:px-6 py-4 space-y-4" {
-                        div #solve-results {
-                            (streaming_skeleton(practice_id, knobs))
-                        }
+            p class="text-xs mt-0.5 text-muted" { (subtitle) }
+        }
+        div class="solve-layout" x-data="lineupEditor()" {
+            aside #roster-pool class="roster-sidebar" {
+                (roster_pool(snapshot, practice_id, &empty_editor, &[], &knobs.walkon, &[]))
+            }
+            div class="solve-center" {
+                div class="px-4 sm:px-6 py-4 space-y-4" {
+                    div #solve-results {
+                        (streaming_skeleton(practice_id, knobs))
                     }
                 }
-                // Right rail: solver
-                div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
-                    (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
-                }
+            }
+            // Right rail: solver
+            div class="no-print" style="border-left: 1px solid var(--rule); display: flex; flex-direction: column" {
+                (knobs_form(practice_id, knobs, committed_practices, true, custom_profiles, snapshot, None))
             }
         }
     }

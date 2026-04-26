@@ -38,7 +38,7 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
                       hx-get="/boats/new"
                       hx-target="#content"
                       hx-push-url="true"
-                      class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                      class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow transition" {
                         "Add shell"
                     }
                 }
@@ -363,7 +363,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                 // Actions
                 div class="flex items-center space-x-3 pt-2" {
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition" {
                         (submit_label)
                     }
                     a href=(cancel_href)

@@ -21,7 +21,7 @@ pub(crate) fn suspended_page(tenant_name: &str, webmaster_email: &str) -> Markup
 
                     div class="space-y-3" {
                         a href={"mailto:" (webmaster_email)}
-                          class="block w-full bg-ink hover:bg-ink-2 text-white font-semibold py-2 rounded shadow transition text-sm" {
+                          class="block w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition text-sm" {
                             "Contact us"
                         }
                         form method="post" action="/logout" {

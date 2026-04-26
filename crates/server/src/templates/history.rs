@@ -113,7 +113,7 @@ pub(crate) fn detail_content(
                             }
                         }
                         button type="button"
-                               class="px-4 py-2 text-sm bg-ink-2 text-white rounded hover:bg-ink transition font-semibold"
+                               class="px-4 py-2 text-sm bg-ink-2 text-paper rounded hover:bg-ink transition font-semibold"
                                onclick=(edit_lineup_js(practice_id, committed, snapshot)) {
                             "Edit lineup"
                         }
@@ -225,7 +225,7 @@ fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
             div class="mt-2 flex justify-end" {
                 button
                     type="submit"
-                    class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                    class="px-3 py-1.5 text-sm bg-blue-600 text-paper rounded hover:bg-blue-700 transition"
                 {
                     "Save notes"
                 }

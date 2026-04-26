@@ -372,7 +372,7 @@ pub(crate) fn attribute_edit_section(
                 h2 class="text-lg font-bold text-ink" { "Edit attributes" }
                 div class="flex items-center gap-2" {
                     button type="button"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-1.5 rounded"
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-3 py-1.5 rounded"
                            hx-post=(post_url)
                            hx-include="#attributes"
                            hx-target="#attributes"
@@ -669,7 +669,7 @@ fn erg_test_section(
                               class="border border-rule rounded px-2 py-1 text-xs focus:border-ink-3 focus:outline-none";
                     }
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-xs font-semibold px-3 py-1.5 rounded" {
                         "Add"
                     }
                 }
@@ -774,7 +774,7 @@ pub(crate) fn seat_affinities_section(
                 }
                 (weight_slider("seat_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }
@@ -873,7 +873,7 @@ pub(crate) fn pair_affinities_section(
                 }
                 (weight_slider("pair_weight", 3))
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded" {
                     "Add / update"
                 }
             }

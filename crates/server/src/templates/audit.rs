@@ -219,7 +219,7 @@ fn filter_bar(
             }
 
             button type="submit"
-                   class="bg-ink-2 hover:bg-ink text-white text-sm font-semibold px-4 py-1.5 rounded transition" {
+                   class="bg-ink-2 hover:bg-ink text-paper text-sm font-semibold px-4 py-1.5 rounded transition" {
                 "Filter"
             }
 

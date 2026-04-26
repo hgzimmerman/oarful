@@ -121,7 +121,7 @@ pub(crate) fn planning_content(
                           class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                       class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Create"
                 }
             }
@@ -147,7 +147,7 @@ pub(crate) fn planning_content(
                                hx-include="[name='practice_ids']:checked"
                                hx-target="body"
                                hx-swap="beforeend"
-                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Send reminders"
                         }
                     }
@@ -290,7 +290,7 @@ pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup 
                            hx-include="[name='dates']:checked"
                            hx-target="body"
                            hx-swap="beforeend"
-                           class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                           class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                         "Send lineups"
                     }
                 }

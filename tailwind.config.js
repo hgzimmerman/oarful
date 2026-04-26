@@ -6,6 +6,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      boxShadow: {
+        soft: 'var(--shadow-soft)',
+        card: 'var(--shadow-card)',
+      },
       colors: {
         paper:   { DEFAULT: 'var(--paper)',   2: 'var(--paper-2)', 3: 'var(--paper-3)' },
         ink:     { DEFAULT: 'var(--ink)',     2: 'var(--ink-2)',   3: 'var(--ink-3)' },

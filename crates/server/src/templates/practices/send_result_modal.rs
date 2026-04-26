@@ -34,7 +34,7 @@ pub(crate) fn send_result_billing_gate(message: &str, stripe_enabled: bool) -> M
                 @if stripe_enabled {
                     form method="post" action="/billing/checkout" class="mt-4" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Upgrade"
                         }
                     }
@@ -114,7 +114,7 @@ fn result_modal_shell(title: &str, body: Markup) -> Markup {
                 (body)
                 div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-3 flex justify-end" {
                     button type="button"
-                           class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm"
+                           class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm"
                            onclick=(CLOSE_JS) {
                         "Close"
                     }

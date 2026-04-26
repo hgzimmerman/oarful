@@ -81,7 +81,7 @@ pub(crate) fn lineup_preview_modal(
                             }
                             div class="flex justify-end" {
                                 button type="submit"
-                                       class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                                       class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                                     "Send " (unique_count) " lineup(s)"
                                 }
                             }

@@ -101,7 +101,7 @@ pub(crate) fn form_content(
                 }
                 div class="flex items-center space-x-3" {
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition" {
                         "Sync"
                     }
                     span #sync-spinner class="htmx-indicator text-sm text-ink-3" {

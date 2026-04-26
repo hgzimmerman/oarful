@@ -16,7 +16,7 @@ fn su_shell(title: &str, content: Markup) -> Markup {
                 script src="/htmx.min.js" {}
             }
             body class="bg-paper text-ink min-h-screen flex flex-col" {
-                nav class="bg-ink text-white px-6 py-3 flex items-center justify-between" {
+                nav class="bg-ink text-paper px-6 py-3 flex items-center justify-between" {
                     span class="font-bold text-lg" { "Oarful Admin" }
                     form method="post" action="/logout" class="inline" {
                         button type="submit"
@@ -69,7 +69,7 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
                     }
                     div class="sm:col-span-2" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-white font-semibold text-sm px-4 py-2 rounded shadow transition" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold text-sm px-4 py-2 rounded shadow transition" {
                             "Create tenant"
                         }
                     }
@@ -130,7 +130,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                         }
                     }
                     button type="submit"
-                           class="text-xs bg-ink-2 text-white px-2 py-1 rounded hover:bg-ink transition" {
+                           class="text-xs bg-ink-2 text-paper px-2 py-1 rounded hover:bg-ink transition" {
                         "Save"
                     }
                 }

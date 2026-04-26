@@ -22,6 +22,8 @@
   --good:    #2f6a3e;
   --warn:    #c5912a;
   --bad:     #b22a2a;
+  --shadow-soft: 0 1px 0 rgba(21,33,45,0.04), 0 8px 22px -14px rgba(21,33,45,0.18);
+  --shadow-card: 0 1px 0 rgba(21,33,45,0.06), 0 18px 40px -28px rgba(21,33,45,0.30);
 }
 
 /* ── Font stacks ──────────────────────────────────────────────────── */
@@ -33,12 +35,6 @@
 }
 
 @layer components {
-  /* Solve page warm wrapper */
-  .solve-page {
-    background: var(--paper);
-    color: var(--ink);
-  }
-
   /* Warm card */
   .solve-card {
     background: var(--paper);
@@ -495,5 +491,23 @@
     background: var(--rule);
     align-self: center;
     margin-left: 4px;
+  }
+
+  /* Form input base */
+  .input-warm {
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    color: var(--ink);
+    padding: 6px 10px;
+    font: inherit;
+    outline: none;
+  }
+  .input-warm:focus {
+    border-color: var(--ink-3);
+    background: var(--paper);
+  }
+  .input-warm::placeholder {
+    color: var(--muted);
   }
 }

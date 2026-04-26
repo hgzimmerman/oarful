@@ -197,7 +197,7 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                     }
                     div class="pt-2" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save preferences"
                         }
                     }

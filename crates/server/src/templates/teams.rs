@@ -39,7 +39,7 @@ pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>
             label class="text-xs text-muted uppercase tracking-wide" { "Team" }
             select name="team_id"
                    onchange="this.form.submit()"
-                   class="bg-ink-2 text-white text-sm rounded px-2 py-1 border border-ink-3 focus:border-rule focus:outline-none cursor-pointer" {
+                   class="bg-ink-2 text-paper text-sm rounded px-2 py-1 border border-ink-3 focus:border-rule focus:outline-none cursor-pointer" {
                 @for t in teams {
                     @if t.id == active {
                         option value=(t.id) selected { (t.name) }
@@ -75,7 +75,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                           class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="bg-ink hover:bg-ink-2 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                       class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Create"
                 }
             }
@@ -244,7 +244,7 @@ pub(crate) fn detail_content(
                     }
                 }
                 button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition" {
                     "Save"
                 }
             }
@@ -337,7 +337,7 @@ fn threshold_section(
                 h3 class="text-sm font-semibold text-ink-2" { "Rower attribute thresholds" }
                 button type="button"
                        onclick="window.dispatchEvent(new CustomEvent('save-thresholds'))"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                       class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                     "Save"
                 }
             }
@@ -718,7 +718,7 @@ fn roster_matrix_inner(
                      hx-target="#admin-tab-content" {
                     div class="flex justify-end mb-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save"
                         }
                     }
@@ -766,7 +766,7 @@ fn roster_matrix_inner(
                     }
                     div class="flex justify-end mt-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save"
                         }
                     }
@@ -826,7 +826,7 @@ fn fleet_matrix_inner(
                      hx-target="#admin-fleet-content" {
                     div class="flex justify-end mb-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save"
                         }
                     }
@@ -879,7 +879,7 @@ fn fleet_matrix_inner(
                     }
                     div class="flex justify-end mt-3" {
                         button type="submit"
-                               class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
                             "Save"
                         }
                     }
