@@ -241,26 +241,19 @@ can resume without re-deriving context.
   tenant. Subscription lifecycle via webhooks.
 - **Pricing on landing page** — pricing section on the public landing
   page.
+- **Squash migrations for 1.0** — replaced 37 tenant DB + 9 master DB
+  incremental migrations with a single `2026-04-26-000000_initial`
+  each. Default team seed preserved. Schema.rs files unchanged.
+- **E2e test fixes** — repaired 7 broken e2e tests: form vs JSON
+  content type, stale `tr[]` → `div[]` selectors, XPath → CSS
+  locator for Generate button, added `#tab-bar` to streaming page
+  for SSE alternative tabs.
 
 ## Open work
 
 ### Quick wins
 
 ### Architecture / platform
-
-#### Squash migrations for 1.0
-
-Replace the ~30 incremental migrations with a single CREATE TABLE
-script reflecting the final schema. Each tenant DB is created fresh
-on signup, so only the final state matters — intermediate ALTER TABLE
-steps are wasted work on every new tenant.
-
-**Approach:** dump the post-migration schema as one `up.sql`, delete
-all existing migrations, replace with a single `2026-xx-xx_initial`.
-No production DBs exist yet — dev DBs can be wiped.
-
-Do this last, right before tagging 1.0 — any new migration added
-after the squash would defeat the purpose.
 
 #### Per-team roles
 
@@ -445,4 +438,3 @@ culprit) remains parked pending a Pumpkin API dive.
 ## Suggested next moves
 
 1. **Per-team roles** — design + migration.
-2. **Squash migrations** — do last before 1.0 tag.
