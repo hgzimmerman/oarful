@@ -403,12 +403,13 @@ fn threshold_slider(
                     "x-ref"="track"
                     "@mousedown"="startDrag($event)"
                     "@touchstart.passive"="startDrag($event)" {
-                    // Histogram bars (rendered from fetched data)
+                    // Histogram bars
                     template "x-for"="bar in bars" {
-                        div class="absolute bottom-0 bg-paper-3 rounded-t-sm"
-                            ":style"="barStyle(bar)" {}
+                        div class="absolute bottom-0 rounded-t-sm cursor-help"
+                            ":style"="barStyle(bar)"
+                            ":title"="barTitle(bar)" {}
                     }
-                    // Colored zone backgrounds
+                    // Colored zone backgrounds (overlay)
                     div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
                         div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
                         div class="bg-green-100/60" ":style"="zoneStyle(1)" {}
@@ -500,8 +501,9 @@ fn threshold_slider_with_distance(
                     "@mousedown"="startDrag($event)"
                     "@touchstart.passive"="startDrag($event)" {
                     template "x-for"="bar in bars" {
-                        div class="absolute bottom-0 bg-paper-3 rounded-t-sm"
-                            ":style"="barStyle(bar)" {}
+                        div class="absolute bottom-0 rounded-t-sm cursor-help"
+                            ":style"="barStyle(bar)"
+                            ":title"="barTitle(bar)" {}
                     }
                     div class="absolute inset-0 flex rounded overflow-hidden pointer-events-none" {
                         div class="bg-blue-100/60" ":style"="zoneStyle(0)" {}
@@ -584,10 +586,16 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
       if (!this.bars.length) return 'display:none';
       var maxC = Math.max(...this.bars.map(b=>b.count), 1);
       var p1 = this.pct(bar.min), p2 = this.pct(bar.max);
-      var left = Math.min(p1, p2);
-      var w = Math.abs(p2 - p1);
+      var fullLeft = Math.min(p1, p2);
+      var fullW = Math.abs(p2 - p1);
+      var inset = fullW * 0.1;
+      var left = fullLeft + inset;
+      var w = fullW - inset * 2;
       var h = bar.count / maxC * 80;
-      return 'left:'+left+'%;width:'+w+'%;height:'+h+'%;opacity:0.5';
+      return 'left:'+left+'%;width:'+w+'%;height:'+h+'%;background:black;opacity:1';
+    },
+    barTitle(bar) {
+      return this.fmt(bar.min) + ' – ' + this.fmt(bar.max) + ' (' + bar.count + ')';
     },
     zoneStyle(i) {
       var pts = [this.rMin, this.v1, this.v2, this.v3, this.rMax];
