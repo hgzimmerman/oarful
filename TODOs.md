@@ -255,19 +255,6 @@ can resume without re-deriving context.
 
 ### Architecture / platform
 
-#### Per-team roles
-
-Currently roles are global per user. Real-world scenario: a PD
-rows on the morning team and coaches the afternoon team.
-
-**Design direction.** `team_membership(user_id, team_id, role)`
-replaces `user_role`. Active team determines effective role.
-Touches schema, JWT claims, role gating, invite flow, team
-switching, user list UI.
-
-Needs more refinement — interaction with multi-tenancy and
-migration path from global roles need thought.
-
 #### Zone reward × side-preference scaling — shipped
 
 Zone reward (S3) is now discounted when the seat is on the rower's
@@ -276,6 +263,14 @@ strength 1→88%, 2→76%, 3→64%, 4→52%, 5→40%). Applied in both the
 CP solver and SA post-processor. `Either` rowers are unaffected.
 
 ### Long-term / parked
+
+#### Per-team roles
+
+Parked — the role hierarchy (PD > Coach > Member) means a PD
+already has full member access on every team. Per-team roles would
+only matter if someone needed to be *restricted* on a specific
+team, which isn't a real scenario for rowing clubs. Revisit only
+if users request it.
 
 #### Regatta lineup generator
 
@@ -437,4 +432,4 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ## Suggested next moves
 
-1. **Per-team roles** — design + migration.
+Nothing urgent — all remaining items are parked/long-term.
