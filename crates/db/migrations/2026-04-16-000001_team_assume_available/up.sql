@@ -1,1 +1,0 @@
-ALTER TABLE team ADD COLUMN assume_available INTEGER NOT NULL DEFAULT 0;

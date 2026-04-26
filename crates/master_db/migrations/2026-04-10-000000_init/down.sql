@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS superuser;
-DROP TABLE IF EXISTS tenant;
