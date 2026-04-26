@@ -82,7 +82,7 @@ pub(crate) fn alternative_block(
         div class="solve-card p-4" {
             div class="flex items-center justify-between mb-3" {
                 div class="flex items-center space-x-3" {
-                    h3 class="font-bold font-serif-heading" style="color: var(--ink)" { "Alternative #" (rank) }
+                    h3 class="font-bold font-serif-heading text-ink" { "Alternative #" (rank) }
                     @if changed_count > 0 {
                         span class="text-xs px-2 py-0.5 rounded-full font-mono-stat"
                              style="background: color-mix(in oklch, var(--warn) 15%, var(--paper)); color: var(--warn); border: 1px solid color-mix(in oklch, var(--warn) 30%, var(--rule))" {
@@ -99,7 +99,7 @@ pub(crate) fn alternative_block(
                 }
             }
             @if used.is_empty() {
-                div class="italic" style="color: var(--muted)" { "No boats fielded." }
+                div class="italic text-muted" { "No boats fielded." }
             } @else {
                 div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
                     @for lineup in &used {
@@ -172,8 +172,8 @@ fn boat_card(
     html! {
         div class="solve-card overflow-hidden" {
             div class="px-4 py-2" style="border-bottom: 1px dashed var(--rule)" {
-                strong class="font-serif-heading" style="color: var(--ink)" { (lineup.boat_name) }
-                span class="text-xs font-mono-stat ml-2" style="color: var(--muted)" {
+                strong class="font-serif-heading text-ink" { (lineup.boat_name) }
+                span class="text-xs font-mono-stat ml-2 text-muted" {
                     "(" (seat_count) "+"
                     @if let Some(b) = boat {
                         ", " (rig_label(b))
@@ -217,22 +217,22 @@ fn seat_row(
             }
             td class="px-4 py-2" {
                 @if let Some(r) = rower {
-                    div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" {
+                    div class="font-medium font-serif-heading text-sm text-ink" {
                         (r.name)
                         @if is_changed {
-                            span class="ml-1 text-xs" style="color: var(--warn)" { "\u{25CF}" }
+                            span class="ml-1 text-xs text-warn" { "\u{25CF}" }
                         }
                     }
                     (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
-                            div class="text-xs font-mono-stat italic" style="color: var(--warn)" {
+                            div class="text-xs font-mono-stat italic text-warn" {
                                 "was " (prev.name)
                             }
                         }
                     }
                 } @else {
-                    span class="italic font-mono-stat" style="color: var(--muted)" { "unknown rower #" (rower_id) }
+                    span class="italic font-mono-stat text-muted" { "unknown rower #" (rower_id) }
                 }
             }
         }
@@ -246,8 +246,8 @@ fn unplaced_block(snapshot: &DbSnapshot, unplaced: &UnplacedRowers) -> Markup {
     html! {
         div class="mt-4 pt-4 text-sm space-y-2" style="border-top: 1px solid var(--rule)" {
             div {
-                strong class="font-mono-stat text-[10px] uppercase tracking-wide" style="color: var(--muted)" { "Benched: " }
-                span class="font-serif-heading" style="color: var(--ink-2)" {
+                strong class="font-mono-stat text-[10px] uppercase tracking-wide text-muted" { "Benched: " }
+                span class="font-serif-heading text-ink-2" {
                     (name_list(snapshot, &unplaced.benched))
                 }
             }

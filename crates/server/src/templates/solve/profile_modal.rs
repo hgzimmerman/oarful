@@ -114,12 +114,11 @@ pub(crate) fn profile_editor_modal(
                 // Header
                 div class="sticky top-0 px-6 py-4 flex items-center justify-between"
                     style="background: var(--paper); border-bottom: 1px solid var(--rule)" {
-                    h2 class="text-lg font-bold font-serif-heading" style="color: var(--ink)" {
+                    h2 class="text-lg font-bold font-serif-heading text-ink" {
                         (title)
                     }
                     button type="button"
-                           class="text-xl leading-none cursor-pointer"
-                           style="color: var(--muted)"
+                           class="text-xl leading-none cursor-pointer text-muted"
                            "@click"="document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {
                         "\u{00d7}"
                     }
@@ -133,7 +132,7 @@ pub(crate) fn profile_editor_modal(
                      class="px-6 py-4 space-y-6" {
 
                     @if is_builtin {
-                        p class="text-sm italic" style="color: var(--muted)" {
+                        p class="text-sm italic text-muted" {
                             "Built-in presets are read-only. Duplicate to create an editable copy."
                         }
                     }
@@ -141,7 +140,7 @@ pub(crate) fn profile_editor_modal(
                     // Name + description
                     div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                         div {
-                            label for="profile-name" class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                            label for="profile-name" class="block text-xs font-semibold uppercase tracking-wide mb-1 text-muted" {
                                 "Name"
                             }
                             input id="profile-name" name="name" type="text"
@@ -153,7 +152,7 @@ pub(crate) fn profile_editor_modal(
                                   style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)";
                         }
                         div {
-                            label for="profile-desc" class="block text-xs font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                            label for="profile-desc" class="block text-xs font-semibold uppercase tracking-wide mb-1 text-muted" {
                                 "Description"
                             }
                             input id="profile-desc" name="description" type="text"
@@ -186,8 +185,7 @@ pub(crate) fn profile_editor_modal(
                         style="background: var(--paper-2); border-top: 1px solid var(--rule)" {
                         @if !is_builtin && !name.is_empty() {
                             button type="button"
-                                   class="text-sm font-medium cursor-pointer"
-                                   style="color: var(--bad)"
+                                   class="text-sm font-medium cursor-pointer text-bad"
                                    hx-get={"/confirm?kind=delete-preset&name=" (name)}
                                    hx-target="body"
                                    hx-swap="beforeend" {
@@ -212,10 +210,10 @@ fn weight_slider(field: &WeightField, readonly: bool) -> Markup {
     html! {
         div {
             div class="flex items-center justify-between mb-1" {
-                label for=(field.name) class="text-xs font-medium" style="color: var(--ink-2)" title=(field.help) {
+                label for=(field.name) class="text-xs font-medium text-ink-2" title=(field.help) {
                     (field.label)
                 }
-                span id=(&val_id) class="text-xs font-mono-stat w-6 text-right" style="color: var(--accent)" {
+                span id=(&val_id) class="text-xs font-mono-stat w-6 text-right text-accent" {
                     (field.value)
                 }
             }

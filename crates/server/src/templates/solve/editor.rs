@@ -250,7 +250,7 @@ pub(crate) fn lineup_editor(
                data-editor-url=(editor_url) {
 
             div class="flex items-center justify-between mb-1" {
-                h2 class="text-xl font-bold font-serif-heading" style="color: var(--ink)" { "Lineup" }
+                h2 class="text-xl font-bold font-serif-heading text-ink" { "Lineup" }
                 div class="no-print" {
                     form method="post" action=(commit_action) {
                         // Server-rendered hidden inputs for commit.
@@ -273,14 +273,12 @@ pub(crate) fn lineup_editor(
             }
             // Selection hint — fixed height so it doesn't cause reflow.
             div class="h-6 mb-2 no-print" {
-                span class="text-xs"
-                     style="color: var(--accent)"
+                span class="text-xs text-accent"
                      x-show="selected && !selectedBoat"
                      x-cloak {
                     "Click another to swap \u{00b7} or click again to cancel"
                 }
-                span class="text-xs"
-                     style="color: var(--accent)"
+                span class="text-xs text-accent"
                      x-show="selectedBoat"
                      x-cloak {
                     "Click a boat pill to transfer rowers \u{00b7} or click Transfer again to cancel"
@@ -305,7 +303,7 @@ pub(crate) fn lineup_editor(
                            data-boat-id=(bid)
                            ":class"={"selectedBoat !== null && selectedBoat !== " (bid) " ? '" (pill_target_class) "' : '" (active_class) "'"}
                            "@click"={"boatPillClick(" (bid) ")"} {
-                        span class="font-serif-heading text-sm" style="color: var(--ink)" {
+                        span class="font-serif-heading text-sm text-ink" {
                             (eb.boat.name)
                         }
                         span class="font-mono-stat text-[10px] px-1 rounded"
@@ -313,7 +311,7 @@ pub(crate) fn lineup_editor(
                             (eb.boat.seat_count)
                             @if eb.boat.has_cox.as_bool() { "+" }
                         }
-                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
+                        span class="font-mono-stat text-[10px] text-muted" {
                             (filled) "/" (total)
                         }
                         @if let Some(_team) = in_use_team {
@@ -326,15 +324,13 @@ pub(crate) fn lineup_editor(
                 }
                 @if editor.boats.len() > 2 {
                     span class="inline-flex items-center gap-1 ml-1" {
-                        span class="text-xs" style="color: var(--rule)" { "\u{00b7}" }
+                        span class="text-xs text-rule" { "\u{00b7}" }
                         button type="button"
-                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer"
-                               style="color: var(--accent)"
+                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer text-accent"
                                "@click"="selectAllBoats()" { "all" }
-                        span class="text-xs" style="color: var(--rule)" { "\u{00b7}" }
+                        span class="text-xs text-rule" { "\u{00b7}" }
                         button type="button"
-                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer"
-                               style="color: var(--accent)"
+                               class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer text-accent"
                                "@click"="deselectAllBoats()" { "none" }
                     }
                 }
@@ -429,10 +425,10 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
             div class="px-4 py-3 flex items-center gap-3"
                 style="border-bottom: 1px dashed var(--rule)" {
                 div class="flex-1 min-w-0" {
-                    h3 class="font-serif-heading font-medium text-base" style="color: var(--ink)" {
+                    h3 class="font-serif-heading font-medium text-base text-ink" {
                         (boat.name)
                     }
-                    div class="font-mono-stat text-[10px] flex flex-wrap gap-1 mt-0.5" style="color: var(--muted)" {
+                    div class="font-mono-stat text-[10px] flex flex-wrap gap-1 mt-0.5 text-muted" {
                         span class="px-1 rounded" style="border: 1px solid var(--rule); color: var(--ink-2); background: var(--paper-2)" {
                             (seat_count)
                             @if boat.has_cox.as_bool() { "+" }
@@ -446,9 +442,8 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                 }
                 // Transfer button
                 button type="button"
-                       class="text-xs no-print cursor-pointer"
-                       style="color: var(--muted)"
-                       ":class"={"selectedBoat === " (boat.id) " ? 'text-xs no-print cursor-pointer font-semibold' : 'text-xs no-print cursor-pointer'"}
+                       class="text-xs no-print cursor-pointer text-muted"
+                       ":class"={"selectedBoat === " (boat.id) " ? 'text-xs no-print cursor-pointer font-semibold' : 'text-xs no-print cursor-pointer text-muted'"}
                        ":style"={"selectedBoat === " (boat.id) " ? 'color: var(--accent)' : 'color: var(--muted)'"}
                        title="Transfer rowers to another boat"
                        "@click.stop"={"selectBoatForTransfer(" (boat.id) ")"} {
@@ -536,12 +531,12 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         // Rower content
                         div class="py-2 px-2 min-w-0" {
                             @if let Some(r) = rower {
-                                div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
+                                div class="font-medium font-serif-heading text-sm text-ink" { (r.name) }
                                 (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                             } @else if is_empty {
-                                span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "\u{2014} empty \u{2014}" }
+                                span class="font-mono-stat text-xs italic text-muted" { "\u{2014} empty \u{2014}" }
                             } @else {
-                                span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "unknown" }
+                                span class="font-mono-stat text-xs italic text-muted" { "unknown" }
                             }
                         }
                         // Lock button
@@ -613,7 +608,7 @@ fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
              style={"border: 1px solid transparent; " (side_style)}
              ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
              "@click"={"select('" (key) "')"} {
-            div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
+            div class="font-medium text-xs text-ink" { (r.name) }
             (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
         }
     }
@@ -645,8 +640,8 @@ pub(crate) fn roster_pool(
     html! {
         // Header
         div class="rp-head" {
-            h2 class="font-serif-heading font-medium text-base m-0" style="color: var(--ink)" { "Roster" }
-            span class="font-mono-stat text-[10px] uppercase tracking-wide" style="color: var(--muted)" {
+            h2 class="font-serif-heading font-medium text-base m-0 text-ink" { "Roster" }
+            span class="font-mono-stat text-[10px] uppercase tracking-wide text-muted" {
                 (pool_count) " avail \u{00b7} " (total_rowers) " total"
             }
         }
@@ -686,8 +681,7 @@ pub(crate) fn roster_pool(
                                 }
                             }
                             button type="submit"
-                                   class="text-xs font-semibold uppercase tracking-wide cursor-pointer"
-                                   style="color: var(--accent)" {
+                                   class="text-xs font-semibold uppercase tracking-wide cursor-pointer text-accent" {
                                 "+ Walk-on"
                             }
                         }
@@ -702,8 +696,8 @@ pub(crate) fn roster_pool(
             @if !editor.sculling.is_empty() {
                 div class="mt-2" {
                     div class="pool-section-head" {
-                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--ink-2)" { "Sculling" }
-                        span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (editor.sculling.len()) }
+                        span class="font-serif-heading italic font-medium text-xs text-ink-2" { "Sculling" }
+                        span class="font-mono-stat text-[10px] text-muted" { (editor.sculling.len()) }
                     }
                     div class="flex flex-col gap-0.5 mt-1" {
                         @for r in &editor.sculling {
@@ -724,7 +718,7 @@ pub(crate) fn roster_pool(
                          style="border: 1px dashed var(--rule)"
                          ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
                          "@click"="select('bench:empty')" {
-                        span class="font-mono-stat italic text-xs" style="color: var(--muted)" { "\u{2014} bench \u{2014}" }
+                        span class="font-mono-stat italic text-xs text-muted" { "\u{2014} bench \u{2014}" }
                     }
                 }
             }
@@ -739,8 +733,8 @@ pub(crate) fn roster_pool(
                 @if !coxes.is_empty() {
                     div class="mt-2" {
                         div class="pool-section-head" {
-                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--cox)" { "Coxswains" }
-                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (coxes.len()) }
+                            span class="font-serif-heading italic font-medium text-xs text-cox" { "Coxswains" }
+                            span class="font-mono-stat text-[10px] text-muted" { (coxes.len()) }
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &coxes {
@@ -752,8 +746,8 @@ pub(crate) fn roster_pool(
                 @if !ports.is_empty() {
                     div class="mt-2" {
                         div class="pool-section-head" {
-                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--port)" { "Port" }
-                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (ports.len()) }
+                            span class="font-serif-heading italic font-medium text-xs text-port" { "Port" }
+                            span class="font-mono-stat text-[10px] text-muted" { (ports.len()) }
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &ports {
@@ -765,8 +759,8 @@ pub(crate) fn roster_pool(
                 @if !stbds.is_empty() {
                     div class="mt-2" {
                         div class="pool-section-head" {
-                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--stbd)" { "Starboard" }
-                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (stbds.len()) }
+                            span class="font-serif-heading italic font-medium text-xs text-stbd" { "Starboard" }
+                            span class="font-mono-stat text-[10px] text-muted" { (stbds.len()) }
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &stbds {
@@ -778,8 +772,8 @@ pub(crate) fn roster_pool(
                 @if !eithers.is_empty() {
                     div class="mt-2" {
                         div class="pool-section-head" {
-                            span class="font-serif-heading italic font-medium text-xs" style="color: var(--either)" { "Either" }
-                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { (eithers.len()) }
+                            span class="font-serif-heading italic font-medium text-xs text-either" { "Either" }
+                            span class="font-mono-stat text-[10px] text-muted" { (eithers.len()) }
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &eithers {
@@ -794,7 +788,7 @@ pub(crate) fn roster_pool(
             @if !other_team_rowers.is_empty() {
                 div class="mt-3" {
                     div class="pool-section-head" {
-                        span class="font-serif-heading italic font-medium text-xs" style="color: var(--warn)" { "Other teams" }
+                        span class="font-serif-heading italic font-medium text-xs text-warn" { "Other teams" }
                     }
                     div class="flex flex-col gap-0.5 mt-1" {
                         @for otr in other_team_rowers {
@@ -802,9 +796,9 @@ pub(crate) fn roster_pool(
                             @let side_style = pool_side_border_style(r);
                             span class="px-2 py-1 rounded"
                                  style={"border: 1px solid transparent; background: color-mix(in oklch, var(--warn) 5%, var(--paper)); " (side_style)} {
-                                div class="font-medium text-xs" style="color: var(--ink)" {
+                                div class="font-medium text-xs text-ink" {
                                     (r.name)
-                                    span class="ml-1 text-[9px] font-normal" style="color: var(--warn)" { "(" (&otr.team_name) ")" }
+                                    span class="ml-1 text-[9px] font-normal text-warn" { "(" (&otr.team_name) ")" }
                                 }
                                 (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
                             }

@@ -64,14 +64,13 @@ pub(super) fn knobs_form(
                 // Header
                 div class="sr-head" {
                     div {
-                        h2 class="font-serif-heading font-medium text-base m-0" style="color: var(--ink)" { "Solver" }
-                        div class="font-mono-stat text-[10px] mt-0.5" style="color: var(--muted)" {
+                        h2 class="font-serif-heading font-medium text-base m-0 text-ink" { "Solver" }
+                        div class="font-mono-stat text-[10px] mt-0.5 text-muted" {
                             "Last run: " (last_run_label)
                         }
                     }
                     button type="button"
-                           class="text-xl leading-none cursor-pointer"
-                           style="color: var(--muted)"
+                           class="text-xl leading-none cursor-pointer text-muted"
                            "@click"="railOpen = false" {
                         "\u{00d7}"
                     }
@@ -86,12 +85,11 @@ pub(super) fn knobs_form(
                     // Preset section — vertical list via HTMX swap
                     section class="sr-section" {
                         div class="flex justify-between items-baseline mb-2" {
-                            span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Preset" }
+                            span class="text-[10px] font-semibold uppercase tracking-wide text-muted" { "Preset" }
                             @let active_preset = if knobs.preset.is_empty() { "balanced" } else { &knobs.preset };
                             @let new_url = format!("/solver-profile/edit?basis={active_preset}");
                             button type="button"
-                                   class="text-xs cursor-pointer"
-                                   style="color: var(--accent)"
+                                   class="text-xs cursor-pointer text-accent"
                                    hx-get=(&new_url)
                                    hx-target="body"
                                    hx-swap="beforeend" {
@@ -106,7 +104,7 @@ pub(super) fn knobs_form(
                         div class="grid grid-cols-2 gap-3" {
                             @if has_eight {
                                 div {
-                                    div class="text-[10px] font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                                    div class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
                                         "Partial fill"
                                     }
                                     div class="seg-warm" {
@@ -121,7 +119,7 @@ pub(super) fn knobs_form(
                                 }
                             }
                             div {
-                                div class="text-[10px] font-semibold uppercase tracking-wide mb-1" style="color: var(--muted)" {
+                                div class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
                                     "Alternatives"
                                 }
                                 div class="seg-warm" {
@@ -144,21 +142,21 @@ pub(super) fn knobs_form(
                             @if !practices.is_empty() {
                                 div {
                                     div class="flex justify-between items-baseline" {
-                                        span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Similarity" }
-                                        span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (knobs.similarity) }
+                                        span class="text-[10px] font-semibold uppercase tracking-wide text-muted" { "Similarity" }
+                                        span class="font-mono-stat text-xs text-ink-2" { (knobs.similarity) }
                                     }
                                     input name="similarity" type="range" min="0" max="10"
                                           value=(knobs.similarity)
                                           class="range-warm"
                                           oninput="knobChanged()";
-                                    p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Stay close to last lineup" }
+                                    p class="text-[10px] italic mt-0.5 text-muted" { "Stay close to last lineup" }
                                 }
                             }
                             // Novelty
                             div {
                                 div class="flex justify-between items-baseline" {
-                                    span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Novelty" }
-                                    span #novelty-val class="font-mono-stat text-xs" style="color: var(--ink-2)" {
+                                    span class="text-[10px] font-semibold uppercase tracking-wide text-muted" { "Novelty" }
+                                    span #novelty-val class="font-mono-stat text-xs text-ink-2" {
                                         @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
                                     }
                                 }
@@ -166,7 +164,7 @@ pub(super) fn knobs_form(
                                       value=(knobs.novelty)
                                       class="range-warm"
                                       oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
-                                p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Avoid recent lineups" }
+                                p class="text-[10px] italic mt-0.5 text-muted" { "Avoid recent lineups" }
                             }
                         }
                     }
@@ -174,17 +172,16 @@ pub(super) fn knobs_form(
                     // Based-on checkboxes
                     @if !practices.is_empty() {
                         section class="sr-section" {
-                            div class="text-[10px] font-semibold uppercase tracking-wide mb-2" style="color: var(--muted)" { "Based on" }
+                            div class="text-[10px] font-semibold uppercase tracking-wide mb-2 text-muted" { "Based on" }
                             div class="flex flex-col gap-1" {
                                 @for p in practices.iter().take(5) {
                                     @let date_str = p.date.format("%Y-%m-%d").to_string();
                                     @let weekday = p.date.format("%a").to_string();
                                     @let checked = knobs.based_on.contains(&date_str);
-                                    label class="inline-flex items-center gap-1.5 text-xs cursor-pointer" style="color: var(--ink-2)" {
+                                    label class="inline-flex items-center gap-1.5 text-xs cursor-pointer text-ink-2" {
                                         input type="checkbox" name="based_on" value=(date_str)
                                               checked[checked]
-                                              class="rounded"
-                                              style="border-color: var(--rule)"
+                                              class="rounded border-rule"
                                               onchange="knobChanged()";
                                         (date_str) " (" (weekday) ")"
                                     }
@@ -196,8 +193,8 @@ pub(super) fn knobs_form(
                     // Time budget
                     section class="sr-section" {
                         div class="flex justify-between items-baseline" {
-                            span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--muted)" { "Time budget" }
-                            span #budget-val class="font-mono-stat text-xs" style="color: var(--ink-2)" {
+                            span class="text-[10px] font-semibold uppercase tracking-wide text-muted" { "Time budget" }
+                            span #budget-val class="font-mono-stat text-xs text-ink-2" {
                                 (knobs.budget) "s"
                             }
                         }
@@ -205,7 +202,7 @@ pub(super) fn knobs_form(
                               value=(knobs.budget)
                               class="range-warm"
                               oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
-                        p class="text-[10px] italic mt-0.5" style="color: var(--muted)" { "Per alternative" }
+                        p class="text-[10px] italic mt-0.5 text-muted" { "Per alternative" }
                     }
 
                     // Hidden state
@@ -246,10 +243,10 @@ pub(super) fn knobs_form(
                                class="btn-accent w-full shadow transition" {
                             (button_label)
                         }
-                        span #solve-spinner class="htmx-indicator text-xs block mt-1 text-center" style="color: var(--muted)" {
+                        span #solve-spinner class="htmx-indicator text-xs block mt-1 text-center text-muted" {
                             "Generating\u{2026}"
                         }
-                        p class="text-[10px] italic mt-2" style="color: var(--muted)" {
+                        p class="text-[10px] italic mt-2 text-muted" {
                             "Locked seats are preserved. Unavailable rowers are skipped."
                         }
                     }
@@ -328,7 +325,7 @@ pub(crate) fn preset_bar(
                         hx-target="#preset-bar"
                         hx-swap="outerHTML" {
                         div class="flex items-baseline gap-2 min-w-0 flex-1" {
-                            span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" { (label) }
+                            span class="font-serif-heading font-medium text-sm text-ink" { (label) }
                             span class="font-mono-stat text-[8px] px-1 rounded" style="color: var(--muted); border: 1px solid var(--rule)" { "built-in" }
                         }
                         div class="flex gap-0.5 opacity-60" {
@@ -355,7 +352,7 @@ pub(crate) fn preset_bar(
                         hx-get=(preset_url)
                         hx-target="#preset-bar"
                         hx-swap="outerHTML" {
-                        span class="font-serif-heading font-medium text-sm" style="color: var(--accent)" { (name) }
+                        span class="font-serif-heading font-medium text-sm text-accent" { (name) }
                         div class="flex gap-0.5 opacity-60" {
                             @let edit_url = format!("/solver-profile/edit?name={name}");
                             button type="button"

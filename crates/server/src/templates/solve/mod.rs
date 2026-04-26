@@ -390,11 +390,10 @@ pub(crate) fn landing_content(
         div class="solve-page" {
             header class="border-b px-4 sm:px-8 py-3"
                    style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-xl font-bold font-serif-heading"
-                   style="color: var(--ink)" {
+                h1 class="text-xl font-bold font-serif-heading text-ink" {
                     "Set Lineups \u{00b7} " (date)
                 }
-                p class="text-xs mt-0.5" style="color: var(--muted)" { (subtitle) }
+                p class="text-xs mt-0.5 text-muted" { (subtitle) }
             }
             div class="solve-layout" x-data="lineupEditor()" {
                 // Left sidebar: roster pool
@@ -441,11 +440,10 @@ pub(crate) fn streaming_page(
         div class="solve-page" {
             header class="border-b px-4 sm:px-8 py-3"
                    style="border-color: var(--rule); background: var(--paper)" {
-                h1 class="text-xl font-bold font-serif-heading"
-                   style="color: var(--ink)" {
+                h1 class="text-xl font-bold font-serif-heading text-ink" {
                     "Set Lineups \u{00b7} " (date)
                 }
-                p class="text-xs mt-0.5" style="color: var(--muted)" { (subtitle) }
+                p class="text-xs mt-0.5 text-muted" { (subtitle) }
             }
             div class="solve-layout" x-data="lineupEditor()" {
                 aside #roster-pool class="roster-sidebar" {
