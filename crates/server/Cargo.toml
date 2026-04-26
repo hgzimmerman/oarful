@@ -52,6 +52,7 @@ async-stripe-checkout.workspace = true
 async-stripe-billing.workspace = true
 async-stripe-webhook.workspace = true
 async-stripe-shared.workspace = true
+percent-encoding = "2.3.2"
 
 [dev-dependencies]
 test-case = { workspace = true }

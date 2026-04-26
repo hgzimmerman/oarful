@@ -170,6 +170,20 @@ pub(crate) async fn stream_handler(
                         &unavail_rowers, &knobs_clone.walkon, &[],
                     );
 
+                    // Build gatherState-format params for saving to the
+                    // active tab cookie.
+                    let mut tab_params = Vec::new();
+                    for lineup in solution.lineups.iter().filter(|l| l.used) {
+                        tab_params.push(format!("boat={}", lineup.boat_id));
+                        for (seat, rower_id) in &lineup.seats {
+                            tab_params.push(format!(
+                                "seat={}:{}:{}",
+                                rower_id, lineup.boat_id, seat
+                            ));
+                        }
+                    }
+                    let tab_state_str = tab_params.join("&");
+
                     // Wrap editor in a #solve-results div with OOB swap
                     // so it replaces the existing editor in-place without
                     // blanking the page during generation.
@@ -178,8 +192,14 @@ pub(crate) async fn stream_handler(
                             (maud::PreEscaped(editor_html.into_string()))
                         }
                     };
+                    // Include a script to save the primary result to the
+                    // active tab cookie so tab switching preserves it.
+                    let save_script = format!(
+                        "<script>if(typeof setTabState==='function'){{var m=getEditorTabs();setTabState(m.active,{});var p=document.querySelector('#tab-bar [data-tab-id=\"'+m.active+'\"]');if(p){{p.classList.remove('tab-pending');p.removeAttribute('data-pending');}}}}</script>",
+                        serde_json::json!(tab_state_str),
+                    );
                     yield Ok(Event::default().event("primary").data(
-                        format!("{}{}", editor_oob.into_string(), pool_oob.into_string())
+                        format!("{}{}{}", editor_oob.into_string(), pool_oob.into_string(), save_script)
                     ));
                 }
                 SolveStreamEvent::PrimaryFailed { status, diagnostics } => {

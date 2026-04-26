@@ -458,6 +458,16 @@
     padding: 12px 16px;
     border-bottom: 1px solid var(--rule-2);
   }
+  /* Pending tab: subtle pulse while waiting for SSE data */
+  @keyframes tab-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.7; }
+  }
+  .tab-pending {
+    animation: tab-pulse 1.5s ease-in-out infinite;
+    cursor: default;
+  }
+
   /* Generate button: racing border highlight during SSE streaming.
      A rotating oversized gradient is clipped by the button, with
      an inner ::after covering the center — only the border gap

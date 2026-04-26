@@ -245,7 +245,7 @@ pub(super) fn knobs_form(
                     // Generate button — sticky at bottom
                     div class="sr-run" {
                         button #generate-btn type="submit"
-                               onclick="setTimeout(startGenerating, 0)"
+                               onclick="requestAnimationFrame(startGenerating)"
                                class="btn-accent w-full shadow transition" {
                             span class="generate-label" data-original-text=(button_label) { (button_label) }
                         }

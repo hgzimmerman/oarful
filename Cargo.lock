@@ -1707,6 +1707,7 @@ dependencies = [
  "lineup_sheets",
  "lineup_solver",
  "maud",
+ "percent-encoding",
  "rayon",
  "reqwest",
  "serde",

@@ -349,11 +349,9 @@ fn tab_bar(meta: &EditorTabsMeta) -> Markup {
                 data-tab-id=(tab.id)
                 onclick=(format!("switchTab({})", tab.id)) {
                     span class="tab-label" { (tab.label) }
-                    @if meta.tabs.len() > 1 {
-                        span class="tab-close text-ink-3 hover:text-red-600 ml-1 text-xs"
-                             onclick=(format!("event.stopPropagation(); removeTab({})", tab.id)) {
-                            "\u{00d7}"
-                        }
+                    span class={"tab-close text-ink-3 hover:text-red-600 ml-1 text-xs" @if meta.tabs.len() <= 1 { " hidden" }}
+                         onclick=(format!("event.stopPropagation(); removeTab({})", tab.id)) {
+                        "\u{00d7}"
                     }
                 }
             }

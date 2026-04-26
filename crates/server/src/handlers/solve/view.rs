@@ -47,14 +47,20 @@ impl Default for EditorTabsMeta {
     }
 }
 
+fn decode_cookie(c: &axum_extra::extract::cookie::Cookie) -> String {
+    percent_encoding::percent_decode_str(c.value())
+        .decode_utf8_lossy()
+        .into_owned()
+}
+
 fn parse_tab_cookies(jar: &CookieJar) -> (EditorTabsMeta, String) {
     let meta: EditorTabsMeta = jar
         .get("editor_tabs")
-        .and_then(|c| serde_json::from_str(c.value()).ok())
+        .and_then(|c| serde_json::from_str(&decode_cookie(c)).ok())
         .unwrap_or_default();
     let active_state = jar
         .get(&format!("tab_{}", meta.active))
-        .map(|c| c.value().to_string())
+        .map(|c| decode_cookie(c))
         .unwrap_or_default();
     (meta, active_state)
 }

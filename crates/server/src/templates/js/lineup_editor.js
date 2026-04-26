@@ -301,7 +301,7 @@ document.addEventListener('htmx:afterSettle', function(evt) {
 });
 
 // Animate the generate button during SSE streaming.
-// Uses only classList + disabled — all visual effects in CSS.
+// Also pre-creates empty alt tabs with a loading animation.
 function startGenerating() {
     var btn = document.getElementById('generate-btn');
     if (!btn) return;
@@ -309,6 +309,45 @@ function startGenerating() {
     btn.classList.add('generating');
     var label = btn.querySelector('.generate-label');
     if (label) label.textContent = 'Generating\u2026';
+
+    // Mark the active tab as pending (generating into it).
+    var meta = getEditorTabs();
+    var activePill = document.querySelector('#tab-bar [data-tab-id="' + meta.active + '"]');
+    if (activePill) {
+        activePill.classList.add('tab-pending');
+        activePill.dataset.pending = 'true';
+    }
+
+    // Pre-create empty alt tabs based on the alts knob value.
+    var altsInput = document.querySelector('input[name="alts"]');
+    var alts = altsInput ? parseInt(altsInput.value, 10) : 0;
+    if (alts > 0) {
+        // Unhide close buttons on existing tabs (hidden when only one tab).
+        document.querySelectorAll('#tab-bar .tab-close.hidden').forEach(function(el) {
+            el.classList.remove('hidden');
+        });
+        var meta = getEditorTabs();
+        for (var i = 1; i <= alts; i++) {
+            var newId = meta.nextId;
+            meta.tabs.push({ id: newId, label: 'Alt ' + i });
+            meta.nextId = newId + 1;
+            setTabState(newId, '');
+            // Append a pending tab pill to the tab bar.
+            var bar = document.getElementById('tab-bar');
+            if (bar) {
+                var addBtn = bar.querySelector('[data-tab-add]');
+                var pill = document.createElement('button');
+                pill.className = 'tab-pill inline-flex items-center gap-1 px-3 text-sm font-medium transition border-b-2 border-transparent text-ink-3 tab-pending';
+                pill.dataset.tabId = newId;
+                pill.dataset.pending = 'true';
+                pill.disabled = true;
+                pill.innerHTML = '<span class="tab-label">Alt ' + i + '</span>';
+                if (addBtn) bar.insertBefore(pill, addBtn);
+                else bar.appendChild(pill);
+            }
+        }
+        setEditorTabs(meta);
+    }
 }
 function stopGenerating() {
     var btn = document.getElementById('generate-btn');

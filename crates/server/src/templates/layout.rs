@@ -65,7 +65,8 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 main #content class="flex-grow" {
                     (content)
                 }
-                footer class="text-center text-xs py-2 no-print text-muted bg-paper" {
+                footer class="text-center text-xs py-2 no-print text-muted bg-paper border-t"
+                       style="border-color: var(--rule)" {
                     a href=(source_url()) target="_blank"
                       class="transition text-muted" {
                         "Source code (AGPL-3.0)"
