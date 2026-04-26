@@ -483,12 +483,15 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                 }
             }
             // Seat rows
+            @let natural_order = !boat.has_cox.as_bool() || boat.cox_position.cox_first() == cox_at_top;
             div class="px-2 py-1" {
-                // Stern end cap
-                div class="end-cap" {
-                    span class="end-cap-rule" {}
-                    span { "stern" }
-                    span class="end-cap-rule" {}
+                // Stern end cap — only when display order matches the boat's real layout
+                @if natural_order {
+                    div class="end-cap" {
+                        span class="end-cap-rule" {}
+                        span { "stern" }
+                        span class="end-cap-rule" {}
+                    }
                 }
                 @for (seat, maybe_rower) in &seats {
                     @let key = format!("{}:{}", boat.id, seat);
@@ -578,11 +581,13 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         (side_indicator(rower))
                     }
                 }
-                // Bow end cap
-                div class="end-cap" {
-                    span class="end-cap-rule" {}
-                    span { "bow" }
-                    span class="end-cap-rule" {}
+                // Bow end cap — only when display order matches the boat's real layout
+                @if natural_order {
+                    div class="end-cap" {
+                        span class="end-cap-rule" {}
+                        span { "bow" }
+                        span class="end-cap-rule" {}
+                    }
                 }
             }
         }
