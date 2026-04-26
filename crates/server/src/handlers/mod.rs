@@ -139,6 +139,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/commit/{id}", post(solve::commit_handler))
         .route("/commit-lineup/{id}", post(solve::commit_lineup_handler))
+        .route("/draft-lineup/{id}", post(solve::draft_lineup_handler))
+        .route("/clear-draft/{id}", post(solve::clear_draft_handler))
         .route("/history", get(history::list_handler))
         .route("/history/{id}", get(history::detail_handler))
         .route("/history/{id}/notes", post(history::notes_handler))

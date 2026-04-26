@@ -200,6 +200,7 @@ diesel::table! {
         practice_id -> Integer,
         boat_id -> Integer,
         created_at -> Timestamp,
+        is_draft -> Integer,
     }
 }
 

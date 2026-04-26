@@ -164,7 +164,7 @@ pub(crate) async fn stream_handler(
                         .collect();
 
                     let editor_html = templates::solve::lineup_editor(
-                        &snapshot, practice_id, &editor, &render_flags,
+                        &snapshot, practice_id, &editor, &render_flags, false,
                     );
                     let pool_oob = templates::solve::roster_pool_oob(
                         &snapshot, practice_id, &editor,

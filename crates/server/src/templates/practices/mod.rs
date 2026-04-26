@@ -32,6 +32,7 @@ pub(crate) struct PracticeRow {
     pub(crate) non_respondent_count: usize,
     pub(crate) boat_count: usize,
     pub(crate) already_sent_today: bool,
+    pub(crate) has_draft: bool,
 }
 
 const PRACTICES_TABS: &[TabDef] = &[
@@ -217,6 +218,11 @@ fn planning_row_inner(
                     }
                 } @else {
                     span class="font-semibold text-ink" { (row.date) }
+                }
+                @if row.has_draft {
+                    span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                        "Draft"
+                    }
                 }
                 @if row.already_sent_today {
                     span class="text-xs bg-paper-2 text-ink-3 px-1.5 py-0.5 rounded-full" {

@@ -75,17 +75,33 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 div id="error-toast"
                     class="fixed bottom-4 left-4 z-50 max-w-sm hidden"
                     role="alert" {
-                    div class="bg-bad text-paper px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
+                    div class="bg-red-50 text-red-900 border border-red-300 border-l-4 border-l-red-600 px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
                         span id="error-toast-msg" class="flex-1" {}
                         button type="button"
-                               class="text-paper/80 hover:text-paper font-bold text-lg leading-none"
+                               class="text-red-400 hover:text-red-700 font-bold text-lg leading-none"
                                onclick="document.getElementById('error-toast').classList.add('hidden')" {
+                            "\u{00d7}"
+                        }
+                    }
+                }
+                // Success toast (fixed bottom-left, hidden by default)
+                div id="success-toast"
+                    class="fixed bottom-4 left-4 z-50 max-w-sm hidden"
+                    role="status" {
+                    div class="bg-emerald-50 text-emerald-900 border border-emerald-300 border-l-4 border-l-emerald-600 px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
+                        span id="success-toast-msg" class="flex-1" {}
+                        button type="button"
+                               class="text-emerald-400 hover:text-emerald-700 font-bold text-lg leading-none"
+                               onclick="document.getElementById('success-toast').classList.add('hidden')" {
                             "\u{00d7}"
                         }
                     }
                 }
                 script {
                     (maud::PreEscaped(include_str!("js/error_toast.js")))
+                }
+                script {
+                    (maud::PreEscaped(include_str!("js/success_toast.js")))
                 }
             }
         }

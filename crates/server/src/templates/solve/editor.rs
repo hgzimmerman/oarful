@@ -240,36 +240,56 @@ pub(crate) fn lineup_editor(
     practice_id: PracticeId,
     editor: &EditorData,
     flags: &DisplayFlags,
+    _has_draft: bool,
 ) -> Markup {
     let commit_action = format!("/commit-lineup/{practice_id}");
+    let draft_action = format!("/draft-lineup/{practice_id}");
+    let clear_action = format!("/clear-draft/{practice_id}");
     let editor_url = format!("/solve/{practice_id}/editor");
 
     html! {
+        // Hidden forms that carry seat data — buttons in the page header
+        // reference these via the HTML5 `form` attribute.
+        form #commit-form method="post" action=(commit_action) class="hidden" {
+            @for eb in &editor.boats {
+                @if eb.active {
+                    @for (seat, maybe_rower) in &eb.seats {
+                        @if let Some(rower_id) = maybe_rower {
+                            input type="hidden" name="seat"
+                                  value={(eb.boat.id) ":" (seat) ":" (rower_id)};
+                        }
+                    }
+                }
+            }
+        }
+        form #draft-form method="post" action=(draft_action)
+             hx-post=(draft_action)
+             hx-swap="none"
+             "hx-on::after-request"="showSuccessToast('Draft saved')"
+             class="hidden" {
+            @for eb in &editor.boats {
+                @if eb.active {
+                    @for (seat, maybe_rower) in &eb.seats {
+                        @if let Some(rower_id) = maybe_rower {
+                            input type="hidden" name="seat"
+                                  value={(eb.boat.id) ":" (seat) ":" (rower_id)};
+                        }
+                    }
+                }
+            }
+        }
+        form #clear-form method="post" action=(clear_action)
+             hx-post=(clear_action)
+             hx-target="#content"
+             hx-push-url="true"
+             class="hidden" {}
+
         section #lineup-editor class="solve-card p-4 sm:p-6"
                data-practice-id=(practice_id)
                data-editor-url=(editor_url) {
 
             div class="flex items-center justify-between mb-1" {
                 h2 class="text-xl font-bold font-serif-heading text-ink" { "Lineup" }
-                div class="no-print" {
-                    form method="post" action=(commit_action) {
-                        // Server-rendered hidden inputs for commit.
-                        @for eb in &editor.boats {
-                            @if eb.active {
-                                @for (seat, maybe_rower) in &eb.seats {
-                                    @if let Some(rower_id) = maybe_rower {
-                                        input type="hidden" name="seat"
-                                              value={(eb.boat.id) ":" (seat) ":" (rower_id)};
-                                    }
-                                }
-                            }
-                        }
-                        button type="submit"
-                               class="btn-accent font-semibold shadow transition whitespace-nowrap" {
-                            "Commit lineup"
-                        }
-                    }
-                }
             }
             // Selection hint — fixed height so it doesn't cause reflow.
             div class="h-6 mb-2 no-print" {

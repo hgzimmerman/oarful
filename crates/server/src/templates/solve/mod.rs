@@ -349,7 +349,9 @@ pub(crate) fn landing_content(
     custom_profiles: &[(String, Option<String>)],
     flags: &DisplayFlags,
     default_boats: &HashSet<BoatId>,
+    draft_lineups: &[lineup_db::lineup::CommittedLineup],
 ) -> Markup {
+    let has_draft = !draft_lineups.is_empty();
     let available_count = snapshot.available_rowers().count();
     let subtitle = format!(
         "{available_count} members available · {boats} candidate shells",
@@ -372,6 +374,7 @@ pub(crate) fn landing_content(
 
     // If seat params are present (e.g. from "Edit lineup" on history),
     // pre-populate the editor with those placements.
+    // Otherwise, if drafts exist, load those into the editor.
     let editor = if !knobs.seat.is_empty() {
         let mut placements: HashMap<BoatId, HashMap<i32, RowerId>> = HashMap::new();
         for t in &knobs.seat {
@@ -382,6 +385,16 @@ pub(crate) fn landing_content(
         }
         let active_boats: HashSet<BoatId> = knobs.boat.iter().copied().collect();
         EditorData::from_placements(snapshot, &placements, &active_boats)
+    } else if has_draft {
+        let mut placements: HashMap<BoatId, HashMap<i32, RowerId>> = HashMap::new();
+        for cl in draft_lineups {
+            let boat_seats = placements.entry(cl.lineup.boat_id).or_default();
+            for seat in &cl.seats {
+                boat_seats.insert(seat.seat_position.as_int(), seat.rower_id);
+            }
+        }
+        let active_boats: HashSet<BoatId> = placements.keys().copied().collect();
+        EditorData::from_placements(snapshot, &placements, &active_boats)
     } else {
         EditorData::empty(snapshot, default_boats)
     };
@@ -389,10 +402,37 @@ pub(crate) fn landing_content(
     html! {
         header class="border-b px-4 sm:px-8 py-3"
                style="border-color: var(--rule); background: var(--paper)" {
-            h1 class="text-xl font-bold font-serif-heading text-ink" {
-                "Set Lineups \u{00b7} " (date)
+            div class="flex flex-wrap items-center justify-between gap-2" {
+                div {
+                    h1 class="text-xl font-bold font-serif-heading text-ink" {
+                        "Set Lineups \u{00b7} " (date)
+                        @if has_draft {
+                            span class="ml-2 text-xs font-normal bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full align-middle" {
+                                "Draft"
+                            }
+                        }
+                    }
+                    p class="text-xs mt-0.5 text-muted" { (subtitle) }
+                }
+                div class="flex items-center gap-3 no-print" {
+                    // Button group: Save draft + Clear
+                    div class="inline-flex rounded-md shadow-soft" {
+                        button type="submit" form="draft-form"
+                               class="border border-rule rounded-l-md px-3 py-2 text-sm font-semibold text-ink-2 bg-paper hover:bg-paper-2 transition whitespace-nowrap" {
+                            "Save draft"
+                        }
+                        button type="submit" form="clear-form"
+                               class="border border-rule border-l-0 rounded-r-md px-3 py-2 text-sm font-semibold text-ink-3 bg-paper hover:bg-paper-2 transition whitespace-nowrap" {
+                            "Clear"
+                        }
+                    }
+                    // Commit — visually distinct, primary action
+                    button type="submit" form="commit-form"
+                           class="btn-accent font-semibold shadow transition whitespace-nowrap" {
+                        "Commit lineup"
+                    }
+                }
             }
-            p class="text-xs mt-0.5 text-muted" { (subtitle) }
         }
         div class="solve-layout" x-data="lineupEditor()" {
             // Left sidebar: roster pool
@@ -403,7 +443,7 @@ pub(crate) fn landing_content(
             div class="solve-center" {
                 div class="px-4 sm:px-6 py-4 space-y-4" {
                     div #solve-results {
-                        (lineup_editor(snapshot, practice_id, &editor, flags))
+                        (lineup_editor(snapshot, practice_id, &editor, flags, has_draft))
                     }
                 }
             }

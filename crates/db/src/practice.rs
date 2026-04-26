@@ -126,7 +126,7 @@ impl Practice {
             .get_result(conn)
     }
 
-    /// Practices with at least one committed lineup, newest first.
+    /// Practices with at least one committed (non-draft) lineup, newest first.
     /// Scoped to a single team.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn list_committed(
@@ -135,13 +135,19 @@ impl Practice {
     ) -> Result<Vec<Practice>, diesel::result::Error> {
         practice::table
             .filter(practice::team_id.eq(team_id))
-            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .filter(
+                practice::id.eq_any(
+                    lineup::table
+                        .filter(lineup::is_draft.eq(0))
+                        .select(lineup::practice_id),
+                ),
+            )
             .select(Practice::as_select())
             .order(practice::date.desc())
             .get_results(conn)
     }
 
-    /// Which of the given practice IDs have at least one committed lineup?
+    /// Which of the given practice IDs have at least one committed (non-draft) lineup?
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn committed_ids(
         conn: &mut SqliteConnection,
@@ -151,7 +157,13 @@ impl Practice {
         practice::table
             .filter(practice::team_id.eq(team_id))
             .filter(practice::id.eq_any(ids))
-            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .filter(
+                practice::id.eq_any(
+                    lineup::table
+                        .filter(lineup::is_draft.eq(0))
+                        .select(lineup::practice_id),
+                ),
+            )
             .select(practice::id)
             .get_results(conn)
     }

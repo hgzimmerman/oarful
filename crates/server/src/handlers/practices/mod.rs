@@ -96,6 +96,7 @@ async fn planning_tab_content(
                 Practice::committed_ids(conn, team_id, &upcoming_ids)?
                     .into_iter()
                     .collect();
+            let draft_ids = Lineup::practices_with_drafts(conn, &upcoming_ids)?;
 
             let existing_dates: HashSet<chrono::NaiveDate> =
                 upcoming_practices.iter().map(|p| p.date).collect();
@@ -143,6 +144,7 @@ async fn planning_tab_content(
                     non_respondent_count: non_respondents,
                     boat_count: 0,
                     already_sent_today: already_sent,
+                    has_draft: draft_ids.contains(&practice.id),
                 });
             }
             Ok((rows, default_time, default_duration, suggested_date))
@@ -328,6 +330,7 @@ async fn committed_tab_content(
                     non_respondent_count: 0,
                     boat_count: lineups.len(),
                     already_sent_today: already_sent,
+                    has_draft: false, // committed tab never shows drafts
                 });
             }
             rows.sort_by(|a, b| b.date.cmp(&a.date));

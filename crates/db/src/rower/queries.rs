@@ -110,6 +110,7 @@ impl Rower {
         let rows: Vec<(RowerId, NaiveDate)> = lineup_seat::table
             .inner_join(lineup::table.on(lineup::id.eq(lineup_seat::lineup_id)))
             .inner_join(practice::table.on(practice::id.eq(lineup::practice_id)))
+            .filter(lineup::is_draft.eq(0))
             .filter(lineup_seat::is_cox.eq(1))
             .select((lineup_seat::rower_id, practice::date))
             .load(conn)?;
@@ -145,7 +146,13 @@ impl Rower {
         // Step 1: all (rower, date) pairs where the rower was available
         // for a committed practice (practice has at least one lineup).
         let committed_practice_ids: Vec<i32> = practice::table
-            .filter(practice::id.eq_any(lineup::table.select(lineup::practice_id)))
+            .filter(
+                practice::id.eq_any(
+                    lineup::table
+                        .filter(lineup::is_draft.eq(0))
+                        .select(lineup::practice_id),
+                ),
+            )
             .select(practice::id)
             .get_results(conn)?;
 
@@ -186,6 +193,7 @@ impl Rower {
         let placed_rows: Vec<(RowerId, i32)> = lineup_seat::table
             .inner_join(lineup::table.on(lineup::id.eq(lineup_seat::lineup_id)))
             .filter(lineup::practice_id.eq_any(&committed_practice_ids))
+            .filter(lineup::is_draft.eq(0))
             .select((lineup_seat::rower_id, lineup::practice_id))
             .get_results(conn)?;
 

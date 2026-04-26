@@ -202,7 +202,10 @@ pub(crate) async fn editor_handler(
         })
         .collect();
 
-    let editor_html = templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags);
+    // Editor reloads always pass has_draft=false; draft state is only
+    // relevant on the initial landing page load.
+    let editor_html =
+        templates::solve::lineup_editor(&snapshot, practice_id, &editor, &flags, false);
     let pool_oob = templates::solve::roster_pool_oob(
         &snapshot,
         practice_id,

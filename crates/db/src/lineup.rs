@@ -119,6 +119,7 @@ pub struct Lineup {
     pub practice_id: PracticeId,
     pub boat_id: BoatId,
     pub created_at: chrono::NaiveDateTime,
+    pub is_draft: IntBool,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -127,6 +128,7 @@ pub struct NewLineup {
     pub practice_id: PracticeId,
     pub boat_id: BoatId,
     pub created_at: chrono::NaiveDateTime,
+    pub is_draft: IntBool,
 }
 
 #[derive(
@@ -211,6 +213,7 @@ impl Lineup {
                     practice_id,
                     boat_id,
                     created_at: now,
+                    is_draft: IntBool::FALSE,
                 })
                 .returning(Lineup::as_returning())
                 .get_result(conn)?;
@@ -234,7 +237,7 @@ impl Lineup {
         })
     }
 
-    /// All committed lineups for a given practice, with their seat rows.
+    /// All committed (non-draft) lineups for a given practice, with their seat rows.
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn for_practice(
         conn: &mut SqliteConnection,
@@ -242,6 +245,7 @@ impl Lineup {
     ) -> Result<Vec<CommittedLineup>, diesel::result::Error> {
         let headers: Vec<Lineup> = lineup::table
             .filter(lineup::practice_id.eq(practice_id))
+            .filter(lineup::is_draft.eq(0))
             .select(Lineup::as_select())
             .order(lineup::id.asc())
             .get_results(conn)?;
@@ -277,6 +281,7 @@ impl Lineup {
         // lineups. `DISTINCT` + `ORDER BY date DESC LIMIT N`.
         let recent_dates: Vec<NaiveDate> = practice::table
             .inner_join(lineup::table.on(lineup::practice_id.eq(practice::id)))
+            .filter(lineup::is_draft.eq(0))
             .select(practice::date)
             .distinct()
             .order(practice::date.desc())
@@ -295,6 +300,7 @@ impl Lineup {
             .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
             .inner_join(boat::table.on(boat::id.eq(lineup::boat_id)))
             .filter(practice::date.eq_any(&recent_dates))
+            .filter(lineup::is_draft.eq(0))
             .select((
                 practice::date,
                 lineup::boat_id,
@@ -331,6 +337,7 @@ impl Lineup {
         let rows: Vec<(PracticeId, RowerId)> = lineup::table
             .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
             .filter(lineup::practice_id.eq_any(practice_ids))
+            .filter(lineup::is_draft.eq(0))
             .select((lineup::practice_id, lineup_seat::rower_id))
             .get_results(conn)?;
 
@@ -353,10 +360,130 @@ impl Lineup {
         let count: i64 = lineup::table
             .inner_join(lineup_seat::table.on(lineup_seat::lineup_id.eq(lineup::id)))
             .filter(lineup::practice_id.eq(practice_id))
+            .filter(lineup::is_draft.eq(0))
             .filter(lineup_seat::rower_id.eq(rower_id))
             .count()
             .get_result(conn)?;
         Ok(count > 0)
+    }
+
+    /// Save a draft for an entire practice. Replaces any existing draft
+    /// lineups for this practice (but does not touch committed ones).
+    #[tracing::instrument(level = "debug", skip(conn, boats), err)]
+    pub fn save_draft_for_practice(
+        conn: &mut SqliteConnection,
+        practice_id: PracticeId,
+        boats: &[(BoatId, Vec<CommitSeat>)],
+    ) -> Result<(), diesel::result::Error> {
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            // Delete existing drafts for this practice.
+            diesel::delete(
+                lineup::table
+                    .filter(lineup::practice_id.eq(practice_id))
+                    .filter(lineup::is_draft.eq(1)),
+            )
+            .execute(conn)?;
+
+            let now = chrono::Utc::now().naive_utc();
+            for (boat_id, seats) in boats {
+                let header: Lineup = diesel::insert_into(lineup::table)
+                    .values(NewLineup {
+                        practice_id,
+                        boat_id: *boat_id,
+                        created_at: now,
+                        is_draft: IntBool::TRUE,
+                    })
+                    .returning(Lineup::as_returning())
+                    .get_result(conn)?;
+
+                let rows: Vec<NewLineupSeat> = seats
+                    .iter()
+                    .map(|s| NewLineupSeat {
+                        lineup_id: header.id,
+                        seat_position: s.seat_position,
+                        rower_id: s.rower_id,
+                        is_cox: IntBool::new(s.is_cox),
+                    })
+                    .collect();
+                if !rows.is_empty() {
+                    diesel::insert_into(lineup_seat::table)
+                        .values(&rows)
+                        .execute(conn)?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// All draft lineups for a given practice, with their seat rows.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn draft_for_practice(
+        conn: &mut SqliteConnection,
+        practice_id: PracticeId,
+    ) -> Result<Vec<CommittedLineup>, diesel::result::Error> {
+        let headers: Vec<Lineup> = lineup::table
+            .filter(lineup::practice_id.eq(practice_id))
+            .filter(lineup::is_draft.eq(1))
+            .select(Lineup::as_select())
+            .order(lineup::id.asc())
+            .get_results(conn)?;
+
+        let mut out = Vec::with_capacity(headers.len());
+        for header in headers {
+            let seats: Vec<LineupSeatRow> = lineup_seat::table
+                .filter(lineup_seat::lineup_id.eq(header.id))
+                .select(LineupSeatRow::as_select())
+                .order(lineup_seat::seat_position.asc())
+                .get_results(conn)?;
+            out.push(CommittedLineup {
+                lineup: header,
+                seats,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Delete all draft lineups for a practice.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn delete_draft_for_practice(
+        conn: &mut SqliteConnection,
+        practice_id: PracticeId,
+    ) -> Result<usize, diesel::result::Error> {
+        diesel::delete(
+            lineup::table
+                .filter(lineup::practice_id.eq(practice_id))
+                .filter(lineup::is_draft.eq(1)),
+        )
+        .execute(conn)
+    }
+
+    /// Whether a practice has any draft lineups.
+    #[tracing::instrument(level = "debug", skip(conn), err)]
+    pub fn has_draft(
+        conn: &mut SqliteConnection,
+        practice_id: PracticeId,
+    ) -> Result<bool, diesel::result::Error> {
+        let count: i64 = lineup::table
+            .filter(lineup::practice_id.eq(practice_id))
+            .filter(lineup::is_draft.eq(1))
+            .count()
+            .get_result(conn)?;
+        Ok(count > 0)
+    }
+
+    /// Which of the given practice IDs have at least one draft lineup?
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn practices_with_drafts(
+        conn: &mut SqliteConnection,
+        practice_ids: &[PracticeId],
+    ) -> Result<std::collections::HashSet<PracticeId>, diesel::result::Error> {
+        let ids: Vec<PracticeId> = lineup::table
+            .filter(lineup::practice_id.eq_any(practice_ids))
+            .filter(lineup::is_draft.eq(1))
+            .select(lineup::practice_id)
+            .distinct()
+            .get_results(conn)?;
+        Ok(ids.into_iter().collect())
     }
 }
 
@@ -611,5 +738,198 @@ mod tests {
         let map = Lineup::committed_rower_ids_for_practices(&mut conn, &[p1.id, p2.id]).unwrap();
         assert_eq!(map[&p1.id].len(), 1);
         assert_eq!(map[&p2.id].len(), 2);
+    }
+
+    #[test]
+    fn draft_not_visible_in_committed_queries() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        // Save a draft
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            practice.id,
+            &[(
+                boat.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        // Draft should not appear in committed queries
+        assert!(Lineup::for_practice(&mut conn, practice.id)
+            .unwrap()
+            .is_empty());
+        assert!(!Lineup::is_rower_in_committed_lineup(&mut conn, practice.id, r1.id).unwrap());
+        assert!(Lineup::recent_placements(&mut conn, 10).unwrap().is_empty());
+        let map = Lineup::committed_rower_ids_for_practices(&mut conn, &[practice.id]).unwrap();
+        assert!(map.is_empty());
+
+        // But draft_for_practice should return it
+        let drafts = Lineup::draft_for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].seats.len(), 1);
+        assert_eq!(drafts[0].seats[0].rower_id, r1.id);
+
+        // has_draft should be true
+        assert!(Lineup::has_draft(&mut conn, practice.id).unwrap());
+    }
+
+    #[test]
+    fn commit_replaces_draft() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        // Save a draft with r1
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            practice.id,
+            &[(
+                boat.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        // Commit with r2 — should replace the draft
+        Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r2.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        // Draft should be gone, committed should have r2
+        assert!(!Lineup::has_draft(&mut conn, practice.id).unwrap());
+        let committed = Lineup::for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].seats[0].rower_id, r2.id);
+    }
+
+    #[test]
+    fn save_draft_replaces_previous_draft() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        // First draft with r1
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            practice.id,
+            &[(
+                boat.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r1.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        // Second draft with r2 replaces
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            practice.id,
+            &[(
+                boat.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r2.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        let drafts = Lineup::draft_for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].seats[0].rower_id, r2.id);
+    }
+
+    #[test]
+    fn delete_draft_preserves_committed() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat = seed_boat(&mut conn);
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let practice = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+
+        // Commit with r1
+        Lineup::commit_for_boat(
+            &mut conn,
+            practice.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        // Also save a draft (different boat to avoid collision)
+        let boat2 = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Four".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(4),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            practice.id,
+            &[(
+                boat2.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r2.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        // Delete draft
+        Lineup::delete_draft_for_practice(&mut conn, practice.id).unwrap();
+
+        // Draft gone, committed still there
+        assert!(!Lineup::has_draft(&mut conn, practice.id).unwrap());
+        let committed = Lineup::for_practice(&mut conn, practice.id).unwrap();
+        assert_eq!(committed.len(), 1);
+        assert_eq!(committed[0].seats[0].rower_id, r1.id);
     }
 }

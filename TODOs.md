@@ -290,6 +290,29 @@ lifecycle events.
 Add pricing to the landing page once Stripe is wired up. Starting
 at $150/year. State it plainly, frame as annual not monthly.
 
+#### Zone reward × side-preference scaling
+
+The seat-affinity (zone) reward can overpower side preference when
+`side_preference_weight` is moderate. A rower with a strong port
+preference (4/5) can get placed starboard-in-zone because the zone
+reward outweighs the side penalty — the coach has to crank
+`side_preference_weight` high to prevent it, which distorts other
+trade-offs.
+
+**Fix:** scale the zone reward down when the rower is on the wrong
+side, proportional to their `side_strength`. Strong preference
+(4–5) gets a heavy discount (most of the zone reward cancelled);
+mild preference (1–3) gets a moderate, scaled discount. Rowers
+with `Either` side are unaffected. This makes the model
+self-correcting — zone placement still matters, but it no longer
+creates an incentive to violate strong side preferences without
+the admin having to tune weights to avoid blowout.
+
+**Implementation sketch:** in the S4 seat-affinity objective term,
+multiply the per-rower zone reward by a factor like
+`1.0 - (side_strength / 5.0) * wrong_side_flag`. The exact curve
+can be tuned via baselines.
+
 ### Long-term / parked
 
 #### Regatta lineup generator

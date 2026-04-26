@@ -21,7 +21,7 @@ pub(crate) async fn view_handler(
 ) -> Result<Html<String>, super::ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (practice, mut snapshot, committed_practices, has_committed) = tenant
+    let (practice, mut snapshot, committed_practices, has_committed, draft_lineups) = tenant
         .db
         .with_conn(move |conn| {
             let practice =
@@ -34,7 +34,8 @@ pub(crate) async fn view_handler(
                     .map(|l| !l.is_empty())
                     .unwrap_or(false)
             };
-            Ok((practice, snapshot, practices, has_committed))
+            let drafts = lineup_db::lineup::Lineup::draft_for_practice(conn, practice.id)?;
+            Ok((practice, snapshot, practices, has_committed, drafts))
         })
         .await
         .map_err(internal_error)?;
@@ -135,6 +136,7 @@ pub(crate) async fn view_handler(
         &profile_names,
         &flags,
         &default_boats,
+        &draft_lineups,
     );
     Ok(crate::handlers::maybe_page_authed(
         &format!("Set Lineups · {date}"),

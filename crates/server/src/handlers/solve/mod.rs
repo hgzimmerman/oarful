@@ -13,7 +13,9 @@ mod profiles;
 mod stream;
 mod view;
 
-pub(crate) use commit::{commit_handler, commit_lineup_handler};
+pub(crate) use commit::{
+    clear_draft_handler, commit_handler, commit_lineup_handler, draft_lineup_handler,
+};
 pub(crate) use editor::editor_handler;
 pub(crate) use profiles::{
     delete_profile_handler, edit_profile_handler, preset_bar_handler, save_profile_handler,
