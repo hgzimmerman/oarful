@@ -1000,7 +1000,7 @@ pub fn solve_streaming(
         }
     };
     tracker.log("primary solve");
-    let (_primary_lineups, primary_placements) = match primary_opt {
+    let (_primary_lineups, primary_placements, primary_solution) = match primary_opt {
         OptimisationResult::Optimal(sol)
         | OptimisationResult::Satisfiable(sol)
         | OptimisationResult::Stopped(sol, _) => {
@@ -1043,13 +1043,14 @@ pub fn solve_streaming(
                     }
                 }
             }
+            let primary_for_tabu = primary_solution.clone();
             let _ = tx.send(SolveStreamEvent::Primary {
                 status: SolveStatus::Satisfied,
                 solution: primary_solution,
                 diagnostics: diagnostics.clone(),
                 objective: Some(primary_obj),
             });
-            (lineups, placements)
+            (lineups, placements, primary_for_tabu)
         }
         OptimisationResult::Unsatisfiable => {
             let _ = tx.send(SolveStreamEvent::PrimaryFailed {
@@ -1081,6 +1082,8 @@ pub fn solve_streaming(
             request.tabu_min_diff,
         )?
     {
+        // Track all prior solutions so SA can check tabu distance.
+        let mut prior_solutions: Vec<ProposedSolution> = vec![primary_solution];
         let mut alt_index = 0usize;
         for alt_i in 1..request.top_n {
             let alt_tracker = ProgressTracker::new(objective);
@@ -1129,13 +1132,57 @@ pub fn solve_streaming(
             let alt_placements = collect_placements(&builder.x, |v| sol.get_integer_value(v));
             let alt_unplaced = compute_unplaced(&builder.available, &alt_lineups);
 
+            let mut alt_solution = ProposedSolution {
+                lineups: alt_lineups,
+                unplaced: alt_unplaced,
+            };
+
+            // SA post-processing for alternatives. Accept the SA
+            // result only if it still differs from all prior solutions
+            // by at least tabu_min_diff placements.
+            if request.sa_postprocess {
+                let sa_boats: Vec<&Boat> = builder.boats.clone();
+                let sa_available: Vec<&Rower> = builder.available.clone();
+                let alt_obj = sol.get_integer_value(objective);
+                if let Some((improved, new_obj)) = anneal::anneal(
+                    &alt_solution,
+                    snapshot,
+                    request,
+                    &sa_boats,
+                    &sa_available,
+                    alt_obj,
+                ) {
+                    if new_obj < alt_obj {
+                        // Check the SA result still respects the tabu
+                        // distance from the primary and all prior alts.
+                        let min_diff = request.tabu_min_diff as usize;
+                        let sa_distinct = prior_solutions
+                            .iter()
+                            .all(|prior| placement_diff(&improved, prior) >= min_diff);
+                        if sa_distinct {
+                            tracing::info!(
+                                alt = alt_i,
+                                old_obj = alt_obj,
+                                new_obj,
+                                "SA improved alt (distinct)"
+                            );
+                            alt_solution = improved;
+                        } else {
+                            tracing::info!(
+                                alt = alt_i,
+                                "SA alt converged too close to a prior solution, keeping CP result"
+                            );
+                        }
+                    }
+                }
+            }
+
+            prior_solutions.push(alt_solution.clone());
+
             if tx
                 .send(SolveStreamEvent::Alternative {
                     index: alt_index,
-                    solution: ProposedSolution {
-                        lineups: alt_lineups,
-                        unplaced: alt_unplaced,
-                    },
+                    solution: alt_solution,
                 })
                 .is_err()
             {
@@ -2125,6 +2172,35 @@ fn collect_placements(
     mut value_of: impl FnMut(DomainId) -> i32,
 ) -> Vec<DomainId> {
     x.values().copied().filter(|&v| value_of(v) == 1).collect()
+}
+
+/// Count the number of `(rower, boat, seat)` placement differences
+/// between two `ProposedSolution`s. Used to verify SA-improved
+/// alternatives still respect the tabu distance from prior solutions.
+fn placement_diff(a: &ProposedSolution, b: &ProposedSolution) -> usize {
+    use std::collections::HashSet;
+    let set_a: HashSet<(BoatId, i32, RowerId)> = a
+        .lineups
+        .iter()
+        .filter(|l| l.used)
+        .flat_map(|l| {
+            l.seats
+                .iter()
+                .map(move |&(seat, rid)| (l.boat_id, seat, rid))
+        })
+        .collect();
+    let set_b: HashSet<(BoatId, i32, RowerId)> = b
+        .lineups
+        .iter()
+        .filter(|l| l.used)
+        .flat_map(|l| {
+            l.seats
+                .iter()
+                .map(move |&(seat, rid)| (l.boat_id, seat, rid))
+        })
+        .collect();
+    // Symmetric difference: placements in A but not B, plus those in B but not A.
+    set_a.symmetric_difference(&set_b).count()
 }
 
 /// Post a tabu constraint forcing any future solution to differ
