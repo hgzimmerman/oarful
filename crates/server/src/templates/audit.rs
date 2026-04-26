@@ -33,7 +33,7 @@ pub(crate) fn list_content(
                     "No audit entries found."
                 }
             } @else {
-                div class="bg-paper rounded-lg shadow overflow-hidden" {
+                div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
                     table class="w-full text-sm" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {

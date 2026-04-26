@@ -41,7 +41,7 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
             h1 class="text-2xl font-bold text-ink mb-6" { "Tenants" }
 
             // Create tenant form
-            details class="mb-8 bg-paper rounded-lg shadow" {
+            details class="mb-8 bg-paper rounded-lg shadow-soft" {
                 summary class="px-4 py-3 cursor-pointer text-sm font-semibold text-ink-2 hover:text-ink" {
                     "Create grandfathered tenant"
                 }
@@ -69,14 +69,14 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
                     }
                     div class="sm:col-span-2" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-paper font-semibold text-sm px-4 py-2 rounded shadow transition" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold text-sm px-4 py-2 rounded shadow-soft transition" {
                             "Create tenant"
                         }
                     }
                 }
             }
 
-            div class="bg-paper rounded-lg shadow overflow-x-auto" {
+            div class="bg-paper rounded-lg shadow-soft overflow-x-auto" {
                 table class="w-full text-sm" {
                     thead class="bg-paper border-b border-rule-2" {
                         tr {

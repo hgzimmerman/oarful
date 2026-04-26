@@ -96,8 +96,8 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 // Mobile: compact card list (wider breakpoint when emails shown)
-                @let mobile_class = if show_emails { "lg:hidden bg-paper rounded-lg shadow divide-y divide-rule-2" } else { "md:hidden bg-paper rounded-lg shadow divide-y divide-rule-2" };
-                @let desktop_class = if show_emails { "hidden lg:block bg-paper rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-paper rounded-lg shadow overflow-x-auto max-w-6xl mx-auto" };
+                @let mobile_class = if show_emails { "lg:hidden bg-paper rounded-lg shadow-soft divide-y divide-rule-2" } else { "md:hidden bg-paper rounded-lg shadow-soft divide-y divide-rule-2" };
+                @let desktop_class = if show_emails { "hidden lg:block bg-paper rounded-lg shadow-soft overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-paper rounded-lg shadow-soft overflow-x-auto max-w-6xl mx-auto" };
                 div class=(mobile_class) {
                     @for row in rows {
                         (mobile_row(&row.rower, row.email.as_deref(), show_emails))
@@ -299,7 +299,7 @@ pub(crate) fn attribute_section(
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     let has_editable = has_any_editable_field(perms);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow p-6" {
+        section #attributes class="bg-paper rounded-lg shadow-soft p-6" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Attributes" }
                 @if has_editable {
@@ -367,7 +367,7 @@ pub(crate) fn attribute_edit_section(
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow p-6 bg-amber-50/50" {
+        section #attributes class="bg-paper rounded-lg shadow-soft p-6 bg-amber-50/50" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Edit attributes" }
                 div class="flex items-center gap-2" {
@@ -588,7 +588,7 @@ fn erg_test_section(
     };
 
     html! {
-        section #erg-tests class="bg-paper rounded-lg shadow p-6" {
+        section #erg-tests class="bg-paper rounded-lg shadow-soft p-6" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Erg tests" }
             }
@@ -707,7 +707,7 @@ pub(crate) fn seat_affinities_section(
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
     let delete_url = format!("/rowers/{}/seat-affinity/delete", r.id);
     html! {
-        section #seat-affinities class="bg-paper rounded-lg shadow p-6" {
+        section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Seat preferences" }
                 span class="text-xs text-ink-3" {
@@ -806,7 +806,7 @@ pub(crate) fn pair_affinities_section(
         }
     };
     html! {
-        section #pair-affinities class="bg-paper rounded-lg shadow p-6" {
+        section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Pair preferences" }
                 span class="text-xs text-ink-3" {

@@ -89,7 +89,7 @@ pub(crate) fn availability_content(
                     "No upcoming practices scheduled."
                 }
             } @else {
-                div class="bg-paper rounded-lg shadow overflow-hidden" {
+                div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
                     table class="w-full text-sm" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
@@ -153,7 +153,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
 pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
     html! {
         div class="space-y-6" {
-            div class="bg-paper rounded-lg shadow p-6" {
+            div class="bg-paper rounded-lg shadow-soft p-6" {
                 form method="post" action="/my/email-preferences"
                      hx-post="/my/email-preferences"
                      hx-target="#content"
@@ -197,7 +197,7 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                     }
                     div class="pt-2" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Save preferences"
                         }
                     }

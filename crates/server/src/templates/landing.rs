@@ -82,7 +82,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                     @if stripe_enabled {
                         div class="mt-16 max-w-md w-full" {
                             h2 class="text-lg font-semibold text-ink mb-4" { "Pricing" }
-                            div class="bg-paper rounded-lg shadow p-6 text-center" {
+                            div class="bg-paper rounded-lg shadow-soft p-6 text-center" {
                                 p class="text-3xl font-bold text-ink" { "$150" }
                                 p class="text-sm text-ink-3 mt-1" { "per year" }
                                 p class="text-sm text-ink-2 mt-3" {

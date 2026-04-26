@@ -72,7 +72,7 @@ pub(crate) fn grid_content(
                     "No roster members."
                 }
             } @else {
-                div class="overflow-auto bg-paper rounded-lg shadow max-h-[75vh]" {
+                div class="overflow-auto bg-paper rounded-lg shadow-soft max-h-[75vh]" {
                     table class="text-xs border-collapse" {
                         thead {
                             tr {

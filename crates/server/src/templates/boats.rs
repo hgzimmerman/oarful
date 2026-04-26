@@ -38,7 +38,7 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
                       hx-get="/boats/new"
                       hx-target="#content"
                       hx-push-url="true"
-                      class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                      class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
                         "Add shell"
                     }
                 }
@@ -64,7 +64,7 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
     html! {
         div class="max-w-5xl mx-auto" {
             h2 class="text-lg font-bold text-ink mb-2" { (heading) }
-            div class="bg-paper rounded-lg shadow overflow-hidden" {
+            div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
                 table class="w-full text-sm" {
                     thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                         tr {
@@ -155,7 +155,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
 
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-3xl mx-auto" {
             // Boat info
-            div class="bg-paper rounded-lg shadow p-6" {
+            div class="bg-paper rounded-lg shadow-soft p-6" {
                 div class="flex items-center justify-between mb-4" {
                     h2 class="text-lg font-bold text-ink" { "Details" }
                     @if can_edit {
@@ -185,7 +185,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
             }
 
             // Usage stats
-            div class="bg-paper rounded-lg shadow p-6" {
+            div class="bg-paper rounded-lg shadow-soft p-6" {
                 h2 class="text-lg font-bold text-ink mb-4" { "Usage" }
 
                 @if usage.total_uses == 0 {
@@ -276,7 +276,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                  hx-post=(action)
                  hx-target="#content"
                  hx-push-url="/admin/fleet"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 // Name
                 (text_field("name", "Name", &data.name, true))
 
@@ -363,7 +363,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                 // Actions
                 div class="flex items-center space-x-3 pt-2" {
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition" {
                         (submit_label)
                     }
                     a href=(cancel_href)

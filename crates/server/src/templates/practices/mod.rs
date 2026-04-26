@@ -121,7 +121,7 @@ pub(crate) fn planning_content(
                           class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="btn-accent font-semibold shadow transition text-sm" {
+                       class="btn-accent font-semibold shadow-soft transition text-sm" {
                     "Create"
                 }
             }
@@ -132,7 +132,7 @@ pub(crate) fn planning_content(
         } @else if is_coach {
             @let initial_checked = rows.iter().filter(|r| !r.cancelled && r.non_respondent_count > 0).count();
             div "x-data"={"{ checked: " (initial_checked) " }"} {
-                div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
+                div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
                     @for row in rows {
                         (planning_row_card(row, is_coach))
                     }
@@ -147,14 +147,14 @@ pub(crate) fn planning_content(
                                hx-include="[name='practice_ids']:checked"
                                hx-target="body"
                                hx-swap="beforeend"
-                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                               class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                             "Send reminders"
                         }
                     }
                 }
             }
         } @else {
-            div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
+            div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
                 @for row in rows {
                     (planning_row_card(row, is_coach))
                 }
@@ -277,7 +277,7 @@ pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup 
 
     html! {
         div class="space-y-4" {
-            div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
+            div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
                 @for row in rows {
                     (committed_row(row, is_coach))
                 }
@@ -290,7 +290,7 @@ pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup 
                            hx-include="[name='dates']:checked"
                            hx-target="body"
                            hx-swap="beforeend"
-                           class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                           class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
                         "Send lineups"
                     }
                 }

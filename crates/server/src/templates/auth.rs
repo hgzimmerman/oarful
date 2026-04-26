@@ -79,7 +79,7 @@ pub(crate) fn login_email_step(
             }
 
             form method="post" action="/login/email"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 div {
                     label for="email" class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
                     input id="email" name="email" type="email" required autofocus
@@ -87,7 +87,7 @@ pub(crate) fn login_email_step(
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                     "Continue"
                 }
             }
@@ -130,7 +130,7 @@ pub(crate) fn login_password_step(
             }
 
             form method="post" action="/login"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 // Show email as read-only context
                 div {
                     label class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
@@ -152,7 +152,7 @@ pub(crate) fn login_password_step(
                     }
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                     "Sign in"
                 }
             }
@@ -185,7 +185,7 @@ pub(crate) fn login_club_picker(
     auth_shell(
         "Choose your club",
         html! {
-            div class="bg-paper rounded-lg shadow p-6 space-y-4" {
+            div class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 p class="text-sm text-ink-2 mb-2" {
                     "Your email is associated with multiple clubs. Choose one:"
                 }
@@ -220,7 +220,7 @@ pub(crate) fn forgot_password_page(prefill_email: Option<&str>) -> Markup {
         "Forgot password",
         html! {
             form method="post" action="/forgot-password"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 div class="text-sm text-ink-2 mb-2" {
                     "Enter your email and we'll send you a link to reset your password."
                 }
@@ -231,7 +231,7 @@ pub(crate) fn forgot_password_page(prefill_email: Option<&str>) -> Markup {
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                     "Send reset link"
                 }
             }
@@ -250,7 +250,7 @@ pub(crate) fn forgot_password_sent(email: &str) -> Markup {
         "Check your email",
         html! {
             (success_banner("Password reset link sent! Check your inbox."))
-            div class="bg-paper rounded-lg shadow p-6 text-center space-y-3" {
+            div class="bg-paper rounded-lg shadow-soft p-6 text-center space-y-3" {
                 p class="text-sm text-ink-2" {
                     "We sent a password reset link to "
                     strong { (email) }
@@ -276,7 +276,7 @@ pub(crate) fn reset_password_form(error: Option<&str>) -> Markup {
                 (error_banner(msg))
             }
             form method="post" action="/reset-password"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 div class="header text-lg font-bold text-ink mb-2" { "Set a new password" }
                 div {
                     label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "New password" }
@@ -291,7 +291,7 @@ pub(crate) fn reset_password_form(error: Option<&str>) -> Markup {
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                     "Update password"
                 }
             }
@@ -305,7 +305,7 @@ pub(crate) fn login_magic_sent(email: &str) -> Markup {
         "Check your email",
         html! {
             (success_banner("Sign-in link sent! Check your inbox."))
-            div class="bg-paper rounded-lg shadow p-6 text-center space-y-3" {
+            div class="bg-paper rounded-lg shadow-soft p-6 text-center space-y-3" {
                 p class="text-sm text-ink-2" {
                     "We sent a sign-in link to "
                     strong { (email) }

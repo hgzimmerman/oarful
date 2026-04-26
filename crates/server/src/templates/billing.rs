@@ -13,7 +13,7 @@ pub(crate) fn suspended_page(tenant_name: &str, webmaster_email: &str) -> Markup
         title,
         html! {
             div class="max-w-lg mx-auto mt-16 text-center" {
-                div class="bg-paper rounded-lg shadow p-8" {
+                div class="bg-paper rounded-lg shadow-soft p-8" {
                     div class="text-4xl mb-4" { "\u{26f5}" }
                     h2 class="text-xl font-bold text-ink mb-2" { (title) }
                     p class="text-ink-2 mb-1" { (tenant_name) }
@@ -21,7 +21,7 @@ pub(crate) fn suspended_page(tenant_name: &str, webmaster_email: &str) -> Markup
 
                     div class="space-y-3" {
                         a href={"mailto:" (webmaster_email)}
-                          class="block w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition text-sm" {
+                          class="block w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition text-sm" {
                             "Contact us"
                         }
                         form method="post" action="/logout" {

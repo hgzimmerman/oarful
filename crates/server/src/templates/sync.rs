@@ -41,7 +41,7 @@ pub(crate) fn form_content(
                  hx-target="#content"
                  hx-push-url="false"
                  hx-indicator="#sync-spinner"
-                 class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 div {
                     label for="spreadsheet_id" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Spreadsheet ID"
@@ -101,7 +101,7 @@ pub(crate) fn form_content(
                 }
                 div class="flex items-center space-x-3" {
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper font-semibold px-4 py-2 rounded shadow-soft transition" {
                         "Sync"
                     }
                     span #sync-spinner class="htmx-indicator text-sm text-ink-3" {
@@ -119,7 +119,7 @@ pub(crate) fn form_content(
 
 fn summary_panel(s: &SyncSummary) -> Markup {
     html! {
-        section class="bg-paper rounded-lg shadow p-6 space-y-4" {
+        section class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
             h2 class="text-xl font-bold text-ink" { "Sync complete" }
 
             div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm" {
@@ -142,7 +142,7 @@ fn summary_panel(s: &SyncSummary) -> Markup {
                     h3 class="font-semibold text-ink-2 mb-2" {
                         "Warnings (" (s.warnings.len()) ")"
                     }
-                    ul class="list-disc pl-5 space-y-1 text-sm text-amber-800" {
+                    ul class="list-disc pl-5 space-y-1 text-sm text-warn" {
                         @for w in &s.warnings {
                             li { (w) }
                         }

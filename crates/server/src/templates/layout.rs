@@ -51,7 +51,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
             }
             body class="min-h-screen flex flex-col bg-paper text-ink" {
                 @if is_superuser {
-                    div class="bg-amber-500 text-paper text-center text-sm py-1.5 px-4 no-print" {
+                    div class="bg-warn text-paper text-center text-sm py-1.5 px-4 no-print" {
                         "Impersonating this tenant "
                         form method="post" action="/su/exit" class="inline" {
                             button type="submit"
@@ -75,7 +75,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 div id="error-toast"
                     class="fixed bottom-4 left-4 z-50 max-w-sm hidden"
                     role="alert" {
-                    div class="bg-red-600 text-paper px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
+                    div class="bg-bad text-paper px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm" {
                         span id="error-toast-msg" class="flex-1" {}
                         button type="button"
                                class="text-paper/80 hover:text-paper font-bold text-lg leading-none"

@@ -19,7 +19,7 @@ pub(crate) fn list_content(
         (page_header("Users", Some(&subtitle)))
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
             // Invite form
-            section class="bg-paper rounded-lg shadow p-6" {
+            section class="bg-paper rounded-lg shadow-soft p-6" {
                 h2 class="text-lg font-bold text-ink mb-4" { "Invite a new user" }
                 form method="post" action="/users/invite"
                      class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end" {
@@ -43,7 +43,7 @@ pub(crate) fn list_content(
                         }
                     }
                     button type="submit"
-                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow transition" {
+                           class="bg-emerald-600 hover:bg-emerald-700 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
                         "Send invite"
                     }
                 }
@@ -51,7 +51,7 @@ pub(crate) fn list_content(
 
             // User table
             @if !users.is_empty() {
-                div class="bg-paper rounded-lg shadow overflow-x-auto" {
+                div class="bg-paper rounded-lg shadow-soft overflow-x-auto" {
                     table class="w-full text-sm min-w-[480px]" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
@@ -216,7 +216,7 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                     }
 
                     form method="post" action=(action)
-                         class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                         class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                         div {
                             label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
                             input id="password" name="password" type="password" required minlength="8"
@@ -228,7 +228,7 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"
-                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                             "Activate account"
                         }
                     }

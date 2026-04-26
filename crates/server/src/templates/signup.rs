@@ -29,7 +29,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                     }
 
                     form method="post" action="/signup"
-                         class="bg-paper rounded-lg shadow p-6 space-y-4" {
+                         class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                         div {
                             label for="club_name" class="block text-sm font-semibold text-ink-2 mb-1" { "Club name" }
                             input id="club_name" name="club_name" type="text" required autofocus
@@ -62,7 +62,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"
-                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow transition" {
+                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
                             "Create club"
                         }
                     }

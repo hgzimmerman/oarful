@@ -21,7 +21,7 @@ pub(crate) fn list_content(practices: &[Practice], stale_ids: &HashSet<PracticeI
             @if practices.is_empty() {
                 (empty_state("No practices committed yet."))
             } @else {
-                div class="bg-paper rounded-lg shadow divide-y divide-rule-2" {
+                div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
                     @for p in practices {
                         (row(p, stale_ids.contains(&p.id)))
                     }
@@ -44,7 +44,7 @@ fn row(p: &Practice, is_stale: bool) -> Markup {
                 div class="flex items-center gap-2" {
                     span class="font-semibold text-ink" { (p.date) }
                     @if is_stale {
-                        span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full" {
+                        span class="text-xs bg-warn/15 text-warn px-1.5 py-0.5 rounded-full" {
                             "Availability changed"
                         }
                     }
@@ -149,7 +149,7 @@ pub(crate) fn detail_content(
             }
 
             @if has_stale {
-                div class="bg-amber-50 border-l-4 border-amber-500 px-4 py-3 rounded text-sm text-amber-900" {
+                div class="bg-warn/10 border-l-4 border-warn px-4 py-3 rounded text-sm text-ink" {
                     strong { "Availability changed. " }
                     "One or more rowers in this lineup are no longer available. "
                     "Highlighted rowers may need to be substituted."
@@ -209,7 +209,7 @@ fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
             hx-post=(action)
             hx-target="#practice-notes"
             hx-swap="outerHTML"
-            class="bg-paper rounded-lg shadow p-4"
+            class="bg-paper rounded-lg shadow-soft p-4"
         {
             label class="block text-sm font-medium text-ink-2 mb-1" {
                 "Practice notes"
@@ -276,7 +276,7 @@ fn lineup_block_with_noshow(
     });
 
     html! {
-        div class="bg-paper rounded-lg shadow overflow-hidden print-break" {
+        div class="bg-paper rounded-lg shadow-soft overflow-hidden print-break" {
             div class="bg-paper-2 px-4 py-2 border-b border-rule-2" {
                 strong { (boat_name) }
                 span class="text-xs text-ink-3 ml-2" {
@@ -292,9 +292,9 @@ fn lineup_block_with_noshow(
                         @let is_designated_cox = rower.map(|r| r.is_designated_cox.as_bool()).unwrap_or(false);
                         @let is_stale = maybe_seat.map(|s| stale_rowers.contains(&s.rower_id)).unwrap_or(false);
                         @let row_class = if is_stale {
-                            "border-b border-rule-2 last:border-0 bg-amber-50 border-l-4 border-l-amber-400"
+                            "border-b border-rule-2 last:border-0 bg-warn/10 border-l-4 border-l-warn"
                         } else if is_designated_cox {
-                            "border-b border-rule-2 last:border-0 border-l-4 border-l-indigo-400"
+                            "border-b border-rule-2 last:border-0 border-l-4 border-l-cox"
                         } else {
                             "border-b border-rule-2 last:border-0"
                         };
@@ -306,7 +306,7 @@ fn lineup_block_with_noshow(
                                 @if let Some(r) = rower {
                                     (r.name)
                                     @if is_stale {
-                                        span class="ml-1 sm:ml-2 text-xs bg-amber-200 text-amber-800 px-1 sm:px-1.5 py-0.5 rounded-full" {
+                                        span class="ml-1 sm:ml-2 text-xs bg-warn/20 text-warn px-1 sm:px-1.5 py-0.5 rounded-full" {
                                             "unavailable"
                                         }
                                     }
@@ -319,7 +319,7 @@ fn lineup_block_with_noshow(
                                     td class="px-2 sm:px-4 py-1.5 sm:py-2 text-right w-20 no-print whitespace-nowrap" {
                                         label class="inline-flex items-center gap-1 text-xs text-ink-3 cursor-pointer" {
                                             input type="checkbox" name="no_show" value=(seat.rower_id)
-                                                  class="rounded border-rule text-amber-600 focus:ring-amber-500";
+                                                  class="rounded border-rule text-warn focus:ring-warn";
                                             "No-show"
                                         }
                                     }
@@ -406,7 +406,7 @@ fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Mar
     }
 
     html! {
-        div class="bg-paper rounded-lg shadow p-4 text-sm space-y-2" {
+        div class="bg-paper rounded-lg shadow-soft p-4 text-sm space-y-2" {
             div {
                 strong class="text-ink-2" { "Benched: " }
                 span class="text-ink-2" {
