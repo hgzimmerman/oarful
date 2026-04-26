@@ -157,6 +157,7 @@ fn snapshot(rowers: Vec<Rower>, boats: Vec<Boat>) -> DbSnapshot {
         seat_affinities: Vec::new(),
         pair_affinities: Vec::new(),
         recent_placements: Vec::new(),
+        erg_scores: None,
     }
 }
 

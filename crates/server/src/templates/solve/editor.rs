@@ -12,8 +12,8 @@ use lineup_db::{
 use maud::{html, Markup};
 
 use super::{
-    compact_side, cox_first, find_rower, rig_label, rower_stats_line, seat_badge, seat_label,
-    side_indicator,
+    compact_side, cox_first, find_rower, rig_label, rower_stats_line_with_erg, seat_badge,
+    seat_label, side_indicator,
 };
 
 /// CSS inline style for a pool rower's side-colored right border.
@@ -537,7 +537,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         div class="py-2 px-2 min-w-0" {
                             @if let Some(r) = rower {
                                 div class="font-medium font-serif-heading text-sm" style="color: var(--ink)" { (r.name) }
-                                (rower_stats_line(r, flags.show_attributes))
+                                (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                             } @else if is_empty {
                                 span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "\u{2014} empty \u{2014}" }
                             } @else {
@@ -601,7 +601,7 @@ fn editor_js() -> &'static str {
 }
 
 /// Render a single rower row in the pool sidebar.
-fn pool_rower_row(r: &Rower, boat_kind: &str) -> Markup {
+fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
     let key = format!("{boat_kind}:{}", r.id);
     let side_style = pool_side_border_style(r);
     html! {
@@ -614,7 +614,7 @@ fn pool_rower_row(r: &Rower, boat_kind: &str) -> Markup {
              ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
              "@click"={"select('" (key) "')"} {
             div class="font-medium text-xs" style="color: var(--ink)" { (r.name) }
-            (rower_stats_line(r, true))
+            (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
         }
     }
 }
@@ -707,7 +707,7 @@ pub(crate) fn roster_pool(
                     }
                     div class="flex flex-col gap-0.5 mt-1" {
                         @for r in &editor.sculling {
-                            (pool_rower_row(r, "sculling"))
+                            (pool_rower_row(r, "sculling", snapshot))
                         }
                     }
                 }
@@ -744,7 +744,7 @@ pub(crate) fn roster_pool(
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &coxes {
-                                (pool_rower_row(r, "bench"))
+                                (pool_rower_row(r, "bench", snapshot))
                             }
                         }
                     }
@@ -757,7 +757,7 @@ pub(crate) fn roster_pool(
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &ports {
-                                (pool_rower_row(r, "bench"))
+                                (pool_rower_row(r, "bench", snapshot))
                             }
                         }
                     }
@@ -770,7 +770,7 @@ pub(crate) fn roster_pool(
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &stbds {
-                                (pool_rower_row(r, "bench"))
+                                (pool_rower_row(r, "bench", snapshot))
                             }
                         }
                     }
@@ -783,7 +783,7 @@ pub(crate) fn roster_pool(
                         }
                         div class="flex flex-col gap-0.5 mt-1" {
                             @for r in &eithers {
-                                (pool_rower_row(r, "bench"))
+                                (pool_rower_row(r, "bench", snapshot))
                             }
                         }
                     }
@@ -806,7 +806,7 @@ pub(crate) fn roster_pool(
                                     (r.name)
                                     span class="ml-1 text-[9px] font-normal" style="color: var(--warn)" { "(" (&otr.team_name) ")" }
                                 }
-                                (rower_stats_line(r, true))
+                                (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
                             }
                         }
                     }

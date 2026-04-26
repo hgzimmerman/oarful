@@ -14,7 +14,7 @@ use maud::{html, Markup};
 
 use super::editor::DisplayFlags;
 use super::{
-    cox_first, find_rower, rig_label, rower_stats_line, seat_badge, seat_label,
+    cox_first, find_rower, rig_label, rower_stats_line_with_erg, seat_badge, seat_label,
     sort_seats_for_display,
 };
 
@@ -223,7 +223,7 @@ fn seat_row(
                             span class="ml-1 text-xs" style="color: var(--warn)" { "\u{25CF}" }
                         }
                     }
-                    (rower_stats_line(r, flags.show_attributes))
+                    (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
                             div class="text-xs font-mono-stat italic" style="color: var(--warn)" {

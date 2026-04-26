@@ -102,6 +102,46 @@ impl ErgTest {
         diesel::delete(erg_test::table.find(id)).execute(conn)?;
         Ok(())
     }
+
+    /// Latest erg test per rower for a specific distance. Returns a map
+    /// of `rower_id → time_cs` for the most recent entry at that distance.
+    pub fn latest_per_rower(
+        conn: &mut SqliteConnection,
+        distance_m: i32,
+    ) -> Result<std::collections::HashMap<RowerId, i32>, diesel::result::Error> {
+        // Load all entries for this distance, keep latest per rower.
+        // Then join back to get the time_cs. Since diesel doesn't
+        // support window functions easily, use a simpler approach:
+        // load all entries for this distance and keep the latest per rower.
+        let entries: Vec<(RowerId, i32, chrono::NaiveDateTime)> = erg_test::table
+            .filter(erg_test::distance_m.eq(distance_m))
+            .select((erg_test::rower_id, erg_test::time_cs, erg_test::created_at))
+            .order(erg_test::created_at.desc())
+            .get_results(conn)?;
+
+        let mut map = std::collections::HashMap::new();
+        for (rid, time_cs, _) in entries {
+            map.entry(rid).or_insert(time_cs);
+        }
+        Ok(map)
+    }
+}
+
+/// Compute the average 500m split in centiseconds from a piece time.
+pub fn split_500_cs(time_cs: i32, distance_m: i32) -> i32 {
+    if distance_m == 0 {
+        return 0;
+    }
+    (time_cs as i64 * 500 / distance_m as i64) as i32
+}
+
+/// Format a 500m split: "M:SS" (no fractional seconds for brevity).
+pub fn format_split_500(time_cs: i32, distance_m: i32) -> String {
+    let split = split_500_cs(time_cs, distance_m);
+    let total_secs = split / 100;
+    let mins = total_secs / 60;
+    let secs = total_secs % 60;
+    format!("{mins}:{secs:02}")
 }
 
 /// Format centiseconds as `M:SS.dd` (e.g. 42350 → "7:03.50").

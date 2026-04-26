@@ -119,6 +119,7 @@ fn run_repeated(
         seat_affinities: vec![],
         pair_affinities: vec![],
         recent_placements: vec![],
+        erg_scores: None,
     };
     let request = SolveRequest {
         date,
@@ -198,6 +199,7 @@ fn run_one_with_label(
         seat_affinities: vec![],
         pair_affinities: vec![],
         recent_placements: vec![],
+        erg_scores: None,
     };
 
     let request = SolveRequest {

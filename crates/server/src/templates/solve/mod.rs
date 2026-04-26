@@ -84,6 +84,49 @@ fn tier_class(ordinal: i32) -> &'static str {
     }
 }
 
+/// Erg score info for a rower, if available.
+pub(super) struct ErgInfo {
+    /// 500m split display string, e.g. "1:42"
+    pub split_label: String,
+    /// Tooltip with full details
+    pub tooltip: String,
+    /// Tier for color (1-4 based on split quartiles)
+    pub tier: i32,
+}
+
+impl ErgInfo {
+    /// Build from erg scores, if this rower has one.
+    pub fn from_scores(
+        rower_id: lineup_db::rower::types::RowerId,
+        scores: &lineup_db::snapshot::ErgScores,
+    ) -> Option<Self> {
+        let &time_cs = scores.times_cs.get(&rower_id)?;
+        let dist = scores.distance_m;
+        let split_label = lineup_db::erg_test::format_split_500(time_cs, dist);
+        let full_time = lineup_db::erg_test::format_time_cs(time_cs);
+        let dist_label = lineup_db::erg_test::format_distance(dist);
+        let tooltip = format!("Erg: {split_label}/500m ({full_time} over {dist_label})");
+        // Tier based on 500m split (lower = faster = higher tier).
+        // Rough thresholds: <1:45 = tier 4, <1:55 = tier 3, <2:05 = tier 2, else tier 1.
+        let split_cs = lineup_db::erg_test::split_500_cs(time_cs, dist);
+        let split_secs = split_cs / 100;
+        let tier = if split_secs < 105 {
+            4
+        } else if split_secs < 115 {
+            3
+        } else if split_secs < 125 {
+            2
+        } else {
+            1
+        };
+        Some(Self {
+            split_label,
+            tooltip,
+            tier,
+        })
+    }
+}
+
 /// CSS class for side preference badge coloring.
 fn side_class(r: &Rower) -> &'static str {
     use lineup_db::rower::types::Side;
@@ -96,8 +139,18 @@ fn side_class(r: &Rower) -> &'static str {
 
 /// Compact stats line for a rower rendered as monospace badge chips.
 /// Each badge has its own tooltip and is tinted by tier (1–4 ordinal)
-/// so the color is consistent across categories.
-pub(super) fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
+/// so the color is consistent across categories. When an erg score
+/// is available, it replaces the Strength badge.
+pub(super) fn rower_stats_line_with_erg(
+    r: &Rower,
+    show_attributes: bool,
+    erg_scores: Option<&lineup_db::snapshot::ErgScores>,
+) -> Markup {
+    let erg = erg_scores.and_then(|s| ErgInfo::from_scores(r.id, s));
+    rower_stats_line_inner(r, show_attributes, erg.as_ref())
+}
+
+fn rower_stats_line_inner(r: &Rower, show_attributes: bool, erg: Option<&ErgInfo>) -> Markup {
     if show_attributes {
         let (weight_label, weight_tip, has_raw_weight) = if let Some(w) = r.weight_kg {
             let lbs = format!("{:.0}lb", w.to_lbs());
@@ -141,7 +194,14 @@ pub(super) fn rower_stats_line(r: &Rower, show_attributes: bool) -> Markup {
                     span class={"stat-badge italic cursor-help " (wt)} title=(weight_tip) { (weight_label) }
                 }
                 span class={"stat-badge cursor-help " (st)} title=(skill_tip) { (r.skill.short()) }
-                span class={"stat-badge cursor-help " (srt)} title=(strength_tip) { (r.strength.short()) }
+                // Erg split replaces Strength when available
+                @if let Some(e) = erg {
+                    @let et = tier_class(e.tier);
+                    @let erg_tip = format!("{}, Strength: {}", e.tooltip, r.strength);
+                    span class={"stat-badge cursor-help " (et)} title=(erg_tip) { (e.split_label) }
+                } @else {
+                    span class={"stat-badge cursor-help " (srt)} title=(strength_tip) { (r.strength.short()) }
+                }
                 @if has_raw_height {
                     span class={"stat-badge cursor-help " (ht)} title=(height_tip) { (height_label) }
                 } @else {

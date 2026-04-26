@@ -1358,6 +1358,7 @@ mod tests {
             seat_affinities: Vec::new(),
             pair_affinities: Vec::new(),
             recent_placements: Vec::new(),
+            erg_scores: None,
         };
 
         let mut failures: Vec<String> = Vec::new();

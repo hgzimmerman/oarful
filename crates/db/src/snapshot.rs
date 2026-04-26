@@ -2,6 +2,7 @@
 
 use crate::availability::{types::AvailabilityStatus, Availability};
 use crate::boat::Boat;
+use crate::erg_test::ErgTest;
 use crate::lineup::{Lineup, RecentPlacement};
 use crate::pair_affinity::PairAffinity;
 use crate::practice::Practice;
@@ -11,6 +12,23 @@ use crate::team::{Team, TeamMembership};
 use chrono::NaiveDate;
 use diesel::SqliteConnection;
 use std::collections::HashMap;
+
+/// Latest erg test scores for a team's preferred distance.
+#[derive(Debug, Clone)]
+pub struct ErgScores {
+    /// Test distance in metres (e.g. 2000).
+    pub distance_m: i32,
+    /// Latest time in centiseconds per rower at this distance.
+    pub times_cs: HashMap<RowerId, i32>,
+}
+
+impl ErgScores {
+    /// Look up a rower's 500m split label, if they have a score.
+    pub fn split_500(&self, rower_id: RowerId) -> Option<String> {
+        let &time_cs = self.times_cs.get(&rower_id)?;
+        Some(crate::erg_test::format_split_500(time_cs, self.distance_m))
+    }
+}
 
 /// How many recent practices feed into [`DbSnapshot::recent_placements`].
 /// Used by the S7 novelty soft constraint to detect "the same person in
@@ -47,6 +65,9 @@ pub struct DbSnapshot {
     /// the solver penalises placing the same rower into a seat they
     /// recently occupied.
     pub recent_placements: Vec<RecentPlacement>,
+    /// Latest erg scores for the team's preferred distance. None if
+    /// the team hasn't configured a preferred erg distance.
+    pub erg_scores: Option<ErgScores>,
 }
 
 impl DbSnapshot {
@@ -71,9 +92,22 @@ impl DbSnapshot {
             .filter(|r| team_rower_ids.contains(&r.id))
             .collect();
 
-        let assume_available = Team::get(conn, team_id)?
+        let team = Team::get(conn, team_id)?;
+        let assume_available = team
+            .as_ref()
             .map(|t| t.assume_available.as_bool())
             .unwrap_or(false);
+        let erg_distance_m = team.as_ref().and_then(|t| t.erg_threshold_distance_m);
+
+        let erg_scores = if let Some(dist) = erg_distance_m {
+            let times_cs = ErgTest::latest_per_rower(conn, dist)?;
+            Some(ErgScores {
+                distance_m: dist,
+                times_cs,
+            })
+        } else {
+            None
+        };
 
         Ok(Self {
             date: practice.date,
@@ -86,6 +120,7 @@ impl DbSnapshot {
             pair_affinities: PairAffinity::list_all(conn)?,
             recent_placements: Lineup::recent_placements(conn, RECENT_LINEUP_WINDOW)?,
             rowers,
+            erg_scores,
         })
     }
 
