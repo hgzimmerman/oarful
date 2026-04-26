@@ -18,7 +18,7 @@ function lineupEditor() {
                     params.push('boat=' + card.dataset.editorBoat);
                 }
             });
-            var knobsForm = document.querySelector('form[hx-get]');
+            var knobsForm = document.getElementById('knobs-form');
             if (knobsForm) {
                 ['lock', 'pin', 'was_pin', 'walkon', 'no_show', 'boat_pin', 'boat_was_pin', 'boat_lock'].forEach(function(name) {
                     knobsForm.querySelectorAll('input[name="' + name + '"]').forEach(function(el) {

@@ -81,7 +81,7 @@ pub(super) fn knobs_form(
                     }
                 }
 
-                form method="get" action=(action)
+                form #knobs-form method="get" action=(action)
                      hx-get=(action)
                      hx-target="#sse-anchor"
                      hx-swap="innerHTML"
