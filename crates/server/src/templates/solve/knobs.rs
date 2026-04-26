@@ -50,13 +50,18 @@ pub(super) fn knobs_form(
             (maud::PreEscaped(include_str!("../js/knobs.js")))
         }
         div "x-data"="{ railOpen: true }" class="flex flex-col flex-1" {
-            // Collapsed state — thin vertical label
+            // Collapsed state — vertical label on desktop, horizontal bar on mobile
             button type="button"
                    class="solver-rail-closed"
                    x-show="!railOpen"
                    "@click"="railOpen = true"
                    title="Open solver" {
-                span class="vert" { "SOLVER" }
+                span class="vert hidden lg:block" { "SOLVER" }
+                span class="lg:hidden flex items-center gap-2 px-4 text-sm" {
+                    span class="font-serif-heading font-medium text-ink" { "Solver" }
+                    span class="text-muted font-mono-stat text-xs" { (last_run_label) }
+                    span class="ml-auto text-muted" { "\u{25BC}" }
+                }
             }
 
             // Open rail
