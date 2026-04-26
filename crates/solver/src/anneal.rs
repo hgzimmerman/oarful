@@ -872,7 +872,15 @@ pub(crate) fn evaluate_breakdown(a: &Assignment, ctx: &EvalContext) -> ObjBreakd
         for &(r_idx, b_idx, seat, eff_weight) in &ctx.seat_affinities {
             if let Place::Seated { boat_idx, seat: s } = a.places[r_idx] {
                 if boat_idx == b_idx && s == seat {
-                    b.s3 += -eff_weight * cfg.seat_affinity_weight;
+                    // Discount zone reward on wrong-side seats (12% per
+                    // side_strength level).
+                    let penalty = wrong_side_penalty(available[r_idx], boats[b_idx], seat);
+                    let w = if penalty > 0 {
+                        eff_weight * (25 - 3 * penalty) / 25
+                    } else {
+                        eff_weight
+                    };
+                    b.s3 += -w * cfg.seat_affinity_weight;
                 }
             }
         }

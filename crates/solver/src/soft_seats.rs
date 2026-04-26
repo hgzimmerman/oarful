@@ -20,7 +20,7 @@ use lineup_db::seat_affinity::SeatZone;
 use lineup_db::snapshot::DbSnapshot;
 use pumpkin_core::variables::{DomainId, TransformableVariable};
 
-use crate::model::{build_seat_trait_map, ModelBuilder};
+use crate::model::{build_seat_trait_map, wrong_side_penalty, ModelBuilder};
 use crate::PartialFillPolicy;
 
 impl<'a> ModelBuilder<'a> {
@@ -361,11 +361,20 @@ impl<'a> ModelBuilder<'a> {
 
         for ((r_idx, b_idx, seat), weight) in &best {
             if let Some(&var) = x.get(&(*r_idx, *b_idx, *seat)) {
+                // Discount zone reward when the seat is on the rower's
+                // wrong side, proportional to side_strength (12% per
+                // level: strength 1→88%, 2→76%, 3→64%, 4→52%, 5→40%).
+                let penalty = wrong_side_penalty(available[*r_idx], boats[*b_idx], *seat);
+                let eff = if penalty > 0 {
+                    (weight * (25 - 3 * penalty) / 25).max(1)
+                } else {
+                    *weight
+                };
                 push_obj!(
                     obj_terms,
                     obj_term_evals,
                     var,
-                    -weight * cfg.seat_affinity_weight
+                    -eff * cfg.seat_affinity_weight
                 );
                 count += 1;
             }

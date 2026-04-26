@@ -232,68 +232,19 @@ can resume without re-deriving context.
   return a modal (appended to body) instead of replacing tab content
   with a green banner. Shows per-recipient status (Sent / Failed).
   Billing gate shows a lock icon + upgrade message in a modal.
+- **Tabbed lineup editor** — tabs are first-class: each is an
+  independent lineup the coach can generate into, manually edit, and
+  compare. Whichever tab is selected is what gets committed / saved
+  as draft. "+ New" button adds tabs, "×" removes (can't delete last).
+- **Stripe payment integration** — `stripe_webhook` handler,
+  `billing` handler, checkout/portal flow. `stripe_customer_id` on
+  tenant. Subscription lifecycle via webhooks.
+- **Pricing on landing page** — pricing section on the public landing
+  page.
 
 ## Open work
 
 ### Quick wins
-
-### Coach features
-
-#### Tabbed lineup editor
-
-Replace the current primary + appended-alternatives layout with a
-tabbed editing experience. Each tab is an independent lineup that the
-coach can generate into, manually edit, and compare.
-
-**Current pain points:**
-- The "Lineup" card header is wasted space — only useful to
-  distinguish from "Alternative #2" etc.
-- Alternatives load below the primary and the coach must "Use this"
-  to swap one in before committing. Awkward two-step.
-- The alternatives count knob only makes sense on the first generate.
-
-**Proposed behavior:**
-- Tabs are first-class: each is an empty set of boats until the
-  coach clicks "Generate" (which fills the *active* tab).
-- Whichever tab is selected is what gets committed / saved as draft.
-- If no lineups exist yet, the alternatives count selector appears
-  in the knobs (batch-generate N tabs at once). Otherwise "Generate"
-  targets the current tab only.
-- Future: a diff view between any two tabs showing who moved where
-  (similar to current alt-vs-primary diff highlighting, but
-  selectable).
-
-**Tab lifecycle:** Page loads with one default tab and a "+ New tab"
-button. Coaches can add tabs freely. Cannot delete the last tab
-(always at least one).
-
-**Tab persistence:** Only the active (selected) tab is persisted on
-commit or save-draft. Unselected tabs are discarded. Long-term we
-may want to persist all tabs as drafts.
-
-**Tab states & visual distinction:**
-- *Active* — currently selected tab, will be committed/saved. Bold
-  or highlighted tab label.
-- *Saved* — tab contents match what's persisted as a draft. Subtle
-  indicator (e.g. dot or checkmark on the tab).
-- *Saved & dirty* — tab was loaded from a draft but the coach has
-  since edited it. Different indicator (e.g. dot changes color or
-  asterisk appears).
-- *Unsaved* — tab has content but has never been saved. No saved
-  indicator.
-
-**Design reference:** Claude design mockup exists (ask for it if
-needed). The mockup had a tabbed interface but didn't fully account
-for the generate-per-tab and commit semantics described above.
-
-#### Raw rower metrics — fully shipped
-
-Phase 1 (raw fields + display), Phase 2 (threshold config +
-auto-bucketing + slider UI), VeryHeavy weight class, and field
-locking all shipped. Categorical dropdowns are greyed out with
-"(auto)" label when a rower has raw values and the team has
-thresholds configured.
-
 
 ### Architecture / platform
 
@@ -324,41 +275,12 @@ switching, user list UI.
 Needs more refinement — interaction with multi-tenancy and
 migration path from global roles need thought.
 
-#### Stripe payment integration
+#### Zone reward × side-preference scaling — shipped
 
-Wire up a payment processor to gate tenant creation or convert
-trials to paid. `billing_status` and `trial_expires_at` already
-exist on the tenant table. Needs `stripe_customer_id` on tenant,
-a checkout/portal flow, and webhook handling for subscription
-lifecycle events.
-
-#### Pricing on landing page
-
-Add pricing to the landing page once Stripe is wired up. Starting
-at $150/year. State it plainly, frame as annual not monthly.
-
-#### Zone reward × side-preference scaling
-
-The seat-affinity (zone) reward can overpower side preference when
-`side_preference_weight` is moderate. A rower with a strong port
-preference (4/5) can get placed starboard-in-zone because the zone
-reward outweighs the side penalty — the coach has to crank
-`side_preference_weight` high to prevent it, which distorts other
-trade-offs.
-
-**Fix:** scale the zone reward down when the rower is on the wrong
-side, proportional to their `side_strength`. Strong preference
-(4–5) gets a heavy discount (most of the zone reward cancelled);
-mild preference (1–3) gets a moderate, scaled discount. Rowers
-with `Either` side are unaffected. This makes the model
-self-correcting — zone placement still matters, but it no longer
-creates an incentive to violate strong side preferences without
-the admin having to tune weights to avoid blowout.
-
-**Implementation sketch:** in the S4 seat-affinity objective term,
-multiply the per-rower zone reward by a factor like
-`1.0 - (side_strength / 5.0) * wrong_side_flag`. The exact curve
-can be tuned via baselines.
+Zone reward (S3) is now discounted when the seat is on the rower's
+wrong side, proportional to `side_strength` (12% per level:
+strength 1→88%, 2→76%, 3→64%, 4→52%, 5→40%). Applied in both the
+CP solver and SA post-processor. `Either` rowers are unaffected.
 
 ### Long-term / parked
 
@@ -523,4 +445,4 @@ culprit) remains parked pending a Pumpkin API dive.
 ## Suggested next moves
 
 1. **Per-team roles** — design + migration.
-2. **Stripe payment integration** — convert trials to paid tenants.
+2. **Squash migrations** — do last before 1.0 tag.
