@@ -49,7 +49,8 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                     }
                 "# }
             }
-            body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col" {
+            body class="min-h-screen flex flex-col"
+                 style="background: var(--paper, #f8fafc); color: var(--ink, #0f172a)" {
                 @if is_superuser {
                     div class="bg-amber-500 text-white text-center text-sm py-1.5 px-4 no-print" {
                         "Impersonating this tenant "
@@ -65,9 +66,11 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 main #content class="flex-grow" {
                     (content)
                 }
-                footer class="text-center text-xs text-slate-400 py-2 no-print" {
+                footer class="text-center text-xs py-2 no-print"
+                       style="color: var(--muted, #94a3b8); background: var(--paper, #f8fafc)" {
                     a href=(source_url()) target="_blank"
-                      class="hover:text-slate-600 transition" {
+                      class="transition"
+                      style="color: var(--muted, #94a3b8)" {
                         "Source code (AGPL-3.0)"
                     }
                 }
