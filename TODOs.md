@@ -430,6 +430,47 @@ Pre-solve diagnostics shipped. The deeper relaxation-pass work
 (re-solve with each hard constraint disabled to identify the
 culprit) remains parked pending a Pumpkin API dive.
 
+### Launch infrastructure
+
+#### Domain + naming
+
+Pick a domain name. The project currently uses "Oarful" as the
+brand in the landing page / onboarding flow. GitHub repo name,
+fly.io app name, and email sender domain all depend on this.
+Decide before setting up the rest.
+
+#### Host source on GitHub
+
+Create a GitHub repo (private or public per AGPL preference).
+Repo name depends on domain/brand decision above.
+
+#### Fly.io deployment
+
+Set up a Fly.io app with:
+- Dockerfile (already have nix-based Docker build in CI)
+- Persistent volume for SQLite data dir + master DB
+- Environment variables: `JWT_SECRET`, `MASTER_DB_PATH`,
+  `DATA_DIR`, `PUBLIC_DIR`, `SOURCE_URL`, plus service keys below
+- Custom domain + TLS
+
+#### Stripe account
+
+Create a Stripe account, get test + live API keys. Set:
+- `STRIPE_SECRET_KEY` env var on Fly.io
+- `STRIPE_WEBHOOK_SECRET` for webhook verification
+- Configure products/prices matching the pricing page
+- Wire up the webhook endpoint URL in Stripe dashboard
+
+#### SendGrid (email)
+
+Create a SendGrid account, verify sender domain. Set:
+- `SENDGRID_API_KEY` env var on Fly.io
+- `FROM_EMAIL` / `FROM_NAME` env vars
+- DNS records (SPF, DKIM) on the domain for deliverability
+
 ## Suggested next moves
 
-Nothing urgent — all remaining items are parked/long-term.
+1. **Domain + naming** — unblocks everything else.
+2. **GitHub repo** — get source hosted.
+3. **Fly.io** — deploy and verify the app runs.
+4. **Stripe + SendGrid** — wire up payments and email.
