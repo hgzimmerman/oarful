@@ -170,8 +170,16 @@ pub(crate) async fn stream_handler(
                         &unavail_rowers, &knobs_clone.walkon, &[],
                     );
 
+                    // Wrap editor in a #solve-results div with OOB swap
+                    // so it replaces the existing editor in-place without
+                    // blanking the page during generation.
+                    let editor_oob = maud::html! {
+                        div #solve-results hx-swap-oob="innerHTML" {
+                            (maud::PreEscaped(editor_html.into_string()))
+                        }
+                    };
                     yield Ok(Event::default().event("primary").data(
-                        format!("{}{}", editor_html.into_string(), pool_oob.into_string())
+                        format!("{}{}", editor_oob.into_string(), pool_oob.into_string())
                     ));
                 }
                 SolveStreamEvent::PrimaryFailed { status, diagnostics } => {
@@ -212,12 +220,9 @@ pub(crate) async fn stream_handler(
                     yield Ok(Event::default().event("tab").data(script));
                 }
                 SolveStreamEvent::Done { elapsed } => {
-                    let html = maud::html! {
-                        p class="text-xs text-slate-300 text-center pt-4 pb-2" {
-                            "Completed in " (format!("{:.1}s", elapsed.as_secs_f64()))
-                        }
-                    };
-                    yield Ok(Event::default().event("done").data(html.into_string()));
+                    let script = "<script>stopGenerating()</script>".to_string();
+                    let _ = elapsed; // available for future use
+                    yield Ok(Event::default().event("done").data(script));
                     break;
                 }
             }

@@ -299,3 +299,22 @@ document.addEventListener('htmx:afterSettle', function(evt) {
         setTabState(meta.active, state);
     }
 });
+
+// Animate the generate button during SSE streaming.
+// Uses only classList + disabled — all visual effects in CSS.
+function startGenerating() {
+    var btn = document.getElementById('generate-btn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.classList.add('generating');
+    var label = btn.querySelector('.generate-label');
+    if (label) label.textContent = 'Generating\u2026';
+}
+function stopGenerating() {
+    var btn = document.getElementById('generate-btn');
+    if (!btn) return;
+    btn.disabled = false;
+    btn.classList.remove('generating');
+    var label = btn.querySelector('.generate-label');
+    if (label) label.textContent = label.dataset.originalText || 'Generate lineup';
+}

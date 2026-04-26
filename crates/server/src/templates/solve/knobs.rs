@@ -83,9 +83,9 @@ pub(super) fn knobs_form(
 
                 form method="get" action=(action)
                      hx-get=(action)
-                     hx-target="#solve-results"
-                     hx-push-url="true"
-                     hx-indicator="#solve-spinner" {
+                     hx-target="#sse-anchor"
+                     hx-swap="innerHTML"
+                     hx-push-url="true" {
 
                     // Preset section — vertical list via HTMX swap
                     section class="sr-section" {
@@ -244,12 +244,10 @@ pub(super) fn knobs_form(
 
                     // Generate button — sticky at bottom
                     div class="sr-run" {
-                        button type="submit"
+                        button #generate-btn type="submit"
+                               onclick="setTimeout(startGenerating, 0)"
                                class="btn-accent w-full shadow transition" {
-                            (button_label)
-                        }
-                        span #solve-spinner class="htmx-indicator text-xs block mt-1 text-center text-muted" {
-                            "Generating\u{2026}"
+                            span class="generate-label" data-original-text=(button_label) { (button_label) }
                         }
                         p class="text-[10px] italic mt-2 text-muted" {
                             "Locked seats are preserved. Unavailable rowers are skipped."

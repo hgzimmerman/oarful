@@ -105,16 +105,16 @@ function createTabFromSSE(label, seatParams) {
     meta.nextId = newId + 1;
     setEditorTabs(meta);
     setTabState(newId, seatParams);
-    // Append a tab pill to the tab bar DOM.
+    // Append a tab pill matching the server-rendered underline style.
     var bar = document.getElementById('tab-bar');
     if (bar) {
         var addBtn = bar.querySelector('[data-tab-add]');
         var pill = document.createElement('button');
-        pill.className = 'tab-pill';
+        pill.className = 'tab-pill inline-flex items-center gap-1 px-3 text-sm font-medium transition border-b-2 border-transparent text-ink-3 hover:text-ink hover:border-rule';
         pill.dataset.tabId = newId;
         pill.onclick = function() { switchTab(newId); };
         pill.innerHTML = '<span class="tab-label">' + label + '</span>'
-            + '<span class="tab-close" onclick="event.stopPropagation(); removeTab(' + newId + ');">\u00d7</span>';
+            + '<span class="tab-close text-ink-3 hover:text-red-600 ml-1 text-xs" onclick="event.stopPropagation(); removeTab(' + newId + ');">\u00d7</span>';
         if (addBtn) bar.insertBefore(pill, addBtn);
         else bar.appendChild(pill);
     }

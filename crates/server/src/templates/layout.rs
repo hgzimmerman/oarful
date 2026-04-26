@@ -106,6 +106,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 script {
                     (maud::PreEscaped(include_str!("js/tab_cookies.js")))
                 }
+                // lineup editor Alpine component + generate animation
                 script {
                     (maud::PreEscaped(include_str!("js/lineup_editor.js")))
                 }

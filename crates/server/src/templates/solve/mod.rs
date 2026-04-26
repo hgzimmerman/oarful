@@ -482,6 +482,10 @@ pub(crate) fn landing_content(
                     div #solve-results {
                         (lineup_editor(snapshot, practice_id, &editor, flags, has_draft))
                     }
+                    // Hidden anchor for the SSE streaming skeleton.
+                    // The generate form targets this instead of #solve-results
+                    // so the editor stays visible during generation.
+                    div #sse-anchor style="position:absolute;width:0;height:0;overflow:hidden" {}
                 }
             }
             // Right rail: solver
@@ -525,7 +529,8 @@ pub(crate) fn streaming_page(
             }
             div class="solve-center" {
                 div class="px-4 sm:px-6 py-4 space-y-4" {
-                    div #solve-results {
+                    div #solve-results {}
+                    div #sse-anchor style="position:absolute;width:0;height:0;overflow:hidden" {
                         (streaming_skeleton(practice_id, knobs))
                     }
                 }
@@ -567,15 +572,10 @@ pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) ->
                 hx-disinherit="hx-ext"
                 class="hidden" {}
 
-            // Single spinner at the bottom — pushed down as results
-            // stream in above it. Replaced by elapsed time on "done".
+            // Done event — resets the generate button animation.
             div "sse-swap"="done"
-                hx-swap="innerHTML" {
-                div class="flex items-center justify-center gap-2 py-8 text-slate-400 text-sm" {
-                    div class="inline-block w-5 h-5 border-2 border-slate-200 border-t-slate-500 rounded-full animate-spin" {}
-                    "Generating..."
-                }
-            }
+                hx-swap="innerHTML"
+                class="hidden" {}
         }
     }
 }
