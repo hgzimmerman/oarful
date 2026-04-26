@@ -70,7 +70,7 @@ pub(super) fn knobs_form(
                 div class="sr-head" {
                     div {
                         h2 class="font-serif-heading font-medium text-base m-0 text-ink" { "Solver" }
-                        div class="font-mono-stat text-[10px] mt-0.5 text-muted" {
+                        div #last-run-label class="font-mono-stat text-[10px] mt-0.5 text-muted" {
                             "Last run: " (last_run_label)
                         }
                     }

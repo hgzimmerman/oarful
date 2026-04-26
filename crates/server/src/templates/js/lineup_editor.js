@@ -349,11 +349,15 @@ function startGenerating() {
         setEditorTabs(meta);
     }
 }
-function stopGenerating() {
+function stopGenerating(elapsed) {
     var btn = document.getElementById('generate-btn');
     if (!btn) return;
     btn.disabled = false;
     btn.classList.remove('generating');
     var label = btn.querySelector('.generate-label');
     if (label) label.textContent = label.dataset.originalText || 'Generate lineup';
+    if (elapsed) {
+        var el = document.getElementById('last-run-label');
+        if (el) el.textContent = 'Last run: ' + elapsed;
+    }
 }

@@ -240,8 +240,16 @@ pub(crate) async fn stream_handler(
                     yield Ok(Event::default().event("tab").data(script));
                 }
                 SolveStreamEvent::Done { elapsed } => {
-                    let script = "<script>stopGenerating()</script>".to_string();
-                    let _ = elapsed; // available for future use
+                    let ms = elapsed.as_millis();
+                    let label = if ms < 1000 {
+                        format!("{ms} ms")
+                    } else {
+                        format!("{:.1}s", elapsed.as_secs_f64())
+                    };
+                    let script = format!(
+                        "<script>stopGenerating({})</script>",
+                        serde_json::json!(label),
+                    );
                     yield Ok(Event::default().event("done").data(script));
                     break;
                 }
