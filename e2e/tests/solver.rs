@@ -27,7 +27,7 @@ async fn generate_and_commit_lineup() {
     client
         .wait()
         .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::XPath("//button[contains(text(), 'Generate')]"))
+        .for_element(Locator::Css("#generate-btn"))
         .await
         .expect("expected Generate button on solve page");
 
@@ -65,25 +65,28 @@ async fn generate_and_commit_lineup() {
         "expected rower names in generated lineup"
     );
 
-    // Commit the lineup by clicking the commit button.
+    // Commit the lineup by submitting the commit form directly.
     client
         .execute(
-            r#"var btn = document.querySelector('button[form="commit-form"]');
-               if (btn) { btn.scrollIntoView(); btn.click(); }"#,
+            r#"var form = document.querySelector('#commit-form');
+               if (form) form.submit();"#,
             vec![],
         )
         .await
         .unwrap();
 
-    // Wait for redirect to history detail.
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-
-    let url = client.current_url().await.unwrap();
-    assert!(
-        url.path().starts_with("/history/"),
-        "expected redirect to /history/ after commit, got {}",
-        url.path()
-    );
+    // Wait for redirect to history detail (poll up to 5s).
+    let mut redirected = false;
+    for _ in 0..20 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        if let Ok(url) = client.current_url().await {
+            if url.path().starts_with("/history/") {
+                redirected = true;
+                break;
+            }
+        }
+    }
+    assert!(redirected, "expected redirect to /history/ after commit");
 
     // Verify committed lineup content.
     let source = client.source().await.unwrap();

@@ -543,7 +543,8 @@ pub(crate) fn streaming_page(
             aside #roster-pool class="roster-sidebar" {
                 (roster_pool(snapshot, practice_id, &empty_editor, &[], &knobs.walkon, &[]))
             }
-            div class="solve-center" {
+            div class="solve-center relative" {
+                (tab_bar(&EditorTabsMeta::default()))
                 div class="px-4 sm:px-6 py-4 space-y-4" {
                     div #solve-results {}
                     div #sse-anchor style="position:absolute;width:0;height:0;overflow:hidden" {

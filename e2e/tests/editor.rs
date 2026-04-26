@@ -41,7 +41,7 @@ async fn swap_two_rowers() {
     let rowers: serde_json::Value = client
         .execute(
             r#"
-            var rows = document.querySelectorAll('tr[data-boat][data-rower]');
+            var rows = document.querySelectorAll('div[data-boat][data-rower]');
             var seated = [];
             for (var i = 0; i < rows.length; i++) {
                 var r = rows[i];
@@ -157,7 +157,7 @@ async fn transfer_between_boats() {
             cards.forEach(function(c) {
                 if (c.dataset.hidden === 'true') return;
                 var rowers = [];
-                c.querySelectorAll('tr[data-rower]').forEach(function(r) {
+                c.querySelectorAll('div[data-rower]').forEach(function(r) {
                     if (r.dataset.rower) rowers.push(r.dataset.name || r.dataset.rower);
                 });
                 if (rowers.length > 0) {
@@ -202,7 +202,7 @@ async fn transfer_between_boats() {
             r#"
             var editor = document.querySelector('#lineup-editor');
             var params = [];
-            editor.querySelectorAll('tr[data-boat][data-seat][data-rower]').forEach(function(el) {
+            editor.querySelectorAll('div[data-boat][data-seat][data-rower]').forEach(function(el) {
                 if (el.dataset.rower && el.dataset.boat !== 'bench' && el.dataset.boat !== 'sculling') {
                     params.push('seat=' + el.dataset.rower + ':' + el.dataset.boat + ':' + el.dataset.seat);
                 }
@@ -265,13 +265,13 @@ async fn transfer_between_boats() {
                 r#"
                 var src = document.querySelector('[data-editor-boat="{}"]');
                 var srcRowers = [];
-                if (src) src.querySelectorAll('tr[data-rower]').forEach(function(r) {{
+                if (src) src.querySelectorAll('div[data-rower]').forEach(function(r) {{
                     if (r.dataset.rower) srcRowers.push(r.dataset.name || r.dataset.rower);
                 }});
 
                 var dst = document.querySelector('[data-editor-boat="{}"]');
                 var dstRowers = [];
-                if (dst) dst.querySelectorAll('tr[data-rower]').forEach(function(r) {{
+                if (dst) dst.querySelectorAll('div[data-rower]').forEach(function(r) {{
                     if (r.dataset.rower) dstRowers.push(r.dataset.name || r.dataset.rower);
                 }});
 

@@ -76,11 +76,11 @@ async fn stale_alert_email_sent_on_availability_change() {
     // Flip rower availability to "No" via coach attendance toggle.
     let toggle_resp = pd_client
         .post(format!("{base}/team/attendance/toggle"))
-        .json(&serde_json::json!({
-            "rower_id": rower_id,
-            "practice_id": practice_id,
-            "status": "No"
-        }))
+        .form(&[
+            ("rower_id", rower_id.to_string()),
+            ("practice_id", practice_id.to_string()),
+            ("status", "No".to_string()),
+        ])
         .send()
         .await
         .unwrap();

@@ -36,19 +36,49 @@ async fn streamed_alternative_creates_tab() {
         .await
         .expect("expected boat cards in lineup editor after generation");
 
-    // Wait for the "Alt 1" tab to appear in the tab bar via SSE.
-    // The alternative re-solves after the primary, so allow another full budget.
-    let alt_tab = client
-        .wait()
-        .at_most(std::time::Duration::from_secs(15))
-        .for_element(Locator::XPath(
-            "//*[@id='tab-bar']//button[contains(., 'Alt 1')]",
-        ))
-        .await
-        .expect("expected Alt 1 tab to appear in tab bar via SSE");
+    // Wait for the "Alt 1" tab to appear in the tab bar.
+    // The alternative re-solves after the primary, so allow up to 20s total.
+    // Poll via JS since SSE-delivered <script> tags may not be visible to
+    // WebDriver element queries until the DOM settles.
+    let mut found = false;
+    for _ in 0..40 {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let result: serde_json::Value = client
+            .execute(
+                r#"
+                var pills = document.querySelectorAll('#tab-bar button.tab-pill');
+                for (var i = 0; i < pills.length; i++) {
+                    if (pills[i].textContent.indexOf('Alt 1') !== -1) return true;
+                }
+                return false;
+                "#,
+                vec![],
+            )
+            .await
+            .unwrap();
+        if result.as_bool() == Some(true) {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "expected Alt 1 tab to appear in tab bar via SSE");
 
     // Click the Alt 1 tab to switch to it.
-    alt_tab.click().await.unwrap();
+    client
+        .execute(
+            r#"
+            var pills = document.querySelectorAll('#tab-bar button.tab-pill');
+            for (var i = 0; i < pills.length; i++) {
+                if (pills[i].textContent.indexOf('Alt 1') !== -1) {
+                    pills[i].click();
+                    break;
+                }
+            }
+            "#,
+            vec![],
+        )
+        .await
+        .unwrap();
 
     // The tab switch does a full page navigation — wait for the
     // editor to reload with the alternative's placements.
