@@ -63,6 +63,8 @@
         devShell = pkgs.mkShell {
           packages = inputs;
           nativeBuildInputs = with pkgs; [
+            flyctl
+            skopeo
             cargo-watch
             (writeShellScriptBin "dump-snapshot" ''
               cargo run -p lineup_cli -- "$@"

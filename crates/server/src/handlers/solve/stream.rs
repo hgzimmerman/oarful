@@ -109,19 +109,37 @@ pub(crate) async fn stream_handler(
                 }
             }
         });
-        if let Err(e) =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             lineup_solver::solve_streaming(&snapshot_for_solve, &request, std_tx.clone())
-        {
-            tracing::error!(?e, "streaming solver error");
-            // Send a failure event so the SSE stream can close cleanly.
-            let _ = std_tx.send(SolveStreamEvent::PrimaryFailed {
-                status: lineup_solver::SolveStatus::Unsatisfiable,
-                diagnostics: vec![],
-            });
-            let _ = std_tx.send(SolveStreamEvent::Done {
-                elapsed: std::time::Duration::ZERO,
-            });
+        })) {
+            Ok(Err(e)) => {
+                tracing::error!(?e, "streaming solver error");
+                let _ = std_tx.send(SolveStreamEvent::PrimaryFailed {
+                    status: lineup_solver::SolveStatus::Unsatisfiable,
+                    diagnostics: vec![],
+                });
+                let _ = std_tx.send(SolveStreamEvent::Done {
+                    elapsed: std::time::Duration::ZERO,
+                });
+            }
+            Err(panic_info) => {
+                let msg = panic_info
+                    .downcast_ref::<String>()
+                    .map(|s| s.as_str())
+                    .or_else(|| panic_info.downcast_ref::<&str>().copied())
+                    .unwrap_or("unknown panic");
+                tracing::error!(panic = msg, "solver panicked");
+                let _ = std_tx.send(SolveStreamEvent::PrimaryFailed {
+                    status: lineup_solver::SolveStatus::Unsatisfiable,
+                    diagnostics: vec![],
+                });
+                let _ = std_tx.send(SolveStreamEvent::Done {
+                    elapsed: std::time::Duration::ZERO,
+                });
+            }
+            Ok(Ok(())) => {}
         }
+        drop(std_tx); // close channel so forwarder thread exits
         let _ = fwd_handle.join();
     });
 
@@ -141,8 +159,7 @@ pub(crate) async fn stream_handler(
 
     let knobs_clone = knobs.clone();
     let stream = async_stream::stream! {
-        let _permit = permit; // hold semaphore until stream ends
-
+        let _permit = permit; // hold until stream ends (covers primary + alternatives)
         while let Some(event) = tokio_rx.recv().await {
             match event {
                 SolveStreamEvent::Primary { solution, .. } => {

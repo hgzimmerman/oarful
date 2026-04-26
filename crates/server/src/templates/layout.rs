@@ -295,7 +295,8 @@ pub(crate) fn empty_state(message: &str) -> Markup {
 }
 
 fn source_url() -> String {
-    std::env::var("SOURCE_URL").unwrap_or_else(|_| "https://github.com/TODO/oarful".to_string())
+    std::env::var("SOURCE_URL")
+        .unwrap_or_else(|_| "https://github.com/hgzimmerman/oarful".to_string())
 }
 
 /// Generic page header: large title + optional subtitle.

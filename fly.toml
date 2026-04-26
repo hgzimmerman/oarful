@@ -1,7 +1,8 @@
-app = "lineup-generator"
+app = "oarful"
 primary_region = "iad"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   HOST = "0.0.0.0"
@@ -9,7 +10,10 @@ primary_region = "iad"
   MASTER_DB = "/data/master.db"
   DATA_DIR = "/data"
   PUBLIC_DIR = "/app/public"
-  RUST_LOG = "info,lineup_server=debug"
+  RUST_LOG = "info,lineup_server=debug,lineup_solver=debug"
+  SOLVE_CONCURRENCY = "2"
+  ORIGIN = "https://oarful.com"
+  SOURCE_URL = "https://github.com/hgzimmerman/oarful"
 
 [http_service]
   internal_port = 8080
