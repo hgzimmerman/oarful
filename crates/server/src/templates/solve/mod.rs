@@ -474,8 +474,26 @@ pub(crate) fn landing_content(
                 (roster_pool(snapshot, practice_id, &editor, &unavailable, &knobs.walkon, &[]))
             }
             // Center: tab bar + editor
-            div class="solve-center" {
+            div class="solve-center relative" {
                 (tab_bar(tab_meta))
+                // Selection hint — floats over the right side of the tab bar.
+                // Zero height so it never shifts layout below.
+                div class="sticky top-0 z-20 pointer-events-none no-print"
+                     style="height: 0; transform: translateY(-45px); text-align: right"
+                     x-show="selected || selectedBoat" x-cloak {
+                    span class="pointer-events-auto inline-flex items-center px-3 text-xs text-accent whitespace-nowrap"
+                         style="height: 43px; margin-top: 1px; background: var(--paper)"
+                         x-show="selected && !selectedBoat"
+                         x-cloak {
+                        "Click another to swap \u{00b7} or click again to cancel"
+                    }
+                    span class="pointer-events-auto inline-flex items-center px-3 text-xs text-accent whitespace-nowrap"
+                         style="height: 43px; margin-top: 1px; background: var(--paper)"
+                         x-show="selectedBoat"
+                         x-cloak {
+                        "Click a boat pill to transfer rowers \u{00b7} or click Transfer again to cancel"
+                    }
+                }
                 div class="px-4 sm:px-6 py-4 space-y-4" {
                     div #solve-results {
                         (lineup_editor(snapshot, practice_id, &editor, flags, has_draft))

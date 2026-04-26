@@ -284,23 +284,9 @@ pub(crate) fn lineup_editor(
              hx-push-url="true"
              class="hidden" {}
 
-        section #lineup-editor class="solve-card pt-1 pb-4 px-4 sm:pb-6 sm:px-6"
+        section #lineup-editor class="solve-card pt-4 pb-4 px-4 sm:pb-6 sm:px-6"
                data-practice-id=(practice_id)
                data-editor-url=(editor_url) {
-
-            // Selection hint — collapses when nothing is selected.
-            div class="no-print" x-show="selected || selectedBoat" x-cloak {
-                span class="text-xs text-accent"
-                     x-show="selected && !selectedBoat"
-                     x-cloak {
-                    "Click another to swap \u{00b7} or click again to cancel"
-                }
-                span class="text-xs text-accent"
-                     x-show="selectedBoat"
-                     x-cloak {
-                    "Click a boat pill to transfer rowers \u{00b7} or click Transfer again to cancel"
-                }
-            }
 
             // Boat selector chips
             div class="flex flex-wrap items-center gap-2 mb-4 no-print" {
@@ -448,6 +434,8 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                             (seat_count)
                             @if boat.has_cox.as_bool() { "+" }
                         }
+                        span { "\u{00b7}" }
+                        span { (boat.weight_class) }
                         span { "\u{00b7}" }
                         span { (rig_label(boat)) }
                         span { "\u{00b7}" }

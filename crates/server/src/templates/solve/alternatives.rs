@@ -176,7 +176,7 @@ fn boat_card(
                 span class="text-xs font-mono-stat ml-2 text-muted" {
                     "(" (seat_count) "+"
                     @if let Some(b) = boat {
-                        ", " (rig_label(b))
+                        ", " (b.weight_class) ", " (rig_label(b))
                     }
                     ")"
                 }
