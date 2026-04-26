@@ -212,8 +212,17 @@ pub(crate) async fn stream_handler(
                         objective: None,
                         cp_breakdown: vec![],
                     };
-                    let html = templates::solve::knobs::status_banner(date, &result);
-                    yield Ok(Event::default().event("error").data(html.into_string()));
+                    let status_msg = match result.status {
+                        lineup_solver::SolveStatus::Unsatisfiable =>
+                            "No valid lineup exists with these constraints. Try relaxing boat selection or partial fill.",
+                        _ =>
+                            "Ran out of time without finding a valid lineup. Try increasing the time budget or relaxing constraints.",
+                    };
+                    let script = format!(
+                        "<script>stopGenerating(); showErrorToast({});</script>",
+                        serde_json::json!(status_msg),
+                    );
+                    yield Ok(Event::default().event("error").data(script));
                 }
                 SolveStreamEvent::Alternative { index, solution } => {
                     // Emit a "tab" event with a <script> that creates a

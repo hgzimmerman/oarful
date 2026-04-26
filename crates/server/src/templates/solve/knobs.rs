@@ -376,8 +376,9 @@ pub(crate) fn preset_bar(
     }
 }
 
-/// Error-only status banner. Success metadata is shown inline in the
-/// knobs form summary. This function only renders for failures.
+/// Error-only status banner. Currently unused — solver errors are
+/// shown as toasts instead. Kept for potential future use.
+#[allow(dead_code)]
 pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
     match result.status {
         SolveStatus::Satisfied => html! {},
@@ -407,6 +408,7 @@ pub(crate) fn status_banner(date: NaiveDate, result: &SolveResult) -> Markup {
     }
 }
 
+#[allow(dead_code)]
 fn diagnostic_message(d: &Diagnostic) -> String {
     match d {
         Diagnostic::NoCoxForBoat { boat_name } => {
