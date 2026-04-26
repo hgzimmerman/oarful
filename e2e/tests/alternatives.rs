@@ -1,11 +1,11 @@
 use fantoccini::Locator;
 use lineup_e2e::TestInstance;
 
-/// Generate lineups with 1 alternative, wait for the alternative to
-/// stream in, then click "Use this" and verify the editor loads with
-/// the alternative's placements.
+/// Generate lineups with 1 alternative, wait for the alt tab to
+/// appear in the tab bar via SSE, then switch to it and verify the
+/// editor loads with that tab's placements.
 #[tokio::test]
-async fn use_streamed_alternative() {
+async fn streamed_alternative_creates_tab() {
     let instance = TestInstance::start().await;
     let client = instance.connect().await;
 
@@ -18,7 +18,7 @@ async fn use_streamed_alternative() {
         .map(|id| format!("/solve/{id}"))
         .expect("expected a /solve/ link on the practices page");
 
-    // Navigate to the solve page with generate + alternatives enabled.
+    // Navigate to the solve page with generate + 1 alternative.
     // partial=2 allows up to 2 optional seats empty per boat.
     let generate_url = format!(
         "{}{}{}generate=1&budget=3&alts=1&partial=2",
@@ -29,7 +29,6 @@ async fn use_streamed_alternative() {
     client.goto(&generate_url).await.unwrap();
 
     // Wait for the primary result to stream in (boat cards in editor).
-    // The solver gets 10s budget; allow extra time for SSE delivery.
     client
         .wait()
         .at_most(std::time::Duration::from_secs(15))
@@ -37,52 +36,34 @@ async fn use_streamed_alternative() {
         .await
         .expect("expected boat cards in lineup editor after generation");
 
-    // Wait for an alternative to stream in — look for "Alternative #2".
+    // Wait for the "Alt 1" tab to appear in the tab bar via SSE.
     // The alternative re-solves after the primary, so allow another full budget.
-    let _alt_header = client
+    let alt_tab = client
         .wait()
         .at_most(std::time::Duration::from_secs(15))
-        .for_element(Locator::XPath("//*[contains(text(), 'Alternative #2')]"))
+        .for_element(Locator::XPath(
+            "//*[@id='tab-bar']//button[contains(., 'Alt 1')]",
+        ))
         .await
-        .expect("expected Alternative #2 to appear via SSE");
+        .expect("expected Alt 1 tab to appear in tab bar via SSE");
 
-    // Verify the "Use this" link exists.
-    let _use_this = client
-        .find(Locator::XPath("//a[contains(text(), 'Use this')]"))
-        .await
-        .expect("expected 'Use this' link on alternative");
+    // Click the Alt 1 tab to switch to it.
+    alt_tab.click().await.unwrap();
 
-    // Click the "Use this" link via JS.
-    client
-        .execute(
-            r#"
-            var links = document.querySelectorAll('a');
-            for (var i = 0; i < links.length; i++) {
-                if (links[i].textContent.trim() === 'Use this') {
-                    links[i].click();
-                    break;
-                }
-            }
-            "#,
-            vec![],
-        )
-        .await
-        .unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-
-    // Wait for the editor to load with the alternative's placements.
+    // The tab switch does a full page navigation — wait for the
+    // editor to reload with the alternative's placements.
     client
         .wait()
-        .at_most(std::time::Duration::from_secs(5))
+        .at_most(std::time::Duration::from_secs(10))
         .for_element(Locator::Css("[data-editor-boat]"))
         .await
-        .expect("expected editor boat cards after 'Use this' navigation");
+        .expect("expected editor boat cards after switching to Alt 1 tab");
 
     // Verify we're on the solve page (not an error page).
     let url = client.current_url().await.unwrap();
     assert!(
         url.path().starts_with("/solve/"),
-        "expected to stay on /solve/ page after 'Use this', got {}",
+        "expected to stay on /solve/ page after tab switch, got {}",
         url.path()
     );
 

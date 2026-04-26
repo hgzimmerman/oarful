@@ -65,10 +65,10 @@ async fn generate_and_commit_lineup() {
         "expected rower names in generated lineup"
     );
 
-    // Commit the lineup by clicking the emerald button.
+    // Commit the lineup by clicking the commit button.
     client
         .execute(
-            r#"var btn = document.querySelector('.bg-emerald-600');
+            r#"var btn = document.querySelector('button[form="commit-form"]');
                if (btn) { btn.scrollIntoView(); btn.click(); }"#,
             vec![],
         )
