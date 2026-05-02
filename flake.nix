@@ -65,6 +65,7 @@
           nativeBuildInputs = with pkgs; [
             flyctl
             skopeo
+            cargo-nextest
             cargo-watch
             (writeShellScriptBin "dump-snapshot" ''
               cargo run -p lineup_cli -- "$@"
