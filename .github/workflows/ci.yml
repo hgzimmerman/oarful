@@ -67,7 +67,7 @@ jobs:
           DBUS_CONF
           nix develop -c bash -c '
             eval $(dbus-daemon --config-file=/tmp/dbus-session.conf --fork --print-address=1 --print-pid=1 | { read addr; read pid; echo "export DBUS_SESSION_BUS_ADDRESS=$addr DBUS_PID=$pid"; })
-            cargo nextest run -p lineup_e2e --retries 2 -j 4
+            cargo nextest run -p lineup_e2e --retries 2 -j 4 --no-fail-fast
             kill $DBUS_PID 2>/dev/null || true
           '
 
