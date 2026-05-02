@@ -38,8 +38,10 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Run tests (excluding e2e)
-        run: nix develop -c cargo test --workspace --exclude lineup_e2e
+      - name: Run tests (excluding e2e and solver baselines)
+        run: nix develop -c cargo test --workspace --exclude lineup_e2e --exclude lineup_solver
+      - name: Run solver constraint tests
+        run: nix develop -c cargo test -p lineup_solver --test constraints
 
   test-e2e:
     name: E2E tests

@@ -3,8 +3,16 @@
 //! Seeds `lineup_db::fixture` into a fresh in-memory sqlite, builds
 //! a `DbSnapshot` for the fixture's practice date, then runs
 //! `solve()` in four scenarios (default, --partial 2, --novelty 1,
-//! --novelty 2) and compares a compact, deterministic rendering of
-//! the result against a checked-in expected file.
+//! --novelty 2) and compares a compact rendering of the result
+//! against a checked-in expected file.
+//!
+//! **Not run in CI.** The solver uses a time budget, so faster/slower
+//! machines explore different branch counts and may converge on
+//! different optima. These baselines are for local regression
+//! detection only.
+//!
+//! TODO: add an iteration-limited solve mode so baselines produce
+//! identical results regardless of machine speed, then re-enable in CI.
 //!
 //! # Philosophy
 //!
