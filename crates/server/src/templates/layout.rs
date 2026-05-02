@@ -25,7 +25,12 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 script src="/alpine.min.js" defer {}
                 script src="/htmx-ext-sse.js" defer {}
                 // Hide x-cloak elements until Alpine initializes
-                style { "[x-cloak] { display: none !important; }" }
+                style { r#"
+                    [x-cloak] { display: none !important; }
+                    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+                    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; z-index: 100; }
+                    .skip-link:focus { left: 8px; top: 8px; width: auto; height: auto; padding: 8px 16px; background: var(--ink); color: var(--paper); border-radius: 4px; font-weight: 600; text-decoration: none; }
+                "# }
                 // Highlight the active nav link on page load and HTMX
                 // navigation. Prefix-matches location.pathname against
                 // data-nav attributes, with alias grouping for related
@@ -50,6 +55,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 "# }
             }
             body class="min-h-screen flex flex-col bg-paper text-ink" {
+                a href="#content" class="skip-link" { "Skip to content" }
                 @if is_superuser {
                     div class="bg-warn text-paper text-center text-sm py-1.5 px-4 no-print" {
                         "Impersonating this tenant "
@@ -62,7 +68,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                     }
                 }
                 (navbar(role))
-                main #content class="flex-grow" {
+                main #content class="flex-grow" "aria-live"="polite" {
                     (content)
                 }
                 footer class="text-center text-xs py-2 no-print text-muted bg-paper border-t"
@@ -81,10 +87,14 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                         span #toast-msg class="flex-1" {}
                         button type="button"
                                class="font-bold text-lg leading-none opacity-60 hover:opacity-100"
+                               "aria-label"="Dismiss"
                                onclick="document.getElementById('toast').classList.add('hidden')" {
-                            "\u{00d7}"
+                            span "aria-hidden"="true" { "\u{00d7}" }
                         }
                     }
+                }
+                script {
+                    (maud::PreEscaped(include_str!("js/focus_trap.js")))
                 }
                 script {
                     (maud::PreEscaped(include_str!("js/toast.js")))
@@ -141,6 +151,7 @@ fn navbar(role: Role) -> Markup {
                 // Hamburger button (mobile only)
                 button class="lg:hidden p-2 rounded hover:bg-paper/10"
                        "@click"="open = !open"
+                       ":aria-expanded"="open"
                        aria-label="Menu" {
                     // Hamburger icon
                     div class="w-5 h-0.5 bg-paper mb-1" {}
@@ -238,7 +249,7 @@ pub(crate) fn tabbed_section(
                 }
             }
         }
-        div id=(target_id) {
+        div id=(target_id) "aria-live"="polite" {
             (tab_content)
         }
     }

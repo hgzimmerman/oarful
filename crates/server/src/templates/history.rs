@@ -65,7 +65,7 @@ fn row(p: &Practice, is_stale: bool) -> Markup {
                     }
                 }
             }
-            span class="text-muted" { "→" }
+            span class="text-muted" "aria-hidden"="true" { "→" }
         }
     }
 }
@@ -186,7 +186,7 @@ pub(crate) fn detail_content(
 fn notes_section(practice: Option<&Practice>, practice_id: PracticeId) -> Markup {
     let existing_notes = practice.and_then(|p| p.notes.as_deref()).unwrap_or("");
     html! {
-        div id="practice-notes" {
+        div id="practice-notes" "aria-live"="polite" {
             (notes_display_inner(existing_notes, practice_id))
         }
     }
@@ -196,7 +196,7 @@ fn notes_section(practice: Option<&Practice>, practice_id: PracticeId) -> Markup
 pub(crate) fn notes_display(practice: &Practice) -> Markup {
     let notes = practice.notes.as_deref().unwrap_or("");
     html! {
-        div id="practice-notes" {
+        div id="practice-notes" "aria-live"="polite" {
             (notes_display_inner(notes, practice.id))
         }
     }

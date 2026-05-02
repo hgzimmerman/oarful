@@ -37,14 +37,14 @@ pub(crate) fn list_content(
                     table class="w-full text-sm" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
-                                th class="px-4 py-2" { "When" }
-                                th class="px-4 py-2" { "User" }
-                                th class="px-4 py-2" { "Action" }
-                                th class="px-4 py-2" { "Resource" }
-                                th class="px-4 py-2" { "Detail" }
+                                th scope="col" class="px-4 py-2" { "When" }
+                                th scope="col" class="px-4 py-2" { "User" }
+                                th scope="col" class="px-4 py-2" { "Action" }
+                                th scope="col" class="px-4 py-2" { "Resource" }
+                                th scope="col" class="px-4 py-2" { "Detail" }
                             }
                         }
-                        tbody #audit-rows {
+                        tbody #audit-rows "aria-live"="polite" {
                             (rows_fragment(entries, user_map))
                         }
                     }

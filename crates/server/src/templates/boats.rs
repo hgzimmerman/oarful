@@ -68,11 +68,11 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
                 table class="w-full text-sm" {
                     thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                         tr {
-                            th class="px-4 py-2" { "Name" }
-                            th class="px-4 py-2" { "Type" }
-                            th class="px-4 py-2" { "Weight" }
-                            th class="px-4 py-2" { "Seats" }
-                            th class="px-4 py-2" { "Rig" }
+                            th scope="col" class="px-4 py-2" { "Name" }
+                            th scope="col" class="px-4 py-2" { "Type" }
+                            th scope="col" class="px-4 py-2" { "Weight" }
+                            th scope="col" class="px-4 py-2" { "Seats" }
+                            th scope="col" class="px-4 py-2" { "Rig" }
                         }
                     }
                     tbody {

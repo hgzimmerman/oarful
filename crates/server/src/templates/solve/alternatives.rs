@@ -31,8 +31,9 @@ pub(super) fn alternatives_panel(
                 x-data="{ open: false }" {
             button type="button"
                    "@click"="open = !open"
+                   ":aria-expanded"="open"
                    class="flex items-center space-x-2 text-slate-700 hover:text-slate-900 font-semibold" {
-                span x-text="open ? '▼' : '▶'" {}
+                span x-text="open ? '▼' : '▶'" "aria-hidden"="true" {}
                 span {
                     "Show "
                     (alternatives.len())
@@ -220,7 +221,7 @@ fn seat_row(
                     div class="font-medium font-serif-heading text-sm text-ink" {
                         (r.name)
                         @if is_changed {
-                            span class="ml-1 text-xs text-warn" { "\u{25CF}" }
+                            span class="ml-1 text-xs text-warn" "aria-hidden"="true" title="Changed from current lineup" { "\u{25CF}" }
                         }
                     }
                     (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))

@@ -108,16 +108,16 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                     table class="w-full text-sm" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
-                                th class="px-4 py-2" { "Name" }
+                                th scope="col" class="px-4 py-2" { "Name" }
                                 @if show_emails {
-                                    th class="px-4 py-2" { "Email" }
+                                    th scope="col" class="px-4 py-2" { "Email" }
                                 }
-                                th class="px-4 py-2" { "Weight" }
-                                th class="px-4 py-2" { "Form" }
-                                th class="px-4 py-2" { "Strength" }
-                                th class="px-4 py-2" { "Side" }
-                                th class="px-4 py-2" { "Cox" }
-                                th class="px-4 py-2" { "Sweep bias" }
+                                th scope="col" class="px-4 py-2" { "Weight" }
+                                th scope="col" class="px-4 py-2" { "Form" }
+                                th scope="col" class="px-4 py-2" { "Strength" }
+                                th scope="col" class="px-4 py-2" { "Side" }
+                                th scope="col" class="px-4 py-2" { "Cox" }
+                                th scope="col" class="px-4 py-2" { "Sweep bias" }
                             }
                         }
                         tbody {
@@ -167,7 +167,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                 }
             }
             div class="flex items-center gap-2" {
-                span class="text-muted" { "→" }
+                span class="text-muted" "aria-hidden"="true" { "→" }
             }
         }
     }
@@ -299,7 +299,7 @@ pub(crate) fn attribute_section(
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     let has_editable = has_any_editable_field(perms);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6" {
+        section #attributes class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Attributes" }
                 @if has_editable {
@@ -588,7 +588,7 @@ fn erg_test_section(
     };
 
     html! {
-        section #erg-tests class="bg-paper rounded-lg shadow-soft p-6" {
+        section #erg-tests class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
                 h2 class="text-lg font-bold text-ink" { "Erg tests" }
             }
@@ -600,12 +600,12 @@ fn erg_test_section(
                     table class="w-full text-sm" {
                         thead {
                             tr class="text-xs text-ink-3 uppercase tracking-wide" {
-                                th class="text-left py-1 px-2" { "Distance" }
-                                th class="text-left py-1 px-2" { "Time" }
-                                th class="text-left py-1 px-2" { "Split /500m" }
-                                th class="text-left py-1 px-2" { "Date" }
+                                th scope="col" class="text-left py-1 px-2" { "Distance" }
+                                th scope="col" class="text-left py-1 px-2" { "Time" }
+                                th scope="col" class="text-left py-1 px-2" { "Split /500m" }
+                                th scope="col" class="text-left py-1 px-2" { "Date" }
                                 @if can_delete {
-                                    th class="py-1 px-2" {}
+                                    th scope="col" class="py-1 px-2" {}
                                 }
                             }
                         }
@@ -707,7 +707,7 @@ pub(crate) fn seat_affinities_section(
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
     let delete_url = format!("/rowers/{}/seat-affinity/delete", r.id);
     html! {
-        section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" {
+        section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Seat preferences" }
                 span class="text-xs text-ink-3" {
@@ -725,9 +725,9 @@ pub(crate) fn seat_affinities_section(
                 table class="w-full text-sm mb-3" {
                     thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
-                            th class="py-1 w-24" { "Seat" }
-                            th class="py-1" { "Preference" }
-                            th class="py-1" { "" }
+                            th scope="col" class="py-1 w-24" { "Seat" }
+                            th scope="col" class="py-1" { "Preference" }
+                            th scope="col" class="py-1" { "" }
                         }
                     }
                     tbody {
@@ -806,7 +806,7 @@ pub(crate) fn pair_affinities_section(
         }
     };
     html! {
-        section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" {
+        section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Pair preferences" }
                 span class="text-xs text-ink-3" {
@@ -824,9 +824,9 @@ pub(crate) fn pair_affinities_section(
                 table class="w-full text-sm mb-3" {
                     thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
-                            th class="py-1" { "Partner" }
-                            th class="py-1" { "Preference" }
-                            th class="py-1" { "" }
+                            th scope="col" class="py-1" { "Partner" }
+                            th scope="col" class="py-1" { "Preference" }
+                            th scope="col" class="py-1" { "" }
                         }
                     }
                     tbody {

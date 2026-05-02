@@ -80,11 +80,11 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
                 table class="w-full text-sm" {
                     thead class="bg-paper border-b border-rule-2" {
                         tr {
-                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Name" }
-                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Slug" }
-                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Status" }
-                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Created" }
-                            th class="text-left px-4 py-3 font-semibold text-ink-2" { "Actions" }
+                            th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Name" }
+                            th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Slug" }
+                            th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Status" }
+                            th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Created" }
+                            th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Actions" }
                         }
                     }
                     tbody {

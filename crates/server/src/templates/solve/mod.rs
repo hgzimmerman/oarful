@@ -350,8 +350,10 @@ fn tab_bar(meta: &EditorTabsMeta) -> Markup {
                 onclick=(format!("switchTab({})", tab.id)) {
                     span class="tab-label" { (tab.label) }
                     span class={"tab-close text-ink-3 hover:text-red-600 ml-1 text-xs" @if meta.tabs.len() <= 1 { " hidden" }}
+                         role="button"
+                         "aria-label"="Close tab"
                          onclick=(format!("event.stopPropagation(); removeTab({})", tab.id)) {
-                        "\u{00d7}"
+                        span "aria-hidden"="true" { "\u{00d7}" }
                     }
                 }
             }

@@ -55,6 +55,7 @@ pub(super) fn knobs_form(
                    class="solver-rail-closed"
                    x-show="!railOpen"
                    "@click"="railOpen = true"
+                   "aria-expanded"="false"
                    title="Open solver" {
                 span class="vert hidden lg:block" { "SOLVER" }
                 span class="lg:hidden flex items-center gap-2 px-4 text-sm" {
@@ -76,8 +77,9 @@ pub(super) fn knobs_form(
                     }
                     button type="button"
                            class="text-xl leading-none cursor-pointer text-muted"
+                           "aria-label"="Close solver settings"
                            "@click"="railOpen = false" {
-                        "\u{00d7}"
+                        span "aria-hidden"="true" { "\u{00d7}" }
                     }
                 }
 

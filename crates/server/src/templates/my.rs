@@ -93,8 +93,8 @@ pub(crate) fn availability_content(
                     table class="w-full text-sm" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
-                                th class="px-4 py-2" { "Date" }
-                                th class="px-4 py-2" { "Status" }
+                                th scope="col" class="px-4 py-2" { "Date" }
+                                th scope="col" class="px-4 py-2" { "Status" }
                             }
                         }
                         tbody {

@@ -101,7 +101,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                                     "Buckets: " (t.bucket_visibility)
                                 }
                             }
-                            span class="text-muted" { "→" }
+                            span class="text-muted" "aria-hidden"="true" { "→" }
                         }
                     }
                 }
@@ -734,11 +734,11 @@ fn roster_matrix_inner(
                         table class="text-xs border-collapse" {
                             thead {
                                 tr {
-                                    th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
+                                    th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
                                         "Rower"
                                     }
                                     @for team in teams {
-                                        th class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
+                                        th scope="col" class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
                                             (team.name)
                                         }
                                     }
@@ -842,11 +842,11 @@ fn fleet_matrix_inner(
                         table class="text-xs border-collapse" {
                             thead {
                                 tr {
-                                    th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
+                                    th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
                                         "Boat"
                                     }
                                     @for team in teams {
-                                        th class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
+                                        th scope="col" class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
                                             (team.name)
                                         }
                                     }

@@ -202,7 +202,7 @@ pub(crate) fn login_club_picker(
                                     div class="text-xs text-ink-3" { (r) }
                                 }
                             }
-                            span class="text-muted text-sm" { "\u{2192}" }
+                            span class="text-muted text-sm" "aria-hidden"="true" { "\u{2192}" }
                         }
                     }
                 }

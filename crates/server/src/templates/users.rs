@@ -55,11 +55,11 @@ pub(crate) fn list_content(
                     table class="w-full text-sm min-w-[480px]" {
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
-                                th class="px-4 py-2" { "Name" }
-                                th class="px-4 py-2" { "Email" }
-                                th class="px-4 py-2" { "Role" }
-                                th class="px-4 py-2" { "Status" }
-                                th class="px-4 py-2" {}
+                                th scope="col" class="px-4 py-2" { "Name" }
+                                th scope="col" class="px-4 py-2" { "Email" }
+                                th scope="col" class="px-4 py-2" { "Role" }
+                                th scope="col" class="px-4 py-2" { "Status" }
+                                th scope="col" class="px-4 py-2" {}
                             }
                         }
                         tbody {

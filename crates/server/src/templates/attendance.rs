@@ -76,7 +76,7 @@ pub(crate) fn grid_content(
                     table class="text-xs border-collapse" {
                         thead {
                             tr {
-                                th class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[140px]" {
+                                th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[140px]" {
                                     "Rower"
                                 }
                                 @for col in columns {
@@ -87,7 +87,7 @@ pub(crate) fn grid_content(
                         tbody {
                             @for rower in rowers {
                                 tr {
-                                    td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-b border-r border-rule-2 whitespace-nowrap" {
+                                    th scope="row" class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-b border-r border-rule-2 whitespace-nowrap text-left" {
                                         (rower.name)
                                     }
                                     @for col in columns {
@@ -135,7 +135,7 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
     let full_date = date.format("%A, %B %-d, %Y").to_string();
 
     html! {
-        th class=(base_class) title=(full_date) {
+        th scope="col" class=(base_class) title=(full_date) {
             @if let Some(pid) = practice_id {
                 a href=(format!("/history/{pid}"))
                   hx-get=(format!("/history/{pid}"))

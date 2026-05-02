@@ -327,11 +327,11 @@ pub(crate) fn lineup_editor(
                 }
                 @if editor.boats.len() > 2 {
                     span class="inline-flex items-center gap-1 ml-1" {
-                        span class="text-xs text-rule" { "\u{00b7}" }
+                        span class="text-xs text-rule" "aria-hidden"="true" { "\u{00b7}" }
                         button type="button"
                                class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer text-accent"
                                "@click"="selectAllBoats()" { "all" }
-                        span class="text-xs text-rule" { "\u{00b7}" }
+                        span class="text-xs text-rule" "aria-hidden"="true" { "\u{00b7}" }
                         button type="button"
                                class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer text-accent"
                                "@click"="deselectAllBoats()" { "none" }
@@ -411,11 +411,11 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                             (seat_count)
                             @if boat.has_cox.as_bool() { "+" }
                         }
-                        span { "\u{00b7}" }
+                        span "aria-hidden"="true" { "\u{00b7}" }
                         span { (boat.weight_class) }
-                        span { "\u{00b7}" }
+                        span "aria-hidden"="true" { "\u{00b7}" }
                         span { (rig_label(boat)) }
-                        span { "\u{00b7}" }
+                        span "aria-hidden"="true" { "\u{00b7}" }
                         @let filled = seats.iter().filter(|(_, r)| r.is_some()).count();
                         span { (filled) "/" (seats.len()) " seated" }
                     }
@@ -435,29 +435,33 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         button type="button"
                                class="lock-btn lock-btn-on"
                                title="Boat locked \u{2014} solver keeps all seats. Click to unlock."
+                               "aria-label"="Unlock boat"
                                "@click.stop"={"cycleBoatState('locked'," (boat.id) ")"} {
-                            "\u{25CF}"
+                            span "aria-hidden"="true" { "\u{25CF}" }
                         }
                     } @else if boat_pin_state == "dirty" {
                         button type="button"
                                class="lock-btn lock-btn-dirty"
                                title="Boat pinned \u{2014} solver will honor this next run. Click to unpin."
+                               "aria-label"="Unpin boat"
                                "@click.stop"={"cycleBoatState('dirty'," (boat.id) ")"} {
-                            "\u{25CF}"
+                            span "aria-hidden"="true" { "\u{25CF}" }
                         }
                     } @else if boat_pin_state == "was_pinned" {
                         button type="button"
                                class="lock-btn lock-btn-was-pinned"
                                title="Boat was pinned last run, now free. Click to lock."
+                               "aria-label"="Lock boat"
                                "@click.stop"={"cycleBoatState('was_pinned'," (boat.id) ")"} {
-                            "\u{25CB}"
+                            span "aria-hidden"="true" { "\u{25CB}" }
                         }
                     } @else {
                         button type="button"
                                class="lock-btn"
                                title="Click to lock this boat"
+                               "aria-label"="Lock boat"
                                "@click.stop"={"cycleBoatState('clean'," (boat.id) ")"} {
-                            "\u{25CB}"
+                            span "aria-hidden"="true" { "\u{25CB}" }
                         }
                     }
                 }
@@ -503,10 +507,14 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         data-name=(rower_name)
                         data-stats=(stats_text)
                         data-pin-state=(pin_state)
+                        role="button"
+                        tabindex="0"
                         class="grid gap-1 my-0.5 rounded cursor-pointer transition items-center"
                         style={"grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" })}
                         ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" }) "'"}
-                        "@click"={"select('" (key) "')"} {
+                        "@click"={"select('" (key) "')"}
+                        "@keydown.enter"={"select('" (key) "')"}
+                        "@keydown.space.prevent"={"select('" (key) "')"} {
                         // Seat tag
                         div class="flex items-center justify-center" {
                             (seat_badge(Some(boat), *seat, &label))
@@ -529,29 +537,33 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                     button type="button"
                                            class="lock-btn lock-btn-on"
                                            title="Locked \u{2014} solver always keeps this. Click to unlock."
+                                           "aria-label"="Unlock seat"
                                            "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
-                                        "\u{25CF}"
+                                        span "aria-hidden"="true" { "\u{25CF}" }
                                     }
                                 } @else if pin_state == "dirty" {
                                     button type="button"
                                            class="lock-btn lock-btn-dirty"
                                            title="Pinned \u{2014} solver will honor this next run. Click to unpin."
+                                           "aria-label"="Unpin seat"
                                            "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {
-                                        "\u{25CF}"
+                                        span "aria-hidden"="true" { "\u{25CF}" }
                                     }
                                 } @else if pin_state == "was_pinned" {
                                     button type="button"
                                            class="lock-btn lock-btn-was-pinned"
                                            title="Was pinned last run, now free. Click to lock."
+                                           "aria-label"="Lock seat"
                                            "@click.stop"={"cycleSeatState('was_pinned','" (seat_key) "')"} {
-                                        "\u{25CB}"
+                                        span "aria-hidden"="true" { "\u{25CB}" }
                                     }
                                 } @else {
                                     button type="button"
                                            class="lock-btn"
                                            title="Click to lock this seat"
+                                           "aria-label"="Lock seat"
                                            "@click.stop"={"cycleSeatState('clean','" (seat_key) "')"} {
-                                        "\u{25CB}"
+                                        span "aria-hidden"="true" { "\u{25CB}" }
                                     }
                                 }
                             }
@@ -583,10 +595,14 @@ fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
              data-boat=(boat_kind)
              data-seat="-1"
              data-rower=(r.id)
+             role="button"
+             tabindex="0"
              class="px-2 py-1 rounded cursor-pointer transition"
              style={"border: 1px solid transparent; " (side_style)}
              ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
-             "@click"={"select('" (key) "')"} {
+             "@click"={"select('" (key) "')"}
+             "@keydown.enter"={"select('" (key) "')"}
+             "@keydown.space.prevent"={"select('" (key) "')"} {
             div class="font-medium text-xs text-ink" { (r.name) }
             (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
         }
@@ -693,10 +709,14 @@ pub(crate) fn roster_pool(
                          data-boat="bench"
                          data-seat="-1"
                          data-rower=""
+                         role="button"
+                         tabindex="0"
                          class="block px-2 py-1.5 rounded cursor-pointer transition text-center"
                          style="border: 1px dashed var(--rule)"
                          ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
-                         "@click"="select('bench:empty')" {
+                         "@click"="select('bench:empty')"
+                         "@keydown.enter"="select('bench:empty')"
+                         "@keydown.space.prevent"="select('bench:empty')" {
                         span class="font-mono-stat italic text-xs text-muted" { "\u{2014} bench \u{2014}" }
                     }
                 }

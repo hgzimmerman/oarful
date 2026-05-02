@@ -582,7 +582,7 @@ pub(crate) async fn confirm_handler(
                 form method="post" action={"/teams/" (id) "/toggle-archive"}
                      hx-post={"/teams/" (id) "/toggle-archive"}
                      hx-target="#content"
-                     onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
+                     onclick="releaseFocus(); document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
                     button type="submit"
                            class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
                         "Archive"
@@ -597,7 +597,7 @@ pub(crate) async fn confirm_handler(
                 form method="post" action={"/rowers/" (id) "/toggle-active"}
                      hx-post={"/rowers/" (id) "/toggle-active"}
                      hx-target="#content"
-                     onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
+                     onclick="releaseFocus(); document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()" {
                     button type="submit"
                            class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
                         "Deactivate"
@@ -612,7 +612,7 @@ pub(crate) async fn confirm_handler(
                 button type="button"
                        hx-delete={"/solver-profile/" (name)}
                        hx-target="#content"
-                       onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
+                       onclick="releaseFocus(); document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
                        class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
                     "Delete"
                 }
@@ -623,7 +623,7 @@ pub(crate) async fn confirm_handler(
             "This will overwrite ALL current data with the backup. Are you sure?",
             html! {
                 button type="submit" form="restore-form"
-                       onclick="document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
+                       onclick="releaseFocus(); document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()"
                        class="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded shadow transition" {
                     "Restore"
                 }

@@ -9,7 +9,7 @@ pub(crate) struct ReminderRecipientPreview {
     pub(crate) dates: Vec<NaiveDate>,
 }
 
-const CLOSE_JS: &str = "document.getElementById('reminder-modal').remove(); document.getElementById('reminder-modal-backdrop').remove()";
+const CLOSE_JS: &str = "releaseFocus(); document.getElementById('reminder-modal').remove(); document.getElementById('reminder-modal-backdrop').remove()";
 
 pub(crate) fn reminder_preview_modal(
     recipients: &[ReminderRecipientPreview],
@@ -28,14 +28,18 @@ pub(crate) fn reminder_preview_modal(
             class="fixed inset-0 bg-black/40 z-40"
             onclick=(CLOSE_JS) {}
         div id="reminder-modal"
+            role="dialog"
+            "aria-modal"="true"
+            "aria-label"="Send reminders"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
             div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
                 div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
                     h2 class="text-lg font-bold text-ink" { "Send reminders" }
                     button type="button"
                            class="text-muted hover:text-ink-2 text-xl leading-none"
+                           "aria-label"="Close"
                            onclick=(CLOSE_JS) {
-                        "\u{00d7}"
+                        span "aria-hidden"="true" { "\u{00d7}" }
                     }
                 }
                 div class="px-6 py-4" {
@@ -84,5 +88,6 @@ pub(crate) fn reminder_preview_modal(
                 }
             }
         }
+        script { (maud::PreEscaped("trapFocus(document.getElementById('reminder-modal'));")) }
     }
 }

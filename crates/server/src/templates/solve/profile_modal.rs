@@ -105,9 +105,12 @@ pub(crate) fn profile_editor_modal(
         div id="profile-modal-backdrop"
             class="fixed inset-0 z-40"
             style="background: color-mix(in oklch, var(--ink) 50%, transparent)"
-            "@click"="document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {}
+            "@click"="releaseFocus(); document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {}
         // Modal
         div id="profile-modal"
+            role="dialog"
+            "aria-modal"="true"
+            "aria-label"="Solver profile"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
             div class="rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto"
                 style="background: var(--paper); border: 1px solid var(--rule)" {
@@ -119,8 +122,9 @@ pub(crate) fn profile_editor_modal(
                     }
                     button type="button"
                            class="text-xl leading-none cursor-pointer text-muted"
-                           "@click"="document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {
-                        "\u{00d7}"
+                           "aria-label"="Close"
+                           "@click"="releaseFocus(); document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {
+                        span "aria-hidden"="true" { "\u{00d7}" }
                     }
                 }
 
@@ -202,6 +206,7 @@ pub(crate) fn profile_editor_modal(
                 }
             }
         }
+        script { (maud::PreEscaped("trapFocus(document.getElementById('profile-modal'));")) }
     }
 }
 

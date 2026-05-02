@@ -66,10 +66,11 @@ pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
                        hx-target="#onboarding-checklist"
                        hx-swap="delete"
                        class="text-ink-3 hover:text-ink transition p-1"
-                       title="Dismiss" {
+                       "aria-label"="Dismiss getting started" {
                     // X icon (inline SVG)
                     svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none"
-                        viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" {
+                        viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                        "aria-hidden"="true" {
                         path stroke-linecap="round" stroke-linejoin="round"
                              d="M6 18L18 6M6 6l12 12";
                     }
@@ -87,7 +88,8 @@ pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
                     li class="flex items-start gap-3 py-2" {
                         // Checkmark circle
                         @if *done {
-                            div class="mt-0.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0" {
+                            div class="mt-0.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0"
+                                "aria-hidden"="true" {
                                 svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-white" fill="none"
                                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" {
                                     path stroke-linecap="round" stroke-linejoin="round"
@@ -95,7 +97,8 @@ pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
                                 }
                             }
                         } @else {
-                            div class="mt-0.5 w-5 h-5 rounded-full border-2 border-rule shrink-0" {}
+                            div class="mt-0.5 w-5 h-5 rounded-full border-2 border-rule shrink-0"
+                                "aria-hidden"="true" {}
                         }
 
                         div class="flex-1 min-w-0" {
