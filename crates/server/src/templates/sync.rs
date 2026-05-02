@@ -129,7 +129,7 @@ fn format_help() -> Markup {
                 " Expected sheet format"
             }
             div x-show="showHelp" x-cloak class="mt-3 border border-rule-2 rounded p-4 text-sm text-ink-2 space-y-3" {
-                p { "The first row that starts with " strong { "Sweep/Scull" } " is treated as the header. Rows above it are ignored." }
+                p { "The row containing a " strong { "Sweep/Scull" } " column is treated as the header. Columns are matched by name (case-insensitive) and can appear in any order. Rows above the header are ignored." }
                 div class="overflow-x-auto" {
                     table class="text-xs font-mono border-collapse w-full" {
                         caption class="sr-only" { "Expected spreadsheet columns" }
@@ -138,9 +138,7 @@ fn format_help() -> Markup {
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "Sweep/Scull" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "Last Name" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "First Name" }
-                                th scope="col" class="px-2 py-1 border border-rule-2 text-ink-3" { "Pronoun" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "Email" }
-                                th scope="col" class="px-2 py-1 border border-rule-2 text-ink-3" { "(unused)" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "Side/Cox" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "3/30" }
                                 th scope="col" class="px-2 py-1 border border-rule-2" { "4/1" }
@@ -151,9 +149,7 @@ fn format_help() -> Markup {
                                 td class="px-2 py-1 border border-rule-2" { "Sweep" }
                                 td class="px-2 py-1 border border-rule-2" { "Smith" }
                                 td class="px-2 py-1 border border-rule-2" { "Alice" }
-                                td class="px-2 py-1 border border-rule-2 text-ink-3" { "she/her" }
                                 td class="px-2 py-1 border border-rule-2" { "alice@example.com" }
-                                td class="px-2 py-1 border border-rule-2 text-ink-3" {}
                                 td class="px-2 py-1 border border-rule-2" { "Port" }
                                 td class="px-2 py-1 border border-rule-2" { "Attending" }
                                 td class="px-2 py-1 border border-rule-2" {}
@@ -162,9 +158,7 @@ fn format_help() -> Markup {
                                 td class="px-2 py-1 border border-rule-2" { "Sculling" }
                                 td class="px-2 py-1 border border-rule-2" { "Jones" }
                                 td class="px-2 py-1 border border-rule-2" { "Bob" }
-                                td class="px-2 py-1 border border-rule-2 text-ink-3" {}
                                 td class="px-2 py-1 border border-rule-2" { "bob@example.com" }
-                                td class="px-2 py-1 border border-rule-2 text-ink-3" {}
                                 td class="px-2 py-1 border border-rule-2" { "Either" }
                                 td class="px-2 py-1 border border-rule-2" { "Not Attending" }
                                 td class="px-2 py-1 border border-rule-2" { "Attending" }
@@ -173,12 +167,12 @@ fn format_help() -> Markup {
                     }
                 }
                 ul class="text-xs text-ink-3 space-y-1 list-disc pl-4" {
-                    li { "Columns must be in this order. Column headers are ignored except for " strong { "Sweep/Scull" } " (marks the header row) and dates." }
+                    li { "Required columns: " strong { "Sweep/Scull" } ", " strong { "Last Name" } ", " strong { "First Name" } ", " strong { "Email" } ", " strong { "Side/Cox" } "." }
+                    li { "Optional columns (ignored): Pronoun, Can you Scull?, or any other unrecognized column." }
                     li { "Date columns use " strong { "M/D" } " format (e.g. 3/30, 11/5). Year is inferred from the current season." }
                     li { "Availability values: " strong { "Attending" } ", " strong { "Not Attending" } ", or empty (no response)." }
                     li { "Side/Cox values: " strong { "Port" } ", " strong { "Starboard" } ", " strong { "Either" } ", or " strong { "Cox" } " (designated coxswain)." }
                     li { "Rowers are matched by " strong { "email" } ". Rows without an email are skipped." }
-                    li { "The Pronoun and column 5 are read but not stored." }
                 }
             }
         }

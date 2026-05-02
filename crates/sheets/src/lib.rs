@@ -14,17 +14,27 @@
 //!
 //! # Expected sheet format
 //!
-//! First 7 columns are rower metadata, followed by one column per
-//! practice date:
+//! Columns are matched by case-insensitive header name and can appear
+//! in any order. Required columns:
+//!
+//! - **Sweep/Scull** — also serves as the header-row marker
+//! - **Last Name** — rower surname
+//! - **First Name** — rower given name
+//! - **Email** — identity key for matching rowers to app users
+//! - **Side/Cox** — `Port`, `Starboard`, `Either`, or `Cox`
+//!
+//! Optional / ignored columns: `Pronoun`, `Can you Scull?`, and any
+//! other unrecognized column names.
+//!
+//! Any column whose header matches `M/D` format is treated as a
+//! practice date (e.g. `3/30`, `11/5`). Year is inferred from the
+//! current calendar year.
 //!
 //! ```text
-//! | Sweep/Scull | Last Name | First Name | Pronoun | Email | Can you Scull? | Side/Cox | 3/30 | 4/1 | 4/3 | ...
-//! | Sweep       | Smith     | Alice      | she/her | a@... | Yes            | Port     | Att. | ... | ... | ...
+//! | Sweep/Scull | Last Name | First Name | Email | Side/Cox | 3/30 | 4/1 | ...
+//! | Sweep       | Smith     | Alice      | a@... | Port     | Att. | ... | ...
 //! ```
 //!
-//! - Date headers are `M/D` format. Year is inferred from the current
-//!   calendar year (sync is intended to be run against the active
-//!   season).
 //! - Cell values: `Attending`, `Not Attending`, or empty. Empty means
 //!   "no response yet" — no availability row is upserted.
 //! - `Sweep/Scull` column distinguishes team membership. Sweep rows
@@ -164,19 +174,18 @@ pub fn sync_csv(
     let header_idx = all_records
         .iter()
         .position(|r| {
-            r.get(0)
-                .map(|c| c.trim().eq_ignore_ascii_case("Sweep/Scull"))
-                .unwrap_or(false)
+            r.iter()
+                .any(|c| c.trim().eq_ignore_ascii_case("Sweep/Scull"))
         })
         .ok_or_else(|| {
             anyhow!(
-                "could not find header row (expected first column to be \
+                "could not find header row (expected a column named \
                  'Sweep/Scull'). Sheet may be in an unexpected format."
             )
         })?;
 
     let headers = &all_records[header_idx];
-    let date_columns = parse_date_headers(headers, year)?;
+    let col_map = ColumnMap::from_headers(headers, year)?;
 
     let mut summary = SyncSummary::default();
 
@@ -191,7 +200,7 @@ pub fn sync_csv(
         summary.rows_read += 1;
         match sync_row(
             record,
-            &date_columns,
+            &col_map,
             team_id,
             row_filter,
             default_time,
@@ -211,7 +220,7 @@ pub fn sync_csv(
 
 fn sync_row(
     record: &csv::StringRecord,
-    date_columns: &[(usize, NaiveDate)],
+    col_map: &ColumnMap,
     team_id: lineup_db::team::TeamId,
     row_filter: RowFilter,
     default_time: Option<chrono::NaiveTime>,
@@ -219,13 +228,11 @@ fn sync_row(
     conn: &mut SqliteConnection,
     summary: &mut SyncSummary,
 ) -> Result<()> {
-    let team = field(record, 0);
-    let last_name = field(record, 1);
-    let first_name = field(record, 2);
-    // field(3) is Pronoun — we don't store it
-    let email = field(record, 4);
-    let _scull_col = field(record, 5); // column 5 read for positional alignment; sweep_bias replaces this
-    let side_cox_text = field(record, 6);
+    let team = field(record, col_map.sweep_scull);
+    let last_name = field(record, col_map.last_name);
+    let first_name = field(record, col_map.first_name);
+    let email = field(record, col_map.email);
+    let side_cox_text = field(record, col_map.side_cox);
 
     if first_name.is_empty() && last_name.is_empty() {
         return Ok(()); // blank row — silently skip
@@ -379,7 +386,7 @@ fn sync_row(
     lineup_db::team::TeamMembership::add(conn, team_id, rower.id)?;
 
     // Upsert per-date availability.
-    for (col_idx, date) in date_columns {
+    for (col_idx, date) in &col_map.dates {
         let cell = record.get(*col_idx).unwrap_or("").trim();
         if cell.is_empty() {
             continue;
@@ -431,38 +438,62 @@ fn sync_row(
     Ok(())
 }
 
-/// Pull the date columns (index, parsed date) out of the header row,
-/// assuming the first 7 columns are the known metadata columns and
-/// everything after that is an `M/D` date.
-fn parse_date_headers(headers: &csv::StringRecord, year: i32) -> Result<Vec<(usize, NaiveDate)>> {
-    const EXPECTED_METADATA: &[&str] = &[
-        "Sweep/Scull",
-        "Last Name",
-        "First Name",
-        "Pronoun",
-        "Email",
-        "Can you Scull?",
-        "Side/Cox",
-    ];
+/// Resolved column indices for the known metadata fields plus any
+/// date columns. Built from the header row by case-insensitive name
+/// matching so columns can appear in any order and optional columns
+/// (Pronoun, Can you Scull?) may be absent.
+struct ColumnMap {
+    sweep_scull: usize,
+    last_name: usize,
+    first_name: usize,
+    email: usize,
+    side_cox: usize,
+    dates: Vec<(usize, NaiveDate)>,
+}
 
-    for (i, expected) in EXPECTED_METADATA.iter().enumerate() {
-        let got = headers.get(i).unwrap_or("").trim();
-        if !got.eq_ignore_ascii_case(expected) {
-            bail!("unexpected header at column {i}: got {got:?}, expected {expected:?}");
-        }
-    }
+impl ColumnMap {
+    fn from_headers(headers: &csv::StringRecord, year: i32) -> Result<Self> {
+        let mut sweep_scull = None;
+        let mut last_name = None;
+        let mut first_name = None;
+        let mut email = None;
+        let mut side_cox = None;
+        let mut dates = Vec::new();
 
-    let mut dates = Vec::new();
-    for idx in EXPECTED_METADATA.len()..headers.len() {
-        let raw = headers.get(idx).unwrap_or("").trim();
-        if raw.is_empty() {
-            continue;
+        for idx in 0..headers.len() {
+            let raw = headers.get(idx).unwrap_or("").trim();
+            if raw.is_empty() {
+                continue;
+            }
+            let lower = raw.to_ascii_lowercase();
+            match lower.as_str() {
+                "sweep/scull" => sweep_scull = Some(idx),
+                "last name" | "last" | "lastname" => last_name = Some(idx),
+                "first name" | "first" | "firstname" => first_name = Some(idx),
+                "email" | "e-mail" => email = Some(idx),
+                "side/cox" | "side" | "cox" => side_cox = Some(idx),
+                // Known optional columns — skip without error.
+                "pronoun" | "pronouns" | "can you scull?" => {}
+                _ => {
+                    // Try to parse as M/D date.
+                    if let Ok(date) = parse_month_day(raw, year) {
+                        dates.push((idx, date));
+                    }
+                    // Otherwise silently ignore (extra metadata columns, etc.)
+                }
+            }
         }
-        let date = parse_month_day(raw, year)
-            .with_context(|| format!("parsing date header column {idx}: {raw:?}"))?;
-        dates.push((idx, date));
+
+        Ok(Self {
+            sweep_scull: sweep_scull
+                .ok_or_else(|| anyhow!("missing required column: Sweep/Scull"))?,
+            last_name: last_name.ok_or_else(|| anyhow!("missing required column: Last Name"))?,
+            first_name: first_name.ok_or_else(|| anyhow!("missing required column: First Name"))?,
+            email: email.ok_or_else(|| anyhow!("missing required column: Email"))?,
+            side_cox: side_cox.ok_or_else(|| anyhow!("missing required column: Side/Cox"))?,
+            dates,
+        })
     }
-    Ok(dates)
 }
 
 /// Parse an `M/D` header into a `NaiveDate` using the supplied year.
@@ -791,11 +822,10 @@ mod tests {
     }
 
     #[test]
-    fn malformed_date_header_fails_fast() {
-        // A header column that doesn't look like `M/D` should
-        // produce a hard error rather than silently dropping the
-        // column — the sheet format changed and the operator should
-        // know before running a bad import.
+    fn unrecognised_header_column_is_silently_ignored() {
+        // Columns that don't match a known name or M/D date pattern
+        // are silently skipped. This lets sheets have extra columns
+        // (notes, internal IDs, etc.) without breaking the import.
         let mut conn = in_memory_conn();
         let tid = seed_team(&mut conn);
         let csv = format!(
@@ -804,12 +834,10 @@ mod tests {
             header_with_dates(&["not-a-date"]),
         );
 
-        let err = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(
-            msg.contains("not-a-date") || msg.contains("M/D"),
-            "error should mention the bad header: {msg}"
-        );
+        let summary = sync_csv(&csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
+        assert_eq!(summary.rowers_created, 1);
+        // The non-date column is ignored — no availability upserted.
+        assert_eq!(summary.availabilities_upserted, 0);
     }
 
     #[test]
@@ -897,5 +925,83 @@ mod tests {
         let rowers = all_rowers(&mut conn);
         assert_eq!(rowers.len(), 1);
         assert_eq!(rowers[0].name, "Nico Scully");
+    }
+
+    #[test]
+    fn reordered_columns_work() {
+        // Columns in a different order than the original GGRC layout.
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = "Email,First Name,Last Name,Sweep/Scull,Side/Cox,4/11\n\
+                   alice@example.com,Alice,Smith,Sweep,Port,Attending\n";
+
+        let summary = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 1);
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers[0].name, "Alice Smith");
+        assert_eq!(rowers[0].side, Side::Port);
+    }
+
+    #[test]
+    fn missing_optional_columns_work() {
+        // No Pronoun or "Can you Scull?" columns — just the required ones.
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = "Sweep/Scull,Last Name,First Name,Email,Side/Cox,4/11\n\
+                   Sweep,Smith,Alice,alice@example.com,Starboard,Attending\n";
+
+        let summary = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 1);
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers[0].side, Side::Starboard);
+    }
+
+    #[test]
+    fn case_insensitive_headers() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = "sweep/scull,LAST NAME,first name,EMAIL,SIDE/COX,4/11\n\
+                   Sweep,Smith,Alice,alice@example.com,Port,Attending\n";
+
+        let summary = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 1);
+    }
+
+    #[test]
+    fn extra_columns_are_ignored() {
+        // Sheet has extra columns (Notes, Internal ID) that we don't know about.
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let csv = "Sweep/Scull,Last Name,First Name,Notes,Email,Internal ID,Side/Cox,4/11\n\
+                   Sweep,Smith,Alice,some note,alice@example.com,12345,Port,Attending\n";
+
+        let summary = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap();
+
+        assert_eq!(summary.rowers_created, 1);
+        assert_eq!(summary.availabilities_upserted, 1);
+        let rowers = all_rowers(&mut conn);
+        assert_eq!(rowers[0].name, "Alice Smith");
+    }
+
+    #[test]
+    fn missing_required_column_errors() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        // Missing Email column.
+        let csv = "Sweep/Scull,Last Name,First Name,Side/Cox,4/11\n\
+                   Sweep,Smith,Alice,Port,Attending\n";
+
+        let err = sync_csv(csv, YEAR, tid, RowFilter::All, &mut conn).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.to_ascii_lowercase().contains("email"),
+            "error should mention missing Email column: {msg}"
+        );
     }
 }
