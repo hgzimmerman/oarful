@@ -48,6 +48,26 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
         },
     )?;
 
+    // Set default practice schedule: 6:00 AM, 90 min, Mon/Wed/Fri.
+    {
+        use crate::schema::team as t;
+        use crate::team::PracticeDays;
+        use crate::types::DurationMinutes;
+        use diesel::prelude::*;
+        let mwf = PracticeDays::from_weekdays(&[
+            chrono::Weekday::Mon,
+            chrono::Weekday::Wed,
+            chrono::Weekday::Fri,
+        ]);
+        diesel::update(t::table.find(team.id))
+            .set((
+                t::default_practice_time.eq(chrono::NaiveTime::from_hms_opt(6, 0, 0)),
+                t::default_practice_duration_minutes.eq(Some(DurationMinutes::new(90))),
+                t::default_practice_days.eq(Some(mwf)),
+            ))
+            .execute(conn)?;
+    }
+
     let boat_specs = demo_boats();
     let mut boat_ids = Vec::new();
     for b in boat_specs {
