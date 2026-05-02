@@ -18,7 +18,8 @@ use crate::{state::AppState, templates, templates::signup::SignupPrefill};
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignupInput {
     pub club_name: String,
-    pub name: String,
+    pub first_name: String,
+    pub last_name: String,
     pub email: String,
     pub password: String,
     pub password_confirm: String,
@@ -45,7 +46,8 @@ pub(crate) async fn signup_handler(
 
     let prefill = SignupPrefill {
         club_name: input.club_name.clone(),
-        name: input.name.clone(),
+        first_name: input.first_name.clone(),
+        last_name: input.last_name.clone(),
         email: input.email.clone(),
     };
 
@@ -57,10 +59,16 @@ pub(crate) async fn signup_handler(
             &prefill,
         ));
     }
-    let admin_name = input.name.trim().to_string();
-    if admin_name.is_empty() {
-        return Ok(form_error("Your name is required.", &prefill));
+    let first_name = input.first_name.trim().to_string();
+    let last_name = input.last_name.trim().to_string();
+    if first_name.is_empty() && last_name.is_empty() {
+        return Ok(form_error("First or last name is required.", &prefill));
     }
+    let admin_name = match (first_name.as_str(), last_name.as_str()) {
+        (f, "") => f.to_string(),
+        ("", l) => l.to_string(),
+        (f, l) => format!("{f} {l}"),
+    };
     let email = input.email.trim().to_lowercase();
     if !email.contains('@') || !email.contains('.') {
         return Ok(form_error("Please enter a valid email address.", &prefill));
@@ -182,8 +190,16 @@ pub(crate) async fn signup_handler(
                     status: UserStatus::Active,
                     created_at: now,
                     updated_at: now,
-                    first_name: None,
-                    last_name: None,
+                    first_name: if first_name.is_empty() {
+                        None
+                    } else {
+                        Some(first_name)
+                    },
+                    last_name: if last_name.is_empty() {
+                        None
+                    } else {
+                        Some(last_name)
+                    },
                 },
             )?;
             AppUser::set_role(conn, user.id, Role::ProgramDirector)?;

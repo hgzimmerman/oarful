@@ -22,11 +22,17 @@ pub(crate) fn list_content(
             section class="bg-paper rounded-lg shadow-soft p-6" {
                 h2 class="text-lg font-bold text-ink mb-4" { "Invite a new user" }
                 form method="post" action="/users/invite"
-                     class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end" {
+                     class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end" {
                     div {
-                        label for="invite_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Name" }
-                        input id="invite_name" name="name" type="text" required
-                              autocomplete="name"
+                        label for="invite_first_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "First name" }
+                        input id="invite_first_name" name="first_name" type="text"
+                              autocomplete="given-name"
+                              class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                    }
+                    div {
+                        label for="invite_last_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Last name" }
+                        input id="invite_last_name" name="last_name" type="text"
+                              autocomplete="family-name"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {

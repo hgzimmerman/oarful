@@ -38,12 +38,21 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                                   placeholder="Your club or organization"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
-                        div {
-                            label for="name" class="block text-sm font-semibold text-ink-2 mb-1" { "Your name" }
-                            input id="name" name="name" type="text" required
-                                  autocomplete="name"
-                                  value=(prefill.name)
-                                  class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                        div class="grid grid-cols-2 gap-3" {
+                            div {
+                                label for="first_name" class="block text-sm font-semibold text-ink-2 mb-1" { "First name" }
+                                input id="first_name" name="first_name" type="text"
+                                      autocomplete="given-name"
+                                      value=(prefill.first_name)
+                                      class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                            }
+                            div {
+                                label for="last_name" class="block text-sm font-semibold text-ink-2 mb-1" { "Last name" }
+                                input id="last_name" name="last_name" type="text"
+                                      autocomplete="family-name"
+                                      value=(prefill.last_name)
+                                      class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                            }
                         }
                         div {
                             label for="email" class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
@@ -126,6 +135,7 @@ pub(crate) fn signup_closed_page() -> Markup {
 #[derive(Default)]
 pub(crate) struct SignupPrefill {
     pub club_name: String,
-    pub name: String,
+    pub first_name: String,
+    pub last_name: String,
     pub email: String,
 }

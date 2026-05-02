@@ -66,7 +66,8 @@ pub(crate) async fn users_content(tenant: &TenantContext) -> Result<maud::Markup
 #[derive(Debug, Deserialize)]
 pub(crate) struct InviteInput {
     pub(crate) email: String,
-    pub(crate) name: String,
+    pub(crate) first_name: String,
+    pub(crate) last_name: String,
     pub(crate) role: Role,
 }
 
@@ -80,11 +81,17 @@ pub(crate) async fn invite_handler(
     require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
 
     let email = input.email.trim().to_lowercase();
-    let name = input.name.trim().to_string();
-    if email.is_empty() || name.is_empty() {
+    let first_name = input.first_name.trim().to_string();
+    let last_name = input.last_name.trim().to_string();
+    if email.is_empty() || (first_name.is_empty() && last_name.is_empty()) {
         let content = templates::users::invite_result(None, Some("Email and name are required."));
         return Ok(super::maybe_page_authed("Invite", content, hx, &tenant));
     }
+    let name = match (first_name.as_str(), last_name.as_str()) {
+        (f, "") => f.to_string(),
+        ("", l) => l.to_string(),
+        (f, l) => format!("{f} {l}"),
+    };
 
     let role = input.role;
     let token = generate_token();
@@ -110,8 +117,16 @@ pub(crate) async fn invite_handler(
                     status: UserStatus::Invited,
                     created_at: now,
                     updated_at: now,
-                    first_name: None,
-                    last_name: None,
+                    first_name: if first_name.is_empty() {
+                        None
+                    } else {
+                        Some(first_name)
+                    },
+                    last_name: if last_name.is_empty() {
+                        None
+                    } else {
+                        Some(last_name)
+                    },
                 },
             )?;
             AppUser::set_role(conn, user.id, role)?;
