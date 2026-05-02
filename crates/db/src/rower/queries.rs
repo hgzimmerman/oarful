@@ -250,6 +250,7 @@ impl Rower {
         new_last_name: Option<&str>,
         new_side: Side,
         is_sculling: bool,
+        can_scull: Option<bool>,
         new_can_cox: bool,
         new_is_designated_cox: bool,
     ) -> Result<Rower, diesel::result::Error> {
@@ -278,6 +279,21 @@ impl Rower {
         if is_sculling && next.sweep_bias != SweepBias::SCULL_HARD {
             next.sweep_bias = SweepBias::SCULL_HARD;
             dirty = true;
+        }
+        // "Can you Scull?" column (when present):
+        //   Yes: promote sweep-hard (2) → sweep-preferred (1), never override ≤ 1.
+        //   No:  force sweep-hard (2).
+        //   None (column absent): leave sweep_bias unchanged.
+        if !is_sculling {
+            if let Some(yes) = can_scull {
+                if yes && next.sweep_bias == SweepBias::SWEEP_HARD {
+                    next.sweep_bias = SweepBias::new(1);
+                    dirty = true;
+                } else if !yes && next.sweep_bias != SweepBias::SWEEP_HARD {
+                    next.sweep_bias = SweepBias::SWEEP_HARD;
+                    dirty = true;
+                }
+            }
         }
         // Boolean flags: promote false → true; never demote.
         if !next.can_cox.as_bool() && new_can_cox {
@@ -347,6 +363,7 @@ mod tests {
             None,
             Side::Either,
             false,
+            None,
             true,
             false,
         )
@@ -369,6 +386,7 @@ mod tests {
             None,
             Side::Port,
             false,
+            None,
             true,
             false,
         )
@@ -391,6 +409,7 @@ mod tests {
             None,
             Side::Port,
             true,
+            None,
             true,
             false,
         )
@@ -416,6 +435,7 @@ mod tests {
             None,
             Side::Port,
             false,
+            None,
             true,
             false,
         )
@@ -442,6 +462,7 @@ mod tests {
             None,
             Side::Port,
             false,
+            None,
             true,
             false,
         )
@@ -466,6 +487,7 @@ mod tests {
             None,
             Side::Port,
             false,
+            None,
             true,
             false,
         )

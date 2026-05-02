@@ -286,9 +286,18 @@ fn sync_row(
     // a designated cox" via the Cox value. Leave the general can_cox
     // flag at its default (true) for new rowers.
     let can_cox = true;
-    // Sculling rows get hard scull bias; sweep rows get hard sweep on creation.
+    // Read the "Can you Scull?" column if present.
+    let can_scull_answer = col_map
+        .can_scull
+        .map(|idx| field(record, idx))
+        .unwrap_or("");
+    let can_scull_yes = can_scull_answer.eq_ignore_ascii_case("yes");
+    // Sculling rows get hard scull bias. Sweep rows: if they can scull,
+    // sweep-preferred (1); otherwise sweep-hard (2).
     let sweep_bias = if is_sculling {
         SweepBias::SCULL_HARD
+    } else if can_scull_yes {
+        SweepBias::new(1) // sweep-preferred, can flex to scull
     } else {
         SweepBias::SWEEP_HARD
     };
@@ -315,6 +324,11 @@ fn sync_row(
                         last_opt.as_deref(),
                         side,
                         is_sculling,
+                        if col_map.can_scull.is_some() {
+                            Some(can_scull_yes)
+                        } else {
+                            None
+                        },
                         can_cox,
                         is_designated_cox,
                     )?;
@@ -448,6 +462,7 @@ struct ColumnMap {
     first_name: usize,
     email: usize,
     side_cox: usize,
+    can_scull: Option<usize>,
     dates: Vec<(usize, NaiveDate)>,
 }
 
@@ -458,6 +473,7 @@ impl ColumnMap {
         let mut first_name = None;
         let mut email = None;
         let mut side_cox = None;
+        let mut can_scull = None;
         let mut dates = Vec::new();
 
         for idx in 0..headers.len() {
@@ -472,8 +488,9 @@ impl ColumnMap {
                 "first name" | "first" | "firstname" => first_name = Some(idx),
                 "email" | "e-mail" => email = Some(idx),
                 "side/cox" | "side" | "cox" => side_cox = Some(idx),
+                "can you scull?" | "can scull" | "scull" => can_scull = Some(idx),
                 // Known optional columns — skip without error.
-                "pronoun" | "pronouns" | "can you scull?" => {}
+                "pronoun" | "pronouns" => {}
                 _ => {
                     // Try to parse as M/D date.
                     if let Ok(date) = parse_month_day(raw, year) {
@@ -491,6 +508,7 @@ impl ColumnMap {
             first_name: first_name.ok_or_else(|| anyhow!("missing required column: First Name"))?,
             email: email.ok_or_else(|| anyhow!("missing required column: Email"))?,
             side_cox: side_cox.ok_or_else(|| anyhow!("missing required column: Side/Cox"))?,
+            can_scull,
             dates,
         })
     }
@@ -620,9 +638,11 @@ mod tests {
         assert_eq!(rowers.len(), 2);
         assert_eq!(rowers[0].name, "Alice Smith");
         assert_eq!(rowers[0].side, Side::Port);
-        assert_eq!(rowers[0].sweep_bias, SweepBias::SWEEP_HARD);
+        // Alice answered "Yes" to Can you Scull? → sweep-preferred (1)
+        assert_eq!(rowers[0].sweep_bias, SweepBias::new(1));
         assert_eq!(rowers[1].name, "Bob Jones");
         assert_eq!(rowers[1].side, Side::Starboard);
+        // Bob answered "No" → sweep-hard (2)
         assert_eq!(rowers[1].sweep_bias, SweepBias::SWEEP_HARD);
         // Email now lives on app_user, not rower.
         let alice_user = AppUser::find_by_email(&mut conn, "alice@example.com")
