@@ -25,7 +25,8 @@ async fn signup_creates_club_and_redirects() {
         .post(format!("{base}/signup"))
         .form(&[
             ("club_name", "Test Rowing Club"),
-            ("name", "Jane Doe"),
+            ("first_name", "Jane"),
+            ("last_name", "Doe"),
             ("email", "jane-signup-ok@example.com"),
             ("password", "securepassword1"),
             ("password_confirm", "securepassword1"),
@@ -65,7 +66,8 @@ async fn signup_rejects_short_password() {
         .post(format!("{base}/signup"))
         .form(&[
             ("club_name", "Short Pass Club"),
-            ("name", "Bob Smith"),
+            ("first_name", "Bob"),
+            ("last_name", "Smith"),
             ("email", "bob-short-pw@example.com"),
             ("password", "short"),
             ("password_confirm", "short"),
@@ -98,7 +100,8 @@ async fn signup_rejects_mismatched_passwords() {
         .post(format!("{base}/signup"))
         .form(&[
             ("club_name", "Mismatch Club"),
-            ("name", "Carol Tester"),
+            ("first_name", "Carol"),
+            ("last_name", "Tester"),
             ("email", "carol-mismatch@example.com"),
             ("password", "password123"),
             ("password_confirm", "different456"),

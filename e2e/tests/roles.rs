@@ -19,7 +19,7 @@ async fn member_sees_restricted_nav() {
                 var form = document.createElement('form');
                 form.method = 'POST';
                 form.action = '{}/users/invite';
-                [['email','test@example.com'],['name','Test Member'],['role','Member']].forEach(function(pair) {{
+                [['email','test@example.com'],['first_name','Test'],['last_name','Member'],['role','Member']].forEach(function(pair) {{
                     var input = document.createElement('input');
                     input.name = pair[0];
                     input.value = pair[1];
