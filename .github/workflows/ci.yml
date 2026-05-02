@@ -51,9 +51,25 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          eval $(dbus-launch --sh-syntax)
-          nix develop -c cargo nextest run -p lineup_e2e --retries 2 -j 4
-          kill $DBUS_SESSION_BUS_PID 2>/dev/null || true
+          cat > /tmp/dbus-session.conf <<DBUS_CONF
+          <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+           "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+          <busconfig>
+            <type>custom</type>
+            <listen>unix:tmpdir=/tmp</listen>
+            <auth>EXTERNAL</auth>
+            <policy context="default">
+              <allow send_destination="*" eavesdrop="true"/>
+              <allow eavesdrop="true"/>
+              <allow own="*"/>
+            </policy>
+          </busconfig>
+          DBUS_CONF
+          nix develop -c bash -c '
+            eval $(dbus-daemon --config-file=/tmp/dbus-session.conf --fork --print-address=1 --print-pid=1 | { read addr; read pid; echo "export DBUS_SESSION_BUS_ADDRESS=$addr DBUS_PID=$pid"; })
+            cargo nextest run -p lineup_e2e --retries 2 -j 4
+            kill $DBUS_PID 2>/dev/null || true
+          '
 
   docker:
     name: Docker image
