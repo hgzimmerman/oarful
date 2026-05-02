@@ -22,8 +22,17 @@ use crate::{
     SolverConfig, COX_COOLDOWN_DAYS,
 };
 
-const ITERATIONS: usize = 15_000;
 const BENCH_COOLDOWN_DAYS: i64 = 7;
+
+/// How long the SA post-processor should run.
+#[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
+pub(crate) enum AnnealBudget {
+    /// Fixed number of iterations (deterministic, used in tests).
+    Iterations(usize),
+    /// Wall-clock time limit (used in production).
+    Duration(std::time::Duration),
+}
 
 /// Placement of a single rower.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,6 +159,7 @@ pub(crate) fn anneal(
     boats: &[&Boat],
     available: &[&Rower],
     cp_objective: i32,
+    budget: AnnealBudget,
 ) -> Option<(ProposedSolution, i32)> {
     let mut assignment = Assignment::from_solution(solution, boats, available);
     let ctx = EvalContext::new(snapshot, request, boats, available);
@@ -228,15 +238,59 @@ pub(crate) fn anneal(
     // SA parameters
     let t_initial: f64 = 2.0;
     let t_final: f64 = 0.01;
-    let alpha = (t_final / t_initial).powf(1.0 / ITERATIONS as f64);
     let mut temperature = t_initial;
     let mut accepted = 0usize;
     let mut last_improved = 0usize;
     let mut reheated = false;
 
     let start = std::time::Instant::now();
+    let deadline = match budget {
+        AnnealBudget::Duration(d) => Some(start + d),
+        AnnealBudget::Iterations(_) => None,
+    };
+    let max_iters = match budget {
+        AnnealBudget::Iterations(n) => n,
+        AnnealBudget::Duration(_) => usize::MAX,
+    };
+    // For fixed iterations we know the count up front; for duration
+    // mode we estimate ~150k iter/sec and refine alpha periodically.
+    let estimated_iters = match budget {
+        AnnealBudget::Iterations(n) => n,
+        AnnealBudget::Duration(d) => (d.as_secs_f64() * 150_000.0) as usize,
+    };
+    let mut alpha = (t_final / t_initial).powf(1.0 / estimated_iters.max(1) as f64);
 
-    for iter in 0..ITERATIONS {
+    let mut iter = 0usize;
+    loop {
+        if iter >= max_iters {
+            break;
+        }
+        if let Some(dl) = deadline {
+            // Check wall clock every 256 iterations to avoid
+            // syscall overhead on every loop.
+            if iter & 0xFF == 0 && std::time::Instant::now() >= dl {
+                break;
+            }
+        }
+
+        // Recalibrate alpha in duration mode after 1024 iterations
+        // using actual throughput so the cooling schedule fits the
+        // real time remaining.
+        if deadline.is_some() && iter == 1024 {
+            let elapsed_so_far = start.elapsed().as_secs_f64();
+            if elapsed_so_far > 0.0 {
+                let remaining = match budget {
+                    AnnealBudget::Duration(d) => d.as_secs_f64() - elapsed_so_far,
+                    _ => unreachable!(),
+                };
+                if remaining > 0.0 {
+                    let rate = 1024.0 / elapsed_so_far;
+                    let remaining_iters = (rate * remaining) as usize;
+                    alpha = (t_final / temperature).powf(1.0 / remaining_iters.max(1) as f64);
+                }
+            }
+        }
+
         // Generate a random move
         let mv = match generate_move(
             &assignment,
@@ -251,6 +305,7 @@ pub(crate) fn anneal(
             Some(m) => m,
             None => {
                 temperature *= alpha;
+                iter += 1;
                 continue;
             }
         };
@@ -308,6 +363,7 @@ pub(crate) fn anneal(
         }
 
         temperature *= alpha;
+        iter += 1;
     }
 
     let elapsed = start.elapsed();
@@ -327,7 +383,7 @@ pub(crate) fn anneal(
         best_obj,
         improvement = initial_obj - best_obj,
         elapsed_ms = elapsed.as_millis() as u64,
-        iterations = ITERATIONS,
+        iterations = iter,
         accepted,
         "SA post-processor"
     );

@@ -863,7 +863,9 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
     let (builder, objective) = build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
     // --- Phase 3: search ---
-    let mut result = search_lineups(builder, objective, request, diagnostics)?;
+    // When SA is enabled, give CP 80% and SA 20% of the time budget.
+    let (cp_budget, sa_budget) = split_time_budget(request.time_budget, request.sa_postprocess);
+    let mut result = search_lineups(builder, objective, request, cp_budget, diagnostics)?;
 
     // --- Phase 4: SA post-processing ---
     if request.sa_postprocess && result.status == SolveStatus::Satisfied {
@@ -875,6 +877,7 @@ pub fn solve(snapshot: &DbSnapshot, request: &SolveRequest) -> Result<SolveResul
             &sa_boats,
             &sa_available,
             cp_obj,
+            sa_budget,
         ) {
             if sa_best_obj < cp_obj {
                 tracing::info!(
@@ -974,6 +977,8 @@ pub fn solve_streaming(
     let (mut builder, objective) =
         build_model(snapshot, request, boats, available, &mut diagnostics)?;
 
+    let (cp_budget, sa_budget) = split_time_budget(request.time_budget, request.sa_postprocess);
+
     let (ws_vars, ws_vals) = build_warm_start(&builder, request.partial_fill);
     let mut brancher = WarmDefaultBrancher::new(&builder.solver, ws_vars, ws_vals);
     let mut resolver = ResolutionResolver::default();
@@ -982,7 +987,7 @@ pub fn solve_streaming(
     let tracker = ProgressTracker::new(objective);
     let primary_opt = {
         let cb = tracker.callback();
-        match request.time_budget {
+        match cp_budget {
             None => {
                 let mut termination = Indefinite;
                 let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
@@ -1030,6 +1035,7 @@ pub fn solve_streaming(
                     &sa_boats,
                     &sa_available,
                     primary_obj,
+                    sa_budget,
                 ) {
                     if new_obj < primary_obj {
                         tracing::info!(
@@ -1089,7 +1095,7 @@ pub fn solve_streaming(
             let alt_tracker = ProgressTracker::new(objective);
             let next = {
                 let cb = alt_tracker.callback();
-                match request.time_budget {
+                match cp_budget {
                     None => {
                         let mut termination = Indefinite;
                         let procedure =
@@ -1151,6 +1157,7 @@ pub fn solve_streaming(
                     &sa_boats,
                     &sa_available,
                     alt_obj,
+                    sa_budget,
                 ) {
                     if new_obj < alt_obj {
                         // Check the SA result still respects the tabu
@@ -1207,6 +1214,33 @@ pub fn solve_streaming(
         elapsed: solve_start.elapsed(),
     });
     Ok(())
+}
+
+/// Split the overall time budget between CP and SA.
+///
+/// When SA is enabled, CP gets 80% and SA gets 20% (as a
+/// `Duration`-based `AnnealBudget`). When SA is disabled or there
+/// is no time budget, CP keeps the original budget and SA gets a
+/// small default duration.
+fn split_time_budget(
+    total: Option<std::time::Duration>,
+    sa_enabled: bool,
+) -> (Option<std::time::Duration>, anneal::AnnealBudget) {
+    match (total, sa_enabled) {
+        (Some(t), true) => {
+            let sa = t / 5;
+            let cp = t - sa;
+            (Some(cp), anneal::AnnealBudget::Duration(sa))
+        }
+        (Some(t), false) => (
+            Some(t),
+            anneal::AnnealBudget::Duration(std::time::Duration::ZERO),
+        ),
+        (None, _) => (
+            None,
+            anneal::AnnealBudget::Duration(std::time::Duration::from_millis(200)),
+        ),
+    }
 }
 
 /// Read the process RSS in KB from /proc/self/statm (Linux only).
@@ -1952,6 +1986,7 @@ fn search_lineups(
     mut builder: ModelBuilder<'_>,
     objective: DomainId,
     request: &SolveRequest,
+    cp_budget: Option<std::time::Duration>,
     diagnostics: Vec<Diagnostic>,
 ) -> Result<SolveResult> {
     let (ws_vars, ws_vals) = build_warm_start(&builder, request.partial_fill);
@@ -1970,7 +2005,7 @@ fn search_lineups(
     let tracker = ProgressTracker::new(objective);
     let primary_opt = {
         let cb = tracker.callback();
-        match request.time_budget {
+        match cp_budget {
             None => {
                 let mut termination = Indefinite;
                 let procedure = LinearSatUnsat::new(OptimisationDirection::Minimise, objective, cb);
@@ -2139,7 +2174,7 @@ fn search_lineups(
                 let alt_tracker = ProgressTracker::new(objective);
                 let next = {
                     let cb = alt_tracker.callback();
-                    match request.time_budget {
+                    match cp_budget {
                         None => {
                             let mut termination = Indefinite;
                             let procedure =
