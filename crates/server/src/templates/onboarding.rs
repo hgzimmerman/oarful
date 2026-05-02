@@ -19,36 +19,48 @@ impl OnboardingState {
     }
 }
 
+struct Step {
+    done: bool,
+    label: &'static str,
+    href: &'static str,
+    subtitle: &'static str,
+}
+
 pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
-    let steps: &[(bool, &str, &str, &str)] = &[
-        (true, "Create your account", "", ""),
-        (
-            state.boat_count > 0,
-            "Add boats to your fleet",
-            "/admin/fleet",
-            "Add the boats your club rows in.",
-        ),
-        (
-            state.rower_count > 0,
-            "Add rowers to your roster",
-            "/team/roster",
-            "Add rowers on the roster page. You can also bulk-import from a spreadsheet via the Sync tab.",
-        ),
-        (
-            state.practice_count > 0,
-            "Create your first practice",
-            "",
-            "Pick a date using the form above.",
-        ),
-        (
-            state.has_committed_lineup,
-            "Solve your first lineup",
-            "",
-            "Open a practice and run the solver to generate seat assignments.",
-        ),
+    let steps = &[
+        Step {
+            done: true,
+            label: "Create your account",
+            href: "",
+            subtitle: "",
+        },
+        Step {
+            done: state.boat_count > 0,
+            label: "Add boats to your fleet",
+            href: "/admin/fleet",
+            subtitle: "Add the boats your club rows in.",
+        },
+        Step {
+            done: state.rower_count > 0,
+            label: "Add rowers to your roster",
+            href: "/team/roster",
+            subtitle: "Add rowers on the roster page. You can also bulk-import from a spreadsheet via the Sync tab.",
+        },
+        Step {
+            done: state.practice_count > 0,
+            label: "Create your first practice",
+            href: "",
+            subtitle: "Pick a date using the form above.",
+        },
+        Step {
+            done: state.has_committed_lineup,
+            label: "Generate your first lineup",
+            href: "",
+            subtitle: "Open a practice and create seat assignments.",
+        },
     ];
 
-    let done_count = steps.iter().filter(|(done, _, _, _)| *done).count();
+    let done_count = steps.iter().filter(|s| s.done).count();
     let total = steps.len();
 
     html! {
@@ -84,10 +96,10 @@ pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
             }
 
             ol class="space-y-1" {
-                @for (done, label, href, subtitle) in steps {
+                @for step in steps {
                     li class="flex items-start gap-3 py-2" {
                         // Checkmark circle
-                        @if *done {
+                        @if step.done {
                             div class="mt-0.5 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0"
                                 "aria-hidden"="true" {
                                 svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 text-white" fill="none"
@@ -102,18 +114,18 @@ pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
                         }
 
                         div class="flex-1 min-w-0" {
-                            @if !href.is_empty() && !done {
-                                a href=(href)
+                            @if !step.href.is_empty() && !step.done {
+                                a href=(step.href)
                                   class="font-medium text-ink hover:text-ink-2 underline decoration-rule hover:decoration-ink transition" {
-                                    (label)
+                                    (step.label)
                                 }
                             } @else {
-                                span class={ "font-medium " @if *done { "text-ink-3 line-through" } @else { "text-ink" } } {
-                                    (label)
+                                span class={ "font-medium " @if step.done { "text-ink-3 line-through" } @else { "text-ink" } } {
+                                    (step.label)
                                 }
                             }
-                            @if !subtitle.is_empty() && !done {
-                                p class="text-sm text-ink-3 mt-0.5" { (subtitle) }
+                            @if !step.subtitle.is_empty() && !step.done {
+                                p class="text-sm text-ink-3 mt-0.5" { (step.subtitle) }
                             }
                         }
                     }

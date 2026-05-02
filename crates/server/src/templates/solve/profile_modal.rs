@@ -110,7 +110,7 @@ pub(crate) fn profile_editor_modal(
         div id="profile-modal"
             role="dialog"
             "aria-modal"="true"
-            "aria-label"="Solver profile"
+            "aria-label"="Generator profile"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
             div class="rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto"
                 style="background: var(--paper); border: 1px solid var(--rule)" {

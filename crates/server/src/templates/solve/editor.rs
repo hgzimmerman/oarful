@@ -434,7 +434,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                     @if boat_pin_state == "locked" {
                         button type="button"
                                class="lock-btn lock-btn-on"
-                               title="Boat locked \u{2014} solver keeps all seats. Click to unlock."
+                               title="Boat locked \u{2014} all seats kept when generating. Click to unlock."
                                "aria-label"="Unlock boat"
                                "aria-pressed"="true"
                                "@click.stop"={"cycleBoatState('locked'," (boat.id) ")"} {
@@ -443,7 +443,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                     } @else if boat_pin_state == "dirty" {
                         button type="button"
                                class="lock-btn lock-btn-dirty"
-                               title="Boat pinned \u{2014} solver will honor this next run. Click to unpin."
+                               title="Boat pinned \u{2014} honored on next generate. Click to unpin."
                                "aria-label"="Unpin boat"
                                "aria-pressed"="true"
                                "@click.stop"={"cycleBoatState('dirty'," (boat.id) ")"} {
@@ -546,7 +546,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                 @if pin_state == "locked" {
                                     button type="button"
                                            class="lock-btn lock-btn-on"
-                                           title="Locked \u{2014} solver always keeps this. Click to unlock."
+                                           title="Locked \u{2014} always kept when generating. Click to unlock."
                                            "aria-label"="Unlock seat"
                                            "aria-pressed"="true"
                                            "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
@@ -555,7 +555,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                 } @else if pin_state == "dirty" {
                                     button type="button"
                                            class="lock-btn lock-btn-dirty"
-                                           title="Pinned \u{2014} solver will honor this next run. Click to unpin."
+                                           title="Pinned \u{2014} honored on next generate. Click to unpin."
                                            "aria-label"="Unpin seat"
                                            "aria-pressed"="true"
                                            "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {

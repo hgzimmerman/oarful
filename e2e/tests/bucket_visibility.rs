@@ -44,7 +44,7 @@ async fn login_via_magic_link(
     };
 
     let resp = receiver
-        .get(&format!("{base}{magic_url}"))
+        .get(format!("{base}{magic_url}"))
         .send()
         .await
         .unwrap();

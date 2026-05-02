@@ -71,7 +71,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                         div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 text-base text-ink-2" {
                             (bullet("Rowers or their coaches set availability and get lineup emails; no more spreadsheets"))
                             (bullet("Lineup generator accounts for seat, side, and pair preferences, height, weight, and skill matching, and weight-class boat eligibility"))
-                            (bullet("Lineup editor for manual adjustments, or skip the solver and build lineups manually"))
+                            (bullet("Lineup editor for manual adjustments, or skip the generator and build lineups manually"))
                             (bullet("Multiple teams per club with boat sharing and double-booking detection"))
                             (bullet("Handle no-shows without redoing lineups from scratch"))
                             (bullet("Boat usage tracking across practices"))

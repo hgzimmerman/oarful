@@ -56,10 +56,10 @@ pub(super) fn knobs_form(
                    x-show="!railOpen"
                    "@click"="railOpen = true"
                    "aria-expanded"="false"
-                   title="Open solver" {
-                span class="vert hidden lg:block" { "SOLVER" }
+                   title="Open settings" {
+                span class="vert hidden lg:block" { "SETTINGS" }
                 span class="lg:hidden flex items-center gap-2 px-4 text-sm" {
-                    span class="font-serif-heading font-medium text-ink" { "Solver" }
+                    span class="font-serif-heading font-medium text-ink" { "Settings" }
                     span class="text-muted font-mono-stat text-xs" { (last_run_label) }
                     span class="ml-auto text-muted" { "\u{25BC}" }
                 }
@@ -70,14 +70,14 @@ pub(super) fn knobs_form(
                 // Header
                 div class="sr-head" {
                     div {
-                        h2 class="font-serif-heading font-medium text-base m-0 text-ink" { "Solver" }
+                        h2 class="font-serif-heading font-medium text-base m-0 text-ink" { "Settings" }
                         div #last-run-label class="font-mono-stat text-[10px] mt-0.5 text-muted" {
                             "Last run: " (last_run_label)
                         }
                     }
                     button type="button"
                            class="text-xl leading-none cursor-pointer text-muted"
-                           "aria-label"="Close solver settings"
+                           "aria-label"="Close settings"
                            "@click"="railOpen = false" {
                         span "aria-hidden"="true" { "\u{00d7}" }
                     }

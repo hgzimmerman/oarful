@@ -233,7 +233,7 @@ fn request(config: SolverConfig) -> SolveRequest {
 /// Find the single fielded lineup and assert the solver actually
 /// fielded it. Returns a reference to the lineup so tests can
 /// inspect its seats.
-fn single_used<'a>(lineups: &'a [ProposedLineup]) -> &'a ProposedLineup {
+fn single_used(lineups: &[ProposedLineup]) -> &ProposedLineup {
     let used: Vec<&ProposedLineup> = lineups.iter().filter(|l| l.used).collect();
     assert_eq!(
         used.len(),

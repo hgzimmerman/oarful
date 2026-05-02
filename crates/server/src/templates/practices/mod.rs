@@ -290,7 +290,7 @@ fn planning_row_inner(
 pub(crate) fn committed_content(rows: &[PracticeRow], is_coach: bool) -> Markup {
     if rows.is_empty() {
         return html! {
-            (empty_state("No committed lineups yet. Solve and commit a lineup from the Planning tab."))
+            (empty_state("No committed lineups yet. Generate and commit a lineup from the Planning tab."))
         };
     }
 
