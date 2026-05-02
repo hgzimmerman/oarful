@@ -97,9 +97,6 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                                         span class="ml-2 text-xs font-normal text-red-500" { "(archived)" }
                                     }
                                 }
-                                div class="text-sm text-ink-3" {
-                                    "Buckets: " (t.bucket_visibility)
-                                }
                             }
                             span class="text-muted" "aria-hidden"="true" { "→" }
                         }
