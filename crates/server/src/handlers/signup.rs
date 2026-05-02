@@ -7,8 +7,9 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use chrono::Utc;
+use diesel::prelude::*;
 use lineup_db::app_user::{AppUser, NewAppUser, Role, UserStatus};
-use lineup_db::team::{NewTeam, Team};
+use lineup_db::team::Team;
 use lineup_master_db::tenant::{BillingStatus, NewTenant, Tenant};
 use serde::Deserialize;
 
@@ -160,17 +161,15 @@ pub(crate) async fn signup_handler(
         .await
         .map_err(super::internal_error)?;
 
-    // Create a team + PD user inside the tenant DB.
+    // Rename the migration-seeded "Default" team + create PD user.
     let club_name_for_team = club_name.clone();
     let (user, team, role) = db
         .with_conn(move |conn| {
-            let team = Team::create(
-                conn,
-                NewTeam {
-                    name: club_name_for_team,
-                    created_at: now,
-                },
-            )?;
+            let team = Team::first(conn)?
+                .ok_or_else(|| diesel::result::Error::NotFound)?;
+            diesel::update(lineup_db::schema::team::table.find(team.id))
+                .set(lineup_db::schema::team::name.eq(&club_name_for_team))
+                .execute(conn)?;
 
             let hash = bcrypt::hash(&password, bcrypt::DEFAULT_COST)
                 .map_err(|e| diesel::result::Error::QueryBuilderError(Box::new(e)))?;

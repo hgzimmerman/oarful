@@ -34,7 +34,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                             label for="club_name" class="block text-sm font-semibold text-ink-2 mb-1" { "Club name" }
                             input id="club_name" name="club_name" type="text" required autofocus
                                   value=(prefill.club_name)
-                                  placeholder="e.g. Riverside Rowing Club"
+                                  placeholder="Your club or organization"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
