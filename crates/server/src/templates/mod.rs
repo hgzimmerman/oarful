@@ -14,6 +14,7 @@ pub(crate) mod history;
 pub(crate) mod landing;
 pub(crate) mod layout;
 pub(crate) mod my;
+pub(crate) mod onboarding;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;

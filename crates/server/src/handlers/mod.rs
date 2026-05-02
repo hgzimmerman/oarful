@@ -290,6 +290,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/teams/{id}/histogram", get(teams::histogram_handler))
         .route("/teams/selector", get(teams::selector_handler))
+        .route("/onboarding/dismiss", post(onboarding_dismiss_handler))
         .route("/nav/stale-badge", get(stale_badge_handler))
         // My pages
         .route("/my", get(my::index_handler))
@@ -464,6 +465,25 @@ pub(crate) async fn switch_team_handler(
             .http_only(true),
     );
     (jar, Redirect::to("/practices"))
+}
+
+/// `POST /onboarding/dismiss` — mark the onboarding checklist as dismissed.
+#[tracing::instrument(level = "debug", skip_all, err)]
+async fn onboarding_dismiss_handler(
+    State(state): State<AppState>,
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<Html<String>, ErrorResponse> {
+    users::require_at_least_role(&tenant.claims, lineup_db::app_user::Role::ProgramDirector)?;
+    let tenant_id = tenant.tenant_id;
+    state
+        .master_db
+        .with_conn(move |conn| {
+            lineup_master_db::tenant::Tenant::dismiss_onboarding(conn, tenant_id)
+        })
+        .await
+        .map_err(internal_error)?;
+    state.refresh_tenant_configs().await;
+    Ok(Html(String::new()))
 }
 
 /// `GET /nav/stale-badge` — returns a small count badge if any upcoming

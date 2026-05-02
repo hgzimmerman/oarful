@@ -19,6 +19,7 @@ use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header, tab_swap, tabbed_section, TabDef};
+use super::onboarding::OnboardingState;
 
 /// Per-row summary used by both the Planning and Committed tabs.
 pub(crate) struct PracticeRow {
@@ -50,10 +51,20 @@ const PRACTICES_TABS: &[TabDef] = &[
 const PRACTICES_TARGET: &str = "practices-tab-content";
 
 /// Full tabbed page wrapper.
-pub(crate) fn tabbed_page(active_tab: &str, tab_content: Markup, _is_coach: bool) -> Markup {
+pub(crate) fn tabbed_page(
+    active_tab: &str,
+    tab_content: Markup,
+    _is_coach: bool,
+    onboarding: Option<&OnboardingState>,
+) -> Markup {
     html! {
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
+            @if let Some(state) = onboarding {
+                @if !state.all_complete() {
+                    (super::onboarding::onboarding_checklist(state))
+                }
+            }
             (tabbed_section(PRACTICES_TABS, active_tab, PRACTICES_TARGET, tab_content))
         }
     }

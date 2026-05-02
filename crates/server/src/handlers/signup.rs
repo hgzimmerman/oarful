@@ -165,8 +165,7 @@ pub(crate) async fn signup_handler(
     let club_name_for_team = club_name.clone();
     let (user, team, role) = db
         .with_conn(move |conn| {
-            let team = Team::first(conn)?
-                .ok_or_else(|| diesel::result::Error::NotFound)?;
+            let team = Team::first(conn)?.ok_or_else(|| diesel::result::Error::NotFound)?;
             diesel::update(lineup_db::schema::team::table.find(team.id))
                 .set(lineup_db::schema::team::name.eq(&club_name_for_team))
                 .execute(conn)?;

@@ -107,6 +107,7 @@ pub struct Tenant {
     pub billing_status: BillingStatus,
     pub stripe_customer_id: Option<String>,
     pub stripe_subscription_id: Option<String>,
+    pub onboarding_dismissed: i32,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -134,6 +135,10 @@ impl Tenant {
 
     pub fn is_demo(&self) -> bool {
         self.demo_expires_at.is_some()
+    }
+
+    pub fn onboarding_dismissed(&self) -> bool {
+        self.onboarding_dismissed != 0
     }
 
     /// Whether the tenant can access the app. Always true — billing
@@ -235,6 +240,16 @@ impl Tenant {
             .select(Tenant::as_select())
             .first(conn)
             .optional()
+    }
+
+    pub fn dismiss_onboarding(
+        conn: &mut SqliteConnection,
+        id: TenantId,
+    ) -> Result<(), diesel::result::Error> {
+        diesel::update(tenant::table.find(id))
+            .set(tenant::onboarding_dismissed.eq(1))
+            .execute(conn)?;
+        Ok(())
     }
 
     pub fn clear_stripe_subscription(

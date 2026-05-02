@@ -15,5 +15,6 @@ diesel::table! {
         billing_status -> BillingStatusMapping,
         stripe_customer_id -> Nullable<Text>,
         stripe_subscription_id -> Nullable<Text>,
+        onboarding_dismissed -> Integer,
     }
 }
