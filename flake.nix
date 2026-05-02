@@ -69,7 +69,7 @@
             cargo-watch
             dbus
             xvfb-run
-            mesa.drivers
+            mesa
             (writeShellScriptBin "dump-snapshot" ''
               cargo run -p lineup_cli -- "$@"
             '')

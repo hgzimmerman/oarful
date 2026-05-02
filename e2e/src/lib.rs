@@ -25,6 +25,34 @@ fn project_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Locate Mesa's EGL vendor JSON directory by searching nix store paths
+/// on `LD_LIBRARY_PATH` / `LIBGL_DRIVERS_PATH`, or falling back to a glob.
+/// Returns the directory containing `50_mesa.json` so libglvnd can load
+/// Mesa's software EGL (llvmpipe) on headless CI runners.
+fn find_mesa_egl_vendor_dir() -> String {
+    // Check if the system already has a vendor dir set.
+    if let Ok(dir) = std::env::var("__EGL_VENDOR_LIBRARY_DIRS") {
+        if std::path::Path::new(&dir).exists() {
+            return dir;
+        }
+    }
+    // Search nix store for mesa's EGL vendor JSON.
+    for entry in std::fs::read_dir("/nix/store").into_iter().flatten() {
+        if let Ok(e) = entry {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            if name.contains("mesa-") && !name.contains(".drv") {
+                let vendor_dir = e.path().join("share/glvnd/egl_vendor.d");
+                if vendor_dir.join("50_mesa.json").exists() {
+                    return vendor_dir.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+    // Fallback — let libglvnd use its default search.
+    String::new()
+}
+
 /// Pick a free display number for Xvfb (99 + port-based offset to avoid collisions).
 fn xvfb_display(port: u16) -> u32 {
     99 + (port as u32 % 900)
@@ -112,28 +140,30 @@ impl TestInstance {
         sleep(Duration::from_millis(200)).await;
 
         // Spawn WebKitWebDriver on the virtual display.
+        //
+        // On headless CI runners (no GPU), WebKitGTK needs Mesa's software
+        // EGL implementation (llvmpipe). We point libglvnd at Mesa's vendor
+        // JSON so it can find libEGL_mesa.so, and force software rendering.
+        let mesa_egl_dir = find_mesa_egl_vendor_dir();
         let webdriver = unsafe {
             Command::new("WebKitWebDriver")
                 .arg("-p")
                 .arg(driver_port.to_string())
                 .env("DISPLAY", &display)
-                // Disable WebKitGTK's hardware-accelerated compositing mode.
-                // Without a GPU (e.g. CI runners under Xvfb), WebKit tries to
-                // create an EGL display, fails with EGL_BAD_PARAMETER, and the
-                // WebProcess crashes. This env var (available since WebKitGTK
-                // 2.10.9) skips GPU compositing entirely.
-                // Ref: https://trac.webkit.org/wiki/EnvironmentVariables
-                .env("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
-                // Disable the DMA-BUF renderer introduced in WebKitGTK 2.46+.
-                // This renderer also requires GPU/EGL access and crashes on
-                // headless CI runners without it.
-                // Ref: https://github.com/nicbarker/clay/issues/244
-                .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
-                // Force Mesa to use its software rasterizer (llvmpipe) for any
-                // remaining OpenGL calls, avoiding EGL/DRI failures on headless
-                // runners that lack a physical GPU.
+                // Tell libglvnd where to find Mesa's EGL vendor JSON so
+                // WebKit can create an EGL display via the software renderer.
+                // Without this, EGL initialization fails with EGL_BAD_PARAMETER
+                // and WebProcess crashes.
+                // Ref: https://github.com/NVIDIA/libglvnd
+                .env("__EGL_VENDOR_LIBRARY_DIRS", &mesa_egl_dir)
+                // Force Mesa to use its software rasterizer (llvmpipe) instead
+                // of attempting hardware DRI access.
                 // Ref: https://docs.mesa3d.org/envvars.html
                 .env("LIBGL_ALWAYS_SOFTWARE", "1")
+                // Disable the DMA-BUF renderer introduced in WebKitGTK 2.46+
+                // which requires kernel DRM/GPU access.
+                // Ref: https://trac.webkit.org/wiki/EnvironmentVariables
+                .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
                 .pre_exec(|| {
