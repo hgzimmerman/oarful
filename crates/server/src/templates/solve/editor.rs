@@ -436,6 +436,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                class="lock-btn lock-btn-on"
                                title="Boat locked \u{2014} solver keeps all seats. Click to unlock."
                                "aria-label"="Unlock boat"
+                               "aria-pressed"="true"
                                "@click.stop"={"cycleBoatState('locked'," (boat.id) ")"} {
                             span "aria-hidden"="true" { "\u{25CF}" }
                         }
@@ -444,6 +445,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                class="lock-btn lock-btn-dirty"
                                title="Boat pinned \u{2014} solver will honor this next run. Click to unpin."
                                "aria-label"="Unpin boat"
+                               "aria-pressed"="true"
                                "@click.stop"={"cycleBoatState('dirty'," (boat.id) ")"} {
                             span "aria-hidden"="true" { "\u{25CF}" }
                         }
@@ -452,6 +454,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                class="lock-btn lock-btn-was-pinned"
                                title="Boat was pinned last run, now free. Click to lock."
                                "aria-label"="Lock boat"
+                               "aria-pressed"="false"
                                "@click.stop"={"cycleBoatState('was_pinned'," (boat.id) ")"} {
                             span "aria-hidden"="true" { "\u{25CB}" }
                         }
@@ -460,6 +463,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                class="lock-btn"
                                title="Click to lock this boat"
                                "aria-label"="Lock boat"
+                               "aria-pressed"="false"
                                "@click.stop"={"cycleBoatState('clean'," (boat.id) ")"} {
                             span "aria-hidden"="true" { "\u{25CB}" }
                         }
@@ -499,6 +503,11 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         "clean"
                     };
                     @let seat_key = format!("{}:{}:{}", rower_id_str, boat.id, seat);
+                    @let seat_aria = if is_empty {
+                        format!("{}: empty", label)
+                    } else {
+                        format!("{}: {}", label, rower_name)
+                    };
                     // Grid row: seat-tag | rower-cell | lock | side-indicator
                     div data-key=(key)
                         data-boat=(boat.id)
@@ -509,6 +518,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         data-pin-state=(pin_state)
                         role="button"
                         tabindex="0"
+                        "aria-label"=(seat_aria)
                         class="grid gap-1 my-0.5 rounded cursor-pointer transition items-center"
                         style={"grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" })}
                         ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" }) "'"}
@@ -538,6 +548,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                            class="lock-btn lock-btn-on"
                                            title="Locked \u{2014} solver always keeps this. Click to unlock."
                                            "aria-label"="Unlock seat"
+                                           "aria-pressed"="true"
                                            "@click.stop"={"cycleSeatState('locked','" (seat_key) "')"} {
                                         span "aria-hidden"="true" { "\u{25CF}" }
                                     }
@@ -546,6 +557,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                            class="lock-btn lock-btn-dirty"
                                            title="Pinned \u{2014} solver will honor this next run. Click to unpin."
                                            "aria-label"="Unpin seat"
+                                           "aria-pressed"="true"
                                            "@click.stop"={"cycleSeatState('dirty','" (seat_key) "')"} {
                                         span "aria-hidden"="true" { "\u{25CF}" }
                                     }
@@ -554,6 +566,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                            class="lock-btn lock-btn-was-pinned"
                                            title="Was pinned last run, now free. Click to lock."
                                            "aria-label"="Lock seat"
+                                           "aria-pressed"="false"
                                            "@click.stop"={"cycleSeatState('was_pinned','" (seat_key) "')"} {
                                         span "aria-hidden"="true" { "\u{25CB}" }
                                     }
@@ -562,6 +575,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                                            class="lock-btn"
                                            title="Click to lock this seat"
                                            "aria-label"="Lock seat"
+                                           "aria-pressed"="false"
                                            "@click.stop"={"cycleSeatState('clean','" (seat_key) "')"} {
                                         span "aria-hidden"="true" { "\u{25CB}" }
                                     }
@@ -597,6 +611,7 @@ fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
              data-rower=(r.id)
              role="button"
              tabindex="0"
+             "aria-label"={"Available: " (r.name)}
              class="px-2 py-1 rounded cursor-pointer transition"
              style={"border: 1px solid transparent; " (side_style)}
              ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
@@ -711,6 +726,7 @@ pub(crate) fn roster_pool(
                          data-rower=""
                          role="button"
                          tabindex="0"
+                         "aria-label"="Bench slot"
                          class="block px-2 py-1.5 rounded cursor-pointer transition text-center"
                          style="border: 1px dashed var(--rule)"
                          ":style"={"selected === 'bench:empty' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper))' : 'border: 1px dashed var(--rule)'"}
