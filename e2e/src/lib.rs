@@ -255,8 +255,14 @@ pub async fn set_input_value(client: &Client, css_selector: &str, value: &str) {
 
 impl Drop for TestInstance {
     fn drop(&mut self) {
-        // Kill the WebKitWebDriver process group.
+        // Send SIGTERM to the WebKitWebDriver process group first so it
+        // can shut down child browser processes gracefully.
         let pid = self.webdriver.id() as i32;
+        unsafe {
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        // Brief grace period for cleanup, then force-kill.
+        std::thread::sleep(std::time::Duration::from_millis(500));
         unsafe {
             libc::kill(-pid, libc::SIGKILL);
         }
@@ -264,6 +270,10 @@ impl Drop for TestInstance {
 
         // Kill the Xvfb process group.
         let xvfb_pid = self.xvfb.id() as i32;
+        unsafe {
+            libc::kill(-xvfb_pid, libc::SIGTERM);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
         unsafe {
             libc::kill(-xvfb_pid, libc::SIGKILL);
         }
