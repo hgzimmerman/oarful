@@ -67,6 +67,8 @@
             skopeo
             cargo-nextest
             cargo-watch
+            dbus
+            xvfb-run
             (writeShellScriptBin "dump-snapshot" ''
               cargo run -p lineup_cli -- "$@"
             '')
