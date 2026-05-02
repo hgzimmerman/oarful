@@ -7,8 +7,10 @@ function segmentedSelect(btn, name, value) {
     var siblings = btn.parentElement.querySelectorAll('button');
     siblings.forEach(function(b) {
         b.className = 'seg-warm-btn';
+        b.setAttribute('aria-pressed', 'false');
     });
     btn.className = 'seg-warm-btn seg-warm-btn-on';
+    btn.setAttribute('aria-pressed', 'true');
     knobChanged();
 }
 function knobChanged() {

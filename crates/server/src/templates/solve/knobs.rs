@@ -111,14 +111,16 @@ pub(super) fn knobs_form(
                         div class="grid grid-cols-2 gap-3" {
                             @if has_eight {
                                 div {
-                                    div class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
+                                    div id="partial-fill-label" class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
                                         "Partial fill"
                                     }
-                                    div class="seg-warm" {
+                                    div class="seg-warm" role="group" "aria-labelledby"="partial-fill-label" {
                                         @for (val, lbl) in &[(0, "Off"), (1, "1"), (2, "2")] {
                                             @let active = knobs.partial == *val;
                                             @let cls = if active { "seg-warm-btn seg-warm-btn-on" } else { "seg-warm-btn" };
+                                            @let pressed = if active { "true" } else { "false" };
                                             button type="button" class=(cls)
+                                                   "aria-pressed"=(pressed)
                                                    onclick={"segmentedSelect(this, 'partial', " (val) ")"} { (lbl) }
                                         }
                                     }
@@ -126,14 +128,16 @@ pub(super) fn knobs_form(
                                 }
                             }
                             div {
-                                div class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
+                                div id="alternatives-label" class="text-[10px] font-semibold uppercase tracking-wide mb-1 text-muted" {
                                     "Alternatives"
                                 }
-                                div class="seg-warm" {
+                                div class="seg-warm" role="group" "aria-labelledby"="alternatives-label" {
                                     @for n in 0..=3i64 {
                                         @let active = knobs.alts as i64 == n;
                                         @let cls = if active { "seg-warm-btn seg-warm-btn-on" } else { "seg-warm-btn" };
+                                        @let pressed = if active { "true" } else { "false" };
                                         button type="button" class=(cls)
+                                               "aria-pressed"=(pressed)
                                                onclick={"segmentedSelect(this, 'alts', " (n) ")"} { (n) }
                                     }
                                 }
@@ -154,8 +158,12 @@ pub(super) fn knobs_form(
                                     }
                                     input name="similarity" type="range" min="0" max="10"
                                           value=(knobs.similarity)
+                                          "aria-label"="Similarity"
+                                          "aria-valuemin"="0"
+                                          "aria-valuemax"="10"
+                                          "aria-valuenow"=(knobs.similarity)
                                           class="range-warm"
-                                          oninput="knobChanged()";
+                                          oninput="this.setAttribute('aria-valuenow', this.value); knobChanged()";
                                     p class="text-[10px] italic mt-0.5 text-muted" { "Stay close to last lineup" }
                                 }
                             }
@@ -167,10 +175,16 @@ pub(super) fn knobs_form(
                                         @if knobs.novelty == 0 { "Off" } @else { (knobs.novelty) }
                                     }
                                 }
+                                @let novelty_text = if knobs.novelty == 0 { "Off".to_string() } else { knobs.novelty.to_string() };
                                 input name="novelty" type="range" min="0" max="5"
                                       value=(knobs.novelty)
+                                      "aria-label"="Novelty"
+                                      "aria-valuemin"="0"
+                                      "aria-valuemax"="5"
+                                      "aria-valuenow"=(knobs.novelty)
+                                      "aria-valuetext"=(novelty_text)
                                       class="range-warm"
-                                      oninput="document.getElementById('novelty-val').textContent = this.value === '0' ? 'Off' : this.value; knobChanged()";
+                                      oninput="var t = this.value === '0' ? 'Off' : this.value; document.getElementById('novelty-val').textContent = t; this.setAttribute('aria-valuenow', this.value); this.setAttribute('aria-valuetext', t); knobChanged()";
                                 p class="text-[10px] italic mt-0.5 text-muted" { "Avoid recent lineups" }
                             }
                         }
@@ -207,8 +221,13 @@ pub(super) fn knobs_form(
                         }
                         input name="budget" type="range" min="1" max="10"
                               value=(knobs.budget)
+                              "aria-label"="Time budget"
+                              "aria-valuemin"="1"
+                              "aria-valuemax"="10"
+                              "aria-valuenow"=(knobs.budget)
+                              "aria-valuetext"={(knobs.budget) "s"}
                               class="range-warm"
-                              oninput="document.getElementById('budget-val').textContent = this.value + 's'; knobChanged()";
+                              oninput="document.getElementById('budget-val').textContent = this.value + 's'; this.setAttribute('aria-valuenow', this.value); this.setAttribute('aria-valuetext', this.value + 's'); knobChanged()";
                         p class="text-[10px] italic mt-0.5 text-muted" { "Per alternative" }
                     }
 
