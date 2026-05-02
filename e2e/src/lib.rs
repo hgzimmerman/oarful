@@ -99,7 +99,7 @@ impl TestInstance {
                 .arg("0")
                 .arg("1280x1024x24")
                 .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::inherit())
                 .pre_exec(|| {
                     libc::setpgid(0, 0);
                     Ok(())
@@ -117,8 +117,8 @@ impl TestInstance {
                 .arg("-p")
                 .arg(driver_port.to_string())
                 .env("DISPLAY", &display)
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
                 .pre_exec(|| {
                     libc::setpgid(0, 0);
                     Ok(())
