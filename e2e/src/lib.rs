@@ -117,6 +117,18 @@ impl TestInstance {
                 .arg("-p")
                 .arg(driver_port.to_string())
                 .env("DISPLAY", &display)
+                // Disable WebKitGTK's hardware-accelerated compositing mode.
+                // Without a GPU (e.g. CI runners under Xvfb), WebKit tries to
+                // create an EGL display, fails with EGL_BAD_PARAMETER, and the
+                // WebProcess crashes. This env var (available since WebKitGTK
+                // 2.10.9) skips GPU compositing entirely.
+                // Ref: https://trac.webkit.org/wiki/EnvironmentVariables
+                .env("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+                // Force Mesa to use its software rasterizer (llvmpipe) for any
+                // remaining OpenGL calls, avoiding EGL/DRI failures on headless
+                // runners that lack a physical GPU.
+                // Ref: https://docs.mesa3d.org/envvars.html
+                .env("LIBGL_ALWAYS_SOFTWARE", "1")
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
                 .pre_exec(|| {
