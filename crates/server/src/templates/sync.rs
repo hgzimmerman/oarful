@@ -21,7 +21,6 @@ pub(crate) fn form_content(
             "Sync sheet",
             Some("Pull roster and availability from a publicly-shared Google Sheet."),
         ))
-        (format_help())
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             @if let Some(ts) = last_synced {
                 div class="text-xs text-ink-3" {
@@ -43,6 +42,7 @@ pub(crate) fn form_content(
                  hx-push-url="false"
                  hx-indicator="#sync-spinner"
                  class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
+                (format_help())
                 div {
                     label for="spreadsheet_id" class="block text-sm font-semibold text-ink-2 mb-1" {
                         "Spreadsheet ID"
@@ -120,8 +120,7 @@ pub(crate) fn form_content(
 
 fn format_help() -> Markup {
     html! {
-        div class="px-4 sm:px-8 max-w-3xl mx-auto"
-            x-data="{ showHelp: false }" {
+        div x-data="{ showHelp: false }" {
             button type="button"
                    "@click"="showHelp = !showHelp"
                    ":aria-expanded"="showHelp"
@@ -129,7 +128,7 @@ fn format_help() -> Markup {
                 span class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current text-[10px] font-bold" { "?" }
                 " Expected sheet format"
             }
-            div x-show="showHelp" x-cloak class="mt-3 bg-paper rounded-lg shadow-soft p-4 text-sm text-ink-2 space-y-3" {
+            div x-show="showHelp" x-cloak class="mt-3 border border-rule-2 rounded p-4 text-sm text-ink-2 space-y-3" {
                 p { "The first row that starts with " strong { "Sweep/Scull" } " is treated as the header. Rows above it are ignored." }
                 div class="overflow-x-auto" {
                     table class="text-xs font-mono border-collapse w-full" {

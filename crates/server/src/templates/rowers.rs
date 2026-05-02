@@ -712,8 +712,9 @@ pub(crate) fn seat_affinities_section(
         section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Seat preferences" }
+                // Drives soft constraint S3 (seat affinity)
                 span class="text-xs text-ink-3" {
-                    "Per-seat reward / penalty (S3)"
+                    "Per-seat reward / penalty"
                 }
             }
             @if let Some(msg) = error {
@@ -812,8 +813,9 @@ pub(crate) fn pair_affinities_section(
         section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
                 h2 class="text-lg font-bold text-ink" { "Pair preferences" }
+                // Drives soft constraint S2 (pair affinity)
                 span class="text-xs text-ink-3" {
-                    "Same-partition reward / penalty (S2)"
+                    "Same-partition reward / penalty"
                 }
             }
             @if let Some(msg) = error {
