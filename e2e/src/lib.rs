@@ -124,6 +124,11 @@ impl TestInstance {
                 // 2.10.9) skips GPU compositing entirely.
                 // Ref: https://trac.webkit.org/wiki/EnvironmentVariables
                 .env("WEBKIT_DISABLE_COMPOSITING_MODE", "1")
+                // Disable the DMA-BUF renderer introduced in WebKitGTK 2.46+.
+                // This renderer also requires GPU/EGL access and crashes on
+                // headless CI runners without it.
+                // Ref: https://github.com/nicbarker/clay/issues/244
+                .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
                 // Force Mesa to use its software rasterizer (llvmpipe) for any
                 // remaining OpenGL calls, avoiding EGL/DRI failures on headless
                 // runners that lack a physical GPU.
