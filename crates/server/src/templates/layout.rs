@@ -38,6 +38,17 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 script {
                     (maud::PreEscaped(include_str!("js/active_nav.js")))
                 }
+                // Respect reduced-motion preference
+                style { r#"
+                    @media (prefers-reduced-motion: reduce) {
+                        *, *::before, *::after {
+                            animation-duration: 0.01ms !important;
+                            animation-iteration-count: 1 !important;
+                            transition-duration: 0.01ms !important;
+                            scroll-behavior: auto !important;
+                        }
+                    }
+                "# }
                 // Print-friendly overrides: hide chrome, expand content
                 style { r#"
                     @media print {

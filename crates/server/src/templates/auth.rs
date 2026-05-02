@@ -83,6 +83,7 @@ pub(crate) fn login_email_step(
                 div {
                     label for="email" class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
                     input id="email" name="email" type="email" required autofocus
+                          autocomplete="email"
                           value=[prefill_email]
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
@@ -143,6 +144,7 @@ pub(crate) fn login_password_step(
                 div {
                     label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
                     input id="password" name="password" type="password" required autofocus
+                          autocomplete="current-password"
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     div class="mt-1 text-right" {
                         a href={"/forgot-password?email=" (email)}
@@ -227,6 +229,7 @@ pub(crate) fn forgot_password_page(prefill_email: Option<&str>) -> Markup {
                 div {
                     label for="email" class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
                     input id="email" name="email" type="email" required autofocus
+                          autocomplete="email"
                           value=[prefill_email]
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
@@ -281,12 +284,14 @@ pub(crate) fn reset_password_form(error: Option<&str>) -> Markup {
                 div {
                     label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "New password" }
                     input id="password" name="password" type="password" required autofocus
+                          autocomplete="new-password"
                           minlength="8"
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 div {
                     label for="password_confirm" class="block text-sm font-semibold text-ink-2 mb-1" { "Confirm password" }
                     input id="password_confirm" name="password_confirm" type="password" required
+                          autocomplete="new-password"
                           minlength="8"
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }

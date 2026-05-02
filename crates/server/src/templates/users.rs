@@ -26,11 +26,13 @@ pub(crate) fn list_content(
                     div {
                         label for="invite_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Name" }
                         input id="invite_name" name="name" type="text" required
+                              autocomplete="name"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
                         label for="invite_email" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Email" }
                         input id="invite_email" name="email" type="email" required
+                              autocomplete="email"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
@@ -221,11 +223,13 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                         div {
                             label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
                             input id="password" name="password" type="password" required minlength="8"
+                                  autocomplete="new-password"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
                             label for="password_confirm" class="block text-sm font-semibold text-ink-2 mb-1" { "Confirm password" }
                             input id="password_confirm" name="password_confirm" type="password" required
+                                  autocomplete="new-password"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"

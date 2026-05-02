@@ -33,6 +33,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                         div {
                             label for="club_name" class="block text-sm font-semibold text-ink-2 mb-1" { "Club name" }
                             input id="club_name" name="club_name" type="text" required autofocus
+                                  autocomplete="organization"
                                   value=(prefill.club_name)
                                   placeholder="Your club or organization"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
@@ -40,24 +41,28 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                         div {
                             label for="name" class="block text-sm font-semibold text-ink-2 mb-1" { "Your name" }
                             input id="name" name="name" type="text" required
+                                  autocomplete="name"
                                   value=(prefill.name)
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
                             label for="email" class="block text-sm font-semibold text-ink-2 mb-1" { "Email" }
                             input id="email" name="email" type="email" required
+                                  autocomplete="email"
                                   value=(prefill.email)
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
                             label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
                             input id="password" name="password" type="password" required
+                                  autocomplete="new-password"
                                   minlength="8"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
                             label for="password_confirm" class="block text-sm font-semibold text-ink-2 mb-1" { "Confirm password" }
                             input id="password_confirm" name="password_confirm" type="password" required
+                                  autocomplete="new-password"
                                   minlength="8"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
