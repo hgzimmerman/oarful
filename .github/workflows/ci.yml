@@ -44,6 +44,10 @@ jobs:
   test-e2e:
     name: E2E tests
     runs-on: ubuntu-latest
+    env:
+      WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+      LIBGL_ALWAYS_SOFTWARE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
