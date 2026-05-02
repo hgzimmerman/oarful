@@ -1,15 +1,15 @@
 status: Satisfied
 fielded: 1/1
 skipped: 
-benched: Carla, Grace, Nico
+benched: Carla, Ivan, Nico
 
 boat 1: Persephone
   cox  Lena
   s1   Hana
   s2   Bob
-  s3   Finn
-  s4   Ivan
-  s5   Mika
+  s3   Grace
+  s4   Mika
+  s5   Finn
   s6   Diego
   s7   Erin
   s8   Alice
