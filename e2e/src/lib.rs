@@ -37,15 +37,17 @@ fn find_mesa_egl_vendor_dir() -> String {
         }
     }
     // Search nix store for mesa's EGL vendor JSON.
-    for entry in std::fs::read_dir("/nix/store").into_iter().flatten() {
-        if let Ok(e) = entry {
-            let name = e.file_name();
-            let name = name.to_string_lossy();
-            if name.contains("mesa-") && !name.contains(".drv") {
-                let vendor_dir = e.path().join("share/glvnd/egl_vendor.d");
-                if vendor_dir.join("50_mesa.json").exists() {
-                    return vendor_dir.to_string_lossy().into_owned();
-                }
+    for e in std::fs::read_dir("/nix/store")
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let name = e.file_name();
+        let name = name.to_string_lossy();
+        if name.contains("mesa-") && !name.contains(".drv") {
+            let vendor_dir = e.path().join("share/glvnd/egl_vendor.d");
+            if vendor_dir.join("50_mesa.json").exists() {
+                return vendor_dir.to_string_lossy().into_owned();
             }
         }
     }
