@@ -91,6 +91,7 @@ pub(crate) fn availability_content(
             } @else {
                 div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
                     table class="w-full text-sm" {
+                        caption class="sr-only" { "Upcoming availability" }
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th scope="col" class="px-4 py-2" { "Date" }

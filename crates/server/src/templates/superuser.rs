@@ -78,6 +78,7 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
 
             div class="bg-paper rounded-lg shadow-soft overflow-x-auto" {
                 table class="w-full text-sm" {
+                    caption class="sr-only" { "Tenants" }
                     thead class="bg-paper border-b border-rule-2" {
                         tr {
                             th scope="col" class="text-left px-4 py-3 font-semibold text-ink-2" { "Name" }

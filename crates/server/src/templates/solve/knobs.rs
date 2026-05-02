@@ -107,7 +107,7 @@ pub(super) fn knobs_form(
                     }
 
                     // Partial fill + Alternatives (side-by-side)
-                    section class="sr-section" {
+                    section class="sr-section" role="group" "aria-label"="Solve options" {
                         div class="grid grid-cols-2 gap-3" {
                             @if has_eight {
                                 div {

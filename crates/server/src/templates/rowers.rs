@@ -106,6 +106,7 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                 // Desktop: full table
                 div class=(desktop_class) {
                     table class="w-full text-sm" {
+                        caption class="sr-only" { "Roster" }
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th scope="col" class="px-4 py-2" { "Name" }
@@ -598,6 +599,7 @@ fn erg_test_section(
             } @else {
                 div class="overflow-auto" {
                     table class="w-full text-sm" {
+                        caption class="sr-only" { "Erg tests" }
                         thead {
                             tr class="text-xs text-ink-3 uppercase tracking-wide" {
                                 th scope="col" class="text-left py-1 px-2" { "Distance" }
@@ -723,6 +725,7 @@ pub(crate) fn seat_affinities_section(
                 div class="text-sm text-ink-3 italic mb-3" { "No seat preferences on file." }
             } @else {
                 table class="w-full text-sm mb-3" {
+                    caption class="sr-only" { "Seat preferences" }
                     thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
                             th scope="col" class="py-1 w-24" { "Seat" }
@@ -822,6 +825,7 @@ pub(crate) fn pair_affinities_section(
                 div class="text-sm text-ink-3 italic mb-3" { "No pair preferences on file." }
             } @else {
                 table class="w-full text-sm mb-3" {
+                    caption class="sr-only" { "Pair preferences" }
                     thead class="text-left text-xs uppercase text-ink-3" {
                         tr {
                             th scope="col" class="py-1" { "Partner" }

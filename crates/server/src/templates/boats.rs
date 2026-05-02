@@ -66,6 +66,7 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
             h2 class="text-lg font-bold text-ink mb-2" { (heading) }
             div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
                 table class="w-full text-sm" {
+                    caption class="sr-only" { "Boat fleet" }
                     thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                         tr {
                             th scope="col" class="px-4 py-2" { "Name" }

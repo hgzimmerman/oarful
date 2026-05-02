@@ -284,6 +284,7 @@ fn lineup_block_with_noshow(
                 }
             }
             table class="w-full text-sm" {
+                caption class="sr-only" { "Lineup seats" }
                 tbody {
                     @for pos in &all_positions {
                         @let label = seat_label(*pos, seat_count);

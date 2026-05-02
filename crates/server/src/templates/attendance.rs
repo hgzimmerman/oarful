@@ -74,6 +74,7 @@ pub(crate) fn grid_content(
             } @else {
                 div class="overflow-auto bg-paper rounded-lg shadow-soft max-h-[75vh]" {
                     table class="text-xs border-collapse" {
+                        caption class="sr-only" { "Attendance" }
                         thead {
                             tr {
                                 th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[140px]" {

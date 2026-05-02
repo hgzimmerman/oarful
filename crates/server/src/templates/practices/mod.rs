@@ -105,8 +105,9 @@ pub(crate) fn planning_content(
             form method="post" action="/practices"
                  hx-post="/practices"
                  hx-target="#content"
-                 hx-push-url="true"
-                 class="flex items-end gap-3 flex-wrap mb-6" {
+                 hx-push-url="true" {
+              fieldset class="flex items-end gap-3 flex-wrap mb-6" style="border: none; padding: 0; margin: 0" {
+                legend class="sr-only" { "Add practice" }
                 div {
                     label for="date" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
                         "Add practice"
@@ -136,6 +137,7 @@ pub(crate) fn planning_content(
                        class="btn-accent font-semibold shadow-soft transition text-sm" {
                     "Create"
                 }
+              }
             }
         }
 

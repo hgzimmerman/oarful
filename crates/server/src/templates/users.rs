@@ -53,6 +53,7 @@ pub(crate) fn list_content(
             @if !users.is_empty() {
                 div class="bg-paper rounded-lg shadow-soft overflow-x-auto" {
                     table class="w-full text-sm min-w-[480px]" {
+                        caption class="sr-only" { "Users" }
                         thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
                             tr {
                                 th scope="col" class="px-4 py-2" { "Name" }
