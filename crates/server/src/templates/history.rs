@@ -305,7 +305,7 @@ fn lineup_block_with_noshow(
                             }
                             td class="px-2 sm:px-4 py-1.5 sm:py-2 text-ink truncate" {
                                 @if let Some(r) = rower {
-                                    (r.name)
+                                    (r.display_name())
                                     @if is_stale {
                                         span class="ml-1 sm:ml-2 text-xs bg-warn/20 text-warn px-1 sm:px-1.5 py-0.5 rounded-full" {
                                             "unavailable"
@@ -413,7 +413,7 @@ fn unplaced_section(snapshot: &DbSnapshot, committed: &[CommittedLineup]) -> Mar
                 span class="text-ink-2" {
                     @for (i, r) in benched.iter().enumerate() {
                         @if i > 0 { ", " }
-                        (r.name)
+                        (r.display_name())
                     }
                 }
             }

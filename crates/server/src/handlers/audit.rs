@@ -62,7 +62,7 @@ pub(crate) async fn audit_content(
             let mut user_map = std::collections::HashMap::new();
             for uid in user_ids {
                 if let Some(user) = AppUser::get(conn, uid)? {
-                    user_map.insert(uid, user.name);
+                    user_map.insert(uid, user.display_name());
                 }
             }
             Ok((entries, actions, user_map))
@@ -116,7 +116,7 @@ pub(crate) async fn rows_handler(
             let mut user_map = std::collections::HashMap::new();
             for uid in user_ids {
                 if let Some(user) = AppUser::get(conn, uid)? {
-                    user_map.insert(uid, user.name);
+                    user_map.insert(uid, user.display_name());
                 }
             }
             Ok((entries, user_map))

@@ -157,7 +157,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
           hx-push-url="true"
           class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
             div {
-                div class="font-medium text-link" { (r.name) }
+                div class="font-medium text-link" { (r.display_name()) }
                 div class="text-xs text-ink-3" {
                     (side_display_label(r))
                     @if show_emails {
@@ -184,7 +184,7 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                   hx-target="#content"
                   hx-push-url="true"
                   class="text-link hover:text-link-2 underline" {
-                    (r.name)
+                    (r.display_name())
                 }
             }
             @if show_emails {
@@ -244,7 +244,7 @@ pub(crate) fn detail_content(
                   title="Back" {
                     "←"
                 }
-                h1 class="text-2xl font-bold text-ink" { (r.name) }
+                h1 class="text-2xl font-bold text-ink" { (r.display_name()) }
             }
             p class="text-sm text-ink-3 mt-1" { (subtitle) }
             @if show_emails {
@@ -796,16 +796,16 @@ pub(crate) fn pair_affinities_section(
     let r = &detail.rower;
     let upsert_url = format!("/rowers/{}/pair-affinity", r.id);
     let delete_url = format!("/rowers/{}/pair-affinity/delete", r.id);
-    let lookup = |id: lineup_db::rower::types::RowerId| -> &str {
+    let lookup = |id: lineup_db::rower::types::RowerId| -> String {
         if id == r.id {
-            r.name.as_str()
+            r.display_name()
         } else {
             detail
                 .other_rowers
                 .iter()
                 .find(|o| o.id == id)
-                .map(|o| o.name.as_str())
-                .unwrap_or("<unknown>")
+                .map(|o| o.display_name())
+                .unwrap_or_else(|| "<unknown>".to_string())
         }
     };
     html! {
@@ -871,7 +871,7 @@ pub(crate) fn pair_affinities_section(
                     select id="partner_id" name="partner_id"
                            class="w-full border border-rule rounded px-3 py-2 text-sm" {
                         @for o in &detail.other_rowers {
-                            option value=(o.id) { (o.name) }
+                            option value=(o.id) { (o.display_name()) }
                         }
                     }
                 }

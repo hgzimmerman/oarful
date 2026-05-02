@@ -439,7 +439,7 @@ pub(crate) async fn magic_login_handler(
 
         // Create one magic link per tenant and collect (club_name, url) pairs.
         let mut clubs: Vec<(String, String)> = Vec::new();
-        let user_name = matches[0].user.name.clone();
+        let user_name = matches[0].user.display_name();
 
         for m in &matches {
             let created = create_magic_link(m.user.id, "/practices", expires_at, None);
@@ -699,7 +699,7 @@ pub(crate) async fn forgot_password_handler(
             (chrono::Utc::now() + chrono::TimeDelta::try_hours(1).unwrap()).naive_utc();
 
         let mut clubs: Vec<(String, String)> = Vec::new();
-        let user_name = matches[0].user.name.clone();
+        let user_name = matches[0].user.display_name();
 
         for m in &matches {
             let created = crate::magic_link::create_magic_link(

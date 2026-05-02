@@ -62,7 +62,7 @@ fn gather_reminder_recipients(
     for r in &all_rowers {
         if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
             if user.wants_reminders() && user.status == lineup_db::app_user::UserStatus::Active {
-                rower_users.insert(r.id, (user.id, user.email.clone(), r.name.clone()));
+                rower_users.insert(r.id, (user.id, user.email.clone(), r.display_name()));
             }
         }
     }

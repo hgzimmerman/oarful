@@ -219,7 +219,7 @@ fn seat_row(
             td class="px-4 py-2" {
                 @if let Some(r) = rower {
                     div class="font-medium font-serif-heading text-sm text-ink" {
-                        (r.name)
+                        (r.display_name())
                         @if is_changed {
                             span class="ml-1 text-xs text-warn" "aria-hidden"="true" title="Changed from current lineup" { "\u{25CF}" }
                         }
@@ -228,7 +228,7 @@ fn seat_row(
                     @if let Some(SeatDiff::Changed { was }) = diff {
                         @if let Some(prev) = find_rower(snapshot, *was) {
                             div class="text-xs font-mono-stat italic text-warn" {
-                                "was " (prev.name)
+                                "was " (prev.display_name())
                             }
                         }
                     }
@@ -261,7 +261,7 @@ fn name_list(snapshot: &DbSnapshot, ids: &[RowerId]) -> Markup {
         @for (i, id) in ids.iter().enumerate() {
             @if i > 0 { ", " }
             @if let Some(r) = find_rower(snapshot, *id) {
-                (r.name)
+                (r.display_name())
             } @else {
                 "#" (id)
             }

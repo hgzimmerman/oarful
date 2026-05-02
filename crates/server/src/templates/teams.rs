@@ -754,7 +754,7 @@ fn roster_matrix_inner(
                                               hx-target="#content"
                                               hx-push-url="true"
                                               class="text-link hover:text-link-2" {
-                                                (rower.name)
+                                                (rower.display_name())
                                             }
                                         }
                                         @for team in teams {

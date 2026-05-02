@@ -89,7 +89,7 @@ pub(crate) fn grid_content(
                             @for rower in rowers {
                                 tr {
                                     th scope="row" class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-b border-r border-rule-2 whitespace-nowrap text-left" {
-                                        (rower.name)
+                                        (rower.display_name())
                                     }
                                     @for col in columns {
                                         @let status = avail_map.get(&(rower.id, col.id));

@@ -221,7 +221,7 @@ pub(crate) async fn resend_invite_handler(
     if tenant.config.can_send_email() {
         if let Err(err) = mailer
             .mailer
-            .send_invite(&user.email, &user.name, &invite_url)
+            .send_invite(&user.email, &user.display_name(), &invite_url)
             .await
         {
             tracing::warn!(?err, email = %user.email, "mailer failed to resend invite");

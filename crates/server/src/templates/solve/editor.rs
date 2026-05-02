@@ -486,7 +486,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                     @let label = seat_label(*seat, seat_count);
                     @let rower = maybe_rower.and_then(|id| find_rower(snapshot, id));
                     @let rower_id_str = maybe_rower.map(|id| id.as_int().to_string()).unwrap_or_default();
-                    @let rower_name = rower.map(|r| r.name.as_str()).unwrap_or("");
+                    @let rower_name = rower.map(|r| r.display_name()).unwrap_or_default();
                     @let stats_text = rower.map(|r| format!(
                         "{} · {} · {} · {}",
                         r.weight_class.short(), r.skill.short(), r.strength.short(), compact_side(r)
@@ -532,7 +532,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         // Rower content
                         div class="py-2 px-2 min-w-0" {
                             @if let Some(r) = rower {
-                                div class="font-medium font-serif-heading text-sm text-ink" { (r.name) }
+                                div class="font-medium font-serif-heading text-sm text-ink" { (r.display_name()) }
                                 (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                             } @else if is_empty {
                                 span class="font-mono-stat text-xs italic text-muted" { "\u{2014} empty \u{2014}" }
@@ -611,14 +611,14 @@ fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
              data-rower=(r.id)
              role="button"
              tabindex="0"
-             "aria-label"={"Available: " (r.name)}
+             "aria-label"={"Available: " (r.display_name())}
              class="px-2 py-1 rounded cursor-pointer transition"
              style={"border: 1px solid transparent; " (side_style)}
              ":style"={"selected === '" (key) "' ? 'border: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); " (side_style) "' : 'border: 1px solid transparent; " (side_style) "'"}
              "@click"={"select('" (key) "')"}
              "@keydown.enter"={"select('" (key) "')"}
              "@keydown.space.prevent"={"select('" (key) "')"} {
-            div class="font-medium text-xs text-ink" { (r.name) }
+            div class="font-medium text-xs text-ink" { (r.display_name()) }
             (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
         }
     }
@@ -663,7 +663,7 @@ pub(crate) fn roster_pool(
                 div class="flex items-center gap-2 flex-wrap" {
                     @if !walkon_ids.is_empty() {
                         @for id in walkon_ids {
-                            @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.name.as_str()).unwrap_or("?");
+                            @let name = snapshot.rowers.iter().find(|r| r.id == *id).map(|r| r.display_name()).unwrap_or_else(|| "?".to_string());
                             span class="inline-block px-2 py-0.5 text-xs rounded-full"
                                  style="background: color-mix(in oklch, var(--good) 15%, var(--paper)); color: var(--good)" {
                                 (name)
@@ -686,7 +686,7 @@ pub(crate) fn roster_pool(
                                    style="border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink)" {
                                 @for r in unavailable {
                                     @if !walkon_ids.contains(&r.id) {
-                                        option value=(r.id) { (r.name) }
+                                        option value=(r.id) { (r.display_name()) }
                                     }
                                 }
                             }
@@ -812,7 +812,7 @@ pub(crate) fn roster_pool(
                             span class="px-2 py-1 rounded"
                                  style={"border: 1px solid transparent; background: color-mix(in oklch, var(--warn) 5%, var(--paper)); " (side_style)} {
                                 div class="font-medium text-xs text-ink" {
-                                    (r.name)
+                                    (r.display_name())
                                     span class="ml-1 text-[9px] font-normal text-warn" { "(" (&otr.team_name) ")" }
                                 }
                                 (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))

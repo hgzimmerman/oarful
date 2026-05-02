@@ -100,10 +100,10 @@ pub(crate) fn user_row(
                       hx-target="#content"
                       hx-push-url="true"
                       class="text-link hover:text-link-2 hover:underline" {
-                        (u.name)
+                        (u.display_name())
                     }
                 } @else {
-                    (u.name)
+                    (u.display_name())
                 }
             }
             td class="px-4 py-2 text-ink-2" { (u.email) }

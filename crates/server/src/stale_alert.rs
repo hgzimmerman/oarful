@@ -215,7 +215,7 @@ async fn poll_tenant(
             let mut map = HashMap::new();
             for rid in all_rower_ids {
                 if let Some(r) = Rower::get(conn, rid)? {
-                    map.insert(rid, r.name);
+                    map.insert(rid, r.display_name());
                 }
             }
             Ok(map)
@@ -332,7 +332,7 @@ async fn poll_tenant(
             .mailer
             .send_stale_alert(
                 &user.email,
-                &user.name,
+                &user.display_name(),
                 &subject,
                 &coach_sections,
                 &magic_url,

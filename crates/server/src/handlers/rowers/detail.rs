@@ -262,7 +262,7 @@ pub(crate) async fn detail_handler(
     let show_emails = tenant.show_emails();
     let content = templates::rowers::detail_content(&detail, perms, show_emails);
     Ok(crate::handlers::maybe_page_authed(
-        &format!("Rower · {}", detail.rower.name),
+        &format!("Rower · {}", detail.rower.display_name()),
         content,
         hx,
         &tenant,
@@ -291,7 +291,7 @@ pub(crate) async fn load_detail(db: &Db, id: RowerId) -> Result<RowerDetail, Err
                 .into_iter()
                 .filter(|r| r.id != id)
                 .collect();
-            other_rowers.sort_by(|a, b| a.name.cmp(&b.name));
+            other_rowers.sort_by_key(|a| a.display_name());
             let erg_tests = lineup_db::erg_test::ErgTest::list_for_rower(conn, id)?;
             Ok(Some(RowerDetail {
                 rower,

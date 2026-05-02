@@ -138,7 +138,7 @@ pub(crate) async fn attendance_content(
                 .into_iter()
                 .filter(|r| team_rower_ids.contains(&r.id))
                 .collect();
-            rowers.sort_by(|a, b| a.name.cmp(&b.name));
+            rowers.sort_by_key(|a| a.display_name());
 
             let since = if show_past {
                 today - chrono::Duration::days(365)

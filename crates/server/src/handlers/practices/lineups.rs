@@ -162,7 +162,7 @@ fn gather_lineup_recipients(
         if let Some(r) = rower_map.get(rid) {
             if let Some(user) = AppUser::find_by_rower_id(conn, r.id)? {
                 if user.wants_lineups() && user.status == lineup_db::app_user::UserStatus::Active {
-                    recipients.push((user.id, user.email.clone(), r.name.clone()));
+                    recipients.push((user.id, user.email.clone(), r.display_name()));
                 }
             }
         }
@@ -258,7 +258,7 @@ pub(crate) async fn send_lineups_handler(
                     for seat_row in &cl.seats {
                         let rower_name = rower_map
                             .get(&seat_row.rower_id)
-                            .map(|r| r.name.clone())
+                            .map(|r| r.display_name())
                             .unwrap_or_else(|| "?".to_string());
                         let label = if seat_row.is_cox.as_bool() {
                             "Cox".to_string()
@@ -278,7 +278,7 @@ pub(crate) async fn send_lineups_handler(
                 for (rid, status) in &available {
                     if status.is_available() && !date_placed.contains(rid) {
                         if let Some(r) = rower_map.get(rid) {
-                            benched_names.push(r.name.clone());
+                            benched_names.push(r.display_name());
                             date_benched.insert(*rid);
                         }
                     }
@@ -326,7 +326,7 @@ pub(crate) async fn send_lineups_handler(
                         if user.wants_lineups()
                             && user.status == lineup_db::app_user::UserStatus::Active
                         {
-                            recipients.push((user.id, user.email.clone(), r.name.clone()));
+                            recipients.push((user.id, user.email.clone(), r.display_name()));
                         }
                     }
                 }
