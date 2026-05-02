@@ -60,6 +60,8 @@ pub fn seed_fleet_only(conn: &mut SqliteConnection) -> Result<(), diesel::result
                 status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
+                first_name: Some("Dev".to_string()),
+                last_name: Some("Coach".to_string()),
             },
         )?;
         AppUser::set_role(conn, user.id, Role::ProgramDirector)?;
@@ -165,6 +167,8 @@ fn seed_all(conn: &mut SqliteConnection) -> Result<(), diesel::result::Error> {
             status: UserStatus::Active,
             created_at: now,
             updated_at: now,
+            first_name: Some("Dev".to_string()),
+            last_name: Some("Coach".to_string()),
         },
     )?;
     AppUser::set_role(conn, user.id, Role::ProgramDirector)?;

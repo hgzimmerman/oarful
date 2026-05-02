@@ -246,6 +246,8 @@ impl Rower {
         conn: &mut SqliteConnection,
         current: &Rower,
         new_name: &str,
+        new_first_name: Option<&str>,
+        new_last_name: Option<&str>,
         new_side: Side,
         is_sculling: bool,
         new_can_cox: bool,
@@ -257,6 +259,14 @@ impl Rower {
 
         if next.name != new_name {
             next.name = new_name.to_string();
+            dirty = true;
+        }
+        if new_first_name.is_some() && next.first_name.as_deref() != new_first_name {
+            next.first_name = new_first_name.map(|s| s.to_string());
+            dirty = true;
+        }
+        if new_last_name.is_some() && next.last_name.as_deref() != new_last_name {
+            next.last_name = new_last_name.map(|s| s.to_string());
             dirty = true;
         }
         // Side: promote Either → specific; never demote.
@@ -305,6 +315,8 @@ mod tests {
             conn,
             NewRower {
                 name: "Seed Rower".into(),
+                first_name: None,
+                last_name: None,
                 weight_class: RowerWeightClass::Medium,
                 skill: Skill::Intermediate,
                 strength: Strength::Intermediate,
@@ -331,6 +343,8 @@ mod tests {
             &mut conn,
             &seeded,
             "Alice Smith",
+            None,
+            None,
             Side::Either,
             false,
             true,
@@ -351,6 +365,8 @@ mod tests {
             &mut conn,
             &seeded,
             "Alice Smith",
+            None,
+            None,
             Side::Port,
             false,
             true,
@@ -371,6 +387,8 @@ mod tests {
             &mut conn,
             &seeded,
             &seeded.name,
+            None,
+            None,
             Side::Port,
             true,
             true,
@@ -394,6 +412,8 @@ mod tests {
             &mut conn,
             &adjusted,
             &adjusted.name,
+            None,
+            None,
             Side::Port,
             false,
             true,
@@ -418,6 +438,8 @@ mod tests {
             &mut conn,
             &seeded,
             &seeded.name,
+            None,
+            None,
             Side::Port,
             false,
             true,
@@ -440,6 +462,8 @@ mod tests {
             &mut conn,
             &seeded,
             "Alice Married-Name",
+            None,
+            None,
             Side::Port,
             false,
             true,

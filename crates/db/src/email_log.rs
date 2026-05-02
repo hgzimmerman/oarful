@@ -135,6 +135,8 @@ mod tests {
                 email: "test@example.com".into(),
                 password_hash: None,
                 name: "Test".into(),
+                first_name: None,
+                last_name: None,
                 status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,

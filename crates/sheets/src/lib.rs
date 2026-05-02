@@ -262,6 +262,16 @@ fn sync_row(
     } else {
         format!("{first_name} {last_name}")
     };
+    let first_opt = if first_name.is_empty() {
+        None
+    } else {
+        Some(first_name.to_string())
+    };
+    let last_opt = if last_name.is_empty() {
+        None
+    } else {
+        Some(last_name.to_string())
+    };
 
     let side = parse_side(side_cox_text);
     let is_designated_cox = side_cox_text.eq_ignore_ascii_case("cox");
@@ -294,6 +304,8 @@ fn sync_row(
                         conn,
                         &existing,
                         &display_name,
+                        first_opt.as_deref(),
+                        last_opt.as_deref(),
                         side,
                         is_sculling,
                         can_cox,
@@ -308,6 +320,8 @@ fn sync_row(
                     // User exists but has no rower — create one and link.
                     let new = NewRower::from_sheet(
                         &display_name,
+                        first_opt.clone(),
+                        last_opt.clone(),
                         side,
                         sweep_bias,
                         can_cox,
@@ -322,8 +336,15 @@ fn sync_row(
         }
         None => {
             // No user with this email — create rower + passwordless active user.
-            let new =
-                NewRower::from_sheet(&display_name, side, sweep_bias, can_cox, is_designated_cox);
+            let new = NewRower::from_sheet(
+                &display_name,
+                first_opt.clone(),
+                last_opt.clone(),
+                side,
+                sweep_bias,
+                can_cox,
+                is_designated_cox,
+            );
             let created = Rower::insert(conn, new)?;
             let now = chrono::Utc::now().naive_utc();
             let user = AppUser::create(
@@ -335,6 +356,16 @@ fn sync_row(
                     status: UserStatus::Active,
                     created_at: now,
                     updated_at: now,
+                    first_name: if first_name.is_empty() {
+                        None
+                    } else {
+                        Some(first_name.to_string())
+                    },
+                    last_name: if last_name.is_empty() {
+                        None
+                    } else {
+                        Some(last_name.to_string())
+                    },
                 },
             )?;
             AppUser::set_role(conn, user.id, Role::Member)?;
@@ -707,6 +738,8 @@ mod tests {
             &mut conn,
             NewRower {
                 name: "Alice Smith".into(),
+                first_name: None,
+                last_name: None,
                 weight_class: RowerWeightClass::Medium,
                 skill: Skill::Expert,
                 strength: Strength::Strong,
@@ -732,6 +765,8 @@ mod tests {
                 email: "alice@example.com".into(),
                 password_hash: None,
                 name: "Alice Smith".into(),
+                first_name: None,
+                last_name: None,
                 status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,

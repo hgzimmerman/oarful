@@ -247,6 +247,8 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
                 status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,
+                first_name: None,
+                last_name: None,
             },
         )?;
         AppUser::set_role(conn, u.id, Role::Member)?;
@@ -263,6 +265,8 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
             status: UserStatus::Active,
             created_at: now,
             updated_at: now,
+            first_name: Some("Demo".to_string()),
+            last_name: Some("Coach".to_string()),
         },
     )?;
     AppUser::set_role(conn, user.id, Role::ProgramDirector)?;

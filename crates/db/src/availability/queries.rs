@@ -124,6 +124,8 @@ mod tests {
             conn,
             NewRower {
                 name: "R".into(),
+                first_name: None,
+                last_name: None,
                 weight_class: RowerWeightClass::Medium,
                 skill: Skill::Intermediate,
                 strength: Strength::Intermediate,

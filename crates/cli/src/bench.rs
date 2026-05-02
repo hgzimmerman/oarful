@@ -466,6 +466,8 @@ fn generate_rowers(n: usize) -> Vec<Rower> {
             updated_at: now,
             weight_kg: None,
             height_m: None,
+            first_name: None,
+            last_name: None,
         })
         .collect()
 }

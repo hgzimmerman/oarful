@@ -21,6 +21,8 @@ diesel::table! {
         updated_at -> Timestamp,
         weight_kg -> Nullable<Double>,
         height_m -> Nullable<Double>,
+        first_name -> Nullable<Text>,
+        last_name -> Nullable<Text>,
     }
 }
 
@@ -51,6 +53,8 @@ diesel::table! {
         opt_in_lineups -> Integer,
         rower_id -> Nullable<Integer>,
         opt_in_stale_alerts -> Integer,
+        first_name -> Nullable<Text>,
+        last_name -> Nullable<Text>,
     }
 }
 

@@ -110,6 +110,8 @@ pub(crate) async fn invite_handler(
                     status: UserStatus::Invited,
                     created_at: now,
                     updated_at: now,
+                    first_name: None,
+                    last_name: None,
                 },
             )?;
             AppUser::set_role(conn, user.id, role)?;

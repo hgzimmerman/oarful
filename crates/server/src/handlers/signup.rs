@@ -182,6 +182,8 @@ pub(crate) async fn signup_handler(
                     status: UserStatus::Active,
                     created_at: now,
                     updated_at: now,
+                    first_name: None,
+                    last_name: None,
                 },
             )?;
             AppUser::set_role(conn, user.id, Role::ProgramDirector)?;

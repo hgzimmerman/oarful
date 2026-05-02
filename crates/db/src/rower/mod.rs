@@ -45,6 +45,21 @@ pub struct Rower {
     pub weight_kg: Option<WeightKg>,
     /// Height in metres.
     pub height_m: Option<HeightM>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+}
+
+impl Rower {
+    /// Preferred display name. Uses first + last when available,
+    /// falls back to the legacy `name` column for unsplit records.
+    pub fn display_name(&self) -> String {
+        match (self.first_name.as_deref(), self.last_name.as_deref()) {
+            (Some(first), Some(last)) => format!("{first} {last}"),
+            (Some(first), None) => first.to_string(),
+            (None, Some(last)) => last.to_string(),
+            (None, None) => self.name.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -63,6 +78,8 @@ pub struct NewRower {
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
 }
 
 impl NewRower {
@@ -97,6 +114,8 @@ impl NewRower {
             active: IntBool::TRUE,
             created_at: now,
             updated_at: now,
+            first_name: None,
+            last_name: None,
         }
     }
 
@@ -106,6 +125,8 @@ impl NewRower {
     /// sheet-provided values for everything it does know.
     pub fn from_sheet(
         name: impl Into<String>,
+        first_name: Option<String>,
+        last_name: Option<String>,
         side: Side,
         sweep_bias: SweepBias,
         can_cox: bool,
@@ -114,6 +135,8 @@ impl NewRower {
         let now = chrono::Utc::now().naive_utc();
         Self {
             name: name.into(),
+            first_name,
+            last_name,
             weight_class: RowerWeightClass::Medium,
             skill: Skill::Intermediate,
             strength: Strength::Intermediate,

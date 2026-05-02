@@ -174,6 +174,8 @@ mod tests {
                 email: email.into(),
                 password_hash: None,
                 name: "U".into(),
+                first_name: None,
+                last_name: None,
                 status: UserStatus::Active,
                 created_at: now,
                 updated_at: now,

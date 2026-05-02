@@ -864,6 +864,8 @@ mod tests {
             sweep_bias: SweepBias::SWEEP_HARD,
             can_cox: IntBool::new(false),
             is_designated_cox: IntBool::new(false),
+            first_name: None,
+            last_name: None,
             active: IntBool::new(true),
             created_at: chrono::NaiveDateTime::default(),
             updated_at: chrono::NaiveDateTime::default(),

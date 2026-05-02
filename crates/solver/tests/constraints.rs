@@ -77,6 +77,8 @@ fn rower(
         sweep_bias: SweepBias::SWEEP_HARD,
         can_cox: IntBool::TRUE,
         is_designated_cox: IntBool::FALSE,
+        first_name: None,
+        last_name: None,
         active: IntBool::TRUE,
         created_at: now,
         updated_at: now,

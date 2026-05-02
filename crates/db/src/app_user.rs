@@ -134,6 +134,8 @@ pub struct AppUser {
     pub opt_in_lineups: IntBool,
     pub rower_id: Option<RowerId>,
     pub opt_in_stale_alerts: IntBool,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -145,6 +147,8 @@ pub struct NewAppUser {
     pub status: UserStatus,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
 }
 
 #[derive(Debug, Clone, diesel::Queryable, diesel::Selectable, diesel::Insertable)]
@@ -155,6 +159,17 @@ pub struct UserRoleRow {
 }
 
 impl AppUser {
+    /// Preferred display name. Uses first + last when available,
+    /// falls back to the legacy `name` column for unsplit records.
+    pub fn display_name(&self) -> String {
+        match (self.first_name.as_deref(), self.last_name.as_deref()) {
+            (Some(first), Some(last)) => format!("{first} {last}"),
+            (Some(first), None) => first.to_string(),
+            (None, Some(last)) => last.to_string(),
+            (None, None) => self.name.clone(),
+        }
+    }
+
     pub fn find_by_email(
         conn: &mut SqliteConnection,
         email_addr: &str,
@@ -404,6 +419,8 @@ mod tests {
                 email: "test@example.com".into(),
                 password_hash: None,
                 name: "Test User".into(),
+                first_name: None,
+                last_name: None,
                 status: UserStatus::Invited,
                 created_at: now,
                 updated_at: now,
