@@ -127,8 +127,20 @@ impl TestInstance {
                 .expect("WebKitWebDriver must be installed (add webkitgtk_4_1 to flake.nix)")
         };
 
-        // Give WebKitWebDriver a moment to start listening.
-        sleep(Duration::from_millis(500)).await;
+        // Wait for WebKitWebDriver to accept connections.
+        let driver_url = format!("http://localhost:{driver_port}/status");
+        let http = reqwest::Client::new();
+        let mut ready = false;
+        for _ in 0..20 {
+            sleep(Duration::from_millis(250)).await;
+            if http.get(&driver_url).send().await.is_ok() {
+                ready = true;
+                break;
+            }
+        }
+        if !ready {
+            panic!("WebKitWebDriver did not become ready on port {driver_port} within 5s");
+        }
 
         Self {
             xvfb,
