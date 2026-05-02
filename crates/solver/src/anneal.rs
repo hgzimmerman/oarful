@@ -12,7 +12,8 @@ use lineup_db::boat::Boat;
 use lineup_db::rower::types::RowerId;
 use lineup_db::rower::Rower;
 use lineup_db::snapshot::DbSnapshot;
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 
 use crate::model::{
     boat_target_weight_ordinal, optional_seats, rower_eligible_for_seat, wrong_side_penalty,
@@ -32,6 +33,22 @@ pub(crate) enum AnnealBudget {
     Iterations(usize),
     /// Wall-clock time limit (used in production).
     Duration(std::time::Duration),
+}
+
+/// SA configuration: budget + optional deterministic seed.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AnnealConfig {
+    pub budget: AnnealBudget,
+    /// When set, seeds the RNG for deterministic results (useful in
+    /// tests paired with `AnnealBudget::Iterations`).
+    pub seed: Option<u64>,
+}
+
+impl AnnealConfig {
+    /// Production default: duration-based, OS entropy.
+    pub fn with_budget(budget: AnnealBudget) -> Self {
+        Self { budget, seed: None }
+    }
 }
 
 /// Placement of a single rower.
@@ -159,7 +176,7 @@ pub(crate) fn anneal(
     boats: &[&Boat],
     available: &[&Rower],
     cp_objective: i32,
-    budget: AnnealBudget,
+    config: AnnealConfig,
 ) -> Option<(ProposedSolution, i32)> {
     let mut assignment = Assignment::from_solution(solution, boats, available);
     let ctx = EvalContext::new(snapshot, request, boats, available);
@@ -198,7 +215,10 @@ pub(crate) fn anneal(
     let mut best_obj = current_obj;
     let mut best_assignment = assignment.places.clone();
 
-    let mut rng = rand::thread_rng();
+    let mut rng: SmallRng = match config.seed {
+        Some(s) => SmallRng::seed_from_u64(s),
+        None => SmallRng::from_entropy(),
+    };
 
     // Collect seated, benched, and empty-seat lists for move generation.
     let seated: Vec<usize> = available
@@ -244,6 +264,7 @@ pub(crate) fn anneal(
     let mut reheated = false;
 
     let start = std::time::Instant::now();
+    let budget = config.budget;
     let deadline = match budget {
         AnnealBudget::Duration(d) => Some(start + d),
         AnnealBudget::Iterations(_) => None,

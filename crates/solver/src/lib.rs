@@ -1225,20 +1225,26 @@ pub fn solve_streaming(
 fn split_time_budget(
     total: Option<std::time::Duration>,
     sa_enabled: bool,
-) -> (Option<std::time::Duration>, anneal::AnnealBudget) {
+) -> (Option<std::time::Duration>, anneal::AnnealConfig) {
+    use anneal::{AnnealBudget, AnnealConfig};
     match (total, sa_enabled) {
         (Some(t), true) => {
             let sa = t / 5;
             let cp = t - sa;
-            (Some(cp), anneal::AnnealBudget::Duration(sa))
+            (
+                Some(cp),
+                AnnealConfig::with_budget(AnnealBudget::Duration(sa)),
+            )
         }
         (Some(t), false) => (
             Some(t),
-            anneal::AnnealBudget::Duration(std::time::Duration::ZERO),
+            AnnealConfig::with_budget(AnnealBudget::Duration(std::time::Duration::ZERO)),
         ),
         (None, _) => (
             None,
-            anneal::AnnealBudget::Duration(std::time::Duration::from_millis(200)),
+            AnnealConfig::with_budget(AnnealBudget::Duration(std::time::Duration::from_millis(
+                200,
+            ))),
         ),
     }
 }
