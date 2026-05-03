@@ -48,9 +48,8 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
     let is_coach = tenant.claims.role().at_least(Role::Coach);
-    let is_pd = tenant.claims.role().at_least(Role::ProgramDirector);
 
-    let onboarding = if is_pd && !tenant.config.onboarding_dismissed {
+    let onboarding = if is_coach {
         Some(query_onboarding_state(&tenant).await?)
     } else {
         None
@@ -69,34 +68,15 @@ pub(crate) async fn list_handler(
 async fn query_onboarding_state(
     tenant: &TenantContext,
 ) -> Result<templates::onboarding::OnboardingState, ErrorResponse> {
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| internal_error(anyhow::anyhow!("no user id in claims")))?;
     tenant
         .db
         .with_conn(move |conn| {
-            use lineup_db::boat::Boat;
-
-            let boat_count = Boat::list_in_service(conn)?.len();
-            let rower_count = Rower::list_active(conn)?.len();
-            let practice_count = {
-                use diesel::prelude::*;
-                use lineup_db::schema::practice;
-                practice::table.count().get_result::<i64>(conn)? as usize
-            };
-            let has_committed_lineup = {
-                use diesel::prelude::*;
-                use lineup_db::schema::lineup;
-                let count: i64 = lineup::table
-                    .filter(lineup::is_draft.eq(0))
-                    .count()
-                    .get_result(conn)?;
-                count > 0
-            };
-
-            Ok(templates::onboarding::OnboardingState {
-                boat_count,
-                rower_count,
-                practice_count,
-                has_committed_lineup,
-            })
+            let completed = lineup_db::onboarding::completed_steps(conn, user_id)?;
+            Ok(templates::onboarding::OnboardingState { completed })
         })
         .await
         .map_err(internal_error)
@@ -283,6 +263,7 @@ pub(crate) async fn create_handler(
         &date.to_string(),
         None,
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::CreatePractice);
 
     Ok(Redirect::to("/practices"))
 }

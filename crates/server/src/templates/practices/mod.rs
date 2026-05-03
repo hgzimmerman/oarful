@@ -61,9 +61,7 @@ pub(crate) fn tabbed_page(
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
             @if let Some(state) = onboarding {
-                @if !state.all_complete() {
-                    (super::onboarding::onboarding_checklist(state))
-                }
+                (super::onboarding::onboarding_checklist(state))
             }
             (tabbed_section(PRACTICES_TABS, active_tab, PRACTICES_TARGET, tab_content))
         }

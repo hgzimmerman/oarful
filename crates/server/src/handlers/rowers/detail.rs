@@ -139,6 +139,7 @@ pub(crate) async fn update_handler(
         &saved.id.to_string(),
         None,
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::CustomizeRower);
 
     Ok(Html(
         templates::rowers::attribute_section(&saved, None, &perms).into_string(),
@@ -345,6 +346,7 @@ pub(crate) async fn seat_affinity_upsert_handler(
         &id.to_string(),
         Some(serde_json::json!({"zone": input.zone, "weight": input.weight}).to_string()),
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::CustomizeRower);
     seat_section_response(&tenant.db, id).await
 }
 
@@ -435,6 +437,7 @@ pub(crate) async fn pair_affinity_upsert_handler(
                 .to_string(),
         ),
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::CustomizeRower);
     pair_section_response(&tenant.db, id).await
 }
 

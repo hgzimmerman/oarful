@@ -1,21 +1,31 @@
-//! Getting-started checklist shown on the Practices page for new tenants.
+//! Getting-started checklist shown on the Practices page for coaches/PDs.
 
+use std::collections::HashSet;
+
+use lineup_db::onboarding::OnboardingStep;
 use maud::{html, Markup};
 
-/// Progress state for each onboarding step.
+/// Per-user onboarding progress, built from their completed steps.
 pub(crate) struct OnboardingState {
-    pub(crate) boat_count: usize,
-    pub(crate) rower_count: usize,
-    pub(crate) practice_count: usize,
-    pub(crate) has_committed_lineup: bool,
+    pub(crate) completed: HashSet<OnboardingStep>,
 }
 
 impl OnboardingState {
-    pub(crate) fn all_complete(&self) -> bool {
-        self.boat_count > 0
-            && self.rower_count > 0
-            && self.practice_count > 0
-            && self.has_committed_lineup
+    pub(crate) fn is_dismissed(&self) -> bool {
+        self.completed.contains(&OnboardingStep::Dismissed)
+    }
+
+    fn all_complete(&self) -> bool {
+        use OnboardingStep::*;
+        [
+            AddBoats,
+            AddRowers,
+            CustomizeRower,
+            CreatePractice,
+            GenerateLineup,
+        ]
+        .iter()
+        .all(|s| self.completed.contains(s))
     }
 }
 
@@ -27,33 +37,37 @@ struct Step {
 }
 
 pub(crate) fn onboarding_checklist(state: &OnboardingState) -> Markup {
+    if state.is_dismissed() || state.all_complete() {
+        return html! {};
+    }
+
     let steps = &[
         Step {
-            done: true,
-            label: "Create your account",
-            href: "",
-            subtitle: "",
-        },
-        Step {
-            done: state.boat_count > 0,
+            done: state.completed.contains(&OnboardingStep::AddBoats),
             label: "Add boats to your fleet",
             href: "/admin/fleet",
             subtitle: "Add the boats your club rows in.",
         },
         Step {
-            done: state.rower_count > 0,
+            done: state.completed.contains(&OnboardingStep::AddRowers),
             label: "Add rowers to your roster",
             href: "/team/roster",
             subtitle: "Add rowers on the roster page. You can also bulk-import from a spreadsheet via the Sync tab.",
         },
         Step {
-            done: state.practice_count > 0,
+            done: state.completed.contains(&OnboardingStep::CustomizeRower),
+            label: "Set rower attributes",
+            href: "/team/roster",
+            subtitle: "Set skill, strength, and side preference on your rowers for better lineups.",
+        },
+        Step {
+            done: state.completed.contains(&OnboardingStep::CreatePractice),
             label: "Create your first practice",
             href: "",
             subtitle: "Pick a date using the form above.",
         },
         Step {
-            done: state.has_committed_lineup,
+            done: state.completed.contains(&OnboardingStep::GenerateLineup),
             label: "Generate your first lineup",
             href: "",
             subtitle: "Open a practice and create seat assignments.",

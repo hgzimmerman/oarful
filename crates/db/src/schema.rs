@@ -298,6 +298,15 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    onboarding_progress (app_user_id, step) {
+        app_user_id -> Integer,
+        step -> Text,
+        completed_at -> Timestamp,
+    }
+}
+
+diesel::joinable!(onboarding_progress -> app_user (app_user_id));
 diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(team_threshold -> team (team_id));
 diesel::joinable!(sync_source -> team (team_id));
@@ -346,4 +355,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     solver_profile,
     sync_source,
     stale_digest_log,
+    onboarding_progress,
 );

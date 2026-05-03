@@ -14,6 +14,7 @@ pub mod erg_test;
 pub mod fixture;
 pub mod lineup;
 pub mod magic_link;
+pub mod onboarding;
 pub mod pair_affinity;
 pub mod practice;
 pub mod rower;

@@ -20,7 +20,6 @@ pub(crate) struct TenantConfig {
     pub(crate) tenant_name: String,
     pub(crate) tenant_slug: String,
     pub(crate) billing_status: BillingStatus,
-    pub(crate) onboarding_dismissed: bool,
 }
 
 impl TenantConfig {
@@ -32,7 +31,6 @@ impl TenantConfig {
             tenant_name: t.name.clone(),
             tenant_slug: t.slug.clone(),
             billing_status: t.billing_status,
-            onboarding_dismissed: t.onboarding_dismissed(),
         }
     }
 

@@ -98,6 +98,7 @@ pub(crate) async fn commit_handler(
         &practice_id.to_string(),
         Some(serde_json::json!({"boat_count": boat_count}).to_string()),
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::GenerateLineup);
 
     Ok(Redirect::to(&format!("/history/{practice_id}")))
 }
@@ -165,6 +166,7 @@ pub(crate) async fn commit_lineup_handler(
         &practice_id.to_string(),
         Some(serde_json::json!({"boat_count": boat_count, "direct": true}).to_string()),
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::GenerateLineup);
 
     Ok(Redirect::to(&format!("/history/{practice_id}")))
 }

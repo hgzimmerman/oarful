@@ -234,6 +234,7 @@ pub(crate) async fn sync_handler(
                     .to_string(),
                 ),
             );
+            tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::AddRowers);
 
             let now = Some(chrono::Utc::now().naive_utc());
             let content = templates::sync::form_content(Some(&input), Some(&summary), None, now);

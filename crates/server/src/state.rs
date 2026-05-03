@@ -248,6 +248,20 @@ impl TenantContext {
                 .role()
                 .at_least(lineup_db::app_user::Role::Coach)
     }
+
+    /// Record that the current user completed an onboarding step.
+    /// Fire-and-forget — silently ignores errors and missing user IDs.
+    pub(crate) fn complete_onboarding_step(&self, step: lineup_db::onboarding::OnboardingStep) {
+        let Some(user_id) = self.claims.user_id() else {
+            return;
+        };
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = db
+                .with_conn(move |conn| lineup_db::onboarding::complete_step(conn, user_id, step))
+                .await;
+        });
+    }
 }
 
 impl AppState {

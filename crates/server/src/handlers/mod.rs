@@ -467,22 +467,28 @@ pub(crate) async fn switch_team_handler(
     (jar, Redirect::to("/practices"))
 }
 
-/// `POST /onboarding/dismiss` — mark the onboarding checklist as dismissed.
+/// `POST /onboarding/dismiss` — mark the onboarding checklist as dismissed
+/// for the current user.
 #[tracing::instrument(level = "debug", skip_all, err)]
 async fn onboarding_dismiss_handler(
-    State(state): State<AppState>,
     Extension(tenant): Extension<TenantContext>,
 ) -> Result<Html<String>, ErrorResponse> {
-    users::require_at_least_role(&tenant.claims, lineup_db::app_user::Role::ProgramDirector)?;
-    let tenant_id = tenant.tenant_id;
-    state
-        .master_db
+    users::require_at_least_role(&tenant.claims, lineup_db::app_user::Role::Coach)?;
+    let user_id = tenant
+        .claims
+        .user_id()
+        .ok_or_else(|| internal_error(anyhow::anyhow!("no user id")))?;
+    tenant
+        .db
         .with_conn(move |conn| {
-            lineup_master_db::tenant::Tenant::dismiss_onboarding(conn, tenant_id)
+            lineup_db::onboarding::complete_step(
+                conn,
+                user_id,
+                lineup_db::onboarding::OnboardingStep::Dismissed,
+            )
         })
         .await
         .map_err(internal_error)?;
-    state.refresh_tenant_configs().await;
     Ok(Html(String::new()))
 }
 

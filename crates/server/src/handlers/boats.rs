@@ -263,6 +263,7 @@ pub(crate) async fn create_handler(
         &boat.id.to_string(),
         Some(serde_json::json!({"name": boat.name}).to_string()),
     );
+    tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::AddBoats);
 
     redirect_or_list(&tenant.db, hx).await
 }
