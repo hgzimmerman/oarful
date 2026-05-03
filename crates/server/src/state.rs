@@ -455,6 +455,125 @@ fn lookup_tenant(master_conn_str: &str, id: TenantId) -> anyhow::Result<Tenant> 
     Tenant::get(&mut conn, id)?.ok_or_else(|| anyhow::anyhow!("tenant {id} not found"))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lineup_db::app_user::{Role, UserId};
+    use lineup_db::onboarding::{self, OnboardingStep};
+    use lineup_db::state::Db;
+    use lineup_db::team::TeamId;
+
+    fn test_db() -> (Db, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!("lineup_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!(
+            "test_{}.db",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let db = Db::connect(path.to_str().unwrap()).unwrap();
+        (db, path)
+    }
+
+    fn user_claims(user_id: i32) -> Claims {
+        Claims::new(
+            UserId::new(user_id),
+            TenantId::new(1),
+            Role::Coach,
+            TeamId::new(1),
+        )
+    }
+
+    fn superuser_claims() -> Claims {
+        Claims::new_superuser(3600)
+    }
+
+    fn tenant_ctx(db: Db, claims: Claims) -> TenantContext {
+        TenantContext {
+            db,
+            tenant_id: TenantId::new(1),
+            claims,
+            config: TenantConfig {
+                attributes_public: false,
+                force_cox_stern: false,
+                emails_visible: false,
+                tenant_name: "Test".into(),
+                tenant_slug: "test".into(),
+                billing_status: BillingStatus::Active,
+            },
+        }
+    }
+
+    /// Seed an app_user in the pool-backed DB so FK constraints pass.
+    async fn seed_user_in_db(db: &Db, user_id: i32) -> UserId {
+        let uid = db
+            .with_conn(move |conn| {
+                use lineup_db::app_user::{AppUser, NewAppUser, UserStatus};
+                let now = chrono::Utc::now().naive_utc();
+                let u = AppUser::create(
+                    conn,
+                    NewAppUser {
+                        email: format!("u{user_id}@test.com"),
+                        password_hash: None,
+                        name: format!("User {user_id}"),
+                        first_name: None,
+                        last_name: None,
+                        status: UserStatus::Active,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                )?;
+                Ok(u.id)
+            })
+            .await
+            .unwrap();
+        uid
+    }
+
+    #[tokio::test]
+    async fn complete_onboarding_step_records_step() {
+        let (db, path) = test_db();
+        let uid = seed_user_in_db(&db, 1).await;
+        let ctx = tenant_ctx(db.clone(), user_claims(uid.as_int()));
+
+        ctx.complete_onboarding_step(OnboardingStep::AddBoats);
+
+        // Let the spawned task complete
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        let steps = db
+            .with_conn(move |conn| onboarding::completed_steps(conn, uid))
+            .await
+            .unwrap();
+        assert!(steps.contains(&OnboardingStep::AddBoats));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn complete_onboarding_step_noop_for_superuser() {
+        let (db, path) = test_db();
+        let ctx = tenant_ctx(db.clone(), superuser_claims());
+
+        // Should not panic or record anything
+        ctx.complete_onboarding_step(OnboardingStep::AddBoats);
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Superuser has no user_id, so nothing is recorded for any user
+        let steps = db
+            .with_conn(move |conn| onboarding::completed_steps(conn, UserId::new(0)))
+            .await
+            .unwrap();
+        assert!(steps.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
 fn ensure_default_tenant(master_conn_str: &str, tenant_db_path: &str) -> anyhow::Result<TenantId> {
     use anyhow::Context;
     let mut conn = lineup_master_db::connect_sync(master_conn_str)

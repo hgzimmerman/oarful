@@ -2438,3 +2438,43 @@ impl ProgressTracker {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn split_time_budget_sa_enabled() {
+        let total = Duration::from_secs(10);
+        let (cp, sa_cfg) = split_time_budget(Some(total), true);
+        // CP gets 80%, SA gets 20%
+        assert_eq!(cp, Some(Duration::from_secs(8)));
+        match sa_cfg.budget {
+            anneal::AnnealBudget::Duration(d) => assert_eq!(d, Duration::from_secs(2)),
+            other => panic!("expected Duration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn split_time_budget_sa_disabled() {
+        let total = Duration::from_secs(10);
+        let (cp, sa_cfg) = split_time_budget(Some(total), false);
+        // CP keeps full budget, SA gets zero
+        assert_eq!(cp, Some(total));
+        match sa_cfg.budget {
+            anneal::AnnealBudget::Duration(d) => assert_eq!(d, Duration::ZERO),
+            other => panic!("expected Duration(ZERO), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn split_time_budget_no_budget() {
+        let (cp, sa_cfg) = split_time_budget(None, true);
+        assert_eq!(cp, None);
+        match sa_cfg.budget {
+            anneal::AnnealBudget::Duration(d) => assert_eq!(d, Duration::from_millis(200)),
+            other => panic!("expected Duration(200ms), got {other:?}"),
+        }
+    }
+}

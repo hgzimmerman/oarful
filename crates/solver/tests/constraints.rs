@@ -2380,3 +2380,80 @@ fn symmetry_breaking_respects_stroke_seat_lock() {
         "symmetry breaking: ordered equivalent boat pairs"
     ));
 }
+
+// ── SA post-processing integration ─────────────────────────────
+
+/// Verify that enabling sa_postprocess doesn't break a basic solve.
+/// The SA path must produce a valid solution with status Satisfied
+/// and the same (or better) objective as CP alone.
+#[test]
+#[traced_test]
+fn sa_postprocess_produces_valid_result() {
+    let rowers = vec![
+        rower(
+            1,
+            "R1",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Port,
+        ),
+        rower(
+            2,
+            "R2",
+            RowerWeightClass::Medium,
+            Skill::Expert,
+            Strength::Strong,
+            Height::Tall,
+            Side::Starboard,
+        ),
+        rower(
+            3,
+            "R3",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Port,
+        ),
+        rower(
+            4,
+            "R4",
+            RowerWeightClass::Medium,
+            Skill::Intermediate,
+            Strength::Intermediate,
+            Height::Medium,
+            Side::Starboard,
+        ),
+        cox_rower(5, "Cox"),
+    ];
+    let snap = snapshot(rowers, vec![four_boat(1, "TestBoat")]);
+
+    let cfg = SolverConfig::default();
+
+    // Solve without SA
+    let mut req_no_sa = request(cfg.clone());
+    req_no_sa.config = cfg.clone();
+    req_no_sa.sa_postprocess = false;
+    let result_no_sa = solve(&snap, &req_no_sa).unwrap();
+    assert_eq!(result_no_sa.status, SolveStatus::Satisfied);
+
+    // Solve with SA
+    let mut req_sa = request(cfg);
+    req_sa.sa_postprocess = true;
+    let result_sa = solve(&snap, &req_sa).unwrap();
+    assert_eq!(result_sa.status, SolveStatus::Satisfied);
+
+    // SA should produce at least as good an objective
+    let obj_no_sa = result_no_sa.objective.unwrap_or(0);
+    let obj_sa = result_sa.objective.unwrap_or(0);
+    assert!(
+        obj_sa >= obj_no_sa,
+        "SA objective ({obj_sa}) should be >= CP-only ({obj_no_sa})"
+    );
+
+    // Both should field exactly one boat with 5 seats (4 + cox)
+    let lineup_sa = single_used(&result_sa.primary.lineups);
+    assert_eq!(lineup_sa.seats.len(), 5);
+}

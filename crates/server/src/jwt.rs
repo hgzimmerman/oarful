@@ -111,7 +111,7 @@ impl Claims {
         matches!(self.sub, Identity::Superuser)
     }
 
-    fn new_superuser(lifetime_secs: u64) -> Self {
+    pub(crate) fn new_superuser(lifetime_secs: u64) -> Self {
         let now = now_secs();
         Self {
             sub: Identity::Superuser,
