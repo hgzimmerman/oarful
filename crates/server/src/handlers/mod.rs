@@ -38,6 +38,7 @@ pub(crate) mod superuser;
 pub(crate) mod sync;
 pub(crate) mod team_hub;
 pub(crate) mod teams;
+pub(crate) mod timeline;
 pub(crate) mod unsubscribe;
 pub(crate) mod users;
 
@@ -144,6 +145,54 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/history", get(history::list_handler))
         .route("/history/{id}", get(history::detail_handler))
         .route("/history/{id}/notes", post(history::notes_handler))
+        .route("/history/{id}/timeline/edit", get(timeline::open_editor))
+        .route("/history/{id}/timeline/add", post(timeline::add_block))
+        .route(
+            "/history/{id}/timeline/delete",
+            post(timeline::delete_block),
+        )
+        .route(
+            "/history/{id}/timeline/patch-block",
+            post(timeline::patch_block),
+        )
+        .route(
+            "/history/{id}/timeline/patch-segment",
+            post(timeline::patch_segment),
+        )
+        .route(
+            "/history/{id}/timeline/target",
+            post(timeline::update_target),
+        )
+        .route("/history/{id}/timeline/save", post(timeline::save_timeline))
+        .route("/history/{id}/timeline/close", post(timeline::close_editor))
+        .route(
+            "/history/{id}/timeline/reorder",
+            post(timeline::reorder_block),
+        )
+        .route(
+            "/history/{id}/timeline/duplicate",
+            post(timeline::duplicate_block),
+        )
+        .route(
+            "/history/{id}/timeline/group-add",
+            post(timeline::group_add_segment),
+        )
+        .route(
+            "/history/{id}/timeline/group-delete",
+            post(timeline::group_delete_segment),
+        )
+        .route(
+            "/history/{id}/timeline/group-patch",
+            post(timeline::group_patch),
+        )
+        .route(
+            "/history/{id}/timeline/group-reorder",
+            post(timeline::group_reorder_segment),
+        )
+        .route(
+            "/history/{id}/timeline/template",
+            post(timeline::insert_template),
+        )
         // Club hub (Coach+)
         .route("/team", get(team_hub::index_handler))
         .route("/team/roster", get(team_hub::roster_handler))

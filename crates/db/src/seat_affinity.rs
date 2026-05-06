@@ -316,13 +316,13 @@ mod tests {
 
     #[test]
     fn seats_for_pair() {
-        assert_eq!(SeatZone::Stroke.seats_for(2), vec![2]);
-        assert_eq!(SeatZone::SternPair.seats_for(2), vec![]); // need >= 3
-        assert_eq!(SeatZone::SternHalf.seats_for(2), vec![2]);
-        assert_eq!(SeatZone::EngineRoom.seats_for(2), vec![]); // need >= 4
-        assert_eq!(SeatZone::BowHalf.seats_for(2), vec![1]);
-        assert_eq!(SeatZone::BowPair.seats_for(2), vec![]); // need >= 3
-        assert_eq!(SeatZone::Bow.seats_for(2), vec![1]);
+        assert_eq!(SeatZone::Stroke.seats_for(2), vec![2_i32]);
+        assert_eq!(SeatZone::SternPair.seats_for(2), Vec::<i32>::new()); // need >= 3
+        assert_eq!(SeatZone::SternHalf.seats_for(2), vec![2_i32]);
+        assert_eq!(SeatZone::EngineRoom.seats_for(2), Vec::<i32>::new()); // need >= 4
+        assert_eq!(SeatZone::BowHalf.seats_for(2), vec![1_i32]);
+        assert_eq!(SeatZone::BowPair.seats_for(2), Vec::<i32>::new()); // need >= 3
+        assert_eq!(SeatZone::Bow.seats_for(2), vec![1_i32]);
     }
 
     // ── seats_for: single (1-seat) ─────────────────────────────────
@@ -332,7 +332,7 @@ mod tests {
         for zone in SeatZone::ALL {
             assert_eq!(
                 zone.seats_for(1),
-                vec![],
+                Vec::<i32>::new(),
                 "zone {zone:?} should be empty for n=1"
             );
         }

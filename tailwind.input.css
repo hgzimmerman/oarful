@@ -559,6 +559,264 @@
     margin-left: 4px;
   }
 
+  /* ── Committed practice detail view ─────────────────────────────── */
+
+  /* 2-column layout: bench sidebar + main content */
+  .cv-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr 260px;
+    min-height: calc(100vh - 52px);
+  }
+  @media (max-width: 900px) {
+    .cv-layout {
+      grid-template-columns: 1fr;
+    }
+    .cv-spacer {
+      display: none;
+    }
+  }
+
+  /* Bench sidebar */
+  .cv-bench {
+    border-right: 1px solid var(--rule);
+    background: color-mix(in oklch, var(--paper-2) 60%, var(--paper));
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 52px; /* navbar height */
+    align-self: start;
+    height: calc(100vh - 52px);
+    overflow: hidden;
+  }
+  @media (max-width: 900px) {
+    .cv-bench {
+      position: static;
+      height: auto;
+      max-height: 40vh;
+      border-right: none;
+      border-bottom: 1px solid var(--rule);
+      order: 2;
+    }
+  }
+  .cv-bench-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 40px;
+  }
+
+  /* Side badge in bench */
+  .cv-side-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .cv-side-port {
+    color: var(--port);
+    background: color-mix(in oklch, var(--port) 12%, var(--paper));
+    border: 1px solid color-mix(in oklch, var(--port) 28%, var(--rule));
+  }
+  .cv-side-stbd {
+    color: var(--stbd);
+    background: color-mix(in oklch, var(--stbd) 12%, var(--paper));
+    border: 1px solid color-mix(in oklch, var(--stbd) 28%, var(--rule));
+  }
+  .cv-side-either {
+    color: var(--either);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+  }
+  .cv-side-cox {
+    color: var(--cox);
+    background: color-mix(in oklch, var(--cox) 12%, var(--paper));
+    border: 1px solid color-mix(in oklch, var(--cox) 28%, var(--rule));
+    font-size: 8px;
+    width: 26px;
+    letter-spacing: 0.1em;
+  }
+
+  /* Status pill */
+  .cv-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--good);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--good) 10%, var(--paper));
+    border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule));
+  }
+  .cv-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--good);
+  }
+
+  /* Summary strip stat */
+  .cv-stat-num {
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1;
+    font-feature-settings: "lnum";
+  }
+  .cv-stat-sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--rule);
+    margin: 4px 24px 4px 0;
+  }
+
+  /* Boat card in committed view */
+  .cv-boat {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+  }
+  .cv-boat-head {
+    padding: 14px 18px 10px;
+    background: linear-gradient(180deg, var(--paper) 0%, color-mix(in oklch, var(--paper-2) 50%, var(--paper)) 100%);
+    border-bottom: 1px dashed var(--rule);
+  }
+
+  /* Seat row in committed view */
+  .cv-seat {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    margin: 1px 0;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: background 0.12s ease;
+  }
+  .cv-seat:hover {
+    background: var(--paper-2);
+  }
+  .cv-seat-stale {
+    background: color-mix(in oklch, var(--warn) 8%, var(--paper));
+    border-color: color-mix(in oklch, var(--warn) 24%, var(--rule));
+  }
+
+  /* Off-side warning chip */
+  .cv-offside {
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--warn);
+    background: color-mix(in oklch, var(--warn) 12%, var(--paper));
+    border: 1px solid color-mix(in oklch, var(--warn) 26%, var(--rule));
+    border-radius: 2px;
+    padding: 1px 5px;
+    cursor: help;
+  }
+
+  /* Commit meter: 11-tick side-preference spectrum */
+  .commit-meter {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.5px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: color-mix(in oklch, var(--ink) 4%, transparent);
+    vertical-align: middle;
+  }
+  .commit-meter .ct {
+    width: 2px;
+    height: 7px;
+    border-radius: 1px;
+    background: color-mix(in oklch, var(--ink) 14%, transparent);
+  }
+  .commit-meter .ct.center {
+    height: 9px;
+    background: color-mix(in oklch, var(--ink) 22%, transparent);
+  }
+  .commit-meter .ct.lit-port {
+    background: color-mix(in oklch, var(--port) var(--lit-pct, 50%), transparent);
+  }
+  .commit-meter .ct.lit-stbd {
+    background: color-mix(in oklch, var(--stbd) var(--lit-pct, 50%), transparent);
+  }
+  .commit-meter .ct.marker {
+    height: 11px;
+    width: 3px;
+    background: var(--marker-color, var(--ink));
+    box-shadow: 0 0 0 1px var(--paper);
+  }
+  .commit-meter[data-pref-val="0"] .ct.center {
+    background: var(--either);
+    height: 11px;
+    width: 3px;
+  }
+  .commit-meter[data-pref-val="X"] {
+    background: color-mix(in oklch, var(--cox) 12%, transparent);
+  }
+  .commit-meter[data-pref-val="X"]::before {
+    content: "cox";
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: var(--cox);
+    padding: 0 2px;
+  }
+  .commit-meter[data-pref-val="X"] .ct {
+    display: none;
+  }
+
+  /* Editor section appear animation */
+  @keyframes tl-appear {
+    from {
+      opacity: 0.5;
+      max-height: 0;
+      overflow: hidden;
+    }
+    to {
+      opacity: 1;
+      max-height: 2000px;
+      overflow: visible;
+    }
+  }
+  .tl-animate-in {
+    animation: tl-appear 500ms ease-out forwards;
+  }
+
+  /* Drag-and-drop reorder */
+  .tl-dragging {
+    opacity: 0.35;
+  }
+  .tl-drop-before {
+    border-left: 3px solid var(--accent) !important;
+    z-index: 2;
+  }
+  .tl-drop-after {
+    border-right: 3px solid var(--accent) !important;
+    z-index: 2;
+  }
+  .tl-drop-above {
+    border-top: 3px solid var(--accent) !important;
+    z-index: 2;
+  }
+  .tl-drop-below {
+    border-bottom: 3px solid var(--accent) !important;
+    z-index: 2;
+  }
+
   /* Form input base */
   .input-warm {
     background: var(--paper-2);

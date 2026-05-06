@@ -126,16 +126,6 @@ impl ErgInfo {
     }
 }
 
-/// CSS class for side preference badge coloring.
-fn side_class(r: &Rower) -> &'static str {
-    use lineup_db::rower::types::Side;
-    match r.side {
-        Side::Port => "stat-side-port",
-        Side::Starboard => "stat-side-stbd",
-        Side::Either => "stat-side-either",
-    }
-}
-
 /// Compact stats line for a rower rendered as monospace badge chips.
 /// Each badge has its own tooltip and is tinted by tier (1–4 ordinal)
 /// so the color is consistent across categories. When an erg score
@@ -182,9 +172,6 @@ fn rower_stats_line_inner(r: &Rower, show_attributes: bool, erg: Option<&ErgInfo
         let strength_tip = format!("Strength: {}", r.strength);
         let srt = tier_class(r.strength.ordinal());
 
-        let side_tip = format!("Side: {}", compact_side(r));
-        let sc = side_class(r);
-
         html! {
             div class="flex gap-1 mt-0.5 flex-wrap" {
                 @if has_raw_weight {
@@ -206,21 +193,63 @@ fn rower_stats_line_inner(r: &Rower, show_attributes: bool, erg: Option<&ErgInfo
                 } @else {
                     span class={"stat-badge italic cursor-help " (ht)} title=(height_tip) { (height_label) }
                 }
-                span class={"stat-badge cursor-help " (sc)} title=(side_tip) { (compact_side(r)) }
             }
         }
     } else {
-        use lineup_db::rower::types::Side;
-        if r.side != Side::Either {
-            let side_tip = format!("Side: {}", compact_side(r));
-            let sc = side_class(r);
-            html! {
-                div class="flex gap-1 mt-0.5" {
-                    span class={"stat-badge cursor-help " (sc)} title=(side_tip) { (compact_side(r)) }
+        html! {}
+    }
+}
+
+/// 11-tick side-preference spectrum. Port (-5) on the left, starboard
+/// (+5) on the right, center (0) = either.
+pub(crate) fn commit_meter(r: &Rower) -> Markup {
+    use lineup_db::rower::types::Side;
+
+    if r.is_designated_cox.as_bool() {
+        return html! {
+            span class="commit-meter" data-pref-val="X" {}
+        };
+    }
+
+    // Stern-to-bow orientation: starboard on the left (-), port on the right (+).
+    let val: i32 = match r.side {
+        Side::Starboard => {
+            let bias = (5 - r.side_strength.as_int()).clamp(0, 5);
+            -bias
+        }
+        Side::Port => (5 - r.side_strength.as_int()).clamp(0, 5),
+        Side::Either => 0,
+    };
+
+    let tooltip = match r.side {
+        Side::Port => format!("Port: {}", val.abs()),
+        Side::Starboard => format!("Starboard: {}", val),
+        Side::Either => "Either".to_string(),
+    };
+
+    html! {
+        span class="commit-meter" data-pref-val=(val) title=(tooltip) {
+            @for i in -5..=5_i32 {
+                @let is_center = i == 0;
+                @let is_marker = i == val && val != 0;
+                @let is_lit = val != 0 && i != val && i != 0
+                    && i.signum() == val.signum()
+                    && i.abs() < val.abs();
+
+                @if is_marker {
+                    @let color = if val < 0 { "var(--stbd)" } else { "var(--port)" };
+                    span class="ct marker" style={"--marker-color: " (color)} {}
+                } @else if is_lit {
+                    @let dist = val.abs() - i.abs();
+                    @let pct = (75 - (dist - 1) * 18).max(20);
+                    @let lit_class = if val < 0 { "ct lit-stbd" } else { "ct lit-port" };
+                    span class=(lit_class) style={"--lit-pct: " (pct) "%"} {}
+                } @else if is_center {
+                    span class="ct center" {}
+                } @else {
+                    span class="ct" {}
                 }
             }
-        } else {
-            html! {}
         }
     }
 }
@@ -232,7 +261,7 @@ fn rower_stats_line_inner(r: &Rower, show_attributes: bool, erg: Option<&ErgInfo
 /// (Port/Starboard only, no Either) that better captures rigging
 /// semantics. The SQL CHECK already forbids Either on boats, but
 /// the Rust type doesn't enforce it.
-pub(super) fn rig_label(b: &Boat) -> &'static str {
+pub(crate) fn rig_label(b: &Boat) -> &'static str {
     use lineup_db::rower::types::Side;
     match b.stroke_side {
         Side::Port => "port-rigged",
