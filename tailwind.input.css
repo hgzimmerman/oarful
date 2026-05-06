@@ -48,7 +48,7 @@
   /* Stat badge chip */
   .stat-badge {
     font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
-    font-size: 10px;
+    font-size: 8px;
     letter-spacing: 0.02em;
     font-weight: 600;
     padding: 1px 5px;

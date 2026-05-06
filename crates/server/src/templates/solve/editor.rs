@@ -520,8 +520,8 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         tabindex="0"
                         "aria-label"=(seat_aria)
                         class="grid gap-1 my-0.5 rounded cursor-pointer transition items-center"
-                        style={"grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" })}
-                        ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr 28px 8px; border: 1px solid " (if is_empty { "var(--rule-2)" } else { "transparent" }) "; border-style: " (if is_empty { "dashed" } else { "solid" }) "'"}
+                        style={"grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 75%, transparent)" })}
+                        ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr auto 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 75%, transparent)" }) "'"}
                         "@click"={"select('" (key) "')"}
                         "@keydown.enter"={"select('" (key) "')"}
                         "@keydown.space.prevent"={"select('" (key) "')"} {
@@ -530,17 +530,22 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                             (seat_badge(Some(boat), *seat, &label))
                         }
                         // Rower content
-                        div class="py-2 px-2 min-w-0" {
+                        div class="px-2 min-w-0 flex items-center" style="min-height: 48px; padding-top: 2px; padding-bottom: 5px" {
                             @if let Some(r) = rower {
-                                div {
-                                    div class="float-right ml-1.5" { (super::commit_meter(r)) }
+                                div class="w-full" {
                                     span class="font-medium font-serif-heading text-sm text-ink" { (r.display_name()) }
+                                    (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                                 }
-                                (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
                             } @else if is_empty {
                                 span class="font-mono-stat text-xs italic text-muted" { "\u{2014} empty \u{2014}" }
                             } @else {
                                 span class="font-mono-stat text-xs italic text-muted" { "unknown" }
+                            }
+                        }
+                        // Commit meter
+                        div class="sm:pr-2" {
+                            @if let Some(r) = rower {
+                                (super::commit_meter(r))
                             }
                         }
                         // Lock button
