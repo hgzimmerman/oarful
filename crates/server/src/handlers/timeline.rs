@@ -8,13 +8,48 @@ use axum::{extract::Path, response::Html, Extension, Form};
 use lineup_db::{
     practice::{Practice, PracticeId},
     timeline::{
-        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, RotatePer, Rotation,
-        Segment, SegmentType, Timeline, TimelineItem,
+        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, HandDrill, Intensity,
+        PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide, Timeline, TimelineItem,
     },
 };
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
+
+/// A comma-separated list of values deserialized from a single form field.
+///
+/// Used for multi-select chip groups (pause points, drills) where the
+/// template writes selected values into one hidden input as CSV.
+/// Invalid items are silently skipped (same as the old manual parsing).
+#[derive(Debug)]
+struct CommaSep<T>(Vec<T>);
+
+impl<T> Default for CommaSep<T> {
+    fn default() -> Self {
+        Self(vec![])
+    }
+}
+
+impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for CommaSep<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let items = s
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .filter_map(|p| {
+                use serde::de::IntoDeserializer;
+                let de: serde::de::value::StringDeserializer<serde::de::value::Error> =
+                    p.to_owned().into_deserializer();
+                T::deserialize(de).ok()
+            })
+            .collect();
+        Ok(CommaSep(items))
+    }
+}
 
 /// Shared form field: the current timeline JSON + selected item id.
 #[derive(Debug, Deserialize)]
@@ -234,7 +269,7 @@ pub(crate) struct PatchBlockForm {
     #[serde(default)]
     duration_value: Option<f64>,
     #[serde(default)]
-    duration_unit: Option<String>,
+    duration_unit: Option<DurationUnit>,
     #[serde(default)]
     note: Option<String>,
 }
@@ -251,12 +286,8 @@ pub(crate) async fn patch_block(
                 if let Some(v) = input.duration_value {
                     b.duration.value = v.max(0.0);
                 }
-                if let Some(ref u) = input.duration_unit {
-                    b.duration.unit = match u.as_str() {
-                        "meters" => DurationUnit::Meters,
-                        "strokes" => DurationUnit::Strokes,
-                        _ => DurationUnit::Min,
-                    };
+                if let Some(u) = input.duration_unit {
+                    b.duration.unit = u;
                 }
                 if let Some(ref n) = input.note {
                     b.note = n.clone();
@@ -282,36 +313,34 @@ pub(crate) struct PatchSegmentForm {
     #[serde(default)]
     duration_value: Option<f64>,
     #[serde(default)]
-    duration_unit: Option<String>,
+    duration_unit: Option<DurationUnit>,
     #[serde(default)]
     rate_low: Option<u8>,
     #[serde(default)]
     rate_high: Option<u8>,
     #[serde(default)]
-    intensity: Option<String>,
+    intensity: Option<Intensity>,
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
-    partial: Option<String>,
+    partial: Option<Slide>,
     #[serde(default)]
     blade: Option<String>,
-    /// Comma-separated pause point values from hidden input.
     #[serde(default)]
-    pause_points: Option<String>,
+    pause_points: CommaSep<PausePoint>,
     #[serde(default)]
-    pause_every: Option<String>,
-    /// Comma-separated drill values from hidden input.
+    pause_every: Option<u32>,
     #[serde(default)]
-    drills: Option<String>,
+    drills: CommaSep<HandDrill>,
     #[serde(default)]
     _range_toggle: Option<String>,
     #[serde(default)]
-    seg_type: Option<String>,
+    seg_type: Option<SegmentType>,
 }
 
 pub(crate) async fn patch_segment(
     Path(practice_id): Path<PracticeId>,
-    Form(input): Form<PatchSegmentForm>,
+    Form(mut input): Form<PatchSegmentForm>,
 ) -> Html<String> {
     let mut tl = input.base.parse();
 
@@ -323,12 +352,8 @@ pub(crate) async fn patch_segment(
                         if let Some(v) = input.duration_value {
                             s.duration.value = v.max(0.0);
                         }
-                        if let Some(ref u) = input.duration_unit {
-                            s.duration.unit = match u.as_str() {
-                                "meters" => DurationUnit::Meters,
-                                "strokes" => DurationUnit::Strokes,
-                                _ => DurationUnit::Min,
-                            };
+                        if let Some(u) = input.duration_unit {
+                            s.duration.unit = u;
                         }
                         if input.rate_low.is_some() || input.rate_high.is_some() {
                             let cur = s.rate.unwrap_or([20, 20]);
@@ -339,22 +364,14 @@ pub(crate) async fn patch_segment(
                             }
                             s.rate = Some([lo, hi]);
                         }
-                        if let Some(ref int) = input.intensity {
-                            s.intensity = match int.as_str() {
-                                "paddle" => Some(timeline::Intensity::Paddle),
-                                "ut2" => Some(timeline::Intensity::Ut2),
-                                "ut1" => Some(timeline::Intensity::Ut1),
-                                "at" => Some(timeline::Intensity::At),
-                                "tr" => Some(timeline::Intensity::Tr),
-                                "an" => Some(timeline::Intensity::An),
-                                _ => s.intensity,
-                            };
+                        if let Some(int) = input.intensity {
+                            s.intensity = Some(int);
                         }
                         if let Some(ref n) = input.note {
                             s.note = n.clone();
                         }
-                        if let Some(ref sl) = input.partial {
-                            s.partial = parse_slide(sl);
+                        if let Some(sl) = input.partial {
+                            s.partial = Some(sl);
                         }
                         if let Some(ref bl) = input.blade {
                             s.blade = match bl.as_str() {
@@ -364,29 +381,11 @@ pub(crate) async fn patch_segment(
                                 _ => Some(timeline::Blade::Feather),
                             };
                         }
-                        if let Some(ref pp_csv) = input.pause_points {
-                            s.pause = pp_csv
-                                .split(',')
-                                .filter(|s| !s.is_empty())
-                                .filter_map(|p| parse_pause_point(p.trim()))
-                                .collect();
-                        }
-                        if let Some(ref pe) = input.pause_every {
-                            s.pause_every = pe.parse::<u32>().ok().filter(|&n| n > 0);
-                        }
-                        if let Some(ref dr_csv) = input.drills {
-                            s.drills = dr_csv
-                                .split(',')
-                                .filter(|s| !s.is_empty())
-                                .filter_map(|h| parse_hand_drill(h.trim()))
-                                .collect();
-                        }
-                        if let Some(ref st) = input.seg_type {
-                            s.seg_type = match st.as_str() {
-                                "rest" => SegmentType::Rest,
-                                "turn" => SegmentType::Turn,
-                                _ => SegmentType::Work,
-                            };
+                        s.pause = std::mem::take(&mut input.pause_points.0);
+                        s.pause_every = input.pause_every.filter(|&n| n > 0);
+                        s.drills = std::mem::take(&mut input.drills.0);
+                        if let Some(st) = input.seg_type {
+                            s.seg_type = st;
                         }
                         break;
                     }
@@ -401,48 +400,6 @@ pub(crate) async fn patch_segment(
         templates::timeline::editor_no_animate(&tl, practice_id, Some(&input.segment_id))
             .into_string(),
     )
-}
-
-fn parse_slide(s: &str) -> Option<timeline::Slide> {
-    match s {
-        "full" => Some(timeline::Slide::Full),
-        "arms-only" => Some(timeline::Slide::ArmsOnly),
-        "arms-body" => Some(timeline::Slide::ArmsBody),
-        "quarter" => Some(timeline::Slide::Quarter),
-        "half" => Some(timeline::Slide::Half),
-        "three-quarter" => Some(timeline::Slide::ThreeQuarter),
-        "full-legs" => Some(timeline::Slide::FullLegs),
-        "legs-body" => Some(timeline::Slide::LegsBody),
-        _ => None,
-    }
-}
-
-fn parse_pause_point(s: &str) -> Option<timeline::PausePoint> {
-    match s {
-        "release" => Some(timeline::PausePoint::Release),
-        "arms-away" => Some(timeline::PausePoint::ArmsAway),
-        "bodies-over" => Some(timeline::PausePoint::BodiesOver),
-        "three-quarter" => Some(timeline::PausePoint::ThreeQuarter),
-        "half" => Some(timeline::PausePoint::Half),
-        "quarter" => Some(timeline::PausePoint::Quarter),
-        "catch" => Some(timeline::PausePoint::Catch),
-        _ => None,
-    }
-}
-
-fn parse_hand_drill(s: &str) -> Option<timeline::HandDrill> {
-    match s {
-        "feet-out" => Some(timeline::HandDrill::FeetOut),
-        "inside-arm" => Some(timeline::HandDrill::InsideArm),
-        "outside-arm" => Some(timeline::HandDrill::OutsideArm),
-        "inside-leg" => Some(timeline::HandDrill::InsideLeg),
-        "outside-leg" => Some(timeline::HandDrill::OutsideLeg),
-        "cut-the-cake" => Some(timeline::HandDrill::CutTheCake),
-        "gunnel-taps" => Some(timeline::HandDrill::GunnelTaps),
-        "wide-grip" => Some(timeline::HandDrill::WideGrip),
-        "slap-catches" => Some(timeline::HandDrill::SlapCatches),
-        _ => None,
-    }
 }
 
 /// `POST /history/{id}/timeline/target` — update target minutes.
@@ -622,9 +579,9 @@ pub(crate) struct GroupPatchForm {
     #[serde(default)]
     group_note: Option<String>,
     #[serde(default)]
-    group_type: Option<String>,
+    group_type: Option<GroupType>,
     #[serde(default)]
-    prev_seg_type: Option<String>,
+    prev_seg_type: Option<SegmentType>,
 }
 
 pub(crate) async fn group_patch(
@@ -675,11 +632,14 @@ pub(crate) async fn group_patch(
                                         .as_deref()
                                         .and_then(|s| s.parse::<f64>().ok())
                                         .unwrap_or(10.0);
-                                    let u = match input.rotate_per_unit.as_deref() {
-                                        Some("min") => DurationUnit::Min,
-                                        Some("meters") => DurationUnit::Meters,
-                                        _ => DurationUnit::Strokes,
-                                    };
+                                    let u = input
+                                        .rotate_per_unit
+                                        .as_deref()
+                                        .map(|s| {
+                                            s.parse::<DurationUnit>()
+                                                .unwrap_or(DurationUnit::Strokes)
+                                        })
+                                        .unwrap_or(DurationUnit::Strokes);
                                     RotatePer::Every { value: v, unit: u }
                                 }
                                 _ => RotatePer::None,
@@ -699,11 +659,8 @@ pub(crate) async fn group_patch(
                 if let Some(ref note) = input.group_note {
                     g.note = note.clone();
                 }
-                if let Some(ref gt) = input.group_type {
-                    g.group_type = match gt.as_str() {
-                        "piece" => GroupType::Piece,
-                        _ => GroupType::Warmup,
-                    };
+                if let Some(gt) = input.group_type {
+                    g.group_type = gt;
                 }
                 break;
             }
@@ -720,16 +677,8 @@ pub(crate) async fn group_patch(
             None
         }
     });
-    let type_changed = match (&input.prev_seg_type, new_seg_type) {
-        (Some(prev), Some(new_type)) => {
-            let prev_type = match prev.as_str() {
-                "work" => SegmentType::Work,
-                "rest" => SegmentType::Rest,
-                "turn" => SegmentType::Turn,
-                _ => SegmentType::Work,
-            };
-            prev_type != new_type
-        }
+    let type_changed = match (input.prev_seg_type, new_seg_type) {
+        (Some(prev), Some(new_type)) => prev != new_type,
         (None, Some(_)) => true, // no previous = first selection, animate
         _ => false,
     };
@@ -748,7 +697,7 @@ pub(crate) struct GroupAddForm {
     #[serde(flatten)]
     base: TimelineForm,
     group_id: String,
-    seg_type: String,
+    seg_type: SegmentType,
 }
 
 pub(crate) async fn group_add_segment(
@@ -756,11 +705,7 @@ pub(crate) async fn group_add_segment(
     Form(input): Form<GroupAddForm>,
 ) -> Html<String> {
     let mut tl = input.base.parse();
-    let st = match input.seg_type.as_str() {
-        "rest" => SegmentType::Rest,
-        "turn" => SegmentType::Turn,
-        _ => SegmentType::Work,
-    };
+    let st = input.seg_type;
     let mut seg = default_segment();
     seg.seg_type = st;
     if !st.is_work() {
@@ -882,4 +827,132 @@ pub(crate) async fn group_reorder_segment(
         }
     }
     Html(templates::timeline::editor(&tl, practice_id, Some(&input.drag_id)).into_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn form<T: serde::de::DeserializeOwned>(qs: &str) -> T {
+        serde_html_form::from_str(qs).unwrap()
+    }
+
+    // ── CommaSep ──
+
+    #[derive(Debug, Deserialize)]
+    struct PauseCsv {
+        #[serde(default)]
+        val: CommaSep<PausePoint>,
+    }
+    #[derive(Debug, Deserialize)]
+    struct DrillCsv {
+        #[serde(default)]
+        val: CommaSep<HandDrill>,
+    }
+
+    #[test]
+    fn comma_sep_parses_pause_points() {
+        let w: PauseCsv = form("val=release%2Carms-away%2Ccatch");
+        assert_eq!(
+            w.val.0,
+            vec![PausePoint::Release, PausePoint::ArmsAway, PausePoint::Catch]
+        );
+    }
+
+    #[test]
+    fn comma_sep_skips_invalid_entries() {
+        let w: DrillCsv = form("val=feet-out%2Cbogus%2Cwide-grip");
+        assert_eq!(w.val.0, vec![HandDrill::FeetOut, HandDrill::WideGrip]);
+    }
+
+    #[test]
+    fn comma_sep_empty_string_gives_empty_vec() {
+        let w: PauseCsv = form("val=");
+        assert!(w.val.0.is_empty());
+    }
+
+    #[test]
+    fn comma_sep_missing_field_gives_empty_vec() {
+        let w: PauseCsv = form("other=1");
+        assert!(w.val.0.is_empty());
+    }
+
+    // ── PatchBlockForm ──
+
+    #[test]
+    fn patch_block_form_parses_duration_unit() {
+        let f: PatchBlockForm =
+            form("patch_id=blk-1&duration_value=5&duration_unit=meters&note=test");
+        assert_eq!(f.duration_unit, Some(DurationUnit::Meters));
+        assert_eq!(f.duration_value, Some(5.0));
+    }
+
+    #[test]
+    fn patch_block_form_missing_optional_fields() {
+        let f: PatchBlockForm = form("patch_id=blk-1");
+        assert_eq!(f.duration_unit, None);
+        assert_eq!(f.duration_value, None);
+        assert_eq!(f.note, None);
+    }
+
+    // ── PatchSegmentForm ──
+
+    #[test]
+    fn patch_segment_form_parses_all_concrete_types() {
+        let f: PatchSegmentForm = form(
+            "group_id=g1&segment_id=s1\
+             &duration_unit=strokes\
+             &intensity=ut2\
+             &partial=arms-only\
+             &seg_type=rest\
+             &pause_points=release%2Ccatch\
+             &drills=feet-out%2Cwide-grip\
+             &pause_every=3",
+        );
+        assert_eq!(f.duration_unit, Some(DurationUnit::Strokes));
+        assert_eq!(f.intensity, Some(Intensity::Ut2));
+        assert_eq!(f.partial, Some(Slide::ArmsOnly));
+        assert_eq!(f.seg_type, Some(SegmentType::Rest));
+        assert_eq!(
+            f.pause_points.0,
+            vec![PausePoint::Release, PausePoint::Catch]
+        );
+        assert_eq!(f.drills.0, vec![HandDrill::FeetOut, HandDrill::WideGrip]);
+        assert_eq!(f.pause_every, Some(3));
+    }
+
+    #[test]
+    fn patch_segment_form_defaults_when_fields_absent() {
+        let f: PatchSegmentForm = form("group_id=g1&segment_id=s1");
+        assert_eq!(f.duration_unit, None);
+        assert_eq!(f.intensity, None);
+        assert_eq!(f.partial, None);
+        assert_eq!(f.seg_type, None);
+        assert!(f.pause_points.0.is_empty());
+        assert!(f.drills.0.is_empty());
+        assert_eq!(f.pause_every, None);
+    }
+
+    // ── GroupPatchForm ──
+
+    #[test]
+    fn group_patch_form_parses_group_type_and_prev_seg_type() {
+        let f: GroupPatchForm = form("group_id=g1&group_type=piece&prev_seg_type=turn");
+        assert_eq!(f.group_type, Some(GroupType::Piece));
+        assert_eq!(f.prev_seg_type, Some(SegmentType::Turn));
+    }
+
+    // ── GroupAddForm ──
+
+    #[test]
+    fn group_add_form_parses_seg_type() {
+        let f: GroupAddForm = form("group_id=g1&seg_type=rest");
+        assert_eq!(f.seg_type, SegmentType::Rest);
+    }
+
+    #[test]
+    fn group_add_form_work_seg_type() {
+        let f: GroupAddForm = form("group_id=g1&seg_type=work");
+        assert_eq!(f.seg_type, SegmentType::Work);
+    }
 }
