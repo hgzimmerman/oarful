@@ -244,7 +244,7 @@ pub(crate) fn detail_content(
                   title="Back" {
                     "←"
                 }
-                h1 class="text-2xl font-bold text-ink" { (r.display_name()) }
+                h1 #rower-name class="text-2xl font-bold text-ink" { (r.display_name()) }
             }
             p class="text-sm text-ink-3 mt-1" { (subtitle) }
             @if show_emails {
@@ -317,6 +317,10 @@ pub(crate) fn attribute_section(
                 div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
                 }
+            }
+            dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3" {
+                (kv("First name", r.first_name.as_deref().unwrap_or("—")))
+                (kv("Last name", r.last_name.as_deref().unwrap_or("—")))
             }
             dl class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {
                 @if perms.show_buckets() {
@@ -392,6 +396,22 @@ pub(crate) fn attribute_edit_section(
             @if let Some(msg) = error {
                 div class="mb-3 text-xs text-bad bg-bad/10 border-l-4 border-bad px-3 py-2 rounded" {
                     (msg)
+                }
+            }
+            div class="grid grid-cols-2 gap-3 text-sm mb-3" {
+                div {
+                    label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "First name" }
+                    input type="text" name="first_name"
+                          value=(r.first_name.as_deref().unwrap_or(""))
+                          class="w-full rounded px-2 py-1.5 text-sm focus:outline-none"
+                          style="border: 1px solid var(--rule); background: var(--paper); color: var(--ink)";
+                }
+                div {
+                    label class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Last name" }
+                    input type="text" name="last_name"
+                          value=(r.last_name.as_deref().unwrap_or(""))
+                          class="w-full rounded px-2 py-1.5 text-sm focus:outline-none"
+                          style="border: 1px solid var(--rule); background: var(--paper); color: var(--ink)";
                 }
             }
             div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm" {

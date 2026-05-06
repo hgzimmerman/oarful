@@ -13,6 +13,7 @@ use lineup_db::seat_affinity::{SeatAffinity, SeatZone};
 use lineup_db::state::Db;
 use lineup_db::types::{AffinityWeight, IntBool, AFFINITY_WEIGHT_MAX, AFFINITY_WEIGHT_MIN};
 use lineup_db::types::{HeightM, WeightKg};
+use maud::html;
 use serde::Deserialize;
 
 use lineup_db::app_user::{AppUser, Role};
@@ -55,6 +56,10 @@ pub(crate) async fn edit_attributes_handler(
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct RowerEditInput {
+    #[serde(default)]
+    pub(crate) first_name: Option<String>,
+    #[serde(default)]
+    pub(crate) last_name: Option<String>,
     pub(crate) weight_class: RowerWeightClass,
     pub(crate) skill: Skill,
     pub(crate) strength: Strength,
@@ -82,6 +87,16 @@ pub(crate) async fn update_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     let perms = resolve_perms(&tenant, &jar, id).await?;
     let mut rower = load(&tenant.db, id).await?;
+
+    // Name — always editable by both members and coaches.
+    rower.first_name = input
+        .first_name
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    rower.last_name = input
+        .last_name
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     if perms.can_edit("weight_class") {
         rower.weight_class = input.weight_class;
@@ -141,9 +156,18 @@ pub(crate) async fn update_handler(
     );
     tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::CustomizeRower);
 
-    Ok(Html(
-        templates::rowers::attribute_section(&saved, None, &perms).into_string(),
-    ))
+    let mut body = templates::rowers::attribute_section(&saved, None, &perms).into_string();
+    // OOB swap to keep the page header name in sync.
+    body.push_str(
+        &html! {
+            h1 #rower-name "hx-swap-oob"="true"
+               class="text-2xl font-bold text-ink" {
+                (saved.display_name())
+            }
+        }
+        .into_string(),
+    );
+    Ok(Html(body))
 }
 
 /// Compute which bucket fields are locked (auto-derived from raw values + thresholds).
