@@ -730,6 +730,7 @@
   /* Commit meter: 11-tick side-preference spectrum */
   .commit-meter {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 1.5px;
     padding: 2px 4px;

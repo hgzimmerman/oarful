@@ -546,19 +546,21 @@ fn boat_card(
 
                         // Rower name + metadata
                         div class="min-w-0" {
-                            div class="flex items-baseline gap-2 flex-wrap" {
+                            div class="flex items-baseline gap-2" {
                                 @if let Some(r) = rower {
-                                    span class="font-serif-heading font-medium text-[15px] tracking-tight truncate" style="color: var(--ink)" {
-                                        (r.display_name())
-                                    }
-                                    @if is_stale {
-                                        span class="font-mono-stat text-[9px] tracking-wide px-1.5 py-0.5 rounded-full" style="background: color-mix(in oklch, var(--warn) 20%, var(--paper)); color: var(--warn)" {
-                                            "unavailable"
+                                    div class="w-28 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" {
+                                        span class="font-serif-heading font-medium text-[15px] tracking-tight" style="color: var(--ink)" {
+                                            (r.display_name())
                                         }
-                                    }
-                                    @if is_mismatch {
-                                        span class="cv-offside" title="Rower's preferred side doesn't match this seat" {
-                                            "off-side"
+                                        @if is_stale {
+                                            span class="font-mono-stat text-[9px] tracking-wide px-1.5 py-0.5 rounded-full" style="background: color-mix(in oklch, var(--warn) 20%, var(--paper)); color: var(--warn)" {
+                                                "unavailable"
+                                            }
+                                        }
+                                        @if is_mismatch {
+                                            span class="cv-offside" title="Rower's preferred side doesn't match this seat" {
+                                                "off-side"
+                                            }
                                         }
                                     }
                                     (commit_meter(r))
@@ -658,11 +660,11 @@ fn bench_section(title: &str, rowers: &[&Rower], dimmed: bool) -> Markup {
                     div class={
                         "grid items-center gap-2 px-2 py-1 rounded"
                         @if dimmed { " opacity-55" }
-                    } style="grid-template-columns: 28px 1fr auto" {
+                    } style="grid-template-columns: 28px 7rem auto" {
                         span class="flex justify-center" {
                             (rower_side_badge(r))
                         }
-                        span class="font-serif-heading font-medium text-[13px] truncate min-w-0" style="color: var(--ink)" {
+                        span class="font-serif-heading font-medium text-[13px] min-w-0" style="color: var(--ink)" {
                             (r.display_name())
                         }
                         (commit_meter(r))

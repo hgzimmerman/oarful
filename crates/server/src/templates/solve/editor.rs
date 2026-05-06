@@ -533,7 +533,7 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         div class="py-2 px-2 min-w-0" {
                             @if let Some(r) = rower {
                                 div class="flex items-center gap-1.5" {
-                                    span class="font-medium font-serif-heading text-sm text-ink" { (r.display_name()) }
+                                    span class="font-medium font-serif-heading text-sm text-ink w-24" { (r.display_name()) }
                                     (super::commit_meter(r))
                                 }
                                 (rower_stats_line_with_erg(r, flags.show_attributes, snapshot.erg_scores.as_ref()))
@@ -622,7 +622,7 @@ fn pool_rower_row(r: &Rower, boat_kind: &str, snapshot: &DbSnapshot) -> Markup {
              "@keydown.enter"={"select('" (key) "')"}
              "@keydown.space.prevent"={"select('" (key) "')"} {
             div class="flex items-center gap-1.5" {
-                span class="font-medium text-xs text-ink" { (r.display_name()) }
+                span class="font-medium text-xs text-ink w-24" { (r.display_name()) }
                 (super::commit_meter(r))
             }
             (rower_stats_line_with_erg(r, true, snapshot.erg_scores.as_ref()))
