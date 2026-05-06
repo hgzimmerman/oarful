@@ -145,8 +145,11 @@ pub struct Segment {
 }
 
 /// Segment types inside a group.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum SegmentType {
     Work,
     Rest,
@@ -167,27 +170,29 @@ impl SegmentType {
     }
 }
 
-impl std::fmt::Display for SegmentType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
-
 // ── Drill / modifier enums (unchanged) ──────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum Intensity {
     Paddle,
     #[serde(rename = "ut2")]
+    #[strum(serialize = "ut2")]
     Ut2,
     #[serde(rename = "ut1")]
+    #[strum(serialize = "ut1")]
     Ut1,
     #[serde(rename = "at")]
+    #[strum(serialize = "at")]
     At,
     #[serde(rename = "tr")]
+    #[strum(serialize = "tr")]
     Tr,
     #[serde(rename = "an")]
+    #[strum(serialize = "an")]
     An,
 }
 
@@ -224,8 +229,11 @@ impl Intensity {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Slide {
     Full,
     ArmsOnly,
@@ -263,8 +271,11 @@ impl Slide {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum PausePoint {
     Release,
     ArmsAway,
@@ -318,8 +329,11 @@ impl Blade {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum HandDrill {
     FeetOut,
     InsideArm,
@@ -360,8 +374,11 @@ impl HandDrill {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum DurationUnit {
     Min,
     Meters,
@@ -1127,5 +1144,59 @@ mod tests {
             "",
         );
         assert_eq!(summarize_segment(&s), "15' r20-22 @UT2");
+    }
+
+    // ── strum Display ↔ serde Deserialize round-trip ──
+
+    /// Verify that every variant's `Display` output (from strum) round-trips
+    /// through serde `Deserialize`. This catches drift between the strum
+    /// `serialize_all` and the serde `rename_all` attributes.
+    fn assert_display_serde_round_trip<T>(variants: &[T])
+    where
+        T: std::fmt::Display + std::fmt::Debug + PartialEq + serde::de::DeserializeOwned,
+    {
+        for v in variants {
+            let s = v.to_string();
+            let back: T = serde_json::from_value(serde_json::Value::String(s.clone()))
+                .unwrap_or_else(|e| panic!("{s:?} (from {v:?}) failed to deserialize: {e}"));
+            assert_eq!(
+                &back, v,
+                "round-trip mismatch: Display produced {s:?}, deserialized to {back:?}, expected {v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn segment_type_display_matches_serde() {
+        assert_display_serde_round_trip(&[SegmentType::Work, SegmentType::Rest, SegmentType::Turn]);
+    }
+
+    #[test]
+    fn intensity_display_matches_serde() {
+        assert_display_serde_round_trip(Intensity::ALL);
+    }
+
+    #[test]
+    fn slide_display_matches_serde() {
+        assert_display_serde_round_trip(Slide::ALL);
+    }
+
+    #[test]
+    fn pause_point_display_matches_serde() {
+        assert_display_serde_round_trip(PausePoint::ALL);
+    }
+
+    #[test]
+    fn hand_drill_display_matches_serde() {
+        assert_display_serde_round_trip(HandDrill::ALL);
+    }
+
+    #[test]
+    fn duration_unit_display_matches_serde() {
+        assert_display_serde_round_trip(&[
+            DurationUnit::Min,
+            DurationUnit::Meters,
+            DurationUnit::Strokes,
+        ]);
     }
 }

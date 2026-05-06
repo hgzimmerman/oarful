@@ -3,7 +3,7 @@
 use lineup_db::timeline::{Blade, Group, HandDrill, Intensity, PausePoint, Segment, Slide};
 use maud::{html, Markup};
 
-use super::css::{chip_style, hand_drill_value, pause_value, slide_value};
+use super::css::chip_style;
 use super::helpers::{duration_field, field_label};
 
 pub(super) fn segment_editor(
@@ -33,7 +33,7 @@ pub(super) fn segment_editor(
                                     @for int in Intensity::ALL {
                                         @let is_active = seg.intensity == Some(*int);
                                         label class="cursor-pointer" {
-                                            input type="radio" name="intensity" value=(format!("{:?}", int).to_lowercase()) checked[is_active] class="hidden";
+                                            input type="radio" name="intensity" value=(int) checked[is_active] class="hidden";
                                             span class={"font-mono-stat text-[10px] px-1.5 py-0.5 rounded border cursor-pointer " @if is_active { "font-bold" }}
                                                  style=(chip_style(is_active))
                                                  title=(int.full_name()) { (int.label()) }
@@ -82,7 +82,7 @@ pub(super) fn segment_editor(
                                 (field_label("Partial strokes"))
                                 select name="partial" class="input-warm text-xs py-0.5" {
                                     @for s in Slide::ALL {
-                                        option value=(slide_value(*s)) selected[seg.partial == Some(*s) || (*s == Slide::Full && seg.partial.is_none())] { (s.label()) }
+                                        option value=(s) selected[seg.partial == Some(*s) || (*s == Slide::Full && seg.partial.is_none())] { (s.label()) }
                                     }
                                 }
                             }
@@ -105,7 +105,7 @@ pub(super) fn segment_editor(
                                 }
                             }
                             // Pause
-                            @let pause_csv = seg.pause.iter().map(|p| pause_value(*p)).collect::<Vec<_>>().join(",");
+                            @let pause_csv = seg.pause.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
                             div {
                                 (field_label("Pause at"))
                                 input type="hidden" name="pause_points" value=(pause_csv) data-multiselect="pause";
@@ -113,7 +113,7 @@ pub(super) fn segment_editor(
                                     @for pp in PausePoint::ALL {
                                         @let is_active = seg.pause.contains(pp);
                                         label class="cursor-pointer" {
-                                            input type="checkbox" value=(pause_value(*pp)) checked[is_active] class="hidden"
+                                            input type="checkbox" value=(pp) checked[is_active] class="hidden"
                                                   onchange="event.stopPropagation();var h=this.form.querySelector('[data-multiselect=pause]');var vs=[];this.form.querySelectorAll('input[type=checkbox][onchange*=pause]:checked').forEach(function(c){vs.push(c.value)});h.value=vs.join(',');h.dispatchEvent(new Event('change',{bubbles:true}))";
                                             span class={"font-mono-stat text-[9px] px-1 py-0.5 rounded border cursor-pointer " @if is_active { "font-bold" }}
                                                  style=(chip_style(is_active)) { (pp.label()) }
@@ -131,7 +131,7 @@ pub(super) fn segment_editor(
                                 }
                             }
                             // Drills
-                            @let drills_csv = seg.drills.iter().map(|d| hand_drill_value(*d)).collect::<Vec<_>>().join(",");
+                            @let drills_csv = seg.drills.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(",");
                             div {
                                 (field_label("Drills"))
                                 input type="hidden" name="drills" value=(drills_csv) data-multiselect="drills";
@@ -139,7 +139,7 @@ pub(super) fn segment_editor(
                                     @for hd in HandDrill::ALL {
                                         @let is_active = seg.drills.contains(hd);
                                         label class="cursor-pointer" {
-                                            input type="checkbox" value=(hand_drill_value(*hd)) checked[is_active] class="hidden"
+                                            input type="checkbox" value=(hd) checked[is_active] class="hidden"
                                                   onchange="event.stopPropagation();var h=this.form.querySelector('[data-multiselect=drills]');var vs=[];this.form.querySelectorAll('input[type=checkbox][onchange*=drills]:checked').forEach(function(c){vs.push(c.value)});h.value=vs.join(',');h.dispatchEvent(new Event('change',{bubbles:true}))";
                                             span class={"font-mono-stat text-[9px] px-1 py-0.5 rounded border cursor-pointer " @if is_active { "font-bold" }}
                                                  style=(chip_style(is_active)) { (hd.label()) }

@@ -146,7 +146,7 @@ pub(super) fn group_editor(
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(seg.id);
                             @if let Some(cst) = cur_seg_type {
-                                input type="hidden" name="prev_seg_type" value=(format!("{:?}", cst).to_lowercase());
+                                input type="hidden" name="prev_seg_type" value=(cst);
                             }
                             button type="submit" class="flex items-center gap-2 flex-1 min-w-0 text-left" style="background: none; border: none; font: inherit; cursor: pointer; padding: 0" {
                                 span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(seg_type_css(seg.seg_type)) { (seg.seg_type.label()) }
