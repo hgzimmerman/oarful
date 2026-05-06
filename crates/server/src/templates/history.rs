@@ -548,7 +548,7 @@ fn boat_card(
                         div class="min-w-0" {
                             div class="flex items-baseline gap-2" {
                                 @if let Some(r) = rower {
-                                    div class="w-28 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" {
+                                    div class="w-28 shrink-0 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" {
                                         span class="font-serif-heading font-medium text-[15px] tracking-tight" style="color: var(--ink)" {
                                             (r.display_name())
                                         }
