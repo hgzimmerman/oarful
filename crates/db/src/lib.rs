@@ -27,6 +27,7 @@ pub mod sync_source;
 pub mod team;
 pub mod team_threshold;
 pub mod test_support;
+pub mod timeline;
 pub mod types;
 
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};

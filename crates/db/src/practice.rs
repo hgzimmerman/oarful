@@ -1,5 +1,6 @@
 use crate::schema::{lineup, practice};
 use crate::team::TeamId;
+use crate::timeline::Timeline;
 use crate::types::{DurationMinutes, IntBool};
 use chrono::{NaiveDate, NaiveTime};
 use diesel::prelude::*;
@@ -68,6 +69,8 @@ pub struct Practice {
     /// Per-practice duration override. If None, falls back to the
     /// team's `default_practice_duration_minutes`.
     pub duration_minutes: Option<DurationMinutes>,
+    /// JSON-serialized practice timeline / plan.
+    pub timeline_json: Option<String>,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -318,6 +321,27 @@ impl Practice {
             }
         }
         Ok(overlapping)
+    }
+
+    /// Parse the stored timeline JSON, if present.
+    pub fn timeline(&self) -> Option<Timeline> {
+        self.timeline_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok())
+    }
+
+    /// Save a timeline to this practice.
+    #[tracing::instrument(level = "debug", skip(conn, timeline), err)]
+    pub fn update_timeline(
+        conn: &mut SqliteConnection,
+        id: PracticeId,
+        timeline: Option<&Timeline>,
+    ) -> Result<Practice, diesel::result::Error> {
+        let json = timeline.map(|t| serde_json::to_string(t).expect("timeline serializes"));
+        diesel::update(practice::table.find(id))
+            .set(practice::timeline_json.eq(json))
+            .returning(Practice::as_returning())
+            .get_result(conn)
     }
 
     /// Full label including year.

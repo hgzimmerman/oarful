@@ -1,0 +1,3 @@
+-- SQLite doesn't support DROP COLUMN in older versions, but diesel
+-- migration tooling only uses down.sql for `diesel migration revert`.
+-- The column is nullable so leaving it in place is harmless.

@@ -184,6 +184,7 @@ diesel::table! {
         notes -> Nullable<Text>,
         cancelled -> Integer,
         duration_minutes -> Nullable<Integer>,
+        timeline_json -> Nullable<Text>,
     }
 }
 

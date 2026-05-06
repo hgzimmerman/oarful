@@ -1643,6 +1643,7 @@ dependencies = [
  "diesel_migrations",
  "libsqlite3-sys",
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
  "tracing",
 ]

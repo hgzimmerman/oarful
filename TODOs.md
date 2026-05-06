@@ -262,6 +262,66 @@ wrong side, proportional to `side_strength` (12% per level:
 strength 1→88%, 2→76%, 3→64%, 4→52%, 5→40%). Applied in both the
 CP solver and SA post-processor. `Either` rowers are unaffected.
 
+### Practice timeline
+
+#### River map + landmark overlay on timeline strip
+
+Overlay estimated boat position on the timeline strip so coaches
+can see where on the river each piece lands. Landmarks (bridges,
+turn-around points) appear as markers above the strip bars.
+
+**Venue model** (program-level, shared across teams):
+- Ordered list of landmarks with distance from dock (meters)
+- Navigability constraints: hard turn-around points (unnavigable
+  beyond), vs soft (coach preference)
+- River current speed (m/s, configurable — wind is out of scope)
+- Can be toggled off for away practices
+- Stretch goal: branches/forks for non-linear bodies of water
+
+**Direction tracking:**
+- Boats start at dock heading away. Each Turn block flips direction.
+- System tracks cumulative distance from dock across segments,
+  accounting for direction reversals.
+- Example: dock(0m) → downriver 2km → spin → upriver 4km past
+  dock → spin → return 2km to dock.
+
+**Speed estimation:**
+- Default: coach inputs an expected boat speed (m/s) for quick
+  visualization without committed lineups.
+- When lineups are committed: estimate from the slowest attached
+  boat. Per-boat speed derived from crew erg averages (season's
+  selected strength piece), scaled by:
+  - Piece duration/distance (longer pieces = slower avg)
+  - Intensity zone (UT2 < AT < TR scaling factors)
+  - Skill level penalty
+  - Unfilled seats penalty
+  - Boat size factor (8s faster than 4s)
+  - Current adjustment (upstream penalty, downstream bonus)
+- Fallback for rowers without erg scores: use the midpoint of
+  their strength bucket from the team threshold system.
+
+**Segment distance estimates:**
+- Each piece/warmup segment gets an estimated distance (meters)
+  shown above its bar in the strip.
+- Launch and dock segments contribute minimal/zero distance
+  (rigging, stationary drills).
+- Rest segments: boats drift or hold position (configurable:
+  0 m/s or slow drift).
+
+**Landmark markers on strip:**
+- Thin vertical lines above the strip at the estimated position
+  where the boat passes each landmark.
+- Label with landmark name (e.g. "Harrison St bridge").
+- Turn blocks should visually indicate reversal of direction.
+
+**Future / stretch:**
+- "Row until landmark" constraint: "15 min or until the bridge,
+  whichever comes first" — the system adjusts the piece duration
+  estimate based on speed.
+- Practice plan studio: dedicated page for assembling plans
+  independently from lineups, with or without specific boats.
+- Multiple practice plans per practice.
+
 ### Long-term / parked
 
 #### Per-team roles
