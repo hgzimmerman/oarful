@@ -9,8 +9,6 @@ use lineup_db::rower::Rower;
 use lineup_db::team::{BucketVisibility, PracticeDays, Team, TeamId};
 use maud::{html, Markup, PreEscaped};
 
-use super::layout::page_header;
-
 /// Renders a compact team switcher that auto-submits on change.
 /// Sits in the navbar's right side. When only one team exists, shows
 /// the name as plain text (no dropdown) since there's nothing to
@@ -118,22 +116,30 @@ pub(crate) fn detail_content(
 ) -> Markup {
     let action = format!("/teams/{}", team.id);
     html! {
-        (page_header(&team.name, Some("Team settings")))
-        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto space-y-6" {
-            a href="/teams"
-              hx-get="/teams"
-              hx-target="#content"
-              hx-push-url="true"
-              class="text-sm text-ink-3 hover:text-ink" {
-                "← back to teams"
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center gap-3 mb-1" {
+                a href="/teams"
+                  hx-get="/teams"
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
+                    "← All teams"
+                }
             }
-
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                (team.name)
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                "Team settings"
+            }
+        }
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto space-y-6" {
             form method="post" action=(action)
                  hx-post=(action)
                  hx-target="#content"
-                 class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
+                 class="rounded-lg p-6 space-y-4" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                 div {
-                    label for="name" class="block text-sm font-semibold text-ink-2 mb-1" {
+                    label for="name" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" {
                         "Team name"
                     }
                     input id="name" name="name" type="text" required
@@ -141,7 +147,7 @@ pub(crate) fn detail_content(
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 div {
-                    label for="bucket_visibility" class="block text-sm font-semibold text-ink-2 mb-1" {
+                    label for="bucket_visibility" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" {
                         "Bucket visibility for members"
                     }
                     select id="bucket_visibility" name="bucket_visibility"
@@ -156,7 +162,7 @@ pub(crate) fn detail_content(
                             "Edit — members can change their own buckets"
                         }
                     }
-                    p class="text-xs text-ink-3 mt-1" {
+                    p class="text-xs mt-1" style="color: var(--muted)" {
                         "Controls whether members see categorical attribute buckets on their profile. Coach+ always has full access."
                     }
                 }
@@ -166,10 +172,10 @@ pub(crate) fn detail_content(
                               checked[team.member_raw_metrics.as_bool()]
                               class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-medium text-ink" {
+                            div class="text-sm font-medium" style="color: var(--ink)" {
                                 "Member raw metrics"
                             }
-                            div class="text-xs text-ink-3" {
+                            div class="text-xs" style="color: var(--muted)" {
                                 "Allow members to enter their own weight, height, and erg test times. Members can add but not delete erg tests."
                             }
                         }
@@ -177,19 +183,19 @@ pub(crate) fn detail_content(
                 }
                 div class="grid grid-cols-1 sm:grid-cols-2 gap-4" {
                     div {
-                        label for="default_practice_time" class="block text-sm font-semibold text-ink-2 mb-1" {
+                        label for="default_practice_time" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" {
                             "Default practice time"
                         }
                         @let time_value = team.default_practice_time.map(|t| t.format("%H:%M").to_string()).unwrap_or_default();
                         input id="default_practice_time" name="default_practice_time" type="time"
                               value=(time_value)
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
-                        p class="text-xs text-ink-3 mt-1" {
+                        p class="text-xs mt-1" style="color: var(--muted)" {
                             "Pre-fills the time when creating new practices."
                         }
                     }
                     div {
-                        label for="default_practice_duration" class="block text-sm font-semibold text-ink-2 mb-1" {
+                        label for="default_practice_duration" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" {
                             "Default duration (minutes)"
                         }
                         @let dur_value = team.default_practice_duration_minutes.map(|m| m.to_string()).unwrap_or_default();
@@ -198,7 +204,7 @@ pub(crate) fn detail_content(
                               value=(dur_value)
                               placeholder="e.g. 90"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
-                        p class="text-xs text-ink-3 mt-1" {
+                        p class="text-xs mt-1" style="color: var(--muted)" {
                             "Used to detect double-booked practices across teams."
                         }
                     }
@@ -209,17 +215,17 @@ pub(crate) fn detail_content(
                               checked[team.assume_available.as_bool()]
                               class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-semibold text-ink-2" {
+                            div class="text-sm font-medium" style="color: var(--ink)" {
                                 "Assume available by default"
                             }
-                            p class="text-xs text-ink-3" {
+                            p class="text-xs" style="color: var(--muted)" {
                                 "When on, rowers who haven't responded are included in lineups. When off (default), no response means excluded."
                             }
                         }
                     }
                 }
                 div {
-                    label class="block text-sm font-semibold text-ink-2 mb-2" {
+                    label class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-2" style="color: var(--ink-2)" {
                         "Default practice days"
                     }
                     @let days = team.default_practice_days.unwrap_or(PracticeDays::EMPTY);
@@ -241,12 +247,11 @@ pub(crate) fn detail_content(
                             }
                         }
                     }
-                    p class="text-xs text-ink-3 mt-1" {
+                    p class="text-xs mt-1" style="color: var(--muted)" {
                         "Pre-fills the next practice date on the Planning page."
                     }
                 }
-                button type="submit"
-                       class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition" {
+                button type="submit" class="btn-warm-ink py-2 px-5" {
                     "Save"
                 }
             }
@@ -256,15 +261,15 @@ pub(crate) fn detail_content(
             (threshold_section(team, thresholds))
 
             // Archive / unarchive section
-            section class="border-t border-red-200 pt-4" {
+            section class="pt-4" style="border-top: 1px solid var(--rule-2)" {
                 @if team.archived.as_bool() {
                     div class="flex items-center gap-3" {
-                        span class="text-sm text-red-600 font-medium" { "This team is archived." }
+                        span class="text-sm font-medium" style="color: var(--bad)" { "This team is archived." }
                         form method="post" action={"/teams/" (team.id) "/toggle-archive"}
                              hx-post={"/teams/" (team.id) "/toggle-archive"}
                              hx-target="#content" {
                             button type="submit"
-                                   class="text-sm text-emerald-600 hover:text-emerald-800 font-medium py-2" {
+                                   class="text-sm font-medium py-2 hover:underline" style="color: var(--good)" {
                                 "Unarchive"
                             }
                         }
@@ -274,7 +279,7 @@ pub(crate) fn detail_content(
                            hx-get={"/confirm?kind=archive-team&id=" (team.id)}
                            hx-target="body"
                            hx-swap="beforeend"
-                           class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                           class="text-sm font-medium py-2 hover:underline" style="color: var(--bad)" {
                         "Archive team"
                     }
                 }
@@ -334,16 +339,16 @@ fn threshold_section(
         .unwrap_or((125.0, 115.0, 105.0));
 
     html! {
-        section class="bg-paper rounded-lg shadow-soft p-6 space-y-2" {
+        section class="rounded-lg p-6 space-y-2" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
             div class="flex items-center justify-between mb-1" {
-                h3 class="text-sm font-semibold text-ink-2" { "Rower attribute thresholds" }
+                h3 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Rower attribute thresholds" }
                 button type="button"
                        onclick="window.dispatchEvent(new CustomEvent('save-thresholds'))"
-                       class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                       class="btn-warm-ink py-2 px-5 text-sm" {
                     "Save"
                 }
             }
-            p class="text-xs text-ink-3 mb-4" {
+            p class="text-xs mb-4" style="color: var(--muted)" {
                 "Drag the markers to set where each category starts and ends. "
                 "Rowers with recorded values will be automatically categorized on save."
             }
@@ -391,7 +396,7 @@ fn threshold_slider(
                 "thresholdSlider('{metric}', '{save_url}', '{hist_url}', {range_min}, {range_max}, {default_low}, {default_mid}, {default_high}, {labels}, {is_descending})"
             ))) {
             div class="mb-1" {
-                span class="text-xs font-semibold text-ink-2 uppercase tracking-wide" { (label) }
+                span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { (label) }
             }
             // Slider track with y-axis + histogram + carets
             div class="flex items-end" {
@@ -479,7 +484,7 @@ fn threshold_slider_with_distance(
                 "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
             ))) {
             div class="flex items-center gap-2 mb-1" {
-                span class="text-xs font-semibold text-ink-2 uppercase tracking-wide" { "Erg split (sec/500m)" }
+                span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Erg split (sec/500m)" }
                 select "x-model"="ergDist"
                        "@change"=(PreEscaped(format!(
                            "fetch('{hist_url_base}&dist=' + ergDist).then(r=>r.json()).then(d=>{{ bars=d }}).catch(()=>{{}})"
