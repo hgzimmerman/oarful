@@ -57,33 +57,36 @@ pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>
 // =====================================================================
 
 pub(crate) fn list_content(teams: &[Team]) -> Markup {
-    let subtitle = format!("{} teams", teams.len());
     html! {
-        (page_header("Teams", Some(&subtitle)))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            // Create team form
-            form method="post" action="/teams"
-                 hx-post="/teams"
-                 hx-target="#content"
-                 hx-push-url="true"
-                 class="flex items-end gap-3" {
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center justify-between" {
                 div {
-                    label for="team_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" {
-                        "New team"
+                    h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                        "Teams"
                     }
+                    p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                        (teams.len()) " teams"
+                    }
+                }
+                // Create team form — inline in header
+                form method="post" action="/teams"
+                     hx-post="/teams"
+                     hx-target="#content"
+                     hx-push-url="true"
+                     class="flex items-center gap-2" {
                     input id="team_name" name="name" type="text" required placeholder="Team name"
                           class="border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
-                }
-                button type="submit"
-                       class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
-                    "Create"
+                    button type="submit" class="btn-warm-ink py-2 px-4 text-sm" {
+                        "Create"
+                    }
                 }
             }
-
+        }
+        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto" {
             @if teams.is_empty() {
-                div class="text-ink-3 italic" { "No teams." }
+                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams." }
             } @else {
-                div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
+                div class="rounded-lg divide-y" style="background: var(--paper); box-shadow: var(--shadow-soft); divide-color: var(--rule-2)" {
                     @for t in teams {
                         a href={"/teams/" (t.id)}
                           hx-get={"/teams/" (t.id)}
@@ -91,14 +94,16 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                           hx-push-url="true"
                           class="flex items-center justify-between px-6 py-4 hover:bg-paper-2 transition cursor-pointer" {
                             div {
-                                div class="font-semibold text-ink" {
+                                span class="font-serif-heading font-medium text-[15px] tracking-tight" style="color: var(--ink)" {
                                     (t.name)
-                                    @if t.archived.as_bool() {
-                                        span class="ml-2 text-xs font-normal text-red-500" { "(archived)" }
+                                }
+                                @if t.archived.as_bool() {
+                                    span class="ml-2 font-mono-stat text-[9px] tracking-wide uppercase px-1.5 py-0.5 rounded" style="background: color-mix(in oklch, var(--bad) 10%, var(--paper)); color: var(--bad)" {
+                                        "archived"
                                     }
                                 }
                             }
-                            span class="text-muted" "aria-hidden"="true" { "→" }
+                            span style="color: var(--muted)" "aria-hidden"="true" { "→" }
                         }
                     }
                 }
