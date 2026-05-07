@@ -71,6 +71,8 @@ pub struct Practice {
     pub duration_minutes: Option<DurationMinutes>,
     /// JSON-serialized practice timeline / plan.
     pub timeline_json: Option<String>,
+    /// Coach explicitly dismissed plan-building for this practice.
+    pub plan_dismissed: IntBool,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -357,6 +359,90 @@ impl Practice {
     }
 }
 
+// ── Practice phase derivation ────────────────────────────────────────
+
+/// The forward-moving lifecycle phase of a practice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PracticePhase {
+    /// Date/time set, collecting availability, no committed lineup yet.
+    Created,
+    /// Lineup committed, but no plan and plan not dismissed.
+    Committed,
+    /// Lineup committed + plan built (or plan dismissed). Ready to send.
+    Ready,
+    /// All boated rowers have been notified.
+    Notified,
+    /// Notified + practice end time has passed + not stale.
+    Complete,
+    /// Cancelled from any state.
+    Cancelled,
+}
+
+impl PracticePhase {
+    /// Human-readable label for display in the UI.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Created => "Needs lineup",
+            Self::Committed => "Needs plan",
+            Self::Ready => "Ready to send",
+            Self::Notified => "Notified",
+            Self::Complete => "Complete",
+            Self::Cancelled => "Cancelled",
+        }
+    }
+}
+
+/// Summary of a practice with its derived phase, used for list views.
+#[derive(Debug, Clone)]
+pub struct PracticeWithPhase {
+    pub practice: Practice,
+    pub phase: PracticePhase,
+    pub is_stale: bool,
+    pub boat_count: usize,
+    pub boated_rower_count: usize,
+    pub yes_count: usize,
+    pub total_responses: usize,
+    pub non_respondent_count: usize,
+    pub unnotified_rower_count: usize,
+}
+
+/// Inputs needed to derive the phase for a single practice.
+/// Gathered in batch by the list query and passed in per-practice.
+pub struct PhaseDeriveInput {
+    pub has_committed_lineup: bool,
+    pub has_plan: bool,
+    pub plan_dismissed: bool,
+    pub is_stale: bool,
+    pub all_boated_notified: bool,
+    pub has_any_boated_rowers: bool,
+    pub practice_ended: bool,
+}
+
+/// Derive the phase for a practice given pre-computed inputs.
+pub fn derive_phase(practice: &Practice, input: &PhaseDeriveInput) -> PracticePhase {
+    if practice.cancelled.as_bool() {
+        return PracticePhase::Cancelled;
+    }
+    if !input.has_committed_lineup {
+        return PracticePhase::Created;
+    }
+    // Has committed lineup from here on.
+    if input.has_any_boated_rowers
+        && input.all_boated_notified
+        && !input.is_stale
+        && input.practice_ended
+    {
+        return PracticePhase::Complete;
+    }
+    if input.has_any_boated_rowers && input.all_boated_notified {
+        return PracticePhase::Notified;
+    }
+    if input.has_plan || input.plan_dismissed {
+        return PracticePhase::Ready;
+    }
+    PracticePhase::Committed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,5 +612,128 @@ mod tests {
         let (start, end) = p.time_window(None).unwrap();
         assert_eq!(start, NaiveTime::from_hms_opt(6, 0, 0).unwrap());
         assert_eq!(end, NaiveTime::from_hms_opt(7, 30, 0).unwrap());
+    }
+
+    // ── Phase derivation tests ──────────────────────────────────────
+
+    fn make_practice(conn: &mut SqliteConnection) -> Practice {
+        let tid = seed_team(conn);
+        Practice::upsert(conn, tid, d(2026, 5, 10), None, None).unwrap()
+    }
+
+    fn base_input() -> PhaseDeriveInput {
+        PhaseDeriveInput {
+            has_committed_lineup: false,
+            has_plan: false,
+            plan_dismissed: false,
+            is_stale: false,
+            all_boated_notified: false,
+            has_any_boated_rowers: false,
+            practice_ended: false,
+        }
+    }
+
+    #[test]
+    fn phase_created_when_no_lineup() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        assert_eq!(derive_phase(&p, &base_input()), PracticePhase::Created);
+    }
+
+    #[test]
+    fn phase_committed_when_lineup_no_plan() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Committed);
+    }
+
+    #[test]
+    fn phase_ready_when_plan_exists() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Ready);
+    }
+
+    #[test]
+    fn phase_ready_when_plan_dismissed() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            plan_dismissed: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Ready);
+    }
+
+    #[test]
+    fn phase_notified_when_all_notified() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Notified);
+    }
+
+    #[test]
+    fn phase_complete_when_ended_and_notified() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            practice_ended: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Complete);
+    }
+
+    #[test]
+    fn phase_notified_not_complete_when_stale() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            practice_ended: true,
+            is_stale: true,
+            ..base_input()
+        };
+        // Stale prevents Complete, falls to Notified
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Notified);
+    }
+
+    #[test]
+    fn phase_cancelled_overrides_all() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        Practice::set_cancelled_by_id(&mut conn, p.id, true).unwrap();
+        let p = Practice::get(&mut conn, p.id).unwrap().unwrap();
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Cancelled);
     }
 }

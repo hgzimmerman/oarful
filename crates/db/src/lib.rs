@@ -13,6 +13,7 @@ pub mod email_log;
 pub mod erg_test;
 pub mod fixture;
 pub mod lineup;
+pub mod lineup_notification;
 pub mod magic_link;
 pub mod onboarding;
 pub mod pair_affinity;

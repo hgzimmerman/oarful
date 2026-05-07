@@ -520,8 +520,8 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         tabindex="0"
                         "aria-label"=(seat_aria)
                         class="grid gap-1 my-0.5 rounded cursor-pointer transition items-center"
-                        style={"grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 75%, transparent)" })}
-                        ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr auto 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 75%, transparent)" }) "'"}
+                        style={"grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 50%, transparent)" })}
+                        ":style"={"selected === '" (key) "' ? 'grid-template-columns: 44px 1fr auto 28px 8px; background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border: 1px solid var(--accent)' : 'grid-template-columns: 44px 1fr auto 28px 8px; border: 1px " (if is_empty { "dashed var(--rule-2)" } else { "solid color-mix(in oklch, var(--rule-2) 50%, transparent)" }) "'"}
                         "@click"={"select('" (key) "')"}
                         "@keydown.enter"={"select('" (key) "')"}
                         "@keydown.space.prevent"={"select('" (key) "')"} {

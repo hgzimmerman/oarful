@@ -1,0 +1,1 @@
+ALTER TABLE practice ADD COLUMN plan_dismissed INTEGER NOT NULL DEFAULT 0;
