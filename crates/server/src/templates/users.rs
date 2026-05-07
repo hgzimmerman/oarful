@@ -6,43 +6,51 @@ use lineup_db::app_user::{AppUser, Role, UserId, UserStatus};
 use lineup_db::rower::types::RowerId;
 use maud::{html, Markup, DOCTYPE};
 
-use super::layout::page_header;
-
 /// User list with invite form (PD-only page).
 pub(crate) fn list_content(
     users: &[AppUser],
     roles: &HashMap<UserId, Role>,
     user_rower_map: &HashMap<UserId, RowerId>,
 ) -> Markup {
-    let subtitle = format!("{} users", users.len());
+    let th_class =
+        "px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold";
     html! {
-        (page_header("Users", Some(&subtitle)))
+        // ── Header ──
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                "Users"
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                (users.len()) " users"
+            }
+        }
+
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
             // Invite form
-            section class="bg-paper rounded-lg shadow-soft p-6" {
-                h2 class="text-lg font-bold text-ink mb-4" { "Invite a new user" }
+            section class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" { "Invite a new user" }
                 form method="post" action="/users/invite"
                      class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end" {
                     div {
-                        label for="invite_first_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "First name" }
+                        label for="invite_first_name" class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "First name" }
                         input id="invite_first_name" name="first_name" type="text"
                               autocomplete="given-name"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="invite_last_name" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Last name" }
+                        label for="invite_last_name" class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "Last name" }
                         input id="invite_last_name" name="last_name" type="text"
                               autocomplete="family-name"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="invite_email" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Email" }
+                        label for="invite_email" class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "Email" }
                         input id="invite_email" name="email" type="email" required
                               autocomplete="email"
                               class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                     }
                     div {
-                        label for="invite_role" class="block text-xs font-semibold text-ink-2 uppercase tracking-wide mb-1" { "Role" }
+                        label for="invite_role" class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "Role" }
                         select id="invite_role" name="role"
                                class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
                             option value="Member" { "Member" }
@@ -50,8 +58,7 @@ pub(crate) fn list_content(
                             option value="ProgramDirector" { "Program Director" }
                         }
                     }
-                    button type="submit"
-                           class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
+                    button type="submit" class="btn-warm-ink py-2 px-4 text-sm" {
                         "Send invite"
                     }
                 }
@@ -59,16 +66,16 @@ pub(crate) fn list_content(
 
             // User table
             @if !users.is_empty() {
-                div class="bg-paper rounded-lg shadow-soft overflow-x-auto" {
+                div class="rounded-lg overflow-x-auto" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                     table class="w-full text-sm min-w-[480px]" {
                         caption class="sr-only" { "Users" }
-                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
-                            tr {
-                                th scope="col" class="px-4 py-2" { "Name" }
-                                th scope="col" class="px-4 py-2" { "Email" }
-                                th scope="col" class="px-4 py-2" { "Role" }
-                                th scope="col" class="px-4 py-2" { "Status" }
-                                th scope="col" class="px-4 py-2" {}
+                        thead {
+                            tr style="background: var(--paper-2)" {
+                                th scope="col" class=(th_class) style="color: var(--ink-2)" { "Name" }
+                                th scope="col" class=(th_class) style="color: var(--ink-2)" { "Email" }
+                                th scope="col" class=(th_class) style="color: var(--ink-2)" { "Role" }
+                                th scope="col" class=(th_class) style="color: var(--ink-2)" { "Status" }
+                                th scope="col" class=(th_class) {}
                             }
                         }
                         tbody {
@@ -97,34 +104,40 @@ pub(crate) fn user_row(
         })
         .unwrap_or("—");
     let rower_id = user_rower_map.get(&u.id);
+
+    let status_style = match u.status {
+        UserStatus::Active => "color: var(--good); background: color-mix(in oklch, var(--good) 10%, var(--paper)); border-color: color-mix(in oklch, var(--good) 22%, var(--rule))",
+        UserStatus::Invited => "color: var(--warn); background: color-mix(in oklch, var(--warn) 10%, var(--paper)); border-color: color-mix(in oklch, var(--warn) 22%, var(--rule))",
+        UserStatus::Disabled => "color: var(--ink-3); background: var(--paper-2); border-color: var(--rule)",
+    };
+
     html! {
-        tr id={"user-" (u.id)} class="border-t border-rule-2" {
-            td class="px-4 py-2 font-medium text-ink" {
+        tr id={"user-" (u.id)} style="border-top: 1px solid var(--rule-2)" class="hover:bg-paper-2" {
+            td class="px-4 py-2.5" {
                 @if let Some(rid) = rower_id {
                     a href={"/rowers/" (rid)}
                       hx-get={"/rowers/" (rid)}
                       hx-target="#content"
                       hx-push-url="true"
-                      class="text-link hover:text-link-2 hover:underline" {
+                      class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                         (u.display_name())
                     }
                 } @else {
-                    (u.display_name())
+                    span class="font-serif-heading font-medium text-[15px] tracking-tight" style="color: var(--ink)" {
+                        (u.display_name())
+                    }
                 }
             }
-            td class="px-4 py-2 text-ink-2" { (u.email) }
-            td class="px-4 py-2 text-ink-2" { (role_label) }
-            td class="px-4 py-2" {
-                @let badge_class = match u.status {
-                    UserStatus::Active => "bg-good/15 text-good",
-                    UserStatus::Invited => "bg-warn/15 text-warn",
-                    UserStatus::Disabled => "bg-paper-3 text-ink-2",
-                };
-                span class={"text-xs px-2 py-0.5 rounded-full " (badge_class)} {
-                    (u.status)
-                }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs" style="color: var(--muted)" { (u.email) }
             }
-            td class="px-4 py-2 text-right space-x-2" {
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (role_label) }
+            }
+            td class="px-4 py-2.5" {
+                span class="stat-badge text-[10px]" style=(status_style) { (u.status) }
+            }
+            td class="px-4 py-2.5 text-right space-x-2" {
                 @if u.status == UserStatus::Invited {
                     form method="post"
                          action={"/users/" (u.id) "/resend-invite"}
@@ -133,7 +146,7 @@ pub(crate) fn user_row(
                          hx-swap="outerHTML"
                          class="inline" {
                         button type="submit"
-                               class="text-xs text-link hover:text-link-2 font-medium" {
+                               class="font-mono-stat text-[10px] font-semibold hover:underline" style="color: var(--link)" {
                             "Resend invite"
                         }
                     }
@@ -146,7 +159,7 @@ pub(crate) fn user_row(
                          hx-swap="outerHTML"
                          class="inline" {
                         button type="submit"
-                               class="text-xs text-muted hover:text-red-600 font-medium" {
+                               class="font-mono-stat text-[10px] font-semibold hover:underline" style="color: var(--muted)" {
                             "Disable"
                         }
                     }
@@ -159,7 +172,7 @@ pub(crate) fn user_row(
                          hx-swap="outerHTML"
                          class="inline" {
                         button type="submit"
-                               class="text-xs text-emerald-600 hover:text-emerald-800 font-medium" {
+                               class="font-mono-stat text-[10px] font-semibold hover:underline" style="color: var(--good)" {
                             "Enable"
                         }
                     }
@@ -172,7 +185,15 @@ pub(crate) fn user_row(
 /// Result page after creating an invite.
 pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Markup {
     html! {
-        (page_header("Invite", None))
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center gap-3 mb-1" {
+                a href="/users"
+                  class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
+                    "← All users"
+                }
+            }
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { "Invite" }
+        }
         div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
             @if let Some(msg) = error {
                 div class="bg-bad/10 border-l-4 border-bad px-4 py-3 rounded text-sm text-ink mb-4" {
@@ -180,20 +201,16 @@ pub(crate) fn invite_result(invite_url: Option<&str>, error: Option<&str>) -> Ma
                 }
             }
             @if let Some(url) = invite_url {
-                div class="bg-emerald-50 border-l-4 border-emerald-500 px-4 py-3 rounded text-sm text-emerald-900 mb-4" {
+                div class="rounded-lg px-4 py-3 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 8%, var(--paper)); border-left: 4px solid var(--good); color: var(--ink)" {
                     p class="font-semibold mb-2" { "Invite created." }
                     p { "Share this link with the user:" }
-                    code class="block mt-2 bg-paper px-3 py-2 rounded border border-emerald-200 font-mono text-xs break-all" {
+                    code class="block mt-2 rounded px-3 py-2 font-mono text-xs break-all" style="background: var(--paper-2); border: 1px solid var(--rule)" {
                         (url)
                     }
-                    p class="text-xs mt-2 text-emerald-700" {
+                    p class="text-xs mt-2" style="color: var(--muted)" {
                         "The link expires in 7 days."
                     }
                 }
-            }
-            a href="/users"
-              class="text-emerald-700 hover:text-emerald-900 font-semibold text-sm" {
-                "← Back to users"
             }
         }
     }
@@ -214,8 +231,8 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
             body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
                     div class="text-center mb-8" {
-                        h1 class="text-2xl font-bold text-ink" { "Oarful" }
-                        p class="text-sm text-ink-3 mt-1" { "Set your password to activate your account" }
+                        h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { "Oarful" }
+                        p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" { "Set your password to activate your account" }
                     }
 
                     @if let Some(msg) = error {
@@ -225,21 +242,20 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                     }
 
                     form method="post" action=(action)
-                         class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
+                         class="rounded-lg p-6 space-y-4" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                         div {
-                            label for="password" class="block text-sm font-semibold text-ink-2 mb-1" { "Password" }
+                            label for="password" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" { "Password" }
                             input id="password" name="password" type="password" required minlength="8"
                                   autocomplete="new-password"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         div {
-                            label for="password_confirm" class="block text-sm font-semibold text-ink-2 mb-1" { "Confirm password" }
+                            label for="password_confirm" class="block font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-1.5" style="color: var(--ink-2)" { "Confirm password" }
                             input id="password_confirm" name="password_confirm" type="password" required
                                   autocomplete="new-password"
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
-                        button type="submit"
-                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                        button type="submit" class="w-full btn-warm-ink py-2" {
                             "Activate account"
                         }
                     }
