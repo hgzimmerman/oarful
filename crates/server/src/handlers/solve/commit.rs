@@ -85,6 +85,9 @@ pub(crate) async fn commit_handler(
                     .collect();
                 Lineup::commit_for_boat(conn, pid, lineup.boat_id, &seats)?;
             }
+            // Clear per-rower notifications so the practice reverts to
+            // Ready/Committed and the coach must re-send.
+            lineup_db::lineup_notification::LineupNotification::clear_for_practice(conn, pid)?;
             Ok(())
         })
         .await
@@ -153,6 +156,9 @@ pub(crate) async fn commit_lineup_handler(
             for (boat_id, seats) in &by_boat {
                 Lineup::commit_for_boat(conn, pid, *boat_id, seats)?;
             }
+            // Clear per-rower notifications so the practice reverts to
+            // Ready/Committed and the coach must re-send.
+            lineup_db::lineup_notification::LineupNotification::clear_for_practice(conn, pid)?;
             Ok(())
         })
         .await

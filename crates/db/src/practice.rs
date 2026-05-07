@@ -153,6 +153,36 @@ impl Practice {
             .get_results(conn)
     }
 
+    /// Practices in the Ready phase: has committed lineup, has plan or plan
+    /// dismissed, not cancelled, date >= today. Lightweight alternative to
+    /// `list_with_phases` when only Ready practices are needed.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_ready(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        today: NaiveDate,
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
+        practice::table
+            .filter(practice::team_id.eq(team_id))
+            .filter(practice::date.ge(today))
+            .filter(practice::cancelled.eq(0))
+            .filter(
+                practice::timeline_json
+                    .is_not_null()
+                    .or(practice::plan_dismissed.eq(1)),
+            )
+            .filter(
+                practice::id.eq_any(
+                    lineup::table
+                        .filter(lineup::is_draft.eq(0))
+                        .select(lineup::practice_id),
+                ),
+            )
+            .select(Practice::as_select())
+            .order(practice::date.asc())
+            .get_results(conn)
+    }
+
     /// Which of the given practice IDs have at least one committed (non-draft) lineup?
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn committed_ids(

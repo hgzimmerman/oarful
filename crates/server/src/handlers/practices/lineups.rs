@@ -95,26 +95,70 @@ pub(crate) async fn lineup_preview_handler(
     }
 
     // Find other ready practices that could also be sent.
+    // Uses a lightweight query instead of full list_with_phases.
     let requested_dates: HashSet<NaiveDate> = dates.iter().copied().collect();
-    let now = chrono::Utc::now().naive_utc();
-    let today = now.date();
+    let today = chrono::Utc::now().date_naive();
     let also_ready = tenant
         .db
         .with_conn(move |conn| {
-            let practices = lineup_db::practice::list_with_phases(conn, team_id, now, today)?;
-            let ready: Vec<templates::practices::AlsoReadyPractice> = practices
-                .iter()
-                .filter(|p| {
-                    matches!(p.phase, lineup_db::practice::PracticePhase::Ready)
-                        && !p.is_stale
-                        && !requested_dates.contains(&p.practice.date)
-                })
-                .map(|p| templates::practices::AlsoReadyPractice {
-                    date: p.practice.date,
-                    boat_count: p.boat_count,
-                    rower_count: p.boated_rower_count,
-                })
-                .collect();
+            let candidates = Practice::list_ready(conn, team_id, today)?;
+            let candidate_ids: Vec<lineup_db::practice::PracticeId> =
+                candidates.iter().map(|p| p.id).collect();
+
+            // Check staleness + get boat/rower counts for candidates.
+            let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &candidate_ids)?;
+            let boat_counts = Lineup::committed_boat_counts(conn, &candidate_ids)?;
+            let avail =
+                lineup_db::availability::Availability::map_for_practices(conn, &candidate_ids)?;
+            let notified =
+                lineup_db::lineup_notification::LineupNotification::notified_rowers_for_practices(
+                    conn,
+                    &candidate_ids,
+                )?;
+
+            let team = lineup_db::team::Team::get(conn, team_id)?;
+            let assume_available = team
+                .as_ref()
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
+
+            let mut ready = Vec::new();
+            for p in &candidates {
+                if requested_dates.contains(&p.date) {
+                    continue;
+                }
+                let boated = committed_rowers.get(&p.id);
+                let boated_set: HashSet<_> = boated
+                    .map(|v| v.iter().copied().collect())
+                    .unwrap_or_default();
+                if boated_set.is_empty() {
+                    continue;
+                }
+
+                // Skip if all boated rowers already notified (phase = Notified, not Ready).
+                if let Some(notified_set) = notified.get(&p.id) {
+                    if boated_set.iter().all(|rid| notified_set.contains(rid)) {
+                        continue;
+                    }
+                }
+
+                // Skip if stale.
+                let is_stale = boated_set.iter().any(|rid| {
+                    !avail
+                        .get(&(*rid, p.id))
+                        .map(|s| s.is_available())
+                        .unwrap_or(assume_available)
+                });
+                if is_stale {
+                    continue;
+                }
+
+                ready.push(templates::practices::AlsoReadyPractice {
+                    date: p.date,
+                    boat_count: boat_counts.get(&p.id).copied().unwrap_or(0),
+                    rower_count: boated_set.len(),
+                });
+            }
             Ok(ready)
         })
         .await
