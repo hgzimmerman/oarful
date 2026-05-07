@@ -705,33 +705,37 @@ fn roster_matrix_inner(
     memberships: &HashSet<(TeamId, RowerId)>,
 ) -> Markup {
     html! {
-        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
-            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
-                "Roster assignments"
-            }
-            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
-                (rowers.len()) " rowers · " (teams.len()) " teams"
-            }
-        }
-        div class="px-4 sm:px-8 py-6" {
-            @if let Some(msg) = toast {
-                div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
-                    (msg)
-                }
-            }
-            @if teams.is_empty() {
-                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
-            } @else if rowers.is_empty() {
-                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No active rowers." }
-            } @else {
-                form method="post" action="/admin/roster"
-                     hx-post="/admin/roster"
-                     hx-target="#admin-tab-content" {
-                    div class="flex justify-end mb-3" {
+        form method="post" action="/admin/roster"
+             hx-post="/admin/roster"
+             hx-target="#admin-tab-content" {
+            header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+                div class="flex items-center justify-between" {
+                    div {
+                        h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                            "Roster assignments"
+                        }
+                        p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                            (rowers.len()) " rowers · " (teams.len()) " teams"
+                        }
+                    }
+                    @if !teams.is_empty() && !rowers.is_empty() {
                         button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
+                }
+            }
+            div class="px-4 sm:px-8 py-6" {
+                @if let Some(msg) = toast {
+                    div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
+                        (msg)
+                    }
+                }
+                @if teams.is_empty() {
+                    div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
+                } @else if rowers.is_empty() {
+                    div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No active rowers." }
+                } @else {
                     div class="overflow-auto rounded-lg max-h-[75vh]" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                         table class="text-xs border-collapse" {
                             caption class="sr-only" { "Team roster assignments" }
@@ -814,37 +818,41 @@ fn fleet_matrix_inner(
     defaults: &HashSet<(TeamId, BoatId)>,
 ) -> Markup {
     html! {
-        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
-            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
-                "Default fleet"
-            }
-            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
-                (boats.len()) " sweep boats · " (teams.len()) " teams"
-            }
-        }
-        div class="px-4 sm:px-8 py-6" {
-            @if let Some(msg) = toast {
-                div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
-                    (msg)
-                }
-            }
-            p class="text-sm mb-4" style="color: var(--muted)" {
-                "Select which boats are pre-selected in the generation pool for each team. "
-                "Single-team clubs default to all boats if none are selected."
-            }
-            @if teams.is_empty() {
-                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
-            } @else if boats.is_empty() {
-                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No sweep boats in the fleet." }
-            } @else {
-                form method="post" action="/admin/fleet/defaults"
-                     hx-post="/admin/fleet/defaults"
-                     hx-target="#admin-fleet-content" {
-                    div class="flex justify-end mb-3" {
+        form method="post" action="/admin/fleet/defaults"
+             hx-post="/admin/fleet/defaults"
+             hx-target="#admin-fleet-content" {
+            header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+                div class="flex items-center justify-between" {
+                    div {
+                        h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                            "Default fleet"
+                        }
+                        p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                            (boats.len()) " sweep boats · " (teams.len()) " teams"
+                        }
+                    }
+                    @if !teams.is_empty() && !boats.is_empty() {
                         button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
+                }
+            }
+            div class="px-4 sm:px-8 py-6" {
+                @if let Some(msg) = toast {
+                    div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
+                        (msg)
+                    }
+                }
+                p class="text-sm mb-4" style="color: var(--muted)" {
+                    "Select which boats are pre-selected in the generation pool for each team. "
+                    "Single-team clubs default to all boats if none are selected."
+                }
+                @if teams.is_empty() {
+                    div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
+                } @else if boats.is_empty() {
+                    div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No sweep boats in the fleet." }
+                } @else {
                     div class="overflow-auto rounded-lg max-h-[75vh]" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                         table class="text-xs border-collapse" {
                             caption class="sr-only" { "Team boat defaults" }
