@@ -29,6 +29,9 @@ use crate::{
 pub(crate) struct SendLineupsInput {
     #[serde(default)]
     pub(crate) dates: Vec<String>,
+    /// Additional dates from the "also ready" upsell checkboxes.
+    #[serde(default)]
+    pub(crate) extra_dates: Vec<String>,
     #[serde(default = "default_scope")]
     pub(crate) scope: String,
 }
@@ -43,6 +46,9 @@ pub(crate) struct LineupPreviewQuery {
     dates: Vec<String>,
     #[serde(default = "default_scope")]
     scope: String,
+    /// When set, resolve this practice to its date. Used for single-practice sends.
+    #[serde(default)]
+    practice_id: Option<i32>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -54,12 +60,27 @@ pub(crate) async fn lineup_preview_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let scope_all = query.scope == "all";
+    let practice_id_param = query.practice_id.map(lineup_db::practice::PracticeId::new);
 
-    let dates: Vec<NaiveDate> = query
+    let mut dates: Vec<NaiveDate> = query
         .dates
         .iter()
         .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
         .collect();
+
+    // Resolve practice_id to date if provided.
+    if let Some(pid) = practice_id_param {
+        if dates.is_empty() {
+            let date = tenant
+                .db
+                .with_conn(move |conn| Ok(Practice::get(conn, pid)?.map(|p| p.date)))
+                .await
+                .map_err(internal_error)?;
+            if let Some(d) = date {
+                dates.push(d);
+            }
+        }
+    }
 
     let date_strs: Vec<String> = dates
         .iter()
@@ -68,9 +89,80 @@ pub(crate) async fn lineup_preview_handler(
 
     if dates.is_empty() {
         return Ok(Html(
-            templates::practices::lineup_preview_modal(&[], &date_strs, "placed").into_string(),
+            templates::practices::lineup_preview_modal(&[], &date_strs, "placed", &[])
+                .into_string(),
         ));
     }
+
+    // Find other ready practices that could also be sent.
+    // Uses a lightweight query instead of full list_with_phases.
+    let requested_dates: HashSet<NaiveDate> = dates.iter().copied().collect();
+    let today = chrono::Utc::now().date_naive();
+    let also_ready = tenant
+        .db
+        .with_conn(move |conn| {
+            let candidates = Practice::list_ready(conn, team_id, today)?;
+            let candidate_ids: Vec<lineup_db::practice::PracticeId> =
+                candidates.iter().map(|p| p.id).collect();
+
+            // Check staleness + get boat/rower counts for candidates.
+            let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &candidate_ids)?;
+            let boat_counts = Lineup::committed_boat_counts(conn, &candidate_ids)?;
+            let avail =
+                lineup_db::availability::Availability::map_for_practices(conn, &candidate_ids)?;
+            let notified =
+                lineup_db::lineup_notification::LineupNotification::notified_rowers_for_practices(
+                    conn,
+                    &candidate_ids,
+                )?;
+
+            let team = lineup_db::team::Team::get(conn, team_id)?;
+            let assume_available = team
+                .as_ref()
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
+
+            let mut ready = Vec::new();
+            for p in &candidates {
+                if requested_dates.contains(&p.date) {
+                    continue;
+                }
+                let boated = committed_rowers.get(&p.id);
+                let boated_set: HashSet<_> = boated
+                    .map(|v| v.iter().copied().collect())
+                    .unwrap_or_default();
+                if boated_set.is_empty() {
+                    continue;
+                }
+
+                // Skip if all boated rowers already notified (phase = Notified, not Ready).
+                if let Some(notified_set) = notified.get(&p.id) {
+                    if boated_set.iter().all(|rid| notified_set.contains(rid)) {
+                        continue;
+                    }
+                }
+
+                // Skip if stale.
+                let is_stale = boated_set.iter().any(|rid| {
+                    !avail
+                        .get(&(*rid, p.id))
+                        .map(|s| s.is_available())
+                        .unwrap_or(assume_available)
+                });
+                if is_stale {
+                    continue;
+                }
+
+                ready.push(templates::practices::AlsoReadyPractice {
+                    date: p.date,
+                    boat_count: boat_counts.get(&p.id).copied().unwrap_or(0),
+                    rower_count: boated_set.len(),
+                });
+            }
+            Ok(ready)
+        })
+        .await
+        .map_err(internal_error)?;
 
     let scope = query.scope.clone();
     let recipients = tenant
@@ -89,7 +181,8 @@ pub(crate) async fn lineup_preview_handler(
         .collect();
 
     Ok(Html(
-        templates::practices::lineup_preview_modal(&preview, &date_strs, &scope).into_string(),
+        templates::practices::lineup_preview_modal(&preview, &date_strs, &scope, &also_ready)
+            .into_string(),
     ))
 }
 
@@ -199,11 +292,14 @@ pub(crate) async fn send_lineups_handler(
     let team_name = tenant.config.tenant_name.clone();
     let scope_all = input.scope == "all";
 
-    // Parse requested dates from checkbox values.
+    // Parse requested dates from checkbox values + upsell extras.
     let dates: Vec<NaiveDate> = input
         .dates
         .iter()
+        .chain(input.extra_dates.iter())
         .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect();
     if dates.is_empty() {
         return Ok(Html(
@@ -332,7 +428,7 @@ pub(crate) async fn send_lineups_handler(
                 }
             }
 
-            // Record sends.
+            // Record sends + per-rower notifications.
             let now = chrono::Utc::now().naive_utc();
             for summary in &summaries {
                 EmailLog::record(
@@ -346,6 +442,21 @@ pub(crate) async fn send_lineups_handler(
                         sent_by_user_id: sender_id,
                     },
                 )?;
+
+                // Record per-rower notification for phase tracking.
+                if let Some(practice) = Practice::find_by_date(conn, team_id, summary.date)? {
+                    let committed = Lineup::for_practice(conn, practice.id)?;
+                    let boated_ids: Vec<_> = committed
+                        .iter()
+                        .flat_map(|c| c.seats.iter().map(|s| s.rower_id))
+                        .collect();
+                    lineup_db::lineup_notification::LineupNotification::record_batch(
+                        conn,
+                        practice.id,
+                        &boated_ids,
+                        now,
+                    )?;
+                }
             }
 
             Ok((summaries, recipients, first_practice_id))

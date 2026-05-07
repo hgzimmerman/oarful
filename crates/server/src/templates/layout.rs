@@ -149,6 +149,13 @@ fn navbar(role: Role) -> Markup {
                         (nav_link("/admin", "Admin"))
                     }
                     li class="ml-4" {}
+                    // Onboarding bell (loads via HTMX, coach+ only)
+                    @if is_coach {
+                        li id="nav-onboarding"
+                           hx-get="/nav/onboarding"
+                           hx-trigger="load"
+                           hx-swap="innerHTML" {}
+                    }
                     (nav_link("/my", "My"))
                     li {
                         form method="post" action="/logout" class="inline" {
@@ -175,13 +182,20 @@ fn navbar(role: Role) -> Markup {
             ul class="lg:hidden flex-col space-y-1 pt-3"
                x-show="open"
                x-cloak
-               "@click"="open = false" {
+               "@click.self"="open = false" {
                 (nav_link_with_badge("/practices", "Practices", is_coach))
                 @if is_coach {
                     (nav_link("/team", "Team"))
                 }
                 @if is_pd {
                     (nav_link("/admin", "Admin"))
+                }
+                // Onboarding bell (mobile)
+                @if is_coach {
+                    li id="nav-onboarding-mobile"
+                       hx-get="/nav/onboarding"
+                       hx-trigger="load"
+                       hx-swap="innerHTML" {}
                 }
                 li class="border-t border-ink-3 my-1 pt-1" {}
                 (nav_link("/my", "My"))

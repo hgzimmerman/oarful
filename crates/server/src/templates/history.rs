@@ -160,10 +160,10 @@ pub(crate) fn detail_content(
         // ── Header ──
         header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
             div class="flex items-center gap-3 mb-1" {
-                a href="/practices/committed"
+                a href="/practices"
                   class="font-mono-stat text-xs tracking-wider hover:underline"
                   style="color: var(--muted)"
-                  hx-get="/practices/committed"
+                  hx-get="/practices"
                   hx-target="#content"
                   hx-push-url="true" {
                     "← All practices"
@@ -275,6 +275,35 @@ pub(crate) fn detail_content(
                 @if is_coach {
                     div class="no-print mb-5" {
                         (notes_section(practice, practice_id))
+                    }
+                }
+
+                // Plan gate: prompt coach to build a plan or dismiss
+                @if is_coach && !committed.is_empty() {
+                    @let has_plan = practice.and_then(|p| p.timeline()).is_some();
+                    @let plan_dismissed = practice.map(|p| p.plan_dismissed.as_bool()).unwrap_or(false);
+                    @if !has_plan && !plan_dismissed {
+                        div class="mb-5 no-print rounded px-4 py-3 text-sm flex items-center justify-between"
+                             style="background: color-mix(in oklch, var(--accent) 8%, var(--paper)); border-left: 4px solid var(--accent); color: var(--ink)" {
+                            div {
+                                strong { "Practice plan. " }
+                                "Build a practice plan below, or skip if you don't need one."
+                            }
+                            form method="post" action={"/practices/" (practice_id) "/dismiss-plan"}
+                                 hx-post={"/practices/" (practice_id) "/dismiss-plan"}
+                                 hx-target="#content" {
+                                button type="submit"
+                                       class="text-sm font-semibold underline ml-4 shrink-0" style="color: var(--accent)" {
+                                    "Skip plan"
+                                }
+                            }
+                        }
+                    }
+                    @if plan_dismissed && !has_plan {
+                        div class="mb-5 no-print rounded px-4 py-3 text-sm flex items-center justify-between"
+                             style="background: var(--paper-2); border-left: 4px solid var(--rule); color: var(--muted)" {
+                            span { "Plan skipped. You can still build one below." }
+                        }
                     }
                 }
 

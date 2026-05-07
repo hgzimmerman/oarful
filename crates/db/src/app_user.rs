@@ -316,6 +316,17 @@ impl AppUser {
             .optional()
     }
 
+    /// Get the set of rower IDs that have linked user accounts.
+    pub fn rower_ids_with_users(
+        conn: &mut SqliteConnection,
+    ) -> Result<std::collections::HashSet<RowerId>, diesel::result::Error> {
+        let ids: Vec<RowerId> = app_user::table
+            .filter(app_user::rower_id.is_not_null())
+            .select(app_user::rower_id.assume_not_null())
+            .load(conn)?;
+        Ok(ids.into_iter().collect())
+    }
+
     /// Update email opt-in preferences.
     pub fn set_email_prefs(
         conn: &mut SqliteConnection,

@@ -185,6 +185,7 @@ diesel::table! {
         cancelled -> Integer,
         duration_minutes -> Nullable<Integer>,
         timeline_json -> Nullable<Text>,
+        plan_dismissed -> Integer,
     }
 }
 
@@ -300,6 +301,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    lineup_notification (id) {
+        id -> Integer,
+        practice_id -> Integer,
+        rower_id -> Integer,
+        sent_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     onboarding_progress (app_user_id, step) {
         app_user_id -> Integer,
         step -> Text,
@@ -331,6 +341,8 @@ diesel::joinable!(lineup -> practice (practice_id));
 diesel::joinable!(lineup -> boat (boat_id));
 diesel::joinable!(lineup_seat -> lineup (lineup_id));
 diesel::joinable!(lineup_seat -> rower (rower_id));
+diesel::joinable!(lineup_notification -> practice (practice_id));
+diesel::joinable!(lineup_notification -> rower (rower_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
@@ -355,6 +367,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     email_log,
     solver_profile,
     sync_source,
+    lineup_notification,
     stale_digest_log,
     onboarding_progress,
 );

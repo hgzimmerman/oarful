@@ -2,10 +2,11 @@ use crate::schema::{lineup, practice};
 use crate::team::TeamId;
 use crate::timeline::Timeline;
 use crate::types::{DurationMinutes, IntBool};
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// Newtyped identifier for a `practice` row. Transparent wrapper over
 /// `i32` with `diesel_derive_newtype::DieselNewType` doing the column
@@ -71,6 +72,8 @@ pub struct Practice {
     pub duration_minutes: Option<DurationMinutes>,
     /// JSON-serialized practice timeline / plan.
     pub timeline_json: Option<String>,
+    /// Coach explicitly dismissed plan-building for this practice.
+    pub plan_dismissed: IntBool,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -150,6 +153,36 @@ impl Practice {
             .get_results(conn)
     }
 
+    /// Practices in the Ready phase: has committed lineup, has plan or plan
+    /// dismissed, not cancelled, date >= today. Lightweight alternative to
+    /// `list_with_phases` when only Ready practices are needed.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn list_ready(
+        conn: &mut SqliteConnection,
+        team_id: TeamId,
+        today: NaiveDate,
+    ) -> Result<Vec<Practice>, diesel::result::Error> {
+        practice::table
+            .filter(practice::team_id.eq(team_id))
+            .filter(practice::date.ge(today))
+            .filter(practice::cancelled.eq(0))
+            .filter(
+                practice::timeline_json
+                    .is_not_null()
+                    .or(practice::plan_dismissed.eq(1)),
+            )
+            .filter(
+                practice::id.eq_any(
+                    lineup::table
+                        .filter(lineup::is_draft.eq(0))
+                        .select(lineup::practice_id),
+                ),
+            )
+            .select(Practice::as_select())
+            .order(practice::date.asc())
+            .get_results(conn)
+    }
+
     /// Which of the given practice IDs have at least one committed (non-draft) lineup?
     #[tracing::instrument(level = "debug", skip_all, err)]
     pub fn committed_ids(
@@ -210,6 +243,18 @@ impl Practice {
     ) -> Result<Practice, diesel::result::Error> {
         diesel::update(practice::table.find(id))
             .set(practice::cancelled.eq(if cancelled { 1 } else { 0 }))
+            .returning(Practice::as_returning())
+            .get_result(conn)
+    }
+
+    /// Set or clear the plan_dismissed flag.
+    pub fn set_plan_dismissed(
+        conn: &mut SqliteConnection,
+        id: PracticeId,
+        dismissed: bool,
+    ) -> Result<Practice, diesel::result::Error> {
+        diesel::update(practice::table.find(id))
+            .set(practice::plan_dismissed.eq(if dismissed { 1 } else { 0 }))
             .returning(Practice::as_returning())
             .get_result(conn)
     }
@@ -355,6 +400,255 @@ impl Practice {
             None => self.date.format("%A, %B %-d, %Y").to_string(),
         }
     }
+}
+
+// ── Practice phase derivation ────────────────────────────────────────
+
+/// The forward-moving lifecycle phase of a practice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PracticePhase {
+    /// Date/time set, collecting availability, no committed lineup yet.
+    Created,
+    /// Lineup committed, but no plan and plan not dismissed.
+    Committed,
+    /// Lineup committed + plan built (or plan dismissed). Ready to send.
+    Ready,
+    /// All boated rowers have been notified.
+    Notified,
+    /// Notified + practice end time has passed + not stale.
+    Complete,
+    /// Cancelled from any state.
+    Cancelled,
+}
+
+impl PracticePhase {
+    /// Human-readable label for display in the UI.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Created => "Needs lineup",
+            Self::Committed => "Needs plan",
+            Self::Ready => "Ready to send",
+            Self::Notified => "Notified",
+            Self::Complete => "Complete",
+            Self::Cancelled => "Cancelled",
+        }
+    }
+}
+
+/// Summary of a practice with its derived phase, used for list views.
+#[derive(Debug, Clone)]
+pub struct PracticeWithPhase {
+    pub practice: Practice,
+    pub phase: PracticePhase,
+    pub is_stale: bool,
+    pub boat_count: usize,
+    pub boated_rower_count: usize,
+    pub yes_count: usize,
+    pub total_responses: usize,
+    pub non_respondent_count: usize,
+    pub unnotified_rower_count: usize,
+}
+
+/// Inputs needed to derive the phase for a single practice.
+/// Gathered in batch by the list query and passed in per-practice.
+pub struct PhaseDeriveInput {
+    pub has_committed_lineup: bool,
+    pub has_plan: bool,
+    pub plan_dismissed: bool,
+    pub is_stale: bool,
+    pub all_boated_notified: bool,
+    pub has_any_boated_rowers: bool,
+    pub practice_ended: bool,
+}
+
+/// Derive the phase for a practice given pre-computed inputs.
+pub fn derive_phase(practice: &Practice, input: &PhaseDeriveInput) -> PracticePhase {
+    if practice.cancelled.as_bool() {
+        return PracticePhase::Cancelled;
+    }
+    if !input.has_committed_lineup {
+        return PracticePhase::Created;
+    }
+    // Has committed lineup from here on.
+    if input.has_any_boated_rowers
+        && input.all_boated_notified
+        && !input.is_stale
+        && input.practice_ended
+    {
+        return PracticePhase::Complete;
+    }
+    if input.has_any_boated_rowers && input.all_boated_notified {
+        return PracticePhase::Notified;
+    }
+    if input.has_plan || input.plan_dismissed {
+        return PracticePhase::Ready;
+    }
+    PracticePhase::Committed
+}
+
+/// Load all practices for a team and derive their phases in batch.
+///
+/// Returns practices sorted by date ascending. Includes:
+/// - All non-cancelled upcoming practices (date >= today)
+/// - All cancelled practices with date >= today (so coaches see them)
+/// - Recently completed/past practices (date >= `history_since`)
+///
+/// All sub-queries (lineups, availability, notifications, staleness)
+/// are batched to avoid N+1.
+pub fn list_with_phases(
+    conn: &mut SqliteConnection,
+    team_id: TeamId,
+    now: NaiveDateTime,
+    history_since: NaiveDate,
+) -> Result<Vec<PracticeWithPhase>, diesel::result::Error> {
+    use crate::app_user::AppUser;
+    use crate::availability::Availability;
+    use crate::lineup::Lineup;
+    use crate::lineup_notification::LineupNotification;
+    use crate::rower::Rower;
+    use crate::team::{Team, TeamMembership};
+
+    let today = now.date();
+
+    // Load all practices in the window (upcoming + recent history).
+    let practices: Vec<Practice> = practice::table
+        .filter(practice::team_id.eq(team_id))
+        .filter(practice::date.ge(history_since))
+        .select(Practice::as_select())
+        .order((practice::date.asc(), practice::time.asc()))
+        .get_results(conn)?;
+
+    if practices.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pids: Vec<PracticeId> = practices.iter().map(|p| p.id).collect();
+
+    // Team settings.
+    let team = Team::get(conn, team_id)?;
+    let default_duration = team
+        .as_ref()
+        .and_then(|t| t.default_practice_duration_minutes);
+    let assume_available = team
+        .as_ref()
+        .map(|t| t.assume_available.as_bool())
+        .unwrap_or(false);
+
+    // Rowers on this team who have user accounts (for non-respondent count).
+    let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
+    let active_rowers: HashSet<_> = Rower::list_active(conn)?
+        .into_iter()
+        .filter(|r| team_rower_ids.contains(&r.id))
+        .map(|r| r.id)
+        .collect();
+    let rowers_with_users = AppUser::rower_ids_with_users(conn)?;
+    let notifiable_rowers: HashSet<_> = active_rowers
+        .iter()
+        .filter(|id| rowers_with_users.contains(id))
+        .copied()
+        .collect();
+
+    // Batch queries.
+    let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
+    let boat_counts = Lineup::committed_boat_counts(conn, &pids)?;
+    let raw_avail = Availability::map_for_practices(conn, &pids)?;
+    let notified_map = LineupNotification::notified_rowers_for_practices(conn, &pids)?;
+
+    // Pre-partition availability by practice to avoid O(n*m) per-practice scan.
+    let mut avail_by_practice: HashMap<
+        PracticeId,
+        HashMap<crate::rower::types::RowerId, crate::availability::types::AvailabilityStatus>,
+    > = HashMap::new();
+    for ((rid, pid), status) in raw_avail {
+        avail_by_practice
+            .entry(pid)
+            .or_default()
+            .insert(rid, status);
+    }
+
+    let mut results = Vec::with_capacity(practices.len());
+    for practice in practices {
+        let pid = practice.id;
+        let empty_vec = Vec::new();
+        let boated: &Vec<_> = committed_rowers.get(&pid).unwrap_or(&empty_vec);
+        let boated_set: HashSet<_> = boated.iter().copied().collect();
+        let notified = notified_map.get(&pid);
+        let boat_count = boat_counts.get(&pid).copied().unwrap_or(0);
+        let practice_avail = avail_by_practice.get(&pid);
+
+        // Staleness: a boated rower whose availability is no longer Yes.
+        // Respects assume_available: if false, no response = not available = stale.
+        let is_stale = !boated_set.is_empty()
+            && boated_set.iter().any(|rid| {
+                !practice_avail
+                    .and_then(|m| m.get(rid))
+                    .map(|s| s.is_available())
+                    .unwrap_or(assume_available)
+            });
+
+        let practice_avail = practice_avail.cloned().unwrap_or_default();
+        let yes_count = practice_avail.values().filter(|s| s.is_available()).count();
+        let total_responses = practice_avail.len();
+        let non_respondent_count = notifiable_rowers
+            .iter()
+            .filter(|id| !practice_avail.contains_key(id))
+            .count();
+
+        // Notification status.
+        let all_boated_notified = if boated_set.is_empty() {
+            false
+        } else {
+            match notified {
+                Some(set) => boated_set.iter().all(|rid| set.contains(rid)),
+                None => false,
+            }
+        };
+        let unnotified_rower_count = if boated_set.is_empty() {
+            0
+        } else {
+            match notified {
+                Some(set) => boated_set.iter().filter(|rid| !set.contains(rid)).count(),
+                None => boated_set.len(),
+            }
+        };
+
+        // Has the practice ended?
+        let practice_ended = if let Some((_, end_time)) = practice.time_window(default_duration) {
+            let end_dt = practice.date.and_time(end_time);
+            now > end_dt
+        } else {
+            // No time info — use end of day.
+            today > practice.date
+        };
+
+        let has_plan = practice.timeline_json.is_some();
+        let plan_dismissed = practice.plan_dismissed.as_bool();
+
+        let input = PhaseDeriveInput {
+            has_committed_lineup: !boated_set.is_empty() || boat_count > 0,
+            has_plan,
+            plan_dismissed,
+            is_stale,
+            all_boated_notified,
+            has_any_boated_rowers: !boated_set.is_empty(),
+            practice_ended,
+        };
+        let phase = derive_phase(&practice, &input);
+
+        results.push(PracticeWithPhase {
+            practice,
+            phase,
+            is_stale,
+            boat_count,
+            boated_rower_count: boated_set.len(),
+            yes_count,
+            total_responses,
+            non_respondent_count,
+            unnotified_rower_count,
+        });
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]
@@ -526,5 +820,620 @@ mod tests {
         let (start, end) = p.time_window(None).unwrap();
         assert_eq!(start, NaiveTime::from_hms_opt(6, 0, 0).unwrap());
         assert_eq!(end, NaiveTime::from_hms_opt(7, 30, 0).unwrap());
+    }
+
+    // ── Phase derivation tests ──────────────────────────────────────
+
+    fn make_practice(conn: &mut SqliteConnection) -> Practice {
+        let tid = seed_team(conn);
+        Practice::upsert(conn, tid, d(2026, 5, 10), None, None).unwrap()
+    }
+
+    fn base_input() -> PhaseDeriveInput {
+        PhaseDeriveInput {
+            has_committed_lineup: false,
+            has_plan: false,
+            plan_dismissed: false,
+            is_stale: false,
+            all_boated_notified: false,
+            has_any_boated_rowers: false,
+            practice_ended: false,
+        }
+    }
+
+    #[test]
+    fn phase_created_when_no_lineup() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        assert_eq!(derive_phase(&p, &base_input()), PracticePhase::Created);
+    }
+
+    #[test]
+    fn phase_committed_when_lineup_no_plan() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Committed);
+    }
+
+    #[test]
+    fn phase_ready_when_plan_exists() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Ready);
+    }
+
+    #[test]
+    fn phase_ready_when_plan_dismissed() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            plan_dismissed: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Ready);
+    }
+
+    #[test]
+    fn phase_notified_when_all_notified() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Notified);
+    }
+
+    #[test]
+    fn phase_complete_when_ended_and_notified() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            practice_ended: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Complete);
+    }
+
+    #[test]
+    fn phase_notified_not_complete_when_stale() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            practice_ended: true,
+            is_stale: true,
+            ..base_input()
+        };
+        // Stale prevents Complete, falls to Notified
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Notified);
+    }
+
+    #[test]
+    fn phase_cancelled_overrides_all() {
+        let mut conn = in_memory_conn();
+        let p = make_practice(&mut conn);
+        Practice::set_cancelled_by_id(&mut conn, p.id, true).unwrap();
+        let p = Practice::get(&mut conn, p.id).unwrap().unwrap();
+        let input = PhaseDeriveInput {
+            has_committed_lineup: true,
+            has_plan: true,
+            all_boated_notified: true,
+            has_any_boated_rowers: true,
+            ..base_input()
+        };
+        assert_eq!(derive_phase(&p, &input), PracticePhase::Cancelled);
+    }
+
+    // ── Integration test for list_with_phases ───────────────────────
+
+    #[test]
+    fn list_with_phases_derives_all_states() {
+        use crate::availability::types::AvailabilityStatus;
+        use crate::availability::Availability;
+        use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+        use crate::boat::{Boat, NewBoat};
+        use crate::lineup::{CommitSeat, Lineup, SeatPosition};
+        use crate::lineup_notification::LineupNotification;
+        use crate::rower::types::{
+            Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+        };
+        use crate::rower::{NewRower, Rower};
+        use crate::team::TeamMembership;
+        use crate::types::IntBool;
+
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let now_ts = chrono::Utc::now().naive_utc();
+
+        // Seed a boat and rower.
+        let boat = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Pair".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(2),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+        let rower = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "R1".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now_ts,
+                updated_at: now_ts,
+            },
+        )
+        .unwrap();
+        TeamMembership::add(&mut conn, tid, rower.id).unwrap();
+
+        let today = d(2026, 5, 10);
+        let now = today.and_hms_opt(12, 0, 0).unwrap();
+
+        // Practice 1: Created (no lineup)
+        let p_created = Practice::upsert(&mut conn, tid, d(2026, 5, 12), None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p_created.id,
+                status: AvailabilityStatus::Yes,
+            },
+        )
+        .unwrap();
+
+        // Practice 2: Committed (has lineup, no plan)
+        let p_committed = Practice::upsert(&mut conn, tid, d(2026, 5, 13), None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p_committed.id,
+                status: AvailabilityStatus::Yes,
+            },
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p_committed.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        // Practice 3: Ready (has lineup + plan dismissed)
+        let p_ready = Practice::upsert(&mut conn, tid, d(2026, 5, 14), None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p_ready.id,
+                status: AvailabilityStatus::Yes,
+            },
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p_ready.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Practice::set_plan_dismissed(&mut conn, p_ready.id, true).unwrap();
+
+        // Practice 4: Notified (lineup + plan + all notified)
+        let p_notified = Practice::upsert(&mut conn, tid, d(2026, 5, 15), None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p_notified.id,
+                status: AvailabilityStatus::Yes,
+            },
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p_notified.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Practice::set_plan_dismissed(&mut conn, p_notified.id, true).unwrap();
+        LineupNotification::record(&mut conn, p_notified.id, rower.id, now_ts).unwrap();
+
+        // Practice 5: Cancelled
+        let p_cancelled = Practice::upsert(&mut conn, tid, d(2026, 5, 16), None, None).unwrap();
+        Practice::set_cancelled_by_id(&mut conn, p_cancelled.id, true).unwrap();
+
+        // Practice 6: Stale (committed + rower changed to unavailable)
+        let p_stale = Practice::upsert(&mut conn, tid, d(2026, 5, 17), None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p_stale.id,
+                status: AvailabilityStatus::No,
+            },
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p_stale.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        let results = list_with_phases(&mut conn, tid, now, today).unwrap();
+        assert_eq!(results.len(), 6);
+
+        let find = |pid: PracticeId| -> &PracticeWithPhase {
+            results.iter().find(|r| r.practice.id == pid).unwrap()
+        };
+
+        assert_eq!(find(p_created.id).phase, PracticePhase::Created);
+        assert!(!find(p_created.id).is_stale);
+
+        assert_eq!(find(p_committed.id).phase, PracticePhase::Committed);
+        assert!(!find(p_committed.id).is_stale);
+
+        assert_eq!(find(p_ready.id).phase, PracticePhase::Ready);
+        assert!(!find(p_ready.id).is_stale);
+
+        assert_eq!(find(p_notified.id).phase, PracticePhase::Notified);
+        assert!(!find(p_notified.id).is_stale);
+
+        assert_eq!(find(p_cancelled.id).phase, PracticePhase::Cancelled);
+
+        assert_eq!(find(p_stale.id).phase, PracticePhase::Committed);
+        assert!(find(p_stale.id).is_stale);
+    }
+
+    #[test]
+    fn set_plan_dismissed_toggles() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 10), None, None).unwrap();
+        assert!(!p.plan_dismissed.as_bool());
+
+        let p = Practice::set_plan_dismissed(&mut conn, p.id, true).unwrap();
+        assert!(p.plan_dismissed.as_bool());
+
+        let p = Practice::set_plan_dismissed(&mut conn, p.id, false).unwrap();
+        assert!(!p.plan_dismissed.as_bool());
+    }
+
+    #[test]
+    fn list_ready_returns_only_ready_practices() {
+        use crate::availability::types::AvailabilityStatus;
+        use crate::availability::Availability;
+        use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+        use crate::boat::{Boat, NewBoat};
+        use crate::lineup::{CommitSeat, Lineup, SeatPosition};
+        use crate::rower::types::{
+            Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+        };
+        use crate::rower::{NewRower, Rower};
+        use crate::types::IntBool;
+
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let now_ts = chrono::Utc::now().naive_utc();
+        let today = d(2026, 5, 10);
+
+        let boat = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Pair".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(2),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+        let rower = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "R".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now_ts,
+                updated_at: now_ts,
+            },
+        )
+        .unwrap();
+
+        let commit_one = |conn: &mut SqliteConnection, pid: PracticeId| {
+            Availability::upsert(
+                conn,
+                crate::availability::NewAvailability {
+                    rower_id: rower.id,
+                    practice_id: pid,
+                    status: AvailabilityStatus::Yes,
+                },
+            )
+            .unwrap();
+            Lineup::commit_for_boat(
+                conn,
+                pid,
+                boat.id,
+                &[CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: rower.id,
+                    is_cox: false,
+                }],
+            )
+            .unwrap();
+        };
+
+        // Created (no lineup) — not ready.
+        Practice::upsert(&mut conn, tid, d(2026, 5, 11), None, None).unwrap();
+
+        // Committed (lineup, no plan) — not ready.
+        let p_committed = Practice::upsert(&mut conn, tid, d(2026, 5, 12), None, None).unwrap();
+        commit_one(&mut conn, p_committed.id);
+
+        // Ready (lineup + plan dismissed).
+        let p_ready = Practice::upsert(&mut conn, tid, d(2026, 5, 13), None, None).unwrap();
+        commit_one(&mut conn, p_ready.id);
+        Practice::set_plan_dismissed(&mut conn, p_ready.id, true).unwrap();
+
+        // Cancelled + plan dismissed — not ready.
+        let p_cancelled = Practice::upsert(&mut conn, tid, d(2026, 5, 14), None, None).unwrap();
+        commit_one(&mut conn, p_cancelled.id);
+        Practice::set_plan_dismissed(&mut conn, p_cancelled.id, true).unwrap();
+        Practice::set_cancelled_by_id(&mut conn, p_cancelled.id, true).unwrap();
+
+        let ready = Practice::list_ready(&mut conn, tid, today).unwrap();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id, p_ready.id);
+    }
+
+    #[test]
+    fn list_with_phases_stale_when_assume_available_false() {
+        use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+        use crate::boat::{Boat, NewBoat};
+        use crate::lineup::{CommitSeat, Lineup, SeatPosition};
+        use crate::rower::types::{
+            Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+        };
+        use crate::rower::{NewRower, Rower};
+        use crate::team::TeamMembership;
+        use crate::types::IntBool;
+
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let now_ts = chrono::Utc::now().naive_utc();
+
+        // Set assume_available = false on team.
+        diesel::update(crate::schema::team::table.find(tid))
+            .set(crate::schema::team::assume_available.eq(0))
+            .execute(&mut conn)
+            .unwrap();
+
+        let boat = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Pair".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(2),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+        let rower = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "R".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now_ts,
+                updated_at: now_ts,
+            },
+        )
+        .unwrap();
+        TeamMembership::add(&mut conn, tid, rower.id).unwrap();
+
+        let today = d(2026, 5, 10);
+        let now = today.and_hms_opt(12, 0, 0).unwrap();
+
+        // Commit a lineup but DON'T set availability at all.
+        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 12), None, None).unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        let results = list_with_phases(&mut conn, tid, now, today).unwrap();
+        let pwp = results.iter().find(|r| r.practice.id == p.id).unwrap();
+
+        // With assume_available=false, no response means not available = stale.
+        assert!(pwp.is_stale);
+    }
+
+    #[test]
+    fn list_with_phases_complete_for_past_notified() {
+        use crate::availability::types::AvailabilityStatus;
+        use crate::availability::Availability;
+        use crate::boat::types::{CoxPosition, OarsPerSeat, SeatCount, WeightClass};
+        use crate::boat::{Boat, NewBoat};
+        use crate::lineup::{CommitSeat, Lineup, SeatPosition};
+        use crate::lineup_notification::LineupNotification;
+        use crate::rower::types::{
+            Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+        };
+        use crate::rower::{NewRower, Rower};
+        use crate::team::TeamMembership;
+        use crate::types::IntBool;
+
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let now_ts = chrono::Utc::now().naive_utc();
+
+        let boat = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Pair".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(2),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+        let rower = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "R".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now_ts,
+                updated_at: now_ts,
+            },
+        )
+        .unwrap();
+        TeamMembership::add(&mut conn, tid, rower.id).unwrap();
+
+        // Practice in the past, with lineup + plan + notification.
+        let past_date = d(2026, 5, 1);
+        let p = Practice::upsert(&mut conn, tid, past_date, None, None).unwrap();
+        Availability::upsert(
+            &mut conn,
+            crate::availability::NewAvailability {
+                rower_id: rower.id,
+                practice_id: p.id,
+                status: AvailabilityStatus::Yes,
+            },
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p.id,
+            boat.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: rower.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Practice::set_plan_dismissed(&mut conn, p.id, true).unwrap();
+        LineupNotification::record(&mut conn, p.id, rower.id, now_ts).unwrap();
+
+        // "now" is well after the practice date.
+        let today = d(2026, 5, 10);
+        let now = today.and_hms_opt(12, 0, 0).unwrap();
+        let history_since = d(2026, 4, 25);
+
+        let results = list_with_phases(&mut conn, tid, now, history_since).unwrap();
+        let pwp = results.iter().find(|r| r.practice.id == p.id).unwrap();
+        assert_eq!(pwp.phase, PracticePhase::Complete);
+        assert!(!pwp.is_stale);
     }
 }

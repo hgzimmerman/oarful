@@ -1,4 +1,4 @@
-//! Practice dashboard handlers: tabs, create, cancel.
+//! Practice dashboard handlers: create, cancel, unified list.
 //!
 //! Email-related handlers live in submodules:
 //! - [`reminders`] — availability reminder preview + send
@@ -11,21 +11,15 @@ pub(crate) use lineups::{lineup_preview_handler, send_lineups_handler};
 pub(crate) use reminders::{reminder_preview_handler, send_reminders_handler};
 
 use axum::{
-    extract::Path,
-    http::HeaderMap,
+    extract::{Path, State},
     response::{Html, IntoResponse, Redirect},
     Extension, Form,
 };
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use chrono::{NaiveDate, NaiveTime, Utc};
-use lineup_db::app_user::{AppUser, Role};
-use lineup_db::availability::Availability;
-use lineup_db::email_log::EmailLog;
-use lineup_db::lineup::Lineup;
+use lineup_db::app_user::Role;
 use lineup_db::practice::{Practice, PracticeId};
-use lineup_db::rower::Rower;
-use lineup_db::types::EmailLogType;
 use serde::Deserialize;
 use std::collections::HashSet;
 
@@ -35,12 +29,6 @@ use crate::{
     templates,
 };
 
-const TAB_TARGET: &str = "practices-tab-content";
-
-fn is_tab_swap(headers: &HeaderMap) -> bool {
-    headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TAB_TARGET)
-}
-
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn list_handler(
     jar: CookieJar,
@@ -48,67 +36,14 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
     let is_coach = tenant.claims.role().at_least(Role::Coach);
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    let onboarding = if is_coach {
-        Some(query_onboarding_state(&tenant).await?)
-    } else {
-        None
-    };
+    let now = Utc::now().naive_utc();
+    let today = now.date();
+    // Show history going back 14 days.
+    let history_since = today - chrono::Duration::days(14);
 
-    let planning_content = planning_tab_content(&jar, &tenant).await?;
-    let content = templates::practices::tabbed_page(
-        "planning",
-        planning_content,
-        is_coach,
-        onboarding.as_ref(),
-    );
-    Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
-}
-
-async fn query_onboarding_state(
-    tenant: &TenantContext,
-) -> Result<templates::onboarding::OnboardingState, ErrorResponse> {
-    let user_id = tenant
-        .claims
-        .user_id()
-        .ok_or_else(|| internal_error(anyhow::anyhow!("no user id in claims")))?;
-    tenant
-        .db
-        .with_conn(move |conn| {
-            let completed = lineup_db::onboarding::completed_steps(conn, user_id)?;
-            Ok(templates::onboarding::OnboardingState { completed })
-        })
-        .await
-        .map_err(internal_error)
-}
-
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn planning_handler(
-    jar: CookieJar,
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-    headers: HeaderMap,
-) -> Result<Html<String>, ErrorResponse> {
-    let content = planning_tab_content(&jar, &tenant).await?;
-    if is_tab_swap(&headers) {
-        return Ok(Html(
-            templates::practices::tab_content_swap("planning", content).into_string(),
-        ));
-    }
-    let is_coach = tenant.claims.role().at_least(Role::Coach);
-    let page = templates::practices::tabbed_page("planning", content, is_coach, None);
-    Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
-}
-
-async fn planning_tab_content(
-    jar: &CookieJar,
-    tenant: &TenantContext,
-) -> Result<maud::Markup, ErrorResponse> {
-    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let today = Utc::now().date_naive();
-    let is_coach = tenant.claims.role().at_least(Role::Coach);
-
-    let (rows, default_time, default_duration, suggested_date) = tenant
+    let (practices, default_time, default_duration, suggested_date, assume_available) = tenant
         .db
         .with_conn(move |conn| {
             let team = lineup_db::team::Team::get(conn, team_id)?;
@@ -117,77 +52,50 @@ async fn planning_tab_content(
                 .as_ref()
                 .and_then(|t| t.default_practice_duration_minutes);
             let practice_days = team.as_ref().and_then(|t| t.default_practice_days);
-            let upcoming_practices = Practice::list_upcoming(conn, team_id, today)?;
+            let assume_available = team
+                .as_ref()
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
 
-            let upcoming_ids: Vec<PracticeId> = upcoming_practices.iter().map(|p| p.id).collect();
-            let committed_ids: HashSet<PracticeId> =
-                Practice::committed_ids(conn, team_id, &upcoming_ids)?
-                    .into_iter()
-                    .collect();
-            let draft_ids = Lineup::practices_with_drafts(conn, &upcoming_ids)?;
+            let practices =
+                lineup_db::practice::list_with_phases(conn, team_id, now, history_since)?;
 
             let existing_dates: HashSet<chrono::NaiveDate> =
-                upcoming_practices.iter().map(|p| p.date).collect();
+                practices.iter().map(|p| p.practice.date).collect();
             let suggested_date =
                 practice_days.and_then(|pd| pd.next_unfilled(today, &existing_dates));
 
-            let all_rowers = Rower::list_active(conn)?;
-            let rowers_with_user: Vec<_> = all_rowers
-                .iter()
-                .filter(|r| {
-                    AppUser::find_by_rower_id(conn, r.id)
-                        .ok()
-                        .flatten()
-                        .is_some()
-                })
-                .collect();
-
-            let mut rows = Vec::new();
-            for practice in &upcoming_practices {
-                if committed_ids.contains(&practice.id) {
-                    continue;
-                }
-                let avail_map = Availability::map_for_practice(conn, practice.id)?;
-                let yes = avail_map.values().filter(|s| s.is_available()).count();
-                let total = avail_map.len();
-                let non_respondents = rowers_with_user
-                    .iter()
-                    .filter(|r| !avail_map.contains_key(&r.id))
-                    .count();
-                let already_sent = EmailLog::already_sent_today(
-                    conn,
-                    team_id,
-                    &EmailLogType::new("reminder"),
-                    practice.date,
-                )?;
-
-                rows.push(templates::practices::PracticeRow {
-                    practice_id: practice.id,
-                    date: practice.date,
-                    time: practice.time,
-                    duration_minutes: practice.effective_duration(default_duration),
-                    yes_count: yes,
-                    total_responses: total,
-                    cancelled: practice.cancelled.as_bool(),
-                    non_respondent_count: non_respondents,
-                    boat_count: 0,
-                    already_sent_today: already_sent,
-                    has_draft: draft_ids.contains(&practice.id),
-                });
-            }
-            Ok((rows, default_time, default_duration, suggested_date))
+            Ok((
+                practices,
+                default_time,
+                default_duration,
+                suggested_date,
+                assume_available,
+            ))
         })
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::planning_content(
-        &rows,
+    let content = templates::practices::unified_page(
+        &practices,
         is_coach,
+        assume_available,
         today,
         default_time,
         default_duration,
         suggested_date,
-    ))
+    );
+    Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
+}
+
+/// Legacy redirect: /practices/planning → /practices
+pub(crate) async fn planning_redirect() -> impl IntoResponse {
+    Redirect::to("/practices")
+}
+
+/// Legacy redirect: /practices/committed → /practices
+pub(crate) async fn committed_redirect() -> impl IntoResponse {
+    Redirect::to("/practices")
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,21 +181,46 @@ pub(crate) async fn cancel_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<axum::response::Response, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    let new_cancelled = tenant
+    // Check notification status and toggle cancel in one DB call.
+    // Returns None if we need to show a confirmation modal instead.
+    let result: Option<bool> = tenant
         .db
         .with_conn(move |conn| {
             let practice =
                 Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
+
+            // If cancelling (not restoring) and rowers have been notified, defer to modal.
+            if !practice.cancelled.as_bool() {
+                let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+                    conn,
+                    practice_id,
+                )?;
+                if !notified.is_empty() {
+                    return Ok(None);
+                }
+            }
+
             let new_cancelled = !practice.cancelled.as_bool();
             Practice::set_cancelled_by_id(conn, practice_id, new_cancelled)?;
-            Ok(new_cancelled)
+            Ok(Some(new_cancelled))
         })
         .await
         .map_err(internal_error)?;
+
+    // Show confirmation modal if notified rowers exist.
+    let new_cancelled = match result {
+        None => {
+            return Ok(
+                Html(templates::practices::cancel_confirm_modal(practice_id).into_string())
+                    .into_response(),
+            );
+        }
+        Some(v) => v,
+    };
 
     crate::audit::record(
         &tenant.db,
@@ -298,75 +231,180 @@ pub(crate) async fn cancel_handler(
         Some(serde_json::json!({"cancelled": new_cancelled}).to_string()),
     );
 
+    // Return HX-Redirect so HTMX navigates (since hx-target is body/beforeend).
+    Ok(([("HX-Redirect", "/practices")], Html(String::new())).into_response())
+}
+
+/// Cancel a practice without sending notification emails.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn cancel_silent_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(practice_id): Path<PracticeId>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    tenant
+        .db
+        .with_conn(move |conn| Practice::set_cancelled_by_id(conn, practice_id, true))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.cancel",
+        "practice",
+        &practice_id.to_string(),
+        Some(serde_json::json!({"cancelled": true, "notified": false}).to_string()),
+    );
+
     Ok(Redirect::to("/practices"))
 }
 
+/// Cancel a practice and send cancellation emails to notified rowers.
 #[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn committed_handler(
+pub(crate) async fn cancel_notify_handler(
+    State(mailer_ctx): State<crate::state::MailerCtx>,
+    State(jwt_keys): State<crate::jwt::JwtKeys>,
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-    headers: HeaderMap,
-) -> Result<Html<String>, ErrorResponse> {
-    let content = committed_tab_content(&jar, &tenant).await?;
-    if is_tab_swap(&headers) {
-        return Ok(Html(
-            templates::practices::tab_content_swap("committed", content).into_string(),
-        ));
-    }
-    let is_coach = tenant.claims.role().at_least(Role::Coach);
-    let page = templates::practices::tabbed_page("committed", content, is_coach, None);
-    Ok(super::maybe_page_authed("Practices", page, hx, &tenant))
-}
+    Path(practice_id): Path<PracticeId>,
+) -> Result<axum::response::Response, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let team_name = tenant.config.tenant_name.clone();
 
-async fn committed_tab_content(
-    jar: &CookieJar,
-    tenant: &TenantContext,
-) -> Result<maud::Markup, ErrorResponse> {
-    let team_id = super::active_team(&tenant.db, jar, Some(&tenant.claims)).await?;
-    let is_coach = tenant.claims.role().at_least(Role::Coach);
-
-    let rows = tenant
+    // Cancel the practice and gather recipients in one DB call.
+    let (practice, recipients) = tenant
         .db
         .with_conn(move |conn| {
-            let team = lineup_db::team::Team::get(conn, team_id)?;
-            let default_duration = team
-                .as_ref()
-                .and_then(|t| t.default_practice_duration_minutes);
-            let committed_practices = Practice::list_committed(conn, team_id)?;
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
+            Practice::set_cancelled_by_id(conn, practice_id, true)?;
+            let notified_ids = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+                conn,
+                practice_id,
+            )?;
 
-            let mut rows = Vec::new();
-            for practice in &committed_practices {
-                let lineups = Lineup::for_practice(conn, practice.id)?;
-                if lineups.is_empty() {
+            // Batch-load rowers and filter to those with accounts to avoid N+1.
+            let notified_set: std::collections::HashSet<_> = notified_ids.into_iter().collect();
+            let rowers_with_users = lineup_db::app_user::AppUser::rower_ids_with_users(conn)?;
+            let all_rowers = lineup_db::rower::Rower::list_active(conn)?;
+            let rower_map: std::collections::HashMap<_, _> =
+                all_rowers.iter().map(|r| (r.id, r)).collect();
+
+            let mut recipients = Vec::new();
+            for rid in &notified_set {
+                if !rowers_with_users.contains(rid) {
                     continue;
                 }
-                let already_sent = EmailLog::already_sent_today(
-                    conn,
-                    team_id,
-                    &EmailLogType::new("lineup"),
-                    practice.date,
-                )?;
-
-                rows.push(templates::practices::PracticeRow {
-                    practice_id: practice.id,
-                    date: practice.date,
-                    time: practice.time,
-                    duration_minutes: practice.effective_duration(default_duration),
-                    yes_count: 0,
-                    total_responses: 0,
-                    cancelled: practice.cancelled.as_bool(),
-                    non_respondent_count: 0,
-                    boat_count: lineups.len(),
-                    already_sent_today: already_sent,
-                    has_draft: false, // committed tab never shows drafts
-                });
+                if let Some(user) = lineup_db::app_user::AppUser::find_by_rower_id(conn, *rid)? {
+                    if user.wants_lineups()
+                        && user.status == lineup_db::app_user::UserStatus::Active
+                    {
+                        let name = rower_map
+                            .get(rid)
+                            .map(|r| r.display_name())
+                            .unwrap_or_else(|| "Rower".to_string());
+                        recipients.push((user.id, user.email.clone(), name));
+                    }
+                }
             }
-            rows.sort_by(|a, b| b.date.cmp(&a.date));
-            Ok(rows)
+            Ok((practice, recipients))
         })
         .await
         .map_err(internal_error)?;
 
-    Ok(templates::practices::committed_content(&rows, is_coach))
+    let mut results: Vec<templates::practices::SendResultRecipient> = Vec::new();
+    for (user_id, email, name) in &recipients {
+        let unsub_url = crate::unsubscribe::url(
+            &mailer_ctx,
+            &tenant.config.tenant_slug,
+            *user_id,
+            crate::unsubscribe::EmailType::Lineups,
+            &jwt_keys,
+        );
+        let unsub_all_url = crate::unsubscribe::url(
+            &mailer_ctx,
+            &tenant.config.tenant_slug,
+            *user_id,
+            crate::unsubscribe::EmailType::All,
+            &jwt_keys,
+        );
+        if let Err(err) = mailer_ctx
+            .mailer
+            .send_cancellation(
+                email,
+                name,
+                &team_name,
+                practice.date,
+                practice.time,
+                &unsub_url,
+                &unsub_all_url,
+            )
+            .await
+        {
+            tracing::warn!(?err, %email, "failed to send cancellation");
+            results.push(templates::practices::SendResultRecipient {
+                name: name.clone(),
+                status: templates::practices::SendStatus::Failed,
+            });
+        } else {
+            results.push(templates::practices::SendResultRecipient {
+                name: name.clone(),
+                status: templates::practices::SendStatus::Sent,
+            });
+        }
+    }
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.cancel",
+        "practice",
+        &practice_id.to_string(),
+        Some(
+            serde_json::json!({
+                "cancelled": true,
+                "notified": true,
+                "sent_count": results.iter().filter(|r| matches!(r.status, templates::practices::SendStatus::Sent)).count()
+            })
+            .to_string(),
+        ),
+    );
+
+    Ok(
+        Html(templates::practices::send_result_modal("Practice cancelled", &results).into_string())
+            .into_response(),
+    )
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn dismiss_plan_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(practice_id): Path<PracticeId>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    tenant
+        .db
+        .with_conn(move |conn| Practice::set_plan_dismissed(conn, practice_id, true))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.dismiss_plan",
+        "practice",
+        &practice_id.to_string(),
+        None,
+    );
+
+    let redirect = format!("/history/{practice_id}");
+    Ok(Redirect::to(&redirect))
 }

@@ -114,6 +114,18 @@ pub trait Mailer: Send + Sync {
         unsubscribe_all_url: &str,
     ) -> Result<()>;
 
+    /// Send a practice cancellation notification.
+    async fn send_cancellation(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        date: NaiveDate,
+        time: Option<NaiveTime>,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
+    ) -> Result<()>;
+
     /// Send a password-reset email. `clubs` is a list of
     /// `(club_name, reset_url)` pairs (one per tenant the email
     /// belongs to).
@@ -153,6 +165,15 @@ pub enum MailMessage {
         team_name: String,
         lineups: Vec<EmailLineupSummary>,
         magic_url: String,
+        unsubscribe_url: String,
+        unsubscribe_all_url: String,
+    },
+    Cancellation {
+        to_email: String,
+        to_name: String,
+        team_name: String,
+        date: NaiveDate,
+        time: Option<NaiveTime>,
         unsubscribe_url: String,
         unsubscribe_all_url: String,
     },
@@ -272,6 +293,28 @@ impl Mailer for ChannelMailer {
             subject: subject.to_string(),
             sections: sections.to_vec(),
             magic_url: magic_url.to_string(),
+            unsubscribe_url: unsubscribe_url.to_string(),
+            unsubscribe_all_url: unsubscribe_all_url.to_string(),
+        });
+        Ok(())
+    }
+
+    async fn send_cancellation(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        date: NaiveDate,
+        time: Option<NaiveTime>,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
+    ) -> Result<()> {
+        let _ = self.tx.send(MailMessage::Cancellation {
+            to_email: to_email.to_string(),
+            to_name: to_name.to_string(),
+            team_name: team_name.to_string(),
+            date,
+            time,
             unsubscribe_url: unsubscribe_url.to_string(),
             unsubscribe_all_url: unsubscribe_all_url.to_string(),
         });
@@ -423,6 +466,36 @@ impl Mailer for LogMailer {
             "stale lineup alert (LogMailer — no email sent)"
         );
         tracing::trace!(html, "stale alert email HTML");
+        Ok(())
+    }
+
+    async fn send_cancellation(
+        &self,
+        to_email: &str,
+        to_name: &str,
+        team_name: &str,
+        date: NaiveDate,
+        time: Option<NaiveTime>,
+        unsubscribe_url: &str,
+        unsubscribe_all_url: &str,
+    ) -> Result<()> {
+        let html = crate::templates::email::cancellation_email(
+            to_name,
+            team_name,
+            date,
+            time,
+            unsubscribe_url,
+            unsubscribe_all_url,
+        )
+        .into_string();
+        tracing::info!(
+            to_email,
+            to_name,
+            team_name,
+            %date,
+            "practice cancellation (LogMailer — no email sent)"
+        );
+        tracing::trace!(html, "cancellation email HTML");
         Ok(())
     }
 

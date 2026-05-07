@@ -485,6 +485,21 @@ impl Lineup {
             .get_results(conn)?;
         Ok(ids.into_iter().collect())
     }
+
+    /// Count committed (non-draft) boats per practice for a batch of practice IDs.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn committed_boat_counts(
+        conn: &mut SqliteConnection,
+        practice_ids: &[PracticeId],
+    ) -> Result<std::collections::HashMap<PracticeId, usize>, diesel::result::Error> {
+        let rows: Vec<(PracticeId, i64)> = lineup::table
+            .filter(lineup::practice_id.eq_any(practice_ids))
+            .filter(lineup::is_draft.eq(0))
+            .group_by(lineup::practice_id)
+            .select((lineup::practice_id, diesel::dsl::count(lineup::id)))
+            .load(conn)?;
+        Ok(rows.into_iter().map(|(pid, c)| (pid, c as usize)).collect())
+    }
 }
 
 #[cfg(test)]
@@ -933,5 +948,85 @@ mod tests {
         let committed = Lineup::for_practice(&mut conn, practice.id).unwrap();
         assert_eq!(committed.len(), 1);
         assert_eq!(committed[0].seats[0].rower_id, r1.id);
+    }
+
+    #[test]
+    fn committed_boat_counts_excludes_drafts() {
+        let mut conn = in_memory_conn();
+        let tid = seed_team(&mut conn);
+        let boat1 = seed_boat(&mut conn);
+        let boat2 = Boat::insert(
+            &mut conn,
+            NewBoat {
+                name: "Four".into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(4),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(1),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap();
+        let r1 = seed_rower(&mut conn, "R1");
+        let r2 = seed_rower(&mut conn, "R2");
+        let p1 = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 1).unwrap());
+        let p2 = seed_practice(&mut conn, tid, NaiveDate::from_ymd_opt(2026, 5, 2).unwrap());
+
+        // p1: two committed boats.
+        Lineup::commit_for_boat(
+            &mut conn,
+            p1.id,
+            boat1.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Lineup::commit_for_boat(
+            &mut conn,
+            p1.id,
+            boat2.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r2.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+
+        // p2: one committed + one draft (draft shouldn't count).
+        Lineup::commit_for_boat(
+            &mut conn,
+            p2.id,
+            boat1.id,
+            &[CommitSeat {
+                seat_position: SeatPosition::new(1),
+                rower_id: r1.id,
+                is_cox: false,
+            }],
+        )
+        .unwrap();
+        Lineup::save_draft_for_practice(
+            &mut conn,
+            p2.id,
+            &[(
+                boat2.id,
+                vec![CommitSeat {
+                    seat_position: SeatPosition::new(1),
+                    rower_id: r2.id,
+                    is_cox: false,
+                }],
+            )],
+        )
+        .unwrap();
+
+        let counts = Lineup::committed_boat_counts(&mut conn, &[p1.id, p2.id]).unwrap();
+        assert_eq!(counts.get(&p1.id).copied(), Some(2));
+        assert_eq!(counts.get(&p2.id).copied(), Some(1));
     }
 }

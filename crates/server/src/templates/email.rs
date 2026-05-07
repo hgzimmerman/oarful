@@ -318,3 +318,43 @@ pub(crate) fn stale_alert_email(
         }),
     )
 }
+
+/// Practice cancellation email: notifies rowers that a practice has been cancelled.
+pub(crate) fn cancellation_email(
+    to_name: &str,
+    team_name: &str,
+    date: NaiveDate,
+    time: Option<NaiveTime>,
+    unsubscribe_url: &str,
+    unsubscribe_all_url: &str,
+) -> Markup {
+    let subject = format!("{team_name} — practice cancelled");
+    email_wrapper(
+        &subject,
+        html! {
+            div class="card" {
+                div class="header" { (&subject) }
+                p style="font-size: 14px; margin-bottom: 16px;" {
+                    "Hi " (to_name) ", the following practice has been cancelled:"
+                }
+                div class="date-item" {
+                    strong { (date.format("%A")) }
+                    " — "
+                    (date)
+                    @if let Some(t) = time {
+                        span style="color: #64748b;" {
+                            " at " (t.format("%-I:%M %p"))
+                        }
+                    }
+                }
+                p style="font-size: 14px; margin-top: 16px; color: #64748b;" {
+                    "No action needed on your part."
+                }
+            }
+        },
+        Some(UnsubFooter {
+            unsub_url: unsubscribe_url,
+            unsub_all_url: unsubscribe_all_url,
+        }),
+    )
+}
