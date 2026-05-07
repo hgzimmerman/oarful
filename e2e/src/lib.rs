@@ -144,29 +144,30 @@ impl TestInstance {
         // Spawn WebKitWebDriver on the virtual display.
         //
         // On headless CI runners (no GPU), WebKitGTK needs Mesa's software
-        // EGL implementation (llvmpipe). We point libglvnd at Mesa's vendor
-        // JSON so it can find libEGL_mesa.so, and force software rendering.
-        let mesa_egl_dir = find_mesa_egl_vendor_dir();
-        let webdriver = unsafe {
-            Command::new("WebKitWebDriver")
-                .arg("-p")
-                .arg(driver_port.to_string())
-                .env("DISPLAY", &display)
+        // EGL implementation (llvmpipe). We detect this by checking for
+        // /dev/dri — if absent, there's no GPU and we apply software
+        // rendering overrides. Dev machines with real GPUs skip these to
+        // avoid conflicting with the system's native EGL driver.
+        let headless = !std::path::Path::new("/dev/dri").exists();
+        let mut cmd = Command::new("WebKitWebDriver");
+        cmd.arg("-p")
+            .arg(driver_port.to_string())
+            .env("DISPLAY", &display);
+
+        if headless {
+            let mesa_egl_dir = find_mesa_egl_vendor_dir();
+            cmd
                 // Tell libglvnd where to find Mesa's EGL vendor JSON so
                 // WebKit can create an EGL display via the software renderer.
-                // Without this, EGL initialization fails with EGL_BAD_PARAMETER
-                // and WebProcess crashes.
-                // Ref: https://github.com/NVIDIA/libglvnd
                 .env("__EGL_VENDOR_LIBRARY_DIRS", &mesa_egl_dir)
-                // Force Mesa to use its software rasterizer (llvmpipe) instead
-                // of attempting hardware DRI access.
-                // Ref: https://docs.mesa3d.org/envvars.html
+                // Force Mesa to use its software rasterizer (llvmpipe).
                 .env("LIBGL_ALWAYS_SOFTWARE", "1")
-                // Disable the DMA-BUF renderer introduced in WebKitGTK 2.46+
-                // which requires kernel DRM/GPU access.
-                // Ref: https://trac.webkit.org/wiki/EnvironmentVariables
-                .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
-                .stdout(std::process::Stdio::inherit())
+                // Disable the DMA-BUF renderer (requires kernel DRM access).
+                .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+
+        let webdriver = unsafe {
+            cmd.stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
                 .pre_exec(|| {
                     libc::setpgid(0, 0);
