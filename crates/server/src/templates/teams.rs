@@ -704,39 +704,44 @@ fn roster_matrix_inner(
     teams: &[Team],
     memberships: &HashSet<(TeamId, RowerId)>,
 ) -> Markup {
-    let subtitle = format!("{} rowers · {} teams", rowers.len(), teams.len());
     html! {
-        (page_header("Roster assignments", Some(&subtitle)))
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                "Roster assignments"
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                (rowers.len()) " rowers · " (teams.len()) " teams"
+            }
+        }
         div class="px-4 sm:px-8 py-6" {
             @if let Some(msg) = toast {
-                div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mb-4" {
+                div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
                     (msg)
                 }
             }
             @if teams.is_empty() {
-                div class="text-ink-3 italic" { "No teams. Create teams first." }
+                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
             } @else if rowers.is_empty() {
-                div class="text-ink-3 italic" { "No active rowers." }
+                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No active rowers." }
             } @else {
                 form method="post" action="/admin/roster"
                      hx-post="/admin/roster"
                      hx-target="#admin-tab-content" {
                     div class="flex justify-end mb-3" {
-                        button type="submit"
-                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                        button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
-                    div class="overflow-auto bg-paper rounded-lg shadow-soft max-h-[75vh]" {
+                    div class="overflow-auto rounded-lg max-h-[75vh]" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                         table class="text-xs border-collapse" {
                             caption class="sr-only" { "Team roster assignments" }
                             thead {
                                 tr {
-                                    th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
+                                    th scope="col" class="att-corner" style="min-width: 160px" {
                                         "Rower"
                                     }
                                     @for team in teams {
-                                        th scope="col" class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
+                                        th scope="col" class="att-date-head" style="min-width: 80px" {
                                             (team.name)
                                         }
                                     }
@@ -744,25 +749,25 @@ fn roster_matrix_inner(
                             }
                             tbody {
                                 @for rower in rowers {
-                                    tr class="border-t border-rule-2 hover:bg-paper-2" {
-                                        td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-r border-rule-2 whitespace-nowrap" {
+                                    tr class="att-row" {
+                                        td class="att-name" {
                                             a href={"/rowers/" (rower.id)}
                                               hx-get={"/rowers/" (rower.id)}
                                               hx-target="#content"
                                               hx-push-url="true"
-                                              class="text-link hover:text-link-2" {
+                                              class="hover:underline" style="color: var(--link)" {
                                                 (rower.display_name())
                                             }
                                         }
                                         @for team in teams {
-                                            td class="text-center border-rule-2 px-1" {
+                                            td class="att-cell text-center px-1" {
                                                 @let field_name = format!("m_{}_{}", team.id, rower.id);
                                                 @let checked = memberships.contains(&(team.id, rower.id));
                                                 input type="checkbox"
                                                        name=(field_name)
                                                        value="1"
                                                        checked[checked]
-                                                       class="w-4 h-4 accent-emerald-600 cursor-pointer";
+                                                       class="w-4 h-4 cursor-pointer";
                                             }
                                         }
                                     }
@@ -771,8 +776,7 @@ fn roster_matrix_inner(
                         }
                     }
                     div class="flex justify-end mt-3" {
-                        button type="submit"
-                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                        button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
@@ -809,43 +813,48 @@ fn fleet_matrix_inner(
     teams: &[Team],
     defaults: &HashSet<(TeamId, BoatId)>,
 ) -> Markup {
-    let subtitle = format!("{} sweep boats · {} teams", boats.len(), teams.len());
     html! {
-        (page_header("Default fleet", Some(&subtitle)))
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                "Default fleet"
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                (boats.len()) " sweep boats · " (teams.len()) " teams"
+            }
+        }
         div class="px-4 sm:px-8 py-6" {
             @if let Some(msg) = toast {
-                div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-6 py-4 text-sm mb-4" {
+                div class="rounded-lg px-6 py-4 text-sm mb-4" style="background: color-mix(in oklch, var(--good) 10%, var(--paper)); border: 1px solid color-mix(in oklch, var(--good) 25%, var(--rule)); color: var(--good)" {
                     (msg)
                 }
             }
-            p class="text-sm text-ink-3 mb-4" {
+            p class="text-sm mb-4" style="color: var(--muted)" {
                 "Select which boats are pre-selected in the generation pool for each team. "
                 "Single-team clubs default to all boats if none are selected."
             }
             @if teams.is_empty() {
-                div class="text-ink-3 italic" { "No teams. Create teams first." }
+                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No teams. Create teams first." }
             } @else if boats.is_empty() {
-                div class="text-ink-3 italic" { "No sweep boats in the fleet." }
+                div class="font-mono-stat text-xs italic" style="color: var(--muted)" { "No sweep boats in the fleet." }
             } @else {
                 form method="post" action="/admin/fleet/defaults"
                      hx-post="/admin/fleet/defaults"
                      hx-target="#admin-fleet-content" {
                     div class="flex justify-end mb-3" {
-                        button type="submit"
-                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                        button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
-                    div class="overflow-auto bg-paper rounded-lg shadow-soft max-h-[75vh]" {
+                    div class="overflow-auto rounded-lg max-h-[75vh]" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                         table class="text-xs border-collapse" {
                             caption class="sr-only" { "Team boat defaults" }
                             thead {
                                 tr {
-                                    th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[160px]" {
+                                    th scope="col" class="att-corner" style="min-width: 160px" {
                                         "Boat"
                                     }
                                     @for team in teams {
-                                        th scope="col" class="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-center font-semibold text-ink-2 border-b border-rule-2 whitespace-nowrap min-w-[80px]" {
+                                        th scope="col" class="att-date-head" style="min-width: 80px" {
                                             (team.name)
                                         }
                                     }
@@ -853,30 +862,30 @@ fn fleet_matrix_inner(
                             }
                             tbody {
                                 @for boat in boats {
-                                    tr class="border-t border-rule-2 hover:bg-paper-2" {
-                                        td class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-r border-rule-2 whitespace-nowrap" {
+                                    tr class="att-row" {
+                                        td class="att-name" {
                                             a href={"/boats/" (boat.id)}
                                               hx-get={"/boats/" (boat.id)}
                                               hx-target="#content"
                                               hx-push-url="true"
-                                              class="text-link hover:text-link-2" {
+                                              class="hover:underline" style="color: var(--link)" {
                                                 (boat.name)
                                             }
-                                            span class="text-muted ml-1" {
+                                            span class="font-mono-stat text-[10px] ml-1" style="color: var(--muted)" {
                                                 "(" (boat.seat_count)
                                                 @if boat.has_cox.as_bool() { "+" }
                                                 ")"
                                             }
                                         }
                                         @for team in teams {
-                                            td class="text-center border-rule-2 px-1" {
+                                            td class="att-cell text-center px-1" {
                                                 @let field_name = format!("b_{}_{}", team.id, boat.id);
                                                 @let checked = defaults.contains(&(team.id, boat.id));
                                                 input type="checkbox"
                                                        name=(field_name)
                                                        value="1"
                                                        checked[checked]
-                                                       class="w-4 h-4 accent-emerald-600 cursor-pointer";
+                                                       class="w-4 h-4 cursor-pointer";
                                             }
                                         }
                                     }
@@ -885,8 +894,7 @@ fn fleet_matrix_inner(
                         }
                     }
                     div class="flex justify-end mt-3" {
-                        button type="submit"
-                               class="bg-good hover:opacity-90 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                        button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save"
                         }
                     }
