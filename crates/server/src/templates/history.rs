@@ -160,10 +160,10 @@ pub(crate) fn detail_content(
         // ── Header ──
         header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
             div class="flex items-center gap-3 mb-1" {
-                a href="/practices/committed"
+                a href="/practices"
                   class="font-mono-stat text-xs tracking-wider hover:underline"
                   style="color: var(--muted)"
-                  hx-get="/practices/committed"
+                  hx-get="/practices"
                   hx-target="#content"
                   hx-push-url="true" {
                     "← All practices"

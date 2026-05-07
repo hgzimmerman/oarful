@@ -109,8 +109,8 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/practices",
             get(practices::list_handler).post(practices::create_handler),
         )
-        .route("/practices/planning", get(practices::planning_handler))
-        .route("/practices/committed", get(practices::committed_handler))
+        .route("/practices/planning", get(practices::planning_redirect))
+        .route("/practices/committed", get(practices::committed_redirect))
         .route(
             "/practices/reminder-preview",
             get(practices::reminder_preview_handler),
