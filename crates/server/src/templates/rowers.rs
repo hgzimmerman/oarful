@@ -177,14 +177,11 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
           hx-push-url="true"
           class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
             div class="min-w-0" {
-                div class="flex items-center gap-2" {
-                    span class="font-serif-heading font-medium text-[15px]" style="color: var(--link)" { (r.display_name()) }
-                    (super::solve::commit_meter(r))
-                }
+                span class="font-serif-heading font-medium text-[15px]" style="color: var(--link)" { (r.display_name()) }
                 div class="flex items-center gap-1 mt-1" {
-                    span class={"stat-badge " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
-                    span class={"stat-badge " (attr_tier(r.skill.ordinal()))} { (r.skill) }
-                    span class={"stat-badge " (attr_tier(r.strength.ordinal()))} { (r.strength) }
+                    span class={"stat-badge text-[10px] " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
+                    span class={"stat-badge text-[10px] " (attr_tier(r.skill.ordinal()))} { (r.skill) }
+                    span class={"stat-badge text-[10px] " (attr_tier(r.strength.ordinal()))} { (r.strength) }
                 }
                 @if show_emails {
                     @if let Some(e) = email {
@@ -202,15 +199,12 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
         tr style="border-top: 1px solid var(--rule-2)" class="hover:bg-paper-2" {
             td class="px-4 py-2.5" {
-                div class="flex items-center gap-2" {
-                    a href={"/rowers/" (r.id)}
-                      hx-get={"/rowers/" (r.id)}
-                      hx-target="#content"
-                      hx-push-url="true"
-                      class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
-                        (r.display_name())
-                    }
-                    (super::solve::commit_meter(r))
+                a href={"/rowers/" (r.id)}
+                  hx-get={"/rowers/" (r.id)}
+                  hx-target="#content"
+                  hx-push-url="true"
+                  class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
+                    (r.display_name())
                 }
             }
             @if show_emails {
@@ -219,13 +213,13 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                 }
             }
             td class="px-4 py-2.5" {
-                span class={"stat-badge " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
+                span class={"stat-badge text-[10px] " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
             }
             td class="px-4 py-2.5" {
-                span class={"stat-badge " (attr_tier(r.skill.ordinal()))} { (r.skill) }
+                span class={"stat-badge text-[10px] " (attr_tier(r.skill.ordinal()))} { (r.skill) }
             }
             td class="px-4 py-2.5" {
-                span class={"stat-badge " (attr_tier(r.strength.ordinal()))} { (r.strength) }
+                span class={"stat-badge text-[10px] " (attr_tier(r.strength.ordinal()))} { (r.strength) }
             }
             td class="px-4 py-2.5" {
                 span class="font-mono-stat text-xs" style="color: var(--ink-2)" {
