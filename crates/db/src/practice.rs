@@ -217,6 +217,18 @@ impl Practice {
             .get_result(conn)
     }
 
+    /// Set or clear the plan_dismissed flag.
+    pub fn set_plan_dismissed(
+        conn: &mut SqliteConnection,
+        id: PracticeId,
+        dismissed: bool,
+    ) -> Result<Practice, diesel::result::Error> {
+        diesel::update(practice::table.find(id))
+            .set(practice::plan_dismissed.eq(if dismissed { 1 } else { 0 }))
+            .returning(Practice::as_returning())
+            .get_result(conn)
+    }
+
     /// Non-cancelled practices for a team on or after `since`,
     /// ordered ascending.
     #[tracing::instrument(level = "debug", skip_all, err)]

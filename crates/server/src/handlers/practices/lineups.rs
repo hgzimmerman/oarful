@@ -332,7 +332,7 @@ pub(crate) async fn send_lineups_handler(
                 }
             }
 
-            // Record sends.
+            // Record sends + per-rower notifications.
             let now = chrono::Utc::now().naive_utc();
             for summary in &summaries {
                 EmailLog::record(
@@ -346,6 +346,21 @@ pub(crate) async fn send_lineups_handler(
                         sent_by_user_id: sender_id,
                     },
                 )?;
+
+                // Record per-rower notification for phase tracking.
+                if let Some(practice) = Practice::find_by_date(conn, team_id, summary.date)? {
+                    let committed = Lineup::for_practice(conn, practice.id)?;
+                    let boated_ids: Vec<_> = committed
+                        .iter()
+                        .flat_map(|c| c.seats.iter().map(|s| s.rower_id))
+                        .collect();
+                    lineup_db::lineup_notification::LineupNotification::record_batch(
+                        conn,
+                        practice.id,
+                        &boated_ids,
+                        now,
+                    )?;
+                }
             }
 
             Ok((summaries, recipients, first_practice_id))

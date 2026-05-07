@@ -221,3 +221,31 @@ pub(crate) async fn cancel_handler(
 
     Ok(Redirect::to("/practices"))
 }
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn dismiss_plan_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(practice_id): Path<PracticeId>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    tenant
+        .db
+        .with_conn(move |conn| Practice::set_plan_dismissed(conn, practice_id, true))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.dismiss_plan",
+        "practice",
+        &practice_id.to_string(),
+        None,
+    );
+
+    let redirect = format!("/history/{practice_id}");
+    Ok(Redirect::to(&redirect))
+}

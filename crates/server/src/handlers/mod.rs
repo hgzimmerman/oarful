@@ -128,6 +128,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(practices::send_lineups_handler),
         )
         .route("/practices/{id}/cancel", post(practices::cancel_handler))
+        .route(
+            "/practices/{id}/dismiss-plan",
+            post(practices::dismiss_plan_handler),
+        )
         .route("/solve/{id}", get(solve::view_handler))
         .route("/solve/{id}/stream", get(solve::stream_handler))
         .route("/solve/{id}/editor", get(solve::editor_handler))

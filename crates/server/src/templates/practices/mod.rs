@@ -334,7 +334,6 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                 "x-transition" {
                 @match pwp.phase {
                     PracticePhase::Created => {
-                        // Send reminders
                         @if pwp.non_respondent_count > 0 {
                             button type="button"
                                    hx-get={"/practices/reminder-preview?practice_ids=" (pid)}
@@ -347,16 +346,16 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                         }
                     }
                     PracticePhase::Committed => {
-                        // Send without plan (skip to Ready → Send)
-                        button type="button"
-                               hx-get={"/practices/lineup-preview?practice_id=" (pid) "&scope=practice"}
-                               hx-target="body"
-                               hx-swap="beforeend"
-                               "@click"="open = false"
-                               class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
-                            "Send without plan"
+                        @if !pwp.is_stale {
+                            button type="button"
+                                   hx-get={"/practices/lineup-preview?practice_id=" (pid) "&scope=practice"}
+                                   hx-target="body"
+                                   hx-swap="beforeend"
+                                   "@click"="open = false"
+                                   class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
+                                "Send without plan"
+                            }
                         }
-                        // Edit lineup
                         a href={"/solve/" (pid)}
                           hx-get={"/solve/" (pid)}
                           hx-target="#content"
@@ -366,7 +365,6 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                         }
                     }
                     PracticePhase::Ready => {
-                        // Edit plan
                         a href={"/history/" (pid)}
                           hx-get={"/history/" (pid)}
                           hx-target="#content"
@@ -374,7 +372,6 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit plan"
                         }
-                        // Edit lineup
                         a href={"/solve/" (pid)}
                           hx-get={"/solve/" (pid)}
                           hx-target="#content"
@@ -384,16 +381,16 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                         }
                     }
                     PracticePhase::Notified => {
-                        // Re-send
-                        button type="button"
-                               hx-get={"/practices/lineup-preview?practice_id=" (pid) "&scope=practice"}
-                               hx-target="body"
-                               hx-swap="beforeend"
-                               "@click"="open = false"
-                               class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
-                            "Re-send lineups"
+                        @if !pwp.is_stale {
+                            button type="button"
+                                   hx-get={"/practices/lineup-preview?practice_id=" (pid) "&scope=practice"}
+                                   hx-target="body"
+                                   hx-swap="beforeend"
+                                   "@click"="open = false"
+                                   class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
+                                "Re-send lineups"
+                            }
                         }
-                        // Edit lineup
                         a href={"/solve/" (pid)}
                           hx-get={"/solve/" (pid)}
                           hx-target="#content"
