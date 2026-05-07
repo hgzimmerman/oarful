@@ -485,6 +485,21 @@ impl Lineup {
             .get_results(conn)?;
         Ok(ids.into_iter().collect())
     }
+
+    /// Count committed (non-draft) boats per practice for a batch of practice IDs.
+    #[tracing::instrument(level = "debug", skip_all, err)]
+    pub fn committed_boat_counts(
+        conn: &mut SqliteConnection,
+        practice_ids: &[PracticeId],
+    ) -> Result<std::collections::HashMap<PracticeId, usize>, diesel::result::Error> {
+        let rows: Vec<(PracticeId, i64)> = lineup::table
+            .filter(lineup::practice_id.eq_any(practice_ids))
+            .filter(lineup::is_draft.eq(0))
+            .group_by(lineup::practice_id)
+            .select((lineup::practice_id, diesel::dsl::count(lineup::id)))
+            .load(conn)?;
+        Ok(rows.into_iter().map(|(pid, c)| (pid, c as usize)).collect())
+    }
 }
 
 #[cfg(test)]

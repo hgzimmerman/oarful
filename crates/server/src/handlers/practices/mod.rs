@@ -48,6 +48,7 @@ pub(crate) async fn list_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
     let is_coach = tenant.claims.role().at_least(Role::Coach);
+    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
     let onboarding = if is_coach {
         Some(query_onboarding_state(&tenant).await?)
@@ -55,11 +56,41 @@ pub(crate) async fn list_handler(
         None
     };
 
-    let planning_content = planning_tab_content(&jar, &tenant).await?;
-    let content = templates::practices::tabbed_page(
-        "planning",
-        planning_content,
+    let now = Utc::now().naive_utc();
+    let today = now.date();
+    // Show history going back 14 days.
+    let history_since = today - chrono::Duration::days(14);
+
+    let (practices, default_time, default_duration, suggested_date) = tenant
+        .db
+        .with_conn(move |conn| {
+            let team = lineup_db::team::Team::get(conn, team_id)?;
+            let default_time = team.as_ref().and_then(|t| t.default_practice_time);
+            let default_duration = team
+                .as_ref()
+                .and_then(|t| t.default_practice_duration_minutes);
+            let practice_days = team.as_ref().and_then(|t| t.default_practice_days);
+
+            let practices =
+                lineup_db::practice::list_with_phases(conn, team_id, now, history_since)?;
+
+            let existing_dates: HashSet<chrono::NaiveDate> =
+                practices.iter().map(|p| p.practice.date).collect();
+            let suggested_date =
+                practice_days.and_then(|pd| pd.next_unfilled(today, &existing_dates));
+
+            Ok((practices, default_time, default_duration, suggested_date))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let content = templates::practices::unified_page(
+        &practices,
         is_coach,
+        today,
+        default_time,
+        default_duration,
+        suggested_date,
         onboarding.as_ref(),
     );
     Ok(super::maybe_page_authed("Practices", content, hx, &tenant))

@@ -2,10 +2,11 @@ use crate::schema::{lineup, practice};
 use crate::team::TeamId;
 use crate::timeline::Timeline;
 use crate::types::{DurationMinutes, IntBool};
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::prelude::*;
 use diesel::SqliteConnection;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// Newtyped identifier for a `practice` row. Transparent wrapper over
 /// `i32` with `diesel_derive_newtype::DieselNewType` doing the column
@@ -441,6 +442,158 @@ pub fn derive_phase(practice: &Practice, input: &PhaseDeriveInput) -> PracticePh
         return PracticePhase::Ready;
     }
     PracticePhase::Committed
+}
+
+/// Load all practices for a team and derive their phases in batch.
+///
+/// Returns practices sorted by date ascending. Includes:
+/// - All non-cancelled upcoming practices (date >= today)
+/// - All cancelled practices with date >= today (so coaches see them)
+/// - Recently completed/past practices (date >= `history_since`)
+///
+/// All sub-queries (lineups, availability, notifications, staleness)
+/// are batched to avoid N+1.
+pub fn list_with_phases(
+    conn: &mut SqliteConnection,
+    team_id: TeamId,
+    now: NaiveDateTime,
+    history_since: NaiveDate,
+) -> Result<Vec<PracticeWithPhase>, diesel::result::Error> {
+    use crate::app_user::AppUser;
+    use crate::availability::Availability;
+    use crate::lineup::Lineup;
+    use crate::lineup_notification::LineupNotification;
+    use crate::rower::Rower;
+    use crate::team::{Team, TeamMembership};
+
+    let today = now.date();
+
+    // Load all practices in the window (upcoming + recent history).
+    let practices: Vec<Practice> = practice::table
+        .filter(practice::team_id.eq(team_id))
+        .filter(practice::date.ge(history_since))
+        .select(Practice::as_select())
+        .order((practice::date.asc(), practice::time.asc()))
+        .get_results(conn)?;
+
+    if practices.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pids: Vec<PracticeId> = practices.iter().map(|p| p.id).collect();
+
+    // Team settings.
+    let team = Team::get(conn, team_id)?;
+    let default_duration = team
+        .as_ref()
+        .and_then(|t| t.default_practice_duration_minutes);
+
+    // Rowers on this team who have user accounts (for non-respondent count).
+    let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
+    let active_rowers: HashSet<_> = Rower::list_active(conn)?
+        .into_iter()
+        .filter(|r| team_rower_ids.contains(&r.id))
+        .map(|r| r.id)
+        .collect();
+    let rowers_with_users = AppUser::rower_ids_with_users(conn)?;
+    let notifiable_rowers: HashSet<_> = active_rowers
+        .iter()
+        .filter(|id| rowers_with_users.contains(id))
+        .copied()
+        .collect();
+
+    // Batch queries.
+    let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
+    let boat_counts = Lineup::committed_boat_counts(conn, &pids)?;
+    let avail_map = Availability::map_for_practices(conn, &pids)?;
+    let notified_map = LineupNotification::notified_rowers_for_practices(conn, &pids)?;
+
+    let mut results = Vec::with_capacity(practices.len());
+    for practice in practices {
+        let pid = practice.id;
+        let empty_vec = Vec::new();
+        let boated: &Vec<_> = committed_rowers.get(&pid).unwrap_or(&empty_vec);
+        let boated_set: HashSet<_> = boated.iter().copied().collect();
+        let notified = notified_map.get(&pid);
+        let boat_count = boat_counts.get(&pid).copied().unwrap_or(0);
+
+        // Staleness: a boated rower whose availability is no longer Yes.
+        let is_stale = !boated_set.is_empty()
+            && boated_set.iter().any(|rid| {
+                !avail_map
+                    .get(&(*rid, pid))
+                    .map(|s| s.is_available())
+                    .unwrap_or(true)
+            });
+
+        // Availability counts for this practice.
+        let practice_avail: HashMap<_, _> = avail_map
+            .iter()
+            .filter(|((_, p), _)| *p == pid)
+            .map(|((r, _), s)| (*r, *s))
+            .collect();
+        let yes_count = practice_avail.values().filter(|s| s.is_available()).count();
+        let total_responses = practice_avail.len();
+        let non_respondent_count = notifiable_rowers
+            .iter()
+            .filter(|id| !practice_avail.contains_key(id))
+            .count();
+
+        // Notification status.
+        let all_boated_notified = if boated_set.is_empty() {
+            false
+        } else {
+            match notified {
+                Some(set) => boated_set.iter().all(|rid| set.contains(rid)),
+                None => false,
+            }
+        };
+        let unnotified_rower_count = if boated_set.is_empty() {
+            0
+        } else {
+            match notified {
+                Some(set) => boated_set.iter().filter(|rid| !set.contains(rid)).count(),
+                None => boated_set.len(),
+            }
+        };
+
+        // Has the practice ended?
+        let practice_ended = if let Some((_, end_time)) = practice.time_window(default_duration) {
+            let end_dt = practice.date.and_time(end_time);
+            now > end_dt
+        } else {
+            // No time info — use end of day.
+            today > practice.date
+        };
+
+        let has_plan = practice.timeline_json.is_some();
+        let plan_dismissed = practice.plan_dismissed.as_bool();
+
+        let input = PhaseDeriveInput {
+            has_committed_lineup: !boated_set.is_empty() || boat_count > 0,
+            has_plan,
+            plan_dismissed,
+            is_stale,
+            all_boated_notified,
+            has_any_boated_rowers: !boated_set.is_empty(),
+            practice_ended,
+        };
+        let phase = derive_phase(&practice, &input);
+
+        results.push(PracticeWithPhase {
+            practice,
+            phase,
+            is_stale,
+            boat_count,
+            boated_rower_count: boated_set.len(),
+            yes_count,
+            total_responses,
+            non_respondent_count,
+            unnotified_rower_count,
+        });
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]

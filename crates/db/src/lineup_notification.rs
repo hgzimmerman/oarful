@@ -97,6 +97,30 @@ impl LineupNotification {
         Ok(boated_rower_ids.iter().all(|id| notified.contains(id)))
     }
 
+    /// Get notified rower IDs across multiple practices in one query.
+    /// Returns a map of practice_id → set of notified rower IDs.
+    pub fn notified_rowers_for_practices(
+        conn: &mut SqliteConnection,
+        practice_ids: &[PracticeId],
+    ) -> Result<
+        std::collections::HashMap<PracticeId, std::collections::HashSet<RowerId>>,
+        diesel::result::Error,
+    > {
+        let rows: Vec<(PracticeId, RowerId)> = lineup_notification::table
+            .filter(lineup_notification::practice_id.eq_any(practice_ids))
+            .select((
+                lineup_notification::practice_id,
+                lineup_notification::rower_id,
+            ))
+            .load(conn)?;
+        let mut map: std::collections::HashMap<PracticeId, std::collections::HashSet<RowerId>> =
+            std::collections::HashMap::new();
+        for (pid, rid) in rows {
+            map.entry(pid).or_default().insert(rid);
+        }
+        Ok(map)
+    }
+
     /// Delete all notifications for a practice (e.g., after lineup re-commit).
     pub fn clear_for_practice(
         conn: &mut SqliteConnection,
