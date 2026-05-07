@@ -76,7 +76,7 @@ pub(crate) fn availability_content(
     html! {
         div class="space-y-6" {
             @if let Some((pid, date)) = stale_warning {
-                div class="rounded px-4 py-3 text-sm" style="background: color-mix(in oklch, var(--warn) 10%, var(--paper)); border-left: 4px solid var(--warn); color: var(--ink)" {
+                div #stale-warning class="rounded px-4 py-3 text-sm" style="background: color-mix(in oklch, var(--warn) 10%, var(--paper)); border-left: 4px solid var(--warn); color: var(--ink)" {
                     strong { "Heads up: " }
                     "Your change affects a "
                     a href={"/history/" (pid)}

@@ -112,13 +112,13 @@ async fn availability_change_warns_about_committed_lineup() {
     // Wait for the page to re-render with the stale warning.
     tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
 
-    // Verify the amber warning banner appears.
+    // Verify the stale-lineup warning banner appears.
     client
         .wait()
         .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::Css(".bg-amber-50"))
+        .for_element(Locator::Css("#stale-warning"))
         .await
-        .expect("expected amber warning banner after changing availability on committed lineup");
+        .expect("expected stale warning banner after changing availability on committed lineup");
 
     // Verify the warning mentions the committed lineup.
     let source = client.source().await.unwrap();

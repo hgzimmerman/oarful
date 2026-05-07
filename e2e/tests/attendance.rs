@@ -55,12 +55,12 @@ async fn attendance_grid_loads_with_rower_data() {
 
     // Verify there are both available (emerald) and absent (red) cells.
     assert!(
-        body.contains("bg-emerald-400"),
-        "attendance grid should contain available (bg-emerald-400) cells"
+        body.contains("att-yes"),
+        "attendance grid should contain available (att-yes) cells"
     );
     assert!(
-        body.contains("bg-red-400"),
-        "attendance grid should contain absent (bg-red-400) cells"
+        body.contains("att-no"),
+        "attendance grid should contain absent (att-no) cells"
     );
 }
 
@@ -80,14 +80,14 @@ async fn attendance_toggle_changes_status() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body = resp.text().await.unwrap();
 
-    // Find a cell that is currently available (bg-emerald-400) and extract
+    // Find a cell that is currently available (att-yes) and extract
     // its rower_id and practice_id from data attributes.
     //
     // We look for a fragment like:
-    //   data-rower="42" data-practice="7" ... bg-emerald-400
+    //   data-rower="42" data-practice="7" ... att-yes
     // The cell element should have both data attributes and the class.
     let (rower_id, practice_id) = find_available_cell(&body)
-        .expect("should find at least one available (bg-emerald-400) cell with data attributes");
+        .expect("should find at least one available (att-yes) cell with data attributes");
 
     // Toggle that cell to "No".
     let toggle_resp = client
@@ -115,17 +115,17 @@ async fn attendance_toggle_changes_status() {
     assert_eq!(resp.status(), StatusCode::OK);
     let body_after = resp.text().await.unwrap();
 
-    // Find the specific cell by its data attributes and check it now has bg-red-400.
+    // Find the specific cell by its data attributes and check it now has att-no.
     let cell_fragment = extract_cell_fragment(&body_after, rower_id, practice_id)
         .expect("cell should still exist after toggle");
     assert!(
-        cell_fragment.contains("bg-red-400"),
+        cell_fragment.contains("att-no"),
         "cell for rower {rower_id} / practice {practice_id} should be red after toggle to No, got: {cell_fragment}"
     );
 }
 
 /// Search the HTML for a cell element that has both `data-rower` and
-/// `data-practice` attributes and contains `bg-emerald-400`.
+/// `data-practice` attributes and contains `att-yes`.
 /// Returns `(rower_id, practice_id)`.
 fn find_available_cell(html: &str) -> Option<(i32, i32)> {
     let mut search_from = 0;
@@ -148,8 +148,8 @@ fn find_available_cell(html: &str) -> Option<(i32, i32)> {
             .unwrap_or(html.len().min(abs_pos + 500));
         let element = &html[td_start..td_end];
 
-        // Check this element has data-practice and bg-emerald-400.
-        if !element.contains("bg-emerald-400") {
+        // Check this element has data-practice and att-yes.
+        if !element.contains("att-yes") {
             continue;
         }
         if let Some(rest) = element.split("data-practice=\"").nth(1) {
