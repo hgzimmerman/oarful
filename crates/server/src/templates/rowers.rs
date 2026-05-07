@@ -270,20 +270,21 @@ pub(crate) fn detail_content(
         format!("{}", r.side)
     };
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
-            div class="flex items-center gap-3" {
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center gap-3 mb-1" {
                 a href="/team/roster"
                   onclick="if (history.length > 1) { history.back(); return false; }"
-                  class="text-muted hover:text-ink-2"
-                  title="Back" {
-                    "←"
+                  class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
+                    "← Roster"
                 }
-                h1 #rower-name class="text-2xl font-bold text-ink" { (r.display_name()) }
             }
-            p class="text-sm text-ink-3 mt-1" { (subtitle) }
+            h1 #rower-name class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { (r.display_name()) }
+            div class="flex items-center gap-2 mt-1" {
+                span class="font-mono-stat text-xs" style="color: var(--muted)" { (subtitle) }
+            }
             @if show_emails {
                 @if let Some(email) = &detail.email {
-                    p class="text-sm text-muted mt-0.5" { (email) }
+                    p class="font-mono-stat text-xs mt-0.5" style="color: var(--muted)" { (email) }
                 }
             }
         }
@@ -296,23 +297,23 @@ pub(crate) fn detail_content(
             // Danger zone — deactivate / reactivate (Coach+ sees the button;
             // the endpoint enforces PD-only).
             @if perms.can_edit_affinities {
-                section class="mt-6 border-t border-red-200 pt-4" {
+                section class="mt-6 pt-4" style="border-top: 1px solid var(--rule-2)" {
                     @if r.active.as_bool() {
                         button type="button"
                                hx-get={"/confirm?kind=deactivate-rower&id=" (r.id)}
                                hx-target="body"
                                hx-swap="beforeend"
-                               class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                               class="text-sm font-medium py-2 hover:underline" style="color: var(--bad)" {
                             "Deactivate rower"
                         }
                     } @else {
                         div class="flex items-center gap-3" {
-                            span class="text-sm text-red-600 font-medium" { "This rower is deactivated." }
+                            span class="text-sm font-medium" style="color: var(--bad)" { "This rower is deactivated." }
                             form method="post" action={"/rowers/" (r.id) "/toggle-active"}
                                  hx-post={"/rowers/" (r.id) "/toggle-active"}
                                  hx-target="#content" {
                                 button type="submit"
-                                       class="text-sm text-emerald-600 hover:text-good font-medium py-2" {
+                                       class="text-sm font-medium py-2 hover:underline" style="color: var(--good)" {
                                     "Reactivate"
                                 }
                             }
@@ -334,9 +335,9 @@ pub(crate) fn attribute_section(
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     let has_editable = has_any_editable_field(perms);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #attributes class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Attributes" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Attributes" }
                 @if has_editable {
                     button type="button"
                            class="text-sm text-ink-3 hover:text-ink font-semibold uppercase tracking-wide"
@@ -406,9 +407,9 @@ pub(crate) fn attribute_edit_section(
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6 bg-warn/5" {
+        section #attributes class="rounded-lg p-6 bg-warn/5" style="background: color-mix(in oklch, var(--warn) 5%, var(--paper)); box-shadow: var(--shadow-soft)" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Edit attributes" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Edit attributes" }
                 div class="flex items-center gap-2" {
                     button type="button"
                            class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-3 py-1.5 rounded"
@@ -643,9 +644,9 @@ fn erg_test_section(
     };
 
     html! {
-        section #erg-tests class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #erg-tests class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Erg tests" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Erg tests" }
             }
 
             @if tests.is_empty() {
@@ -745,9 +746,9 @@ pub(crate) fn erg_test_section_markup(
 
 fn kv(label: &str, value: &str) -> Markup {
     html! {
-        div class="bg-paper rounded p-2" {
-            div class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
-            div class="font-medium text-ink" { (value) }
+        div class="rounded p-2" style="background: var(--paper)" {
+            div class="font-mono-stat text-[9px] tracking-widest uppercase font-semibold" style="color: var(--muted)" { (label) }
+            div class="font-medium mt-0.5" style="color: var(--ink)" { (value) }
         }
     }
 }
@@ -763,11 +764,10 @@ pub(crate) fn seat_affinities_section(
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
     let delete_url = format!("/rowers/{}/seat-affinity/delete", r.id);
     html! {
-        section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #seat-affinities class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-ink" { "Seat preferences" }
-                // Drives soft constraint S3 (seat affinity)
-                span class="text-xs text-ink-3" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Seat preferences" }
+                span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
                     "Per-seat reward / penalty"
                 }
             }
@@ -864,11 +864,10 @@ pub(crate) fn pair_affinities_section(
         }
     };
     html! {
-        section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #pair-affinities class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-ink" { "Pair preferences" }
-                // Drives soft constraint S2 (pair affinity)
-                span class="text-xs text-ink-3" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Pair preferences" }
+                span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
                     "Same-partition reward / penalty"
                 }
             }
