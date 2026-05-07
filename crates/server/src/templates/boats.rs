@@ -166,31 +166,40 @@ fn boat_row(b: &Boat) -> Markup {
 // =====================================================================
 
 pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bool) -> Markup {
-    let type_label = crate::handlers::boats::type_label(boat);
+    let short = display_type(boat);
+    let long = display_type_long(boat);
     let rig = if boat.oars_per_seat.as_int() == 1 {
         format!("{} rigged", boat.stroke_side)
     } else {
         "sculling".into()
     };
-    let seats = if boat.has_cox.as_bool() {
-        format!("{}+", boat.seat_count)
-    } else {
-        format!("{}-", boat.seat_count)
-    };
 
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
-            div class="flex items-center gap-3" {
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center gap-3 mb-1" {
                 a href="/admin/fleet"
                   onclick="if (history.length > 1) { history.back(); return false; }"
-                  class="text-muted hover:text-ink-2"
-                  title="Back" {
-                    "←"
+                  class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
+                    "← Fleet"
                 }
+            }
+            div class="flex items-center justify-between" {
                 div {
-                    h1 class="text-2xl font-bold text-ink" { (boat.name) }
-                    p class="text-sm text-ink-3 mt-1" {
-                        (type_label) " · " (seats) " · " (rig)
+                    h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { (boat.name) }
+                    div class="flex items-center gap-2 mt-1" {
+                        span class="stat-badge text-[10px] stat-tier-2 cursor-help" title=(long) { (short) }
+                        span class="font-mono-stat text-xs" style="color: var(--muted)" {
+                            (rig) " · " (boat.weight_class)
+                        }
+                    }
+                }
+                @if can_edit {
+                    a href=(format!("/boats/{}/edit", boat.id))
+                      hx-get=(format!("/boats/{}/edit", boat.id))
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="btn-warm-ghost text-xs py-2" {
+                        "Edit"
                     }
                 }
             }
@@ -198,19 +207,8 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
 
         div class="px-4 sm:px-8 py-6 space-y-6 max-w-3xl mx-auto" {
             // Boat info
-            div class="bg-paper rounded-lg shadow-soft p-6" {
-                div class="flex items-center justify-between mb-4" {
-                    h2 class="text-lg font-bold text-ink" { "Details" }
-                    @if can_edit {
-                        a href=(format!("/boats/{}/edit", boat.id))
-                          hx-get=(format!("/boats/{}/edit", boat.id))
-                          hx-target="#content"
-                          hx-push-url="true"
-                          class="text-sm font-semibold text-link hover:text-link-2" {
-                            "Edit"
-                        }
-                    }
-                }
+            div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" { "Details" }
 
                 dl class="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-4 text-sm" {
                     (detail_item("Weight class", &boat.weight_class.to_string()))
@@ -228,40 +226,41 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
             }
 
             // Usage stats
-            div class="bg-paper rounded-lg shadow-soft p-6" {
-                h2 class="text-lg font-bold text-ink mb-4" { "Usage" }
+            div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" { "Usage" }
 
                 @if usage.total_uses == 0 {
-                    p class="text-sm text-ink-3 italic" {
+                    p class="font-mono-stat text-xs italic" style="color: var(--muted)" {
                         "No committed lineups found for this boat."
                     }
                 } @else {
-                    div class="flex gap-8 mb-4" {
-                        div {
-                            div class="text-3xl font-bold text-ink" { (usage.total_uses) }
-                            div class="text-xs text-ink-3 uppercase tracking-wide" { "Total outings" }
+                    div class="flex items-stretch gap-0 mb-4" {
+                        div class="flex items-baseline gap-3 pr-6" {
+                            span class="cv-stat-num font-serif-heading" { (usage.total_uses) }
+                            span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "outings" }
                         }
                         @if let Some(last) = usage.last_used {
-                            div {
-                                div class="text-3xl font-bold text-ink" { (last.format("%b %-d")) }
-                                div class="text-xs text-ink-3 uppercase tracking-wide" { "Last used" }
+                            div class="cv-stat-sep" {}
+                            div class="flex items-baseline gap-3 pr-6" {
+                                span class="cv-stat-num font-serif-heading" { (last.format("%b %-d")) }
+                                span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "last used" }
                             }
                         }
                     }
 
-                    h3 class="text-sm font-semibold text-ink-2 mb-2" { "Recent outings" }
-                    div class="divide-y divide-rule-2 text-sm" {
+                    h3 class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-2" style="color: var(--ink-2)" { "Recent outings" }
+                    div class="text-sm" style="divide-color: var(--rule-2)" {
                         @for (pid, date) in usage.recent_uses.iter().take(20) {
                             a href=(format!("/history/{pid}"))
                               hx-get=(format!("/history/{pid}"))
                               hx-target="#content"
                               hx-push-url="true"
-                              class="block px-2 py-1.5 hover:bg-paper-2 text-link hover:text-link-2" {
+                              class="block px-2 py-1.5 rounded hover:bg-paper-2 font-serif-heading text-[14px]" style="color: var(--link)" {
                                 (date.format("%A, %b %-d, %Y"))
                             }
                         }
                         @if usage.recent_uses.len() > 20 {
-                            p class="px-2 py-1.5 text-ink-3 text-xs" {
+                            p class="px-2 py-1.5 font-mono-stat text-xs" style="color: var(--muted)" {
                                 (format!("… and {} more", usage.recent_uses.len() - 20))
                             }
                         }
@@ -275,8 +274,8 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
 fn detail_item(label: &str, value: &str) -> Markup {
     html! {
         div {
-            dt class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
-            dd class="font-medium text-ink" { (value) }
+            dt class="font-mono-stat text-[9px] tracking-widest uppercase font-semibold" style="color: var(--muted)" { (label) }
+            dd class="font-medium mt-0.5" style="color: var(--ink)" { (value) }
         }
     }
 }
