@@ -177,13 +177,21 @@ impl TestInstance {
             // Only set this when we actually find the directory — setting
             // it to an empty string *breaks* EGL vendor discovery.
             if let Some(ref mesa_egl_dir) = find_mesa_egl_vendor_dir() {
+                eprintln!("[e2e] Using Mesa EGL vendor dir: {mesa_egl_dir}");
                 cmd.env("__EGL_VENDOR_LIBRARY_DIRS", mesa_egl_dir);
+            } else {
+                eprintln!("[e2e] WARNING: Could not find Mesa EGL vendor dir in /nix/store");
             }
             cmd
                 // Force Mesa to use its software rasterizer (llvmpipe).
                 .env("LIBGL_ALWAYS_SOFTWARE", "1")
                 // Disable the DMA-BUF renderer (requires kernel DRM access).
                 .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            eprintln!(
+                "[e2e] Headless mode: LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1"
+            );
+        } else {
+            eprintln!("[e2e] GPU detected (/dev/dri exists), using native rendering");
         }
 
         let webdriver = unsafe {
