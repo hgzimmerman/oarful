@@ -780,6 +780,79 @@
     display: none;
   }
 
+  /* ── Attendance grid ──────────────────────────────────────────────── */
+
+  .att-corner {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    background: var(--paper-2);
+    padding: 8px 12px;
+    text-align: left;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    border-bottom: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    min-width: 140px;
+  }
+  .att-date-head {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper-2);
+    padding: 4px 6px 6px;
+    text-align: center;
+    font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+    min-width: 44px;
+  }
+  .att-today {
+    background: color-mix(in oklch, var(--accent) 12%, var(--paper-2));
+  }
+  .att-name {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: var(--paper);
+    padding: 4px 12px;
+    font-family: Charter, 'Bitstream Charter', Georgia, serif;
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule-2);
+    border-right: 1px solid var(--rule);
+    white-space: nowrap;
+    text-align: left;
+  }
+  .att-row:hover .att-name {
+    background: var(--paper-2);
+  }
+  .att-cell {
+    border-bottom: 1px solid color-mix(in oklch, var(--rule-2) 60%, transparent);
+    border-right: 1px solid color-mix(in oklch, var(--rule-2) 60%, transparent);
+    min-width: 44px;
+    height: 28px;
+  }
+  .att-yes {
+    background: color-mix(in oklch, var(--good) 52%, var(--paper));
+  }
+  .att-no {
+    background: color-mix(in oklch, var(--bad) 42%, var(--paper));
+  }
+  .att-legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
   /* Editor section appear animation */
   @keyframes tl-appear {
     from {

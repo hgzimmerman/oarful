@@ -1,6 +1,6 @@
 //! Attendance grid — horizontal scrollable table with rowers as rows
-//! and practice dates as columns. Color-coded: green = present,
-//! red = absent, white = no response.
+//! and practice dates as columns. Color-coded cells show availability
+//! status using the warm paper palette.
 
 use std::collections::HashMap;
 
@@ -26,19 +26,34 @@ pub(crate) fn grid_content(
     today: NaiveDate,
     editable: bool,
 ) -> Markup {
-    let subtitle = format!(
-        "{} members · {} practices{}",
-        rowers.len(),
-        columns.len(),
-        if show_past { " (incl. past year)" } else { "" },
-    );
+    // Compute attendance stats.
+    let yes_count = avail_map
+        .values()
+        .filter(|s| **s == AvailabilityStatus::Yes)
+        .count();
+    let no_count = avail_map
+        .values()
+        .filter(|s| **s == AvailabilityStatus::No)
+        .count();
+    let responded = yes_count + no_count;
+    let rate_pct = if responded > 0 {
+        (yes_count as f64 / responded as f64 * 100.0).round() as u32
+    } else {
+        0
+    };
 
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
+        // ── Header ──
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
             div class="flex items-center justify-between" {
                 div {
-                    h1 class="text-2xl font-bold text-ink" { "Attendance" }
-                    p class="text-sm text-ink-3 mt-1" { (subtitle) }
+                    h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                        "Attendance"
+                    }
+                    p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                        (rowers.len()) " members · " (columns.len()) " practices"
+                        @if show_past { " (incl. past year)" }
+                    }
                 }
                 div {
                     @if show_past {
@@ -46,7 +61,7 @@ pub(crate) fn grid_content(
                           hx-get="/team/attendance"
                           hx-target="#team-tab-content"
                           hx-push-url="true"
-                          class="text-sm font-semibold text-ink-2 border border-rule px-3 py-1.5 rounded transition hover:bg-paper-2" {
+                          class="btn-warm-ghost text-xs py-2" {
                             "Future only"
                         }
                     } @else {
@@ -54,7 +69,7 @@ pub(crate) fn grid_content(
                           hx-get="/team/attendance?show_past=1"
                           hx-target="#team-tab-content"
                           hx-push-url="true"
-                          class="text-sm font-semibold text-ink-2 border border-rule px-3 py-1.5 rounded transition hover:bg-paper-2" {
+                          class="btn-warm-ghost text-xs py-2" {
                             "Show past year"
                         }
                     }
@@ -62,24 +77,42 @@ pub(crate) fn grid_content(
             }
         }
 
+        // ── Summary strip ──
+        @if !columns.is_empty() && !rowers.is_empty() {
+            div class="flex items-stretch gap-0 px-4 sm:px-8 py-3 border-b flex-wrap" style="border-color: var(--rule); background: var(--paper)" {
+                div class="flex items-baseline gap-3 pr-6" {
+                    span class="cv-stat-num font-serif-heading" { (rowers.len()) }
+                    span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "members" }
+                }
+                div class="cv-stat-sep" {}
+                div class="flex items-baseline gap-3 pr-6" {
+                    span class="cv-stat-num font-serif-heading" { (columns.len()) }
+                    span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "practices" }
+                }
+                div class="cv-stat-sep" {}
+                div class="flex items-baseline gap-3 pr-6" {
+                    span class="cv-stat-num font-serif-heading" { (rate_pct) "%" }
+                    span class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "attendance" }
+                }
+            }
+        }
+
         div class="px-4 sm:px-8 py-6" {
             @if columns.is_empty() {
-                div class="text-center text-ink-3 italic py-12" {
+                div class="text-center italic py-12 font-mono-stat text-xs" style="color: var(--muted)" {
                     "No practices scheduled."
                 }
             } @else if rowers.is_empty() {
-                div class="text-center text-ink-3 italic py-12" {
+                div class="text-center italic py-12 font-mono-stat text-xs" style="color: var(--muted)" {
                     "No roster members."
                 }
             } @else {
-                div class="overflow-auto bg-paper rounded-lg shadow-soft max-h-[75vh]" {
+                div class="overflow-auto rounded-lg max-h-[75vh]" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                     table class="text-xs border-collapse" {
                         caption class="sr-only" { "Attendance" }
                         thead {
                             tr {
-                                th scope="col" class="sticky top-0 left-0 z-20 bg-paper-2 px-3 py-2 text-left font-semibold text-ink-2 border-b border-r border-rule-2 min-w-[140px]" {
-                                    "Rower"
-                                }
+                                th scope="col" class="att-corner" { "Rower" }
                                 @for col in columns {
                                     (date_header(&col.date, today, if col.committed { Some(&col.id) } else { None }))
                                 }
@@ -87,8 +120,8 @@ pub(crate) fn grid_content(
                         }
                         tbody {
                             @for rower in rowers {
-                                tr {
-                                    th scope="row" class="sticky left-0 z-10 bg-paper px-3 py-1.5 font-medium text-ink border-b border-r border-rule-2 whitespace-nowrap text-left" {
+                                tr class="att-row" {
+                                    th scope="row" class="att-name" {
                                         (rower.display_name())
                                     }
                                     @for col in columns {
@@ -106,17 +139,17 @@ pub(crate) fn grid_content(
                 }
 
                 // Legend
-                div class="flex items-center gap-4 mt-3 text-xs text-ink-3" {
-                    span class="flex items-center gap-1" {
-                        span class="inline-block w-3 h-3 rounded-sm bg-emerald-400" {}
+                div class="flex items-center gap-5 mt-4 font-mono-stat text-[10px] tracking-wide uppercase" style="color: var(--muted)" {
+                    span class="flex items-center gap-1.5" {
+                        span class="att-legend-swatch att-yes" {}
                         "Present"
                     }
-                    span class="flex items-center gap-1" {
-                        span class="inline-block w-3 h-3 rounded-sm bg-red-400" {}
+                    span class="flex items-center gap-1.5" {
+                        span class="att-legend-swatch att-no" {}
                         "Absent"
                     }
-                    span class="flex items-center gap-1" {
-                        span class="inline-block w-3 h-3 rounded-sm border border-rule-2" {}
+                    span class="flex items-center gap-1.5" {
+                        span class="att-legend-swatch" style="background: var(--paper-2); border: 1px solid var(--rule)" {}
                         "No response"
                     }
                 }
@@ -131,40 +164,42 @@ pub(crate) fn grid_content(
 
 fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&PracticeId>) -> Markup {
     let is_today = *date == today;
-    let bg = if is_today { "bg-blue-50" } else { "bg-paper-2" };
-    let base_class = format!("sticky top-0 z-10 {bg} px-1.5 py-2 text-center font-medium border-b border-rule-2 whitespace-nowrap min-w-[44px]");
+    let class = if is_today {
+        "att-date-head att-today"
+    } else {
+        "att-date-head"
+    };
     let full_date = date.format("%A, %B %-d, %Y").to_string();
 
     html! {
-        th scope="col" class=(base_class) title=(full_date) {
+        th scope="col" class=(class) title=(full_date) {
             @if let Some(pid) = practice_id {
                 a href=(format!("/history/{pid}"))
                   hx-get=(format!("/history/{pid}"))
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-link hover:text-link-2" {
-                    div class="text-[10px] uppercase" { (date.format("%a")) }
+                  class="hover:opacity-80" style="color: var(--link)" {
+                    div class="text-[9px] uppercase tracking-wider" { (date.format("%a")) }
                     div { (date.format("%b")) }
                     div class="text-sm font-bold" { (date.format("%-d")) }
                 }
             } @else {
-                div class="text-[10px] text-muted uppercase" { (date.format("%a")) }
-                div class="text-ink-2" { (date.format("%b")) }
-                div class="text-sm font-bold text-ink-2" { (date.format("%-d")) }
+                div class="text-[9px] uppercase tracking-wider" style="color: var(--muted)" { (date.format("%a")) }
+                div style="color: var(--ink-3)" { (date.format("%b")) }
+                div class="text-sm font-bold" style="color: var(--ink-2)" { (date.format("%-d")) }
             }
         }
     }
 }
 
 fn status_cell(status: Option<&AvailabilityStatus>) -> Markup {
-    let (bg, title) = match status {
-        Some(AvailabilityStatus::Yes) => ("bg-emerald-400", "Present"),
-        Some(AvailabilityStatus::No) => ("bg-red-400", "Absent"),
-        None => ("", "No response"),
+    let (class, title) = match status {
+        Some(AvailabilityStatus::Yes) => ("att-cell att-yes", "Present"),
+        Some(AvailabilityStatus::No) => ("att-cell att-no", "Absent"),
+        None => ("att-cell", "No response"),
     };
     html! {
-        td class=(format!("{bg} border-b border-r border-rule-2 min-w-[44px] h-7"))
-           title=(title) {}
+        td class=(class) title=(title) {}
     }
 }
 
@@ -173,13 +208,25 @@ fn editable_status_cell(
     rower_id: RowerId,
     practice_id: PracticeId,
 ) -> Markup {
-    let (bg, title, next) = match status {
-        Some(AvailabilityStatus::Yes) => ("bg-emerald-400", "Present → click: Absent", "No"),
-        Some(AvailabilityStatus::No) => ("bg-red-400", "Absent → click: Clear", "clear"),
-        None => ("", "No response → click: Present", "Yes"),
+    let (class, title, next) = match status {
+        Some(AvailabilityStatus::Yes) => (
+            "att-cell att-yes cursor-pointer select-none",
+            "Present → click: Absent",
+            "No",
+        ),
+        Some(AvailabilityStatus::No) => (
+            "att-cell att-no cursor-pointer select-none",
+            "Absent → click: Clear",
+            "clear",
+        ),
+        None => (
+            "att-cell cursor-pointer select-none",
+            "No response → click: Present",
+            "Yes",
+        ),
     };
     html! {
-        td class=(format!("{bg} border-b border-r border-rule-2 min-w-[44px] h-7 cursor-pointer select-none"))
+        td class=(class)
            title=(title)
            id=(format!("c-{rower_id}-{practice_id}"))
            data-rower=(rower_id.to_string())
