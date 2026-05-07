@@ -84,20 +84,38 @@ impl DetailPermissions {
 }
 use maud::{html, Markup};
 
-use super::layout::{empty_state, page_header};
+use super::layout::empty_state;
 use crate::handlers::rowers::RowerDetail;
 
+/// Map an attribute ordinal (1–4) to a stat-badge tier class.
+fn attr_tier(ordinal: i32) -> &'static str {
+    match ordinal {
+        1 => "stat-tier-1",
+        2 => "stat-tier-2",
+        3 => "stat-tier-3",
+        _ => "stat-tier-4",
+    }
+}
+
 pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: bool) -> Markup {
-    let subtitle = format!("{} active members", rows.len());
     html! {
-        (page_header("Roster", Some(&subtitle)))
+        // ── Header ──
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                "Roster"
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                (rows.len()) " active members"
+            }
+        }
+
         div class="px-4 sm:px-8 py-6" {
             @if rows.is_empty() {
                 (empty_state("No members on file. Sync the spreadsheet to populate the roster."))
             } @else {
                 // Mobile: compact card list (wider breakpoint when emails shown)
                 @let mobile_class = if show_emails { "lg:hidden bg-paper rounded-lg shadow-soft divide-y divide-rule-2" } else { "md:hidden bg-paper rounded-lg shadow-soft divide-y divide-rule-2" };
-                @let desktop_class = if show_emails { "hidden lg:block bg-paper rounded-lg shadow-soft overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block bg-paper rounded-lg shadow-soft overflow-x-auto max-w-6xl mx-auto" };
+                @let desktop_class = if show_emails { "hidden lg:block overflow-x-auto max-w-6xl mx-auto" } else { "hidden md:block overflow-x-auto max-w-6xl mx-auto" };
                 div class=(mobile_class) {
                     @for row in rows {
                         (mobile_row(&row.rower, row.email.as_deref(), show_emails))
@@ -105,25 +123,27 @@ pub(crate) fn list_content(rows: &[RosterRow], _is_coach: bool, show_emails: boo
                 }
                 // Desktop: full table
                 div class=(desktop_class) {
-                    table class="w-full text-sm" {
-                        caption class="sr-only" { "Roster" }
-                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
-                            tr {
-                                th scope="col" class="px-4 py-2" { "Name" }
-                                @if show_emails {
-                                    th scope="col" class="px-4 py-2" { "Email" }
+                    div class="rounded-lg overflow-hidden" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                        table class="w-full text-sm" {
+                            caption class="sr-only" { "Roster" }
+                            thead {
+                                tr style="background: var(--paper-2)" {
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Name" }
+                                    @if show_emails {
+                                        th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Email" }
+                                    }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Weight" }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Form" }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Strength" }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Side" }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Cox" }
+                                    th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Sweep bias" }
                                 }
-                                th scope="col" class="px-4 py-2" { "Weight" }
-                                th scope="col" class="px-4 py-2" { "Form" }
-                                th scope="col" class="px-4 py-2" { "Strength" }
-                                th scope="col" class="px-4 py-2" { "Side" }
-                                th scope="col" class="px-4 py-2" { "Cox" }
-                                th scope="col" class="px-4 py-2" { "Sweep bias" }
                             }
-                        }
-                        tbody {
-                            @for row in rows {
-                                (static_row(&row.rower, row.email.as_deref(), show_emails))
+                            tbody {
+                                @for row in rows {
+                                    (static_row(&row.rower, row.email.as_deref(), show_emails))
+                                }
                             }
                         }
                     }
@@ -148,7 +168,7 @@ pub(crate) fn batch_invite_result(
     }
 }
 
-/// Mobile card for one rower — name and side.
+/// Mobile card for one rower — name, stat badges, and side meter.
 fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
         a href={"/rowers/" (r.id)}
@@ -156,20 +176,20 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
           hx-target="#content"
           hx-push-url="true"
           class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
-            div {
-                div class="font-medium text-link" { (r.display_name()) }
-                div class="text-xs text-ink-3" {
-                    (side_display_label(r))
-                    @if show_emails {
-                        @if let Some(e) = email {
-                            " · " (e)
-                        }
+            div class="min-w-0" {
+                span class="font-serif-heading font-medium text-[15px]" style="color: var(--link)" { (r.display_name()) }
+                div class="flex items-center gap-1 mt-1" {
+                    span class={"stat-badge text-[10px] " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
+                    span class={"stat-badge text-[10px] " (attr_tier(r.skill.ordinal()))} { (r.skill) }
+                    span class={"stat-badge text-[10px] " (attr_tier(r.strength.ordinal()))} { (r.strength) }
+                }
+                @if show_emails {
+                    @if let Some(e) = email {
+                        div class="text-xs mt-0.5 truncate" style="color: var(--muted)" { (e) }
                     }
                 }
             }
-            div class="flex items-center gap-2" {
-                span class="text-muted" "aria-hidden"="true" { "→" }
-            }
+            span style="color: var(--muted)" "aria-hidden"="true" { "→" }
         }
     }
 }
@@ -177,32 +197,46 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
 /// Read-only `<tr>` for one rower.
 fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
     html! {
-        tr class="border-t border-rule-2 hover:bg-paper-2" {
-            td class="px-4 py-2 font-medium" {
+        tr style="border-top: 1px solid var(--rule-2)" class="hover:bg-paper-2" {
+            td class="px-4 py-2.5" {
                 a href={"/rowers/" (r.id)}
                   hx-get={"/rowers/" (r.id)}
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-link hover:text-link-2 underline" {
+                  class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                     (r.display_name())
                 }
             }
             @if show_emails {
-                td class="px-4 py-2 text-ink-3" {
+                td class="px-4 py-2.5 text-xs" style="color: var(--muted)" {
                     @if let Some(e) = email { (e) }
                 }
             }
-            td class="px-4 py-2" { (r.weight_class) }
-            td class="px-4 py-2" { (r.skill) }
-            td class="px-4 py-2" { (r.strength) }
-            td class="px-4 py-2" { (side_display_label(r)) }
-            td class="px-4 py-2" {
-                @if r.is_designated_cox.as_bool() { "designated" }
-                @else if r.can_cox.as_bool() { "yes" }
-                @else { "—" }
+            td class="px-4 py-2.5" {
+                span class={"stat-badge text-[10px] " (attr_tier(r.weight_class.ordinal()))} { (r.weight_class) }
             }
-            td class="px-4 py-2" {
-                (r.sweep_bias)
+            td class="px-4 py-2.5" {
+                span class={"stat-badge text-[10px] " (attr_tier(r.skill.ordinal()))} { (r.skill) }
+            }
+            td class="px-4 py-2.5" {
+                span class={"stat-badge text-[10px] " (attr_tier(r.strength.ordinal()))} { (r.strength) }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs" style="color: var(--ink-2)" {
+                    (side_display_label(r))
+                }
+            }
+            td class="px-4 py-2.5" {
+                @if r.is_designated_cox.as_bool() {
+                    span class="stat-badge" style="color: var(--cox); background: color-mix(in oklch, var(--cox) 8%, var(--paper)); border-color: color-mix(in oklch, var(--cox) 22%, var(--rule))" { "designated" }
+                } @else if r.can_cox.as_bool() {
+                    span class="stat-badge" style="color: var(--cox); background: color-mix(in oklch, var(--cox) 8%, var(--paper)); border-color: color-mix(in oklch, var(--cox) 22%, var(--rule))" { "yes" }
+                } @else {
+                    span class="font-mono-stat text-xs" style="color: var(--muted)" { "—" }
+                }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (r.sweep_bias) }
             }
         }
     }
@@ -236,20 +270,21 @@ pub(crate) fn detail_content(
         format!("{}", r.side)
     };
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
-            div class="flex items-center gap-3" {
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            div class="flex items-center gap-3 mb-1" {
                 a href="/team/roster"
                   onclick="if (history.length > 1) { history.back(); return false; }"
-                  class="text-muted hover:text-ink-2"
-                  title="Back" {
-                    "←"
+                  class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
+                    "← Roster"
                 }
-                h1 #rower-name class="text-2xl font-bold text-ink" { (r.display_name()) }
             }
-            p class="text-sm text-ink-3 mt-1" { (subtitle) }
+            h1 #rower-name class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { (r.display_name()) }
+            div class="flex items-center gap-2 mt-1" {
+                span class="font-mono-stat text-xs" style="color: var(--muted)" { (subtitle) }
+            }
             @if show_emails {
                 @if let Some(email) = &detail.email {
-                    p class="text-sm text-muted mt-0.5" { (email) }
+                    p class="font-mono-stat text-xs mt-0.5" style="color: var(--muted)" { (email) }
                 }
             }
         }
@@ -262,23 +297,23 @@ pub(crate) fn detail_content(
             // Danger zone — deactivate / reactivate (Coach+ sees the button;
             // the endpoint enforces PD-only).
             @if perms.can_edit_affinities {
-                section class="mt-6 border-t border-red-200 pt-4" {
+                section class="mt-6 pt-4" style="border-top: 1px solid var(--rule-2)" {
                     @if r.active.as_bool() {
                         button type="button"
                                hx-get={"/confirm?kind=deactivate-rower&id=" (r.id)}
                                hx-target="body"
                                hx-swap="beforeend"
-                               class="text-sm text-red-600 hover:text-red-800 font-medium py-2" {
+                               class="text-sm font-medium py-2 hover:underline" style="color: var(--bad)" {
                             "Deactivate rower"
                         }
                     } @else {
                         div class="flex items-center gap-3" {
-                            span class="text-sm text-red-600 font-medium" { "This rower is deactivated." }
+                            span class="text-sm font-medium" style="color: var(--bad)" { "This rower is deactivated." }
                             form method="post" action={"/rowers/" (r.id) "/toggle-active"}
                                  hx-post={"/rowers/" (r.id) "/toggle-active"}
                                  hx-target="#content" {
                                 button type="submit"
-                                       class="text-sm text-emerald-600 hover:text-good font-medium py-2" {
+                                       class="text-sm font-medium py-2 hover:underline" style="color: var(--good)" {
                                     "Reactivate"
                                 }
                             }
@@ -300,9 +335,9 @@ pub(crate) fn attribute_section(
     let edit_url = format!("/rowers/{}/edit-attributes", r.id);
     let has_editable = has_any_editable_field(perms);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #attributes class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Attributes" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Attributes" }
                 @if has_editable {
                     button type="button"
                            class="text-sm text-ink-3 hover:text-ink font-semibold uppercase tracking-wide"
@@ -372,9 +407,9 @@ pub(crate) fn attribute_edit_section(
     let post_url = format!("/rowers/{}", r.id);
     let cancel_url = format!("/rowers/{}/attributes", r.id);
     html! {
-        section #attributes class="bg-paper rounded-lg shadow-soft p-6 bg-warn/5" {
+        section #attributes class="rounded-lg p-6 bg-warn/5" style="background: color-mix(in oklch, var(--warn) 5%, var(--paper)); box-shadow: var(--shadow-soft)" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Edit attributes" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Edit attributes" }
                 div class="flex items-center gap-2" {
                     button type="button"
                            class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-3 py-1.5 rounded"
@@ -609,9 +644,9 @@ fn erg_test_section(
     };
 
     html! {
-        section #erg-tests class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #erg-tests class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-start justify-between mb-4" {
-                h2 class="text-lg font-bold text-ink" { "Erg tests" }
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Erg tests" }
             }
 
             @if tests.is_empty() {
@@ -711,9 +746,9 @@ pub(crate) fn erg_test_section_markup(
 
 fn kv(label: &str, value: &str) -> Markup {
     html! {
-        div class="bg-paper rounded p-2" {
-            div class="text-xs text-ink-3 uppercase tracking-wide" { (label) }
-            div class="font-medium text-ink" { (value) }
+        div class="rounded p-2" style="background: var(--paper)" {
+            div class="font-mono-stat text-[9px] tracking-widest uppercase font-semibold" style="color: var(--muted)" { (label) }
+            div class="font-medium mt-0.5" style="color: var(--ink)" { (value) }
         }
     }
 }
@@ -729,11 +764,10 @@ pub(crate) fn seat_affinities_section(
     let upsert_url = format!("/rowers/{}/seat-affinity", r.id);
     let delete_url = format!("/rowers/{}/seat-affinity/delete", r.id);
     html! {
-        section #seat-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #seat-affinities class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-ink" { "Seat preferences" }
-                // Drives soft constraint S3 (seat affinity)
-                span class="text-xs text-ink-3" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Seat preferences" }
+                span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
                     "Per-seat reward / penalty"
                 }
             }
@@ -830,11 +864,10 @@ pub(crate) fn pair_affinities_section(
         }
     };
     html! {
-        section #pair-affinities class="bg-paper rounded-lg shadow-soft p-6" "aria-live"="polite" {
+        section #pair-affinities class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" "aria-live"="polite" {
             div class="flex items-center justify-between mb-3" {
-                h2 class="text-lg font-bold text-ink" { "Pair preferences" }
-                // Drives soft constraint S2 (pair affinity)
-                span class="text-xs text-ink-3" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight" style="color: var(--ink)" { "Pair preferences" }
+                span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
                     "Same-partition reward / penalty"
                 }
             }

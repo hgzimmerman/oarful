@@ -592,9 +592,3 @@ async fn load(db: &Db, id: BoatId) -> Result<Boat, ErrorResponse> {
         .map_err(internal_error)?;
     maybe.ok_or_else(|| not_found("Boat not found."))
 }
-
-/// Public re-export of the type label helper so templates can use it
-/// for the list view without importing boat db types.
-pub(crate) fn type_label(b: &Boat) -> String {
-    boat_type_label(b)
-}

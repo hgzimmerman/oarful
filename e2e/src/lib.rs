@@ -27,13 +27,15 @@ fn project_root() -> PathBuf {
 
 /// Locate Mesa's EGL vendor JSON directory by searching nix store paths
 /// on `LD_LIBRARY_PATH` / `LIBGL_DRIVERS_PATH`, or falling back to a glob.
-/// Returns the directory containing `50_mesa.json` so libglvnd can load
+/// Returns `Some(dir)` containing `50_mesa.json` so libglvnd can load
 /// Mesa's software EGL (llvmpipe) on headless CI runners.
-fn find_mesa_egl_vendor_dir() -> String {
+/// Returns `None` when no vendor dir is found — callers should skip
+/// setting `__EGL_VENDOR_LIBRARY_DIRS` so the system default is preserved.
+fn find_mesa_egl_vendor_dir() -> Option<String> {
     // Check if the system already has a vendor dir set.
     if let Ok(dir) = std::env::var("__EGL_VENDOR_LIBRARY_DIRS") {
         if std::path::Path::new(&dir).exists() {
-            return dir;
+            return Some(dir);
         }
     }
     // Search nix store for mesa's EGL vendor JSON.
@@ -47,17 +49,20 @@ fn find_mesa_egl_vendor_dir() -> String {
         if name.contains("mesa-") && !name.contains(".drv") {
             let vendor_dir = e.path().join("share/glvnd/egl_vendor.d");
             if vendor_dir.join("50_mesa.json").exists() {
-                return vendor_dir.to_string_lossy().into_owned();
+                return Some(vendor_dir.to_string_lossy().into_owned());
             }
         }
     }
-    // Fallback — let libglvnd use its default search.
-    String::new()
+    // Not found — don't override the system default.
+    None
 }
 
-/// Pick a free display number for Xvfb (99 + port-based offset to avoid collisions).
-fn xvfb_display(port: u16) -> u32 {
-    99 + (port as u32 % 900)
+/// Pick a unique display number for Xvfb. Uses the driver port directly
+/// since it's unique per test process (nextest runs each test in its own
+/// process, so in-memory coordination isn't possible). Ephemeral ports
+/// are typically 32768+ which is well above any real X display number.
+fn xvfb_display(driver_port: u16) -> u32 {
+    driver_port as u32
 }
 
 /// An isolated test instance with its own WebKitWebDriver, in-process Axum
@@ -107,7 +112,7 @@ impl TestInstance {
 
         let app_port = available_port();
         let driver_port = available_port();
-        let display_num = xvfb_display(app_port);
+        let display_num = xvfb_display(driver_port);
         let display = format!(":{display_num}");
 
         // Create a temp directory for this test's databases.
@@ -158,27 +163,37 @@ impl TestInstance {
 
         // Spawn WebKitWebDriver on the virtual display.
         //
-        // On headless CI runners (no GPU), WebKitGTK needs Mesa's software
-        // EGL implementation (llvmpipe). We detect this by checking for
-        // /dev/dri — if absent, there's no GPU and we apply software
-        // rendering overrides. Dev machines with real GPUs skip these to
-        // avoid conflicting with the system's native EGL driver.
-        let headless = !std::path::Path::new("/dev/dri").exists();
+        // On headless CI runners, WebKitGTK needs Mesa's software EGL
+        // implementation (llvmpipe). We detect CI by checking for
+        // LIBGL_ALWAYS_SOFTWARE=1 (set in the CI workflow) — /dev/dri
+        // can exist on CI runners even when the GPU isn't usable.
+        let headless = std::env::var("LIBGL_ALWAYS_SOFTWARE").as_deref() == Ok("1");
         let mut cmd = Command::new("WebKitWebDriver");
         cmd.arg("-p")
             .arg(driver_port.to_string())
             .env("DISPLAY", &display);
 
         if headless {
-            let mesa_egl_dir = find_mesa_egl_vendor_dir();
+            // Tell libglvnd where to find Mesa's EGL vendor JSON so
+            // WebKit can create an EGL display via the software renderer.
+            // Only set this when we actually find the directory — setting
+            // it to an empty string *breaks* EGL vendor discovery.
+            if let Some(ref mesa_egl_dir) = find_mesa_egl_vendor_dir() {
+                eprintln!("[e2e] Using Mesa EGL vendor dir: {mesa_egl_dir}");
+                cmd.env("__EGL_VENDOR_LIBRARY_DIRS", mesa_egl_dir);
+            } else {
+                eprintln!("[e2e] WARNING: Could not find Mesa EGL vendor dir in /nix/store");
+            }
             cmd
-                // Tell libglvnd where to find Mesa's EGL vendor JSON so
-                // WebKit can create an EGL display via the software renderer.
-                .env("__EGL_VENDOR_LIBRARY_DIRS", &mesa_egl_dir)
                 // Force Mesa to use its software rasterizer (llvmpipe).
                 .env("LIBGL_ALWAYS_SOFTWARE", "1")
                 // Disable the DMA-BUF renderer (requires kernel DRM access).
                 .env("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            eprintln!(
+                "[e2e] Headless mode: LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1"
+            );
+        } else {
+            eprintln!("[e2e] GPU detected (/dev/dri exists), using native rendering");
         }
 
         let webdriver = unsafe {

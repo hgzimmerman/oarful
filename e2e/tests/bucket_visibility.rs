@@ -134,10 +134,11 @@ async fn member_profile_hides_buckets_by_default() {
 
     // Buckets should be hidden (off by default).
     // The subtitle should only show the side, not weight_class/skill/etc.
+    // The subtitle is inside a <span class="font-mono-stat text-xs" ...> in the header.
     let subtitle = body
-        .split("<p class=\"text-sm text-slate-500 mt-1\">")
+        .split("font-mono-stat text-xs")
         .nth(1)
-        .and_then(|s| s.split("</p>").next())
+        .and_then(|s| s.split("</span>").next())
         .unwrap_or("");
     assert!(
         !subtitle.contains("Expert") && !subtitle.contains("Strong"),
