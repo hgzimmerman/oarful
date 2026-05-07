@@ -89,8 +89,35 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
     }
 }
 
+/// Human-friendly boat type label: "FourPlus" → "Four+", "CoxlessEight" → "Eight−", etc.
+fn display_type(b: &Boat) -> String {
+    match (
+        b.seat_count.as_int(),
+        b.has_cox.as_bool(),
+        b.oars_per_seat.as_int(),
+    ) {
+        (1, false, 2) => "1x".into(),
+        (2, false, 2) => "2x".into(),
+        (2, false, 1) => "2−".into(),
+        (4, false, 2) => "4x".into(),
+        (4, true, 2) => "4x+".into(),
+        (4, false, 1) => "4−".into(),
+        (4, true, 1) => "4+".into(),
+        (8, true, 1) => "8+".into(),
+        (8, false, 1) => "8−".into(),
+        (s, cox, oars) => {
+            let suffix = if cox { "+" } else { "−" };
+            if oars == 2 {
+                format!("{s}x{suffix}")
+            } else {
+                format!("{s}{suffix}")
+            }
+        }
+    }
+}
+
 fn boat_row(b: &Boat) -> Markup {
-    let type_label = crate::handlers::boats::type_label(b);
+    let type_label = display_type(b);
     let rig = if b.oars_per_seat.as_int() == 1 {
         format!("{} rigged", b.stroke_side)
     } else {
