@@ -57,9 +57,12 @@ fn find_mesa_egl_vendor_dir() -> Option<String> {
     None
 }
 
-/// Pick a free display number for Xvfb (99 + port-based offset to avoid collisions).
-fn xvfb_display(port: u16) -> u32 {
-    99 + (port as u32 % 900)
+/// Pick a unique display number for Xvfb. Uses the driver port directly
+/// since it's unique per test process (nextest runs each test in its own
+/// process, so in-memory coordination isn't possible). Ephemeral ports
+/// are typically 32768+ which is well above any real X display number.
+fn xvfb_display(driver_port: u16) -> u32 {
+    driver_port as u32
 }
 
 /// An isolated test instance with its own WebKitWebDriver, in-process Axum
@@ -109,7 +112,7 @@ impl TestInstance {
 
         let app_port = available_port();
         let driver_port = available_port();
-        let display_num = xvfb_display(app_port);
+        let display_num = xvfb_display(driver_port);
         let display = format!(":{display_num}");
 
         // Create a temp directory for this test's databases.
