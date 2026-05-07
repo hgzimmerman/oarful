@@ -163,12 +163,11 @@ impl TestInstance {
 
         // Spawn WebKitWebDriver on the virtual display.
         //
-        // On headless CI runners (no GPU), WebKitGTK needs Mesa's software
-        // EGL implementation (llvmpipe). We detect this by checking for
-        // /dev/dri — if absent, there's no GPU and we apply software
-        // rendering overrides. Dev machines with real GPUs skip these to
-        // avoid conflicting with the system's native EGL driver.
-        let headless = !std::path::Path::new("/dev/dri").exists();
+        // On headless CI runners, WebKitGTK needs Mesa's software EGL
+        // implementation (llvmpipe). We detect CI by checking for
+        // LIBGL_ALWAYS_SOFTWARE=1 (set in the CI workflow) — /dev/dri
+        // can exist on CI runners even when the GPU isn't usable.
+        let headless = std::env::var("LIBGL_ALWAYS_SOFTWARE").as_deref() == Ok("1");
         let mut cmd = Command::new("WebKitWebDriver");
         cmd.arg("-p")
             .arg(driver_port.to_string())
