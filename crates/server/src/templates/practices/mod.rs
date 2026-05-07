@@ -14,7 +14,7 @@ pub(crate) use send_result_modal::{
     send_result_billing_gate, send_result_modal, SendResultRecipient, SendStatus,
 };
 
-use lineup_db::practice::{PracticePhase, PracticeWithPhase};
+use lineup_db::practice::{PracticeId, PracticePhase, PracticeWithPhase};
 use lineup_db::types::DurationMinutes;
 use maud::{html, Markup};
 
@@ -411,7 +411,8 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                     div class="border-t border-rule my-1" {}
                     form method="post" action=(cancel_action)
                          hx-post=(cancel_action)
-                         hx-target="#content" {
+                         hx-target="body"
+                         hx-swap="beforeend" {
                         button type="submit"
                                "@click"="open = false"
                                class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2 text-red-600" {
@@ -421,5 +422,64 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                 }
             }
         }
+    }
+}
+
+// ── Cancel confirmation modal ────────────────────────────────────────
+
+const CANCEL_CLOSE_JS: &str = "releaseFocus(); document.getElementById('cancel-modal').remove(); document.getElementById('cancel-modal-backdrop').remove()";
+
+pub(crate) fn cancel_confirm_modal(practice_id: PracticeId) -> Markup {
+    let silent_url = format!("/practices/{practice_id}/cancel-silent");
+    let notify_url = format!("/practices/{practice_id}/cancel-notify");
+
+    html! {
+        div id="cancel-modal-backdrop"
+            class="fixed inset-0 bg-black/40 z-40"
+            onclick=(CANCEL_CLOSE_JS) {}
+        div id="cancel-modal"
+            role="dialog"
+            "aria-modal"="true"
+            "aria-label"="Cancel practice"
+            class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto" {
+                div class="px-6 py-4 border-b border-rule-2 flex items-center justify-between" {
+                    h2 class="text-lg font-bold text-ink" { "Cancel practice" }
+                    button type="button"
+                           class="text-muted hover:text-ink-2 text-xl leading-none"
+                           "aria-label"="Close"
+                           onclick=(CANCEL_CLOSE_JS) {
+                        span "aria-hidden"="true" { "\u{00d7}" }
+                    }
+                }
+                div class="px-6 py-4" {
+                    p class="text-sm text-ink-2" {
+                        "Rowers have already been notified about this practice. Would you like to send cancellation emails?"
+                    }
+                }
+                div class="px-6 py-4 border-t border-rule-2 flex justify-end gap-3" {
+                    form method="post" action=(silent_url)
+                         hx-post=(silent_url)
+                         hx-target="#content"
+                         onclick=(CANCEL_CLOSE_JS) {
+                        button type="submit"
+                               class="text-sm font-semibold text-ink-3 hover:text-ink px-3 py-2" {
+                            "Cancel without notifying"
+                        }
+                    }
+                    form method="post" action=(notify_url)
+                         hx-post=(notify_url)
+                         hx-target="body"
+                         hx-swap="beforeend"
+                         onclick=(CANCEL_CLOSE_JS) {
+                        button type="submit"
+                               class="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                            "Cancel and notify rowers"
+                        }
+                    }
+                }
+            }
+        }
+        script { (maud::PreEscaped("trapFocus(document.getElementById('cancel-modal'));")) }
     }
 }

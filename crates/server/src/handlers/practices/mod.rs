@@ -11,7 +11,7 @@ pub(crate) use lineups::{lineup_preview_handler, send_lineups_handler};
 pub(crate) use reminders::{reminder_preview_handler, send_reminders_handler};
 
 use axum::{
-    extract::Path,
+    extract::{Path, State},
     response::{Html, IntoResponse, Redirect},
     Extension, Form,
 };
@@ -194,10 +194,34 @@ pub(crate) async fn cancel_handler(
     jar: CookieJar,
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
-) -> Result<impl IntoResponse, ErrorResponse> {
+) -> Result<axum::response::Response, ErrorResponse> {
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
+    // Check if the practice is currently not cancelled and has notified rowers.
+    let (is_currently_cancelled, has_notifications) = tenant
+        .db
+        .with_conn(move |conn| {
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
+            let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+                conn,
+                practice_id,
+            )?;
+            Ok((practice.cancelled.as_bool(), !notified.is_empty()))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // If cancelling (not restoring) and rowers have been notified, show confirmation modal.
+    if !is_currently_cancelled && has_notifications {
+        return Ok(
+            Html(templates::practices::cancel_confirm_modal(practice_id).into_string())
+                .into_response(),
+        );
+    }
+
+    // Otherwise, proceed with cancel/restore directly.
     let new_cancelled = tenant
         .db
         .with_conn(move |conn| {
@@ -219,7 +243,151 @@ pub(crate) async fn cancel_handler(
         Some(serde_json::json!({"cancelled": new_cancelled}).to_string()),
     );
 
+    // Return HX-Redirect so HTMX navigates (since hx-target is body/beforeend).
+    Ok(([("HX-Redirect", "/practices")], Html(String::new())).into_response())
+}
+
+/// Cancel a practice without sending notification emails.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn cancel_silent_handler(
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(practice_id): Path<PracticeId>,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+
+    tenant
+        .db
+        .with_conn(move |conn| Practice::set_cancelled_by_id(conn, practice_id, true))
+        .await
+        .map_err(internal_error)?;
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.cancel",
+        "practice",
+        &practice_id.to_string(),
+        Some(serde_json::json!({"cancelled": true, "notified": false}).to_string()),
+    );
+
     Ok(Redirect::to("/practices"))
+}
+
+/// Cancel a practice and send cancellation emails to notified rowers.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn cancel_notify_handler(
+    State(mailer_ctx): State<crate::state::MailerCtx>,
+    State(jwt_keys): State<crate::jwt::JwtKeys>,
+    jar: CookieJar,
+    Extension(tenant): Extension<TenantContext>,
+    Path(practice_id): Path<PracticeId>,
+) -> Result<axum::response::Response, ErrorResponse> {
+    crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
+    let team_name = tenant.config.tenant_name.clone();
+
+    let (practice, notified_rower_ids) = tenant
+        .db
+        .with_conn(move |conn| {
+            let practice =
+                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
+            Practice::set_cancelled_by_id(conn, practice_id, true)?;
+            let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+                conn,
+                practice_id,
+            )?;
+            Ok((practice, notified))
+        })
+        .await
+        .map_err(internal_error)?;
+
+    // Send cancellation emails to all notified rowers who have accounts and want lineup emails.
+    let recipients = tenant
+        .db
+        .with_conn(move |conn| {
+            let mut recipients = Vec::new();
+            for rid in &notified_rower_ids {
+                if let Some(user) = lineup_db::app_user::AppUser::find_by_rower_id(conn, *rid)? {
+                    if user.wants_lineups()
+                        && user.status == lineup_db::app_user::UserStatus::Active
+                    {
+                        let rower = lineup_db::rower::Rower::get(conn, *rid)?;
+                        let name = rower
+                            .map(|r| r.display_name())
+                            .unwrap_or_else(|| "Rower".to_string());
+                        recipients.push((user.id, user.email.clone(), name));
+                    }
+                }
+            }
+            Ok(recipients)
+        })
+        .await
+        .map_err(internal_error)?;
+
+    let mut results: Vec<templates::practices::SendResultRecipient> = Vec::new();
+    for (user_id, email, name) in &recipients {
+        let unsub_url = crate::unsubscribe::url(
+            &mailer_ctx,
+            &tenant.config.tenant_slug,
+            *user_id,
+            crate::unsubscribe::EmailType::Lineups,
+            &jwt_keys,
+        );
+        let unsub_all_url = crate::unsubscribe::url(
+            &mailer_ctx,
+            &tenant.config.tenant_slug,
+            *user_id,
+            crate::unsubscribe::EmailType::All,
+            &jwt_keys,
+        );
+        if let Err(err) = mailer_ctx
+            .mailer
+            .send_cancellation(
+                email,
+                name,
+                &team_name,
+                practice.date,
+                practice.time,
+                &unsub_url,
+                &unsub_all_url,
+            )
+            .await
+        {
+            tracing::warn!(?err, %email, "failed to send cancellation");
+            results.push(templates::practices::SendResultRecipient {
+                name: name.clone(),
+                status: templates::practices::SendStatus::Failed,
+            });
+        } else {
+            results.push(templates::practices::SendResultRecipient {
+                name: name.clone(),
+                status: templates::practices::SendStatus::Sent,
+            });
+        }
+    }
+
+    crate::audit::record(
+        &tenant.db,
+        tenant.claims.audit_user_id(),
+        "practice.cancel",
+        "practice",
+        &practice_id.to_string(),
+        Some(
+            serde_json::json!({
+                "cancelled": true,
+                "notified": true,
+                "sent_count": results.iter().filter(|r| matches!(r.status, templates::practices::SendStatus::Sent)).count()
+            })
+            .to_string(),
+        ),
+    );
+
+    Ok(
+        Html(templates::practices::send_result_modal("Practice cancelled", &results).into_string())
+            .into_response(),
+    )
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]

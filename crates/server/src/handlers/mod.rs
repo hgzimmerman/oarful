@@ -129,6 +129,14 @@ pub(crate) fn create_router(state: AppState) -> Router {
         )
         .route("/practices/{id}/cancel", post(practices::cancel_handler))
         .route(
+            "/practices/{id}/cancel-silent",
+            post(practices::cancel_silent_handler),
+        )
+        .route(
+            "/practices/{id}/cancel-notify",
+            post(practices::cancel_notify_handler),
+        )
+        .route(
             "/practices/{id}/dismiss-plan",
             post(practices::dismiss_plan_handler),
         )
