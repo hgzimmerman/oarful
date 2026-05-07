@@ -499,6 +499,10 @@ pub fn list_with_phases(
     let default_duration = team
         .as_ref()
         .and_then(|t| t.default_practice_duration_minutes);
+    let assume_available = team
+        .as_ref()
+        .map(|t| t.assume_available.as_bool())
+        .unwrap_or(false);
 
     // Rowers on this team who have user accounts (for non-respondent count).
     let team_rower_ids = TeamMembership::rower_ids_for_team(conn, team_id)?;
@@ -517,8 +521,20 @@ pub fn list_with_phases(
     // Batch queries.
     let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
     let boat_counts = Lineup::committed_boat_counts(conn, &pids)?;
-    let avail_map = Availability::map_for_practices(conn, &pids)?;
+    let raw_avail = Availability::map_for_practices(conn, &pids)?;
     let notified_map = LineupNotification::notified_rowers_for_practices(conn, &pids)?;
+
+    // Pre-partition availability by practice to avoid O(n*m) per-practice scan.
+    let mut avail_by_practice: HashMap<
+        PracticeId,
+        HashMap<crate::rower::types::RowerId, crate::availability::types::AvailabilityStatus>,
+    > = HashMap::new();
+    for ((rid, pid), status) in raw_avail {
+        avail_by_practice
+            .entry(pid)
+            .or_default()
+            .insert(rid, status);
+    }
 
     let mut results = Vec::with_capacity(practices.len());
     for practice in practices {
@@ -528,22 +544,19 @@ pub fn list_with_phases(
         let boated_set: HashSet<_> = boated.iter().copied().collect();
         let notified = notified_map.get(&pid);
         let boat_count = boat_counts.get(&pid).copied().unwrap_or(0);
+        let practice_avail = avail_by_practice.get(&pid);
 
         // Staleness: a boated rower whose availability is no longer Yes.
+        // Respects assume_available: if false, no response = not available = stale.
         let is_stale = !boated_set.is_empty()
             && boated_set.iter().any(|rid| {
-                !avail_map
-                    .get(&(*rid, pid))
+                !practice_avail
+                    .and_then(|m| m.get(rid))
                     .map(|s| s.is_available())
-                    .unwrap_or(true)
+                    .unwrap_or(assume_available)
             });
 
-        // Availability counts for this practice.
-        let practice_avail: HashMap<_, _> = avail_map
-            .iter()
-            .filter(|((_, p), _)| *p == pid)
-            .map(|((r, _), s)| (*r, *s))
-            .collect();
+        let practice_avail = practice_avail.cloned().unwrap_or_default();
         let yes_count = practice_avail.values().filter(|s| s.is_available()).count();
         let total_responses = practice_avail.len();
         let non_respondent_count = notifiable_rowers

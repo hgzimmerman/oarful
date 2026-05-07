@@ -54,6 +54,9 @@ impl LineupNotification {
         rower_ids: &[RowerId],
         sent_at: NaiveDateTime,
     ) -> Result<(), diesel::result::Error> {
+        if rower_ids.is_empty() {
+            return Ok(());
+        }
         let rows: Vec<NewLineupNotification> = rower_ids
             .iter()
             .map(|&rower_id| NewLineupNotification {
@@ -62,11 +65,9 @@ impl LineupNotification {
                 sent_at,
             })
             .collect();
-        for row in &rows {
-            diesel::replace_into(lineup_notification::table)
-                .values(row)
-                .execute(conn)?;
-        }
+        diesel::replace_into(lineup_notification::table)
+            .values(&rows)
+            .execute(conn)?;
         Ok(())
     }
 

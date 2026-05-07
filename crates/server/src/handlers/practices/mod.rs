@@ -198,41 +198,42 @@ pub(crate) async fn cancel_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    // Check if the practice is currently not cancelled and has notified rowers.
-    let (is_currently_cancelled, has_notifications) = tenant
+    // Check notification status and toggle cancel in one DB call.
+    // Returns None if we need to show a confirmation modal instead.
+    let result: Option<bool> = tenant
         .db
         .with_conn(move |conn| {
             let practice =
                 Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
-            let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
-                conn,
-                practice_id,
-            )?;
-            Ok((practice.cancelled.as_bool(), !notified.is_empty()))
-        })
-        .await
-        .map_err(internal_error)?;
 
-    // If cancelling (not restoring) and rowers have been notified, show confirmation modal.
-    if !is_currently_cancelled && has_notifications {
-        return Ok(
-            Html(templates::practices::cancel_confirm_modal(practice_id).into_string())
-                .into_response(),
-        );
-    }
+            // If cancelling (not restoring) and rowers have been notified, defer to modal.
+            if !practice.cancelled.as_bool() {
+                let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+                    conn,
+                    practice_id,
+                )?;
+                if !notified.is_empty() {
+                    return Ok(None);
+                }
+            }
 
-    // Otherwise, proceed with cancel/restore directly.
-    let new_cancelled = tenant
-        .db
-        .with_conn(move |conn| {
-            let practice =
-                Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let new_cancelled = !practice.cancelled.as_bool();
             Practice::set_cancelled_by_id(conn, practice_id, new_cancelled)?;
-            Ok(new_cancelled)
+            Ok(Some(new_cancelled))
         })
         .await
         .map_err(internal_error)?;
+
+    // Show confirmation modal if notified rowers exist.
+    let new_cancelled = match result {
+        None => {
+            return Ok(
+                Html(templates::practices::cancel_confirm_modal(practice_id).into_string())
+                    .into_response(),
+            );
+        }
+        Some(v) => v,
+    };
 
     crate::audit::record(
         &tenant.db,
@@ -288,40 +289,43 @@ pub(crate) async fn cancel_notify_handler(
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let team_name = tenant.config.tenant_name.clone();
 
-    let (practice, notified_rower_ids) = tenant
+    // Cancel the practice and gather recipients in one DB call.
+    let (practice, recipients) = tenant
         .db
         .with_conn(move |conn| {
             let practice =
                 Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             Practice::set_cancelled_by_id(conn, practice_id, true)?;
-            let notified = lineup_db::lineup_notification::LineupNotification::notified_rowers(
+            let notified_ids = lineup_db::lineup_notification::LineupNotification::notified_rowers(
                 conn,
                 practice_id,
             )?;
-            Ok((practice, notified))
-        })
-        .await
-        .map_err(internal_error)?;
 
-    // Send cancellation emails to all notified rowers who have accounts and want lineup emails.
-    let recipients = tenant
-        .db
-        .with_conn(move |conn| {
+            // Batch-load rowers and filter to those with accounts to avoid N+1.
+            let notified_set: std::collections::HashSet<_> = notified_ids.into_iter().collect();
+            let rowers_with_users = lineup_db::app_user::AppUser::rower_ids_with_users(conn)?;
+            let all_rowers = lineup_db::rower::Rower::list_active(conn)?;
+            let rower_map: std::collections::HashMap<_, _> =
+                all_rowers.iter().map(|r| (r.id, r)).collect();
+
             let mut recipients = Vec::new();
-            for rid in &notified_rower_ids {
+            for rid in &notified_set {
+                if !rowers_with_users.contains(rid) {
+                    continue;
+                }
                 if let Some(user) = lineup_db::app_user::AppUser::find_by_rower_id(conn, *rid)? {
                     if user.wants_lineups()
                         && user.status == lineup_db::app_user::UserStatus::Active
                     {
-                        let rower = lineup_db::rower::Rower::get(conn, *rid)?;
-                        let name = rower
+                        let name = rower_map
+                            .get(rid)
                             .map(|r| r.display_name())
                             .unwrap_or_else(|| "Rower".to_string());
                         recipients.push((user.id, user.email.clone(), name));
                     }
                 }
             }
-            Ok(recipients)
+            Ok((practice, recipients))
         })
         .await
         .map_err(internal_error)?;
