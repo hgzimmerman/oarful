@@ -18,9 +18,9 @@ pub(crate) fn list_content(
     has_more: bool,
 ) -> Markup {
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
-            h1 class="text-2xl font-bold text-ink" { "Audit log" }
-            p class="text-sm text-ink-3 mt-1" { "90-day history of changes" }
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { "Audit log" }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" { "90-day history of changes" }
         }
 
         div class="px-4 sm:px-8 py-6 space-y-4 max-w-6xl mx-auto" {
@@ -29,20 +29,20 @@ pub(crate) fn list_content(
 
             // Table
             @if entries.is_empty() && offset == 0 {
-                div class="text-center text-ink-3 italic py-12" {
+                div class="text-center font-mono-stat text-xs italic py-12" style="color: var(--muted)" {
                     "No audit entries found."
                 }
             } @else {
-                div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
+                div class="rounded-lg overflow-hidden" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                     table class="w-full text-sm" {
                         caption class="sr-only" { "Audit log" }
-                        thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
-                            tr {
-                                th scope="col" class="px-4 py-2" { "When" }
-                                th scope="col" class="px-4 py-2" { "User" }
-                                th scope="col" class="px-4 py-2" { "Action" }
-                                th scope="col" class="px-4 py-2" { "Resource" }
-                                th scope="col" class="px-4 py-2" { "Detail" }
+                        thead {
+                            tr style="background: var(--paper-2)" {
+                                th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "When" }
+                                th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "User" }
+                                th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Action" }
+                                th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Resource" }
+                                th scope="col" class="px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold" style="color: var(--ink-2)" { "Detail" }
                             }
                         }
                         tbody #audit-rows "aria-live"="polite" {
@@ -88,30 +88,34 @@ pub(crate) fn rows_and_load_more(
 fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Markup {
     html! {
         @for entry in entries {
-            tr class="border-t border-rule-2 hover:bg-paper-2" {
-                td class="px-4 py-2 text-xs text-ink-3 whitespace-nowrap" {
-                    (entry.timestamp.format("%Y-%m-%d %H:%M"))
-                }
-                td class="px-4 py-2" {
-                    @if let Some(uid) = entry.user_id {
-                        @if let Some(name) = user_map.get(&uid) {
-                            span class="text-ink" { (name) }
-                        } @else {
-                            span class="text-muted" { "user #" (uid) }
-                        }
-                    } @else {
-                        span class="text-muted italic" { "system" }
+            tr style="border-top: 1px solid var(--rule-2)" class="hover:bg-paper-2" {
+                td class="px-4 py-2.5 whitespace-nowrap" {
+                    span class="font-mono-stat text-[11px]" style="color: var(--muted)" {
+                        (entry.timestamp.format("%Y-%m-%d %H:%M"))
                     }
                 }
-                td class="px-4 py-2" {
+                td class="px-4 py-2.5" {
+                    @if let Some(uid) = entry.user_id {
+                        @if let Some(name) = user_map.get(&uid) {
+                            span class="font-serif-heading font-medium text-[13px]" style="color: var(--ink)" { (name) }
+                        } @else {
+                            span class="font-mono-stat text-xs" style="color: var(--muted)" { "user #" (uid) }
+                        }
+                    } @else {
+                        span class="font-mono-stat text-xs italic" style="color: var(--muted)" { "system" }
+                    }
+                }
+                td class="px-4 py-2.5" {
                     (action_badge(entry.action.as_str()))
                 }
-                td class="px-4 py-2 text-xs font-mono text-ink-2" {
-                    (entry.resource_type) "/" (entry.resource_id)
+                td class="px-4 py-2.5" {
+                    span class="font-mono-stat text-[11px]" style="color: var(--ink-2)" {
+                        (entry.resource_type) "/" (entry.resource_id)
+                    }
                 }
-                td class="px-4 py-2 text-xs text-ink-3 max-w-xs truncate" {
+                td class="px-4 py-2.5 max-w-xs truncate" {
                     @if let Some(ref d) = entry.detail {
-                        (d)
+                        span class="font-mono-stat text-[11px]" style="color: var(--muted)" { (d) }
                     }
                 }
             }
@@ -120,22 +124,18 @@ fn rows_fragment(entries: &[AuditLog], user_map: &HashMap<UserId, String>) -> Ma
 }
 
 fn action_badge(action: &str) -> Markup {
-    let (bg, text) = match action.split('.').next().unwrap_or("") {
-        "lineup" => ("bg-blue-100/80", "text-blue-700"),
-        "rower" => ("bg-emerald-100/80", "text-emerald-700"),
-        "boat" => ("bg-amber-100/80", "text-amber-700"),
-        "practice" => ("bg-violet-100/80", "text-violet-700"),
-        "invite" => ("bg-pink-100/80", "text-pink-700"),
-        "sync" => ("bg-cyan-100/80", "text-cyan-700"),
-        "solver_profile" => ("bg-orange-100/80", "text-orange-700"),
-        "team" => ("bg-indigo-100/80", "text-indigo-700"),
-        "availability" => ("bg-teal-100/80", "text-teal-700"),
-        _ => ("bg-paper-2", "text-ink"),
+    let style = match action.split('.').next().unwrap_or("") {
+        "lineup" => "color: var(--link); background: color-mix(in oklch, var(--link) 10%, var(--paper)); border-color: color-mix(in oklch, var(--link) 22%, var(--rule))",
+        "rower" => "color: var(--good); background: color-mix(in oklch, var(--good) 10%, var(--paper)); border-color: color-mix(in oklch, var(--good) 22%, var(--rule))",
+        "boat" => "color: var(--warn); background: color-mix(in oklch, var(--warn) 10%, var(--paper)); border-color: color-mix(in oklch, var(--warn) 22%, var(--rule))",
+        "practice" => "color: var(--cox); background: color-mix(in oklch, var(--cox) 10%, var(--paper)); border-color: color-mix(in oklch, var(--cox) 22%, var(--rule))",
+        "invite" | "sync" => "color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border-color: color-mix(in oklch, var(--accent) 22%, var(--rule))",
+        "availability" => "color: var(--stbd); background: color-mix(in oklch, var(--stbd) 10%, var(--paper)); border-color: color-mix(in oklch, var(--stbd) 22%, var(--rule))",
+        "team" | "solver_profile" => "color: var(--ink-3); background: var(--paper-2); border-color: var(--rule)",
+        _ => "color: var(--ink-3); background: var(--paper-2); border-color: var(--rule)",
     };
     html! {
-        span class=(format!("{bg} {text} text-xs px-1.5 py-0.5 rounded-full")) {
-            (action)
-        }
+        span class="stat-badge text-[10px]" style=(style) { (action) }
     }
 }
 
@@ -174,7 +174,7 @@ fn filter_bar(
              class="flex flex-wrap items-end gap-3" {
 
             div {
-                label class="block text-xs text-ink-3 mb-1" { "Action" }
+                label class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "Action" }
                 select name="action"
                        class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All actions" }
@@ -189,7 +189,7 @@ fn filter_bar(
             }
 
             div {
-                label class="block text-xs text-ink-3 mb-1" { "User" }
+                label class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "User" }
                 select name="user_id"
                        class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All users" }
@@ -205,7 +205,7 @@ fn filter_bar(
             }
 
             div {
-                label class="block text-xs text-ink-3 mb-1" { "Resource" }
+                label class="block font-mono-stat text-[9px] tracking-widest uppercase font-semibold mb-1" style="color: var(--muted)" { "Resource" }
                 select name="resource_type"
                        class="border border-rule rounded px-2 py-1.5 text-sm" {
                     option value="" { "All resources" }
@@ -219,8 +219,7 @@ fn filter_bar(
                 }
             }
 
-            button type="submit"
-                   class="bg-ink-2 hover:bg-ink text-paper text-sm font-semibold px-4 py-1.5 rounded transition" {
+            button type="submit" class="btn-warm-ink py-1.5 px-4 text-sm" {
                 "Filter"
             }
 
@@ -229,7 +228,7 @@ fn filter_bar(
                   hx-get="/admin/audit"
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-sm text-ink-3 hover:text-ink" {
+                  class="font-mono-stat text-xs hover:underline" style="color: var(--muted)" {
                     "Clear"
                 }
             }
@@ -266,7 +265,7 @@ fn load_more_button(query: &AuditQuery, offset: i64) -> Markup {
                    hx-get=(url)
                    hx-target="#audit-rows"
                    hx-swap="beforeend"
-                   class="text-sm font-semibold text-ink-2 hover:text-ink border border-rule px-4 py-2 rounded transition" {
+                   class="btn-warm-ghost text-xs py-2" {
                 "Load more"
             }
         }
