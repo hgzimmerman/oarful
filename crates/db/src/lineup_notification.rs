@@ -133,3 +133,156 @@ impl LineupNotification {
         .execute(conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::practice::Practice;
+    use crate::rower::types::{
+        Height, RowerWeightClass, Side, SideStrength, Skill, Strength, SweepBias,
+    };
+    use crate::rower::{NewRower, Rower};
+    use crate::team::{NewTeam, Team};
+    use crate::test_support::in_memory_conn;
+    use crate::types::IntBool;
+
+    fn seed(conn: &mut diesel::SqliteConnection) -> (crate::team::TeamId, PracticeId, RowerId) {
+        let now = chrono::Utc::now().naive_utc();
+        let tid = Team::create(
+            conn,
+            NewTeam {
+                name: "T".into(),
+                created_at: now,
+            },
+        )
+        .unwrap()
+        .id;
+        let pid = Practice::upsert(
+            conn,
+            tid,
+            chrono::NaiveDate::from_ymd_opt(2026, 6, 1).unwrap(),
+            None,
+            None,
+        )
+        .unwrap()
+        .id;
+        let rid = Rower::insert(
+            conn,
+            NewRower {
+                name: "R".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Port,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap()
+        .id;
+        (tid, pid, rid)
+    }
+
+    #[test]
+    fn record_batch_and_query() {
+        let mut conn = in_memory_conn();
+        let (_, pid, rid) = seed(&mut conn);
+        let now = chrono::Utc::now().naive_utc();
+
+        // Second rower for batch test.
+        let rid2 = Rower::insert(
+            &mut conn,
+            NewRower {
+                name: "R2".into(),
+                first_name: None,
+                last_name: None,
+                weight_class: RowerWeightClass::Medium,
+                skill: Skill::Intermediate,
+                strength: Strength::Intermediate,
+                height: Height::Medium,
+                side: Side::Starboard,
+                side_strength: SideStrength::default(),
+                sweep_bias: SweepBias::default(),
+                can_cox: IntBool::FALSE,
+                is_designated_cox: IntBool::FALSE,
+                active: IntBool::TRUE,
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .unwrap()
+        .id;
+
+        LineupNotification::record_batch(&mut conn, pid, &[rid, rid2], now).unwrap();
+
+        let notified = LineupNotification::notified_rowers(&mut conn, pid).unwrap();
+        assert_eq!(notified.len(), 2);
+        assert!(notified.contains(&rid));
+        assert!(notified.contains(&rid2));
+
+        assert!(LineupNotification::all_notified(&mut conn, pid, &[rid, rid2]).unwrap());
+        assert!(!LineupNotification::all_notified(
+            &mut conn,
+            pid,
+            &[rid, rid2, crate::rower::types::RowerId::new(999)]
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn clear_for_practice_removes_all() {
+        let mut conn = in_memory_conn();
+        let (_, pid, rid) = seed(&mut conn);
+        let now = chrono::Utc::now().naive_utc();
+
+        LineupNotification::record(&mut conn, pid, rid, now).unwrap();
+        assert_eq!(
+            LineupNotification::notified_rowers(&mut conn, pid)
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let deleted = LineupNotification::clear_for_practice(&mut conn, pid).unwrap();
+        assert_eq!(deleted, 1);
+        assert!(LineupNotification::notified_rowers(&mut conn, pid)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn record_batch_empty_is_noop() {
+        let mut conn = in_memory_conn();
+        let (_, pid, _) = seed(&mut conn);
+        let now = chrono::Utc::now().naive_utc();
+        LineupNotification::record_batch(&mut conn, pid, &[], now).unwrap();
+        assert!(LineupNotification::notified_rowers(&mut conn, pid)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn record_updates_timestamp_on_conflict() {
+        let mut conn = in_memory_conn();
+        let (_, pid, rid) = seed(&mut conn);
+        let t1 = chrono::NaiveDateTime::parse_from_str("2026-06-01 10:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap();
+        let t2 = chrono::NaiveDateTime::parse_from_str("2026-06-01 12:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap();
+
+        LineupNotification::record(&mut conn, pid, rid, t1).unwrap();
+        LineupNotification::record(&mut conn, pid, rid, t2).unwrap();
+
+        // Should still be just one row.
+        let notified = LineupNotification::notified_rowers(&mut conn, pid).unwrap();
+        assert_eq!(notified.len(), 1);
+    }
+}
