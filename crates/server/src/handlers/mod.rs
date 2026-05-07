@@ -352,6 +352,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route("/teams/{id}/histogram", get(teams::histogram_handler))
         .route("/teams/selector", get(teams::selector_handler))
         .route("/onboarding/dismiss", post(onboarding_dismiss_handler))
+        .route("/nav/onboarding", get(onboarding_bell_handler))
         .route("/nav/stale-badge", get(stale_badge_handler))
         // My pages
         .route("/my", get(my::index_handler))
@@ -551,6 +552,38 @@ async fn onboarding_dismiss_handler(
         .await
         .map_err(internal_error)?;
     Ok(Html(String::new()))
+}
+
+/// `GET /nav/onboarding` — returns the bell icon + dropdown checklist for
+/// coaches with pending onboarding steps, or empty HTML otherwise.
+/// Called via `hx-trigger="load"` from the navbar.
+#[tracing::instrument(level = "debug", skip_all, err)]
+async fn onboarding_bell_handler(
+    Extension(tenant): Extension<TenantContext>,
+) -> Result<Html<String>, ErrorResponse> {
+    if !tenant
+        .claims
+        .role()
+        .at_least(lineup_db::app_user::Role::Coach)
+    {
+        return Ok(Html(String::new()));
+    }
+    let user_id = match tenant.claims.user_id() {
+        Some(id) => id,
+        None => return Ok(Html(String::new())),
+    };
+    let state = tenant
+        .db
+        .with_conn(move |conn| {
+            let completed = lineup_db::onboarding::completed_steps(conn, user_id)?;
+            Ok(templates::onboarding::OnboardingState { completed })
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Html(
+        templates::onboarding::onboarding_bell(&state).into_string(),
+    ))
 }
 
 /// `GET /nav/stale-badge` — returns a small count badge if any upcoming

@@ -38,12 +38,6 @@ pub(crate) async fn list_handler(
     let is_coach = tenant.claims.role().at_least(Role::Coach);
     let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
 
-    let onboarding = if is_coach {
-        Some(query_onboarding_state(&tenant).await?)
-    } else {
-        None
-    };
-
     let now = Utc::now().naive_utc();
     let today = now.date();
     // Show history going back 14 days.
@@ -79,26 +73,8 @@ pub(crate) async fn list_handler(
         default_time,
         default_duration,
         suggested_date,
-        onboarding.as_ref(),
     );
     Ok(super::maybe_page_authed("Practices", content, hx, &tenant))
-}
-
-async fn query_onboarding_state(
-    tenant: &TenantContext,
-) -> Result<templates::onboarding::OnboardingState, ErrorResponse> {
-    let user_id = tenant
-        .claims
-        .user_id()
-        .ok_or_else(|| internal_error(anyhow::anyhow!("no user id in claims")))?;
-    tenant
-        .db
-        .with_conn(move |conn| {
-            let completed = lineup_db::onboarding::completed_steps(conn, user_id)?;
-            Ok(templates::onboarding::OnboardingState { completed })
-        })
-        .await
-        .map_err(internal_error)
 }
 
 /// Legacy redirect: /practices/planning → /practices

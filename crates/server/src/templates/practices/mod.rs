@@ -19,12 +19,10 @@ use lineup_db::types::DurationMinutes;
 use maud::{html, Markup};
 
 use super::layout::{empty_state, page_header};
-use super::onboarding::OnboardingState;
 
 // ── Unified practice list (phase-based) ──────────────────────────────
 
 /// Full unified practice list page — replaces the tabbed Planning/Committed view.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn unified_page(
     practices: &[PracticeWithPhase],
     is_coach: bool,
@@ -32,7 +30,6 @@ pub(crate) fn unified_page(
     default_time: Option<chrono::NaiveTime>,
     default_duration: Option<DurationMinutes>,
     suggested_date: Option<chrono::NaiveDate>,
-    onboarding: Option<&OnboardingState>,
 ) -> Markup {
     let min_date = today.format("%Y-%m-%d").to_string();
     let date_value = suggested_date
@@ -67,10 +64,6 @@ pub(crate) fn unified_page(
     html! {
         (page_header("Practices", None))
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            @if let Some(state) = onboarding {
-                (super::onboarding::onboarding_checklist(state))
-            }
-
             // Create practice form (coach only)
             @if is_coach {
                 form method="post" action="/practices"
