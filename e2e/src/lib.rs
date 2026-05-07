@@ -90,6 +90,21 @@ impl TestInstance {
     }
 
     async fn start_inner(mailer: Arc<dyn lineup_server::mailer::Mailer>) -> Self {
+        // Init tracing when RUST_LOG is set so solver/server logs are
+        // visible during e2e debugging. Off by default to keep test
+        // output clean. Example: RUST_LOG=lineup_solver=debug
+        use std::sync::Once;
+        static TRACING: Once = Once::new();
+        if std::env::var("RUST_LOG").is_ok() {
+            TRACING.call_once(|| {
+                tracing_subscriber::fmt()
+                    .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+                    .with_test_writer()
+                    .try_init()
+                    .ok();
+            });
+        }
+
         let app_port = available_port();
         let driver_port = available_port();
         let display_num = xvfb_display(app_port);

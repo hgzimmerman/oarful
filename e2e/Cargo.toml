@@ -14,3 +14,4 @@ axum.workspace = true
 reqwest = { workspace = true, features = ["cookies", "multipart", "json"] }
 diesel.workspace = true
 lineup_server = { path = "../crates/server" }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
