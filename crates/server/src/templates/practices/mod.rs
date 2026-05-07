@@ -23,9 +23,11 @@ use super::layout::{empty_state, page_header};
 // ── Unified practice list (phase-based) ──────────────────────────────
 
 /// Full unified practice list page — replaces the tabbed Planning/Committed view.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn unified_page(
     practices: &[PracticeWithPhase],
     is_coach: bool,
+    assume_available: bool,
     today: chrono::NaiveDate,
     default_time: Option<chrono::NaiveTime>,
     default_duration: Option<DurationMinutes>,
@@ -129,7 +131,7 @@ pub(crate) fn unified_page(
             } @else {
                 div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
                     @for pwp in &upcoming {
-                        (unified_row(pwp, is_coach))
+                        (unified_row(pwp, is_coach, assume_available))
                     }
                 }
             }
@@ -142,7 +144,7 @@ pub(crate) fn unified_page(
                     }
                     div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2 opacity-75" {
                         @for pwp in &past {
-                            (unified_row(pwp, is_coach))
+                            (unified_row(pwp, is_coach, assume_available))
                         }
                     }
                 }
@@ -173,7 +175,7 @@ fn phase_badge(phase: PracticePhase, is_stale: bool) -> Markup {
     }
 }
 
-fn primary_action(pwp: &PracticeWithPhase) -> Option<Markup> {
+fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Markup> {
     let pid = pwp.practice.id;
     if pwp.is_stale && !matches!(pwp.phase, PracticePhase::Created | PracticePhase::Cancelled) {
         let href = format!("/solve/{pid}");
@@ -189,16 +191,32 @@ fn primary_action(pwp: &PracticeWithPhase) -> Option<Markup> {
     }
     match pwp.phase {
         PracticePhase::Created => {
-            let href = format!("/solve/{pid}");
-            Some(html! {
-                a href=(href)
-                  hx-get=(href)
-                  hx-target="#content"
-                  hx-push-url="true"
-                  class="btn-warm-ink text-xs py-1.5 px-3" {
-                    "Generate lineup"
-                }
-            })
+            // If assume_available is off and most rowers haven't responded,
+            // the primary action is sending reminders rather than generating.
+            let needs_reminders =
+                !assume_available && pwp.non_respondent_count > 0 && pwp.yes_count < 4;
+            if needs_reminders {
+                Some(html! {
+                    button type="button"
+                           hx-get={"/practices/reminder-preview?practice_ids=" (pid)}
+                           hx-target="body"
+                           hx-swap="beforeend"
+                           class="btn-warm-ink text-xs py-1.5 px-3" {
+                        "Send reminders"
+                    }
+                })
+            } else {
+                let href = format!("/solve/{pid}");
+                Some(html! {
+                    a href=(href)
+                      hx-get=(href)
+                      hx-target="#content"
+                      hx-push-url="true"
+                      class="btn-warm-ink text-xs py-1.5 px-3" {
+                        "Generate lineup"
+                    }
+                })
+            }
         }
         PracticePhase::Committed => {
             let href = format!("/history/{pid}");
@@ -225,7 +243,7 @@ fn primary_action(pwp: &PracticeWithPhase) -> Option<Markup> {
     }
 }
 
-fn unified_row(pwp: &PracticeWithPhase, is_coach: bool) -> Markup {
+fn unified_row(pwp: &PracticeWithPhase, is_coach: bool, assume_available: bool) -> Markup {
     let p = &pwp.practice;
     let weekday = p.date.format("%A").to_string();
     let opacity = if p.cancelled.as_bool() {
@@ -266,11 +284,11 @@ fn unified_row(pwp: &PracticeWithPhase, is_coach: bool) -> Markup {
             // Right side: primary action + secondary actions
             @if is_coach {
                 div class="flex items-center gap-2 ml-3 shrink-0" {
-                    @if let Some(action) = primary_action(pwp) {
+                    @if let Some(action) = primary_action(pwp, assume_available) {
                         (action)
                     }
                     @if !matches!(pwp.phase, PracticePhase::Complete) {
-                        (secondary_actions(pwp))
+                        (secondary_actions(pwp, assume_available))
                     }
                 }
             }
@@ -314,7 +332,7 @@ fn row_info(pwp: &PracticeWithPhase, weekday: &str) -> Markup {
     }
 }
 
-fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
+fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup {
     let pid = pwp.practice.id;
     let cancel_action = format!("/practices/{pid}/cancel");
     let is_cancelled = pwp.practice.cancelled.as_bool();
@@ -332,7 +350,21 @@ fn secondary_actions(pwp: &PracticeWithPhase) -> Markup {
                 "x-transition" {
                 @match pwp.phase {
                     PracticePhase::Created => {
-                        @if pwp.non_respondent_count > 0 {
+                        // Show whichever action isn't the primary.
+                        @let needs_reminders = !assume_available
+                            && pwp.non_respondent_count > 0
+                            && pwp.yes_count < 4;
+                        @if needs_reminders {
+                            // Primary is "Send reminders", so secondary is "Generate lineup".
+                            a href={"/solve/" (pid)}
+                              hx-get={"/solve/" (pid)}
+                              hx-target="#content"
+                              hx-push-url="true"
+                              class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
+                                "Generate lineup"
+                            }
+                        } @else if pwp.non_respondent_count > 0 {
+                            // Primary is "Generate lineup", so secondary is "Send reminders".
                             button type="button"
                                    hx-get={"/practices/reminder-preview?practice_ids=" (pid)}
                                    hx-target="body"

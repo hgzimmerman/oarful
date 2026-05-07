@@ -43,7 +43,7 @@ pub(crate) async fn list_handler(
     // Show history going back 14 days.
     let history_since = today - chrono::Duration::days(14);
 
-    let (practices, default_time, default_duration, suggested_date) = tenant
+    let (practices, default_time, default_duration, suggested_date, assume_available) = tenant
         .db
         .with_conn(move |conn| {
             let team = lineup_db::team::Team::get(conn, team_id)?;
@@ -52,6 +52,10 @@ pub(crate) async fn list_handler(
                 .as_ref()
                 .and_then(|t| t.default_practice_duration_minutes);
             let practice_days = team.as_ref().and_then(|t| t.default_practice_days);
+            let assume_available = team
+                .as_ref()
+                .map(|t| t.assume_available.as_bool())
+                .unwrap_or(false);
 
             let practices =
                 lineup_db::practice::list_with_phases(conn, team_id, now, history_since)?;
@@ -61,7 +65,13 @@ pub(crate) async fn list_handler(
             let suggested_date =
                 practice_days.and_then(|pd| pd.next_unfilled(today, &existing_dates));
 
-            Ok((practices, default_time, default_duration, suggested_date))
+            Ok((
+                practices,
+                default_time,
+                default_duration,
+                suggested_date,
+                assume_available,
+            ))
         })
         .await
         .map_err(internal_error)?;
@@ -69,6 +79,7 @@ pub(crate) async fn list_handler(
     let content = templates::practices::unified_page(
         &practices,
         is_coach,
+        assume_available,
         today,
         default_time,
         default_duration,
