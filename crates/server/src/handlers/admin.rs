@@ -270,22 +270,35 @@ async fn settings_content(
         .ok_or_else(|| not_found("Tenant not found."))?;
 
     Ok(html! {
-        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto" {
-            h2 class="text-lg font-bold text-slate-800 mb-4" { "Tenant settings" }
+        // ── Header ──
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
+            h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" {
+                "Settings"
+            }
+            p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" {
+                "Tenant-wide configuration"
+            }
+        }
+
+        div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto space-y-6" {
+            // ── Display preferences ──
             form method="post" action="/admin/settings"
                  hx-post="/admin/settings"
                  hx-target={"#" (TARGET)}
-                 class="bg-white rounded-lg shadow p-6 space-y-4" {
+                 class="rounded-lg p-6 space-y-5" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-1" style="color: var(--ink)" {
+                    "Display preferences"
+                }
                 div {
                     label class="flex items-center gap-3 cursor-pointer" {
                         input type="checkbox" name="attributes_public" value="1"
                               checked[t.are_attributes_public()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                              class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-medium text-slate-800" {
+                            div class="text-sm font-medium" style="color: var(--ink)" {
                                 "Public rower attributes"
                             }
-                            p class="text-xs text-slate-500" {
+                            p class="text-xs" style="color: var(--muted)" {
                                 "Show weight class, form, and strength to all members. When off, only Coach+ can see them."
                             }
                         }
@@ -295,12 +308,12 @@ async fn settings_content(
                     label class="flex items-center gap-3 cursor-pointer" {
                         input type="checkbox" name="emails_visible" value="1"
                               checked[t.are_emails_visible()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                              class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-medium text-slate-800" {
+                            div class="text-sm font-medium" style="color: var(--ink)" {
                                 "Visible email addresses"
                             }
-                            p class="text-xs text-slate-500" {
+                            p class="text-xs" style="color: var(--muted)" {
                                 "Show rower emails on the roster and detail pages. When off, only Coach+ can see them."
                             }
                         }
@@ -310,49 +323,51 @@ async fn settings_content(
                     label class="flex items-center gap-3 cursor-pointer" {
                         input type="checkbox" name="force_cox_stern" value="1"
                               checked[t.force_cox_stern()]
-                              class="rounded border-slate-300 text-slate-800 focus:ring-slate-500";
+                              class="rounded border-rule text-ink focus:ring-ink-3";
                         div {
-                            div class="text-sm font-medium text-slate-800" {
+                            div class="text-sm font-medium" style="color: var(--ink)" {
                                 "Force cox at stern"
                             }
-                            p class="text-xs text-slate-500" {
+                            p class="text-xs" style="color: var(--muted)" {
                                 "Always display the coxswain at the top of lineup cards, regardless of per-boat bow/stern setting."
                             }
                         }
                     }
                 }
-                button type="submit"
-                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded shadow transition" {
+                button type="submit" class="btn-warm-ink py-2 px-5" {
                     "Save"
                 }
             }
 
-            // Billing plan section
-            div class="bg-white rounded-lg shadow p-6 mt-6" {
-                h3 class="text-sm font-semibold text-slate-800 mb-3" { "Plan" }
+            // ── Plan / billing ──
+            div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-3" style="color: var(--ink)" {
+                    "Plan"
+                }
                 div class="flex items-center justify-between" {
-                    div {
-                        span class="text-sm text-slate-700 font-medium" {
-                            (match t.billing_status {
-                                lineup_master_db::tenant::BillingStatus::Free => "Free",
-                                lineup_master_db::tenant::BillingStatus::Active => "Active",
-                                lineup_master_db::tenant::BillingStatus::Grandfathered => "Grandfathered",
-                            })
-                        }
+                    div class="flex items-center gap-2" {
+                        @let (plan_label, plan_style) = match t.billing_status {
+                            lineup_master_db::tenant::BillingStatus::Free =>
+                                ("Free", "color: var(--ink-3); background: var(--paper-2); border-color: var(--rule)"),
+                            lineup_master_db::tenant::BillingStatus::Active =>
+                                ("Active", "color: var(--good); background: color-mix(in oklch, var(--good) 10%, var(--paper)); border-color: color-mix(in oklch, var(--good) 22%, var(--rule))"),
+                            lineup_master_db::tenant::BillingStatus::Grandfathered =>
+                                ("Grandfathered", "color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, var(--paper)); border-color: color-mix(in oklch, var(--accent) 22%, var(--rule))"),
+                        };
+                        span class="stat-badge text-[10px]" style=(plan_style) { (plan_label) }
                         @if !tenant.config.can_send_email() {
-                            span class="ml-2 text-xs text-slate-400" { "(email disabled)" }
+                            span class="font-mono-stat text-[10px]" style="color: var(--muted)" { "(email disabled)" }
                         }
                     }
                     @if stripe_enabled {
                         @if t.stripe_customer_id.is_some() {
                             a href="/billing/portal"
-                              class="text-sm text-slate-600 hover:text-slate-800 underline transition" {
+                              class="font-mono-stat text-xs font-semibold hover:underline" style="color: var(--accent)" {
                                 "Manage subscription"
                             }
                         } @else if t.billing_status == lineup_master_db::tenant::BillingStatus::Free {
                             form method="post" action="/billing/checkout" {
-                                button type="submit"
-                                       class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded shadow transition text-sm" {
+                                button type="submit" class="btn-warm-ink py-2 px-4 text-sm" {
                                     "Upgrade"
                                 }
                             }
