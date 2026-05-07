@@ -29,6 +29,9 @@ use crate::{
 pub(crate) struct SendLineupsInput {
     #[serde(default)]
     pub(crate) dates: Vec<String>,
+    /// Additional dates from the "also ready" upsell checkboxes.
+    #[serde(default)]
+    pub(crate) extra_dates: Vec<String>,
     #[serde(default = "default_scope")]
     pub(crate) scope: String,
 }
@@ -43,6 +46,9 @@ pub(crate) struct LineupPreviewQuery {
     dates: Vec<String>,
     #[serde(default = "default_scope")]
     scope: String,
+    /// When set, resolve this practice to its date. Used for single-practice sends.
+    #[serde(default)]
+    practice_id: Option<i32>,
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -54,12 +60,27 @@ pub(crate) async fn lineup_preview_handler(
     crate::handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
     let team_id = crate::handlers::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let scope_all = query.scope == "all";
+    let practice_id_param = query.practice_id.map(lineup_db::practice::PracticeId::new);
 
-    let dates: Vec<NaiveDate> = query
+    let mut dates: Vec<NaiveDate> = query
         .dates
         .iter()
         .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
         .collect();
+
+    // Resolve practice_id to date if provided.
+    if let Some(pid) = practice_id_param {
+        if dates.is_empty() {
+            let date = tenant
+                .db
+                .with_conn(move |conn| Ok(Practice::get(conn, pid)?.map(|p| p.date)))
+                .await
+                .map_err(internal_error)?;
+            if let Some(d) = date {
+                dates.push(d);
+            }
+        }
+    }
 
     let date_strs: Vec<String> = dates
         .iter()
@@ -68,9 +89,36 @@ pub(crate) async fn lineup_preview_handler(
 
     if dates.is_empty() {
         return Ok(Html(
-            templates::practices::lineup_preview_modal(&[], &date_strs, "placed").into_string(),
+            templates::practices::lineup_preview_modal(&[], &date_strs, "placed", &[])
+                .into_string(),
         ));
     }
+
+    // Find other ready practices that could also be sent.
+    let requested_dates: HashSet<NaiveDate> = dates.iter().copied().collect();
+    let now = chrono::Utc::now().naive_utc();
+    let today = now.date();
+    let also_ready = tenant
+        .db
+        .with_conn(move |conn| {
+            let practices = lineup_db::practice::list_with_phases(conn, team_id, now, today)?;
+            let ready: Vec<templates::practices::AlsoReadyPractice> = practices
+                .iter()
+                .filter(|p| {
+                    matches!(p.phase, lineup_db::practice::PracticePhase::Ready)
+                        && !p.is_stale
+                        && !requested_dates.contains(&p.practice.date)
+                })
+                .map(|p| templates::practices::AlsoReadyPractice {
+                    date: p.practice.date,
+                    boat_count: p.boat_count,
+                    rower_count: p.boated_rower_count,
+                })
+                .collect();
+            Ok(ready)
+        })
+        .await
+        .map_err(internal_error)?;
 
     let scope = query.scope.clone();
     let recipients = tenant
@@ -89,7 +137,8 @@ pub(crate) async fn lineup_preview_handler(
         .collect();
 
     Ok(Html(
-        templates::practices::lineup_preview_modal(&preview, &date_strs, &scope).into_string(),
+        templates::practices::lineup_preview_modal(&preview, &date_strs, &scope, &also_ready)
+            .into_string(),
     ))
 }
 
@@ -199,11 +248,14 @@ pub(crate) async fn send_lineups_handler(
     let team_name = tenant.config.tenant_name.clone();
     let scope_all = input.scope == "all";
 
-    // Parse requested dates from checkbox values.
+    // Parse requested dates from checkbox values + upsell extras.
     let dates: Vec<NaiveDate> = input
         .dates
         .iter()
+        .chain(input.extra_dates.iter())
         .filter_map(|s| NaiveDate::parse_from_str(s.trim(), "%Y-%m-%d").ok())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect();
     if dates.is_empty() {
         return Ok(Html(

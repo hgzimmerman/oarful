@@ -8,7 +8,7 @@ mod lineup_modal;
 mod reminder_modal;
 mod send_result_modal;
 
-pub(crate) use lineup_modal::{lineup_preview_modal, LineupRecipientPreview};
+pub(crate) use lineup_modal::{lineup_preview_modal, AlsoReadyPractice, LineupRecipientPreview};
 pub(crate) use reminder_modal::{reminder_preview_modal, ReminderRecipientPreview};
 pub(crate) use send_result_modal::{
     send_result_billing_gate, send_result_modal, SendResultRecipient, SendStatus,
@@ -114,9 +114,14 @@ pub(crate) fn unified_page(
 
             // Bulk send button
             @if is_coach && ready_count > 0 {
+                @let ready_dates_query: String = upcoming.iter()
+                    .filter(|p| matches!(p.phase, PracticePhase::Ready) && !p.is_stale)
+                    .map(|p| format!("dates={}", p.practice.date.format("%Y-%m-%d")))
+                    .collect::<Vec<_>>()
+                    .join("&");
                 div class="flex justify-end" {
                     button type="button"
-                           hx-get="/practices/lineup-preview"
+                           hx-get={"/practices/lineup-preview?" (ready_dates_query)}
                            hx-target="body"
                            hx-swap="beforeend"
                            class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {

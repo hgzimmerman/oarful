@@ -7,12 +7,20 @@ pub(crate) struct LineupRecipientPreview {
     pub(crate) name: String,
 }
 
+/// Other practices in Ready state that could be included in a bulk send.
+pub(crate) struct AlsoReadyPractice {
+    pub(crate) date: chrono::NaiveDate,
+    pub(crate) boat_count: usize,
+    pub(crate) rower_count: usize,
+}
+
 const CLOSE_JS: &str = "releaseFocus(); document.getElementById('lineup-modal').remove(); document.getElementById('lineup-modal-backdrop').remove()";
 
 pub(crate) fn lineup_preview_modal(
     recipients: &[LineupRecipientPreview],
     date_strs: &[String],
     scope: &str,
+    also_ready: &[AlsoReadyPractice],
 ) -> Markup {
     let unique_count = recipients.len();
     let date_count = date_strs.len();
@@ -58,6 +66,27 @@ pub(crate) fn lineup_preview_modal(
                             }
                         }
                     }
+
+                    // Upsell: other ready practices
+                    @if !also_ready.is_empty() && !recipients.is_empty() {
+                        div class="mt-2 mb-2 rounded px-3 py-3 text-sm"
+                            style="background: var(--paper-2); border: 1px solid var(--rule)" {
+                            p class="text-ink-2 font-semibold mb-2" {
+                                (also_ready.len()) " other practice(s) also ready to send:"
+                            }
+                            @for p in also_ready {
+                                label class="flex items-center gap-2 py-1 cursor-pointer text-sm text-ink" {
+                                    input type="checkbox" name="extra_dates"
+                                          value=(p.date.format("%Y-%m-%d"))
+                                          class="rounded border-rule text-ink focus:ring-ink-3";
+                                    span { (p.date.format("%a, %b %-d")) }
+                                    span class="text-ink-3" {
+                                        " · " (p.boat_count) " boat(s), " (p.rower_count) " rower(s)"
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 @if !date_strs.is_empty() && !recipients.is_empty() {
                     div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-4" {
@@ -65,6 +94,7 @@ pub(crate) fn lineup_preview_modal(
                              hx-post="/practices/send-lineups"
                              hx-target="body"
                              hx-swap="beforeend"
+                             hx-include="[name='extra_dates']:checked"
                              onclick=(PreEscaped(CLOSE_JS)) {
                             @for d in date_strs {
                                 input type="hidden" name="dates" value=(d);
