@@ -74,7 +74,6 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Name" }
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Type" }
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Weight" }
-                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Seats" }
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Rig" }
                         }
                     }
@@ -89,44 +88,53 @@ fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
     }
 }
 
-/// Human-friendly boat type label: "FourPlus" → "Four+", "CoxlessEight" → "Eight−", etc.
-fn display_type(b: &Boat) -> String {
+/// Shorthand boat type notation (8+, 4x, 2−) for the badge.
+fn display_type(b: &Boat) -> &'static str {
     match (
         b.seat_count.as_int(),
         b.has_cox.as_bool(),
         b.oars_per_seat.as_int(),
     ) {
-        (1, false, 2) => "1x".into(),
-        (2, false, 2) => "2x".into(),
-        (2, false, 1) => "2−".into(),
-        (4, false, 2) => "4x".into(),
-        (4, true, 2) => "4x+".into(),
-        (4, false, 1) => "4−".into(),
-        (4, true, 1) => "4+".into(),
-        (8, true, 1) => "8+".into(),
-        (8, false, 1) => "8−".into(),
-        (s, cox, oars) => {
-            let suffix = if cox { "+" } else { "−" };
-            if oars == 2 {
-                format!("{s}x{suffix}")
-            } else {
-                format!("{s}{suffix}")
-            }
-        }
+        (1, false, 2) => "1x",
+        (2, false, 2) => "2x",
+        (2, false, 1) => "2−",
+        (4, false, 2) => "4x",
+        (4, true, 2) => "4x+",
+        (4, false, 1) => "4−",
+        (4, true, 1) => "4+",
+        (8, true, 1) => "8+",
+        (8, false, 1) => "8−",
+        _ => "?",
+    }
+}
+
+/// Full descriptive name for the tooltip.
+fn display_type_long(b: &Boat) -> &'static str {
+    match (
+        b.seat_count.as_int(),
+        b.has_cox.as_bool(),
+        b.oars_per_seat.as_int(),
+    ) {
+        (1, false, 2) => "Single scull",
+        (2, false, 2) => "Double scull",
+        (2, false, 1) => "Pair",
+        (4, false, 2) => "Quad scull",
+        (4, true, 2) => "Coxed quad scull",
+        (4, false, 1) => "Coxless four",
+        (4, true, 1) => "Coxed four",
+        (8, true, 1) => "Eight",
+        (8, false, 1) => "Coxless eight",
+        _ => "Unknown",
     }
 }
 
 fn boat_row(b: &Boat) -> Markup {
-    let type_label = display_type(b);
+    let short = display_type(b);
+    let long = display_type_long(b);
     let rig = if b.oars_per_seat.as_int() == 1 {
         format!("{} rigged", b.stroke_side)
     } else {
         "sculling".into()
-    };
-    let seats = if b.has_cox.as_bool() {
-        format!("{}+", b.seat_count)
-    } else {
-        format!("{}-", b.seat_count)
     };
     let href = format!("/boats/{}", b.id);
     html! {
@@ -141,13 +149,10 @@ fn boat_row(b: &Boat) -> Markup {
                 }
             }
             td class="px-4 py-2.5" {
-                span class="stat-badge text-[10px] stat-tier-2" { (type_label) }
+                span class="stat-badge text-[10px] stat-tier-2 cursor-help" title=(long) { (short) }
             }
             td class="px-4 py-2.5" {
                 span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (b.weight_class) }
-            }
-            td class="px-4 py-2.5" {
-                span class="font-mono-stat text-xs font-semibold" style="color: var(--ink)" { (seats) }
             }
             td class="px-4 py-2.5" {
                 span class="font-mono-stat text-[11px]" style="color: var(--muted)" { (rig) }
