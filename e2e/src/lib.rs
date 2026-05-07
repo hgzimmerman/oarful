@@ -27,13 +27,15 @@ fn project_root() -> PathBuf {
 
 /// Locate Mesa's EGL vendor JSON directory by searching nix store paths
 /// on `LD_LIBRARY_PATH` / `LIBGL_DRIVERS_PATH`, or falling back to a glob.
-/// Returns the directory containing `50_mesa.json` so libglvnd can load
+/// Returns `Some(dir)` containing `50_mesa.json` so libglvnd can load
 /// Mesa's software EGL (llvmpipe) on headless CI runners.
-fn find_mesa_egl_vendor_dir() -> String {
+/// Returns `None` when no vendor dir is found — callers should skip
+/// setting `__EGL_VENDOR_LIBRARY_DIRS` so the system default is preserved.
+fn find_mesa_egl_vendor_dir() -> Option<String> {
     // Check if the system already has a vendor dir set.
     if let Ok(dir) = std::env::var("__EGL_VENDOR_LIBRARY_DIRS") {
         if std::path::Path::new(&dir).exists() {
-            return dir;
+            return Some(dir);
         }
     }
     // Search nix store for mesa's EGL vendor JSON.
@@ -47,12 +49,12 @@ fn find_mesa_egl_vendor_dir() -> String {
         if name.contains("mesa-") && !name.contains(".drv") {
             let vendor_dir = e.path().join("share/glvnd/egl_vendor.d");
             if vendor_dir.join("50_mesa.json").exists() {
-                return vendor_dir.to_string_lossy().into_owned();
+                return Some(vendor_dir.to_string_lossy().into_owned());
             }
         }
     }
-    // Fallback — let libglvnd use its default search.
-    String::new()
+    // Not found — don't override the system default.
+    None
 }
 
 /// Pick a free display number for Xvfb (99 + port-based offset to avoid collisions).
@@ -170,11 +172,14 @@ impl TestInstance {
             .env("DISPLAY", &display);
 
         if headless {
-            let mesa_egl_dir = find_mesa_egl_vendor_dir();
+            // Tell libglvnd where to find Mesa's EGL vendor JSON so
+            // WebKit can create an EGL display via the software renderer.
+            // Only set this when we actually find the directory — setting
+            // it to an empty string *breaks* EGL vendor discovery.
+            if let Some(ref mesa_egl_dir) = find_mesa_egl_vendor_dir() {
+                cmd.env("__EGL_VENDOR_LIBRARY_DIRS", mesa_egl_dir);
+            }
             cmd
-                // Tell libglvnd where to find Mesa's EGL vendor JSON so
-                // WebKit can create an EGL display via the software renderer.
-                .env("__EGL_VENDOR_LIBRARY_DIRS", &mesa_egl_dir)
                 // Force Mesa to use its software rasterizer (llvmpipe).
                 .env("LIBGL_ALWAYS_SOFTWARE", "1")
                 // Disable the DMA-BUF renderer (requires kernel DRM access).
