@@ -17,20 +17,20 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
     );
 
     html! {
-        header class="bg-paper border-b border-rule-2 px-4 sm:px-8 py-4 sm:py-6" {
+        header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
             div class="flex items-center justify-between" {
                 div {
-                    h1 class="text-2xl font-bold text-ink" { "Fleet" }
-                    p class="text-sm text-ink-3 mt-1" { (subtitle) }
+                    h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { "Fleet" }
+                    p class="font-mono-stat text-xs tracking-wide mt-1" style="color: var(--muted)" { (subtitle) }
                 }
                 div class="flex items-center gap-2" {
                     @if can_export {
                         a href="/boats/export.csv"
-                          class="text-ink-3 hover:text-ink text-sm font-semibold border border-rule px-4 py-2 rounded transition" {
+                          class="btn-warm-ghost text-xs py-2" {
                             "Fleet CSV"
                         }
                         a href="/boats/usage-matrix.csv"
-                          class="text-ink-3 hover:text-ink text-sm font-semibold border border-rule px-4 py-2 rounded transition" {
+                          class="btn-warm-ghost text-xs py-2" {
                             "Usage CSV"
                         }
                     }
@@ -38,7 +38,7 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
                       hx-get="/boats/new"
                       hx-target="#content"
                       hx-push-url="true"
-                      class="bg-good hover:opacity-90 text-paper text-sm font-semibold px-4 py-2 rounded shadow-soft transition" {
+                      class="btn-warm-ink text-sm py-2 px-4" {
                         "Add shell"
                     }
                 }
@@ -61,19 +61,21 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
 }
 
 fn boat_table(heading: &str, boats: &[&Boat]) -> Markup {
+    let th_class =
+        "px-4 py-2.5 text-left font-mono-stat text-[10px] tracking-widest uppercase font-semibold";
     html! {
         div class="max-w-5xl mx-auto" {
-            h2 class="text-lg font-bold text-ink mb-2" { (heading) }
-            div class="bg-paper rounded-lg shadow-soft overflow-hidden" {
+            h2 class="font-serif-heading text-lg font-medium tracking-tight mb-2" style="color: var(--ink)" { (heading) }
+            div class="rounded-lg overflow-hidden" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                 table class="w-full text-sm" {
                     caption class="sr-only" { "Boat fleet" }
-                    thead class="bg-paper-2 text-left text-xs uppercase text-ink-2" {
-                        tr {
-                            th scope="col" class="px-4 py-2" { "Name" }
-                            th scope="col" class="px-4 py-2" { "Type" }
-                            th scope="col" class="px-4 py-2" { "Weight" }
-                            th scope="col" class="px-4 py-2" { "Seats" }
-                            th scope="col" class="px-4 py-2" { "Rig" }
+                    thead {
+                        tr style="background: var(--paper-2)" {
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Name" }
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Type" }
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Weight" }
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Seats" }
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Rig" }
                         }
                     }
                     tbody {
@@ -101,20 +103,28 @@ fn boat_row(b: &Boat) -> Markup {
     };
     let href = format!("/boats/{}", b.id);
     html! {
-        tr class="border-t border-rule-2 hover:bg-paper-2" {
-            td class="px-4 py-2 font-medium" {
+        tr style="border-top: 1px solid var(--rule-2)" class="hover:bg-paper-2" {
+            td class="px-4 py-2.5" {
                 a href=(href)
                   hx-get=(href)
                   hx-target="#content"
                   hx-push-url="true"
-                  class="text-link hover:text-link-2 underline" {
+                  class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                     (b.name)
                 }
             }
-            td class="px-4 py-2" { (type_label) }
-            td class="px-4 py-2" { (b.weight_class) }
-            td class="px-4 py-2 font-mono" { (seats) }
-            td class="px-4 py-2 text-xs" { (rig) }
+            td class="px-4 py-2.5" {
+                span class="stat-badge text-[10px] stat-tier-2" { (type_label) }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs" style="color: var(--ink-2)" { (b.weight_class) }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-xs font-semibold" style="color: var(--ink)" { (seats) }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-[11px]" style="color: var(--muted)" { (rig) }
+            }
         }
     }
 }
