@@ -253,6 +253,23 @@ can resume without re-deriving context.
 
 ### Quick wins
 
+#### Progressive Web App (installable)
+
+Add a `manifest.json`, minimal service worker, and `<link rel="manifest">`
+in the base maud template so the app is installable to phone home screens.
+`display: standalone` removes browser chrome. No offline caching needed —
+just the install prompt. Complements kiosk check-in (rowers get a home
+screen icon instead of a bookmark). Icons needed at 192x192 and 512x512.
+
+Prerequisite: navigation audit. `standalone` mode has no browser
+back button, so every page needs a clear way to navigate back/home.
+Audit all pages for dead-end flows (modals, detail pages, post-submit
+states) and add explicit back/breadcrumb links where missing. Tackle
+this alongside the PWA manifest work.
+
+Future: push notifications (VAPID keys, subscription storage) as an
+alternative to email for lineup/reminder alerts. Separate, larger effort.
+
 ### Architecture / platform
 
 #### Zone reward × side-preference scaling — shipped
@@ -321,6 +338,36 @@ turn-around points) appear as markers above the strip bars.
 - Practice plan studio: dedicated page for assembling plans
   independently from lineups, with or without specific boats.
 - Multiple practice plans per practice.
+
+#### Kiosk mode (laptop + TV)
+
+Two kiosk surfaces for boathouse use: a laptop for rower self-check-in
+(tap name or scan QR) and a wall-mounted TV showing upcoming lineups,
+schedules, and a QR code. Both tenant-scoped, SSE-powered, accessed
+via single-use activation tokens (cookie session, no user login).
+
+QR check-in marks rowers as present for the next practice within a
+configurable window. New `presence` table. Laptop view is interactive
+(tap-to-toggle, search bar); TV view is display-optimized (high
+contrast, auto-scroll, side-by-side co-incident practices, 24h
+schedule fallback).
+
+Admin UI at `/admin/kiosk` for token generation/revocation (Coach+).
+
+Laptop kiosk is the priority. TV kiosk shares most infrastructure.
+
+Full design: [docs/design-kiosk-mode.md](docs/design-kiosk-mode.md)
+
+#### Oar inventory
+
+Oar sets (team-scoped, free-text names) assigned to boats per practice.
+Fill priorities suggest oar sets for specific boats. Displayed in the
+practice editor, history detail, and kiosk views so rowers know what
+equipment to bring to the dock.
+
+Prerequisite for oar display in kiosk mode, but independently useful.
+
+Full design: [docs/design-oar-inventory.md](docs/design-oar-inventory.md)
 
 ### Long-term / parked
 
