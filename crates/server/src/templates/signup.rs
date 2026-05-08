@@ -14,6 +14,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Sign up · Oarful" }
                 link rel="stylesheet" href="/tailwind.css";
+                (super::layout::theme_init_script())
             }
             body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
@@ -76,7 +77,7 @@ pub(crate) fn signup_page(error: Option<&str>, prefill: &SignupPrefill) -> Marku
                                   class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                         }
                         button type="submit"
-                               class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                               class="w-full btn-warm-ink py-2" {
                             "Create club"
                         }
                     }

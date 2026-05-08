@@ -20,8 +20,8 @@ const MY_TABS: &[TabDef] = &[
         id: "availability",
     },
     TabDef {
-        label: "Email",
-        url: "/my/email-preferences",
+        label: "Preferences",
+        url: "/my/preferences",
         id: "email",
     },
 ];
@@ -154,15 +154,22 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
 }
 
 // =====================================================================
-// Email preferences
+// Preferences (email + appearance)
 // =====================================================================
 
 pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
     html! {
         div class="space-y-6" {
+            // ── Appearance ──
+            (appearance_section())
+
+            // ── Email preferences ──
             div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
-                form method="post" action="/my/email-preferences"
-                     hx-post="/my/email-preferences"
+                h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" {
+                    "Email notifications"
+                }
+                form method="post" action="/my/preferences"
+                     hx-post="/my/preferences"
                      hx-target="#content"
                      hx-push-url="true"
                      class="space-y-4" {
@@ -206,6 +213,37 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                         button type="submit" class="btn-warm-ink py-2 px-5 text-sm" {
                             "Save preferences"
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn appearance_section() -> Markup {
+    html! {
+        div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)"
+            x-data="themeToggle()" {
+            h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" {
+                "Appearance"
+            }
+            div class="flex items-center justify-between" {
+                div {
+                    div class="text-sm font-medium" style="color: var(--ink)" { "Theme" }
+                    p class="text-xs" style="color: var(--muted)" { "Choose light, dark, or match your system setting." }
+                }
+                div class="seg-warm" {
+                    button type="button" "@click"="set('light')"
+                           ":class"="mode === 'light' ? 'seg-warm-btn seg-warm-btn-on' : 'seg-warm-btn'" {
+                        "Light"
+                    }
+                    button type="button" "@click"="set('system')"
+                           ":class"="mode === 'system' ? 'seg-warm-btn seg-warm-btn-on' : 'seg-warm-btn'" {
+                        "System"
+                    }
+                    button type="button" "@click"="set('dark')"
+                           ":class"="mode === 'dark' ? 'seg-warm-btn seg-warm-btn-on' : 'seg-warm-btn'" {
+                        "Dark"
                     }
                 }
             }

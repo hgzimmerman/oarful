@@ -27,6 +27,41 @@
   --link-2:  #2a5280;
   --shadow-soft: 0 1px 0 rgba(21,33,45,0.04), 0 8px 22px -14px rgba(21,33,45,0.18);
   --shadow-card: 0 1px 0 rgba(21,33,45,0.06), 0 18px 40px -28px rgba(21,33,45,0.30);
+  --nav-bg:   #15212d;
+  --nav-text: #f3eee3;
+}
+
+/* ── Dark palette ──────────────────────────────────────────────────
+   Applied via .dark class on <html>. A tiny inline script in <head>
+   adds the class before first paint based on localStorage or
+   prefers-color-scheme, so there is no flash of wrong theme. */
+html.dark {
+  color-scheme: dark;
+  --input-bg:#1e2d3d;
+  --paper:   #0f1923;
+  --paper-2: #172432;
+  --paper-3: #1e2f40;
+  --ink:     #e2ddd0;
+  --ink-2:   #c0b9aa;
+  --ink-3:   #8e8778;
+  --muted:   #7a7566;
+  --rule:    #2f4458;
+  --rule-2:  #283a4c;
+  --accent:  #d77a4a;
+  --accent-2:#e89565;
+  --port:    #e05555;
+  --stbd:    #4cad62;
+  --cox:     #8b7abf;
+  --either:  #8e8778;
+  --good:    #4cad62;
+  --warn:    #daa53a;
+  --bad:     #e05555;
+  --link:    #6ea4d4;
+  --link-2:  #8dbde6;
+  --shadow-soft: inset 0 0 0 1px var(--rule), 0 8px 22px -14px rgba(0,0,0,0.50);
+  --shadow-card: inset 0 0 0 1px var(--rule), 0 18px 40px -28px rgba(0,0,0,0.60);
+  --nav-bg:   #172432;
+  --nav-text: #e2ddd0;
 }
 
 /* ── Font stacks ──────────────────────────────────────────────────── */
@@ -202,12 +237,12 @@
     background: var(--paper-2);
   }
   .seg-warm-btn-on {
-    background: var(--ink);
-    color: var(--paper);
+    background: var(--nav-bg);
+    color: var(--nav-text);
     font-weight: 600;
   }
   .seg-warm-btn-on:hover {
-    background: var(--ink-2);
+    background: color-mix(in oklch, var(--nav-bg) 85%, var(--nav-text));
   }
 
   /* Lock button */
@@ -232,9 +267,9 @@
     color: var(--ink);
   }
   .lock-btn-on {
-    background: var(--ink);
-    color: var(--paper);
-    border-color: var(--ink);
+    background: var(--nav-bg);
+    color: var(--nav-text);
+    border-color: var(--nav-bg);
   }
   .lock-btn-dirty {
     background: color-mix(in oklch, var(--accent) 15%, var(--paper));
@@ -267,23 +302,24 @@
   /* Warm ghost button */
   .btn-warm-ghost {
     background: transparent;
-    border: 1px solid var(--rule);
-    color: var(--ink-2);
+    border: 1px solid var(--rule-2);
+    color: var(--ink-3);
     padding: 6px 12px;
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.1s;
+    transition: background 0.1s, border-color 0.1s;
   }
   .btn-warm-ghost:hover {
     background: var(--paper-2);
+    border-color: var(--rule);
   }
 
-  /* Warm ink button */
+  /* Warm ink button — stays dark in both light and dark mode */
   .btn-warm-ink {
-    background: var(--ink);
-    color: var(--paper);
-    border: 1px solid var(--ink);
+    background: var(--nav-bg);
+    color: var(--nav-text);
+    border: 1px solid var(--nav-bg);
     padding: 7px 14px;
     border-radius: 6px;
     font-size: 12px;
@@ -292,7 +328,7 @@
     transition: background 0.12s;
   }
   .btn-warm-ink:hover {
-    background: var(--ink-2);
+    background: color-mix(in oklch, var(--nav-bg) 85%, var(--nav-text));
   }
 
   /* End cap (stern/bow) */
@@ -504,7 +540,7 @@
     animation: border-spin 2s linear infinite;
     background: conic-gradient(
       var(--accent) 70%,
-      white 84%,
+      var(--paper) 84%,
       var(--accent) 90%
     );
     z-index: 0;
@@ -841,10 +877,10 @@
     height: 28px;
   }
   .att-yes {
-    background: color-mix(in oklch, var(--good) 52%, var(--paper));
+    background: color-mix(in srgb, var(--good) 50%, var(--paper));
   }
   .att-no {
-    background: color-mix(in oklch, var(--bad) 42%, var(--paper));
+    background: color-mix(in srgb, var(--bad) 40%, var(--paper));
   }
   .att-legend-swatch {
     display: inline-block;
@@ -928,4 +964,9 @@ input[type="search"],
 select,
 textarea {
   background-color: var(--input-bg);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }

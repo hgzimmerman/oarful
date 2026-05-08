@@ -12,6 +12,7 @@ fn auth_shell(title: &str, body: Markup) -> Markup {
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Oarful" }
                 link rel="stylesheet" href="/tailwind.css";
+                (super::layout::theme_init_script())
             }
             body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {
@@ -88,7 +89,7 @@ pub(crate) fn login_email_step(
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                       class="w-full btn-warm-ink py-2" {
                     "Continue"
                 }
             }
@@ -154,7 +155,7 @@ pub(crate) fn login_password_step(
                     }
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                       class="w-full btn-warm-ink py-2" {
                     "Sign in"
                 }
             }
@@ -234,7 +235,7 @@ pub(crate) fn forgot_password_page(prefill_email: Option<&str>) -> Markup {
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                       class="w-full btn-warm-ink py-2" {
                     "Send reset link"
                 }
             }
@@ -296,7 +297,7 @@ pub(crate) fn reset_password_form(error: Option<&str>) -> Markup {
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
                 }
                 button type="submit"
-                       class="w-full bg-ink hover:bg-ink-2 text-paper font-semibold py-2 rounded shadow-soft transition" {
+                       class="w-full btn-warm-ink py-2" {
                     "Update password"
                 }
             }

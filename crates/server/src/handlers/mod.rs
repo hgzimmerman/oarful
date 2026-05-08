@@ -365,7 +365,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(my::availability_handler).post(my::availability_update_handler),
         )
         .route(
-            "/my/email-preferences",
+            "/my/preferences",
             get(my::email_prefs_handler).post(my::email_prefs_update_handler),
         )
         .route("/my/erg-test", post(my::erg_test_add_handler))

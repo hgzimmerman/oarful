@@ -227,6 +227,7 @@ pub(crate) fn accept_form(action: &str, error: Option<&str>) -> Markup {
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Set password · Oarful" }
                 script src="/tailwindcss.js" {}
+                (super::layout::theme_init_script())
             }
             body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {

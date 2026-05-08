@@ -37,7 +37,7 @@ pub(crate) fn selector(teams: &[Team], active: TeamId, tenant_name: Option<&str>
             label class="text-xs text-muted uppercase tracking-wide" { "Team" }
             select name="team_id"
                    onchange="this.form.submit()"
-                   class="bg-ink-2 text-paper text-sm rounded px-2 py-1 border border-ink-3 focus:border-rule focus:outline-none cursor-pointer" {
+                   class="text-sm rounded px-2 py-1 focus:outline-none cursor-pointer" style="background: color-mix(in oklch, var(--nav-bg) 80%, var(--nav-text)); color: var(--nav-text); border: 1px solid color-mix(in oklch, var(--nav-bg) 60%, var(--nav-text))" {
                 @for t in teams {
                     @if t.id == active {
                         option value=(t.id) selected { (t.name) }
@@ -599,7 +599,7 @@ window.thresholdSlider = function(metric, saveUrl, histUrl, rMin, rMax, dLow, dM
       var left = fullLeft + inset;
       var w = fullW - inset * 2;
       var h = bar.count / maxC * 80;
-      return 'left:'+left+'%;width:'+w+'%;height:'+h+'%;background:black;opacity:1';
+      return 'left:'+left+'%;width:'+w+'%;height:'+h+'%;background:var(--ink);opacity:0.7';
     },
     barTitle(bar) {
       return this.fmt(bar.min) + ' – ' + this.fmt(bar.max) + ' (' + bar.count + ')';

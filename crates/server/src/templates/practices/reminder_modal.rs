@@ -80,7 +80,7 @@ pub(crate) fn reminder_preview_modal(
                                 input type="hidden" name="practice_ids" value=(id);
                             }
                             button type="submit"
-                                   class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                                   class="btn-warm-ink py-2 px-4 text-sm" {
                                 "Send " (unique_count) " reminder(s)"
                             }
                         }
