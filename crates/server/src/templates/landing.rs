@@ -14,6 +14,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Oarful 🚣 Lineup Generator for Rowing Clubs" }
                 link rel="stylesheet" href="/tailwind.css";
+                (super::layout::theme_init_script())
             }
             body class="bg-paper text-ink min-h-screen flex flex-col" {
                 // Nav bar

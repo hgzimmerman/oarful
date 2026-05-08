@@ -64,6 +64,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                         * { color-adjust: exact; -webkit-print-color-adjust: exact; }
                     }
                 "# }
+                (theme_init_script())
             }
             body class="min-h-screen flex flex-col bg-paper text-ink" {
                 a href="#content" class="skip-link" { "Skip to content" }
@@ -116,6 +117,25 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 // lineup editor Alpine component + generate animation
                 script {
                     (maud::PreEscaped(include_str!("js/lineup_editor.js")))
+                }
+                // Theme toggle Alpine component
+                script {
+                    (maud::PreEscaped(r#"
+window.themeToggle = function() {
+  return {
+    mode: localStorage.getItem('theme') || 'system',
+    set(m) {
+      this.mode = m;
+      localStorage.setItem('theme', m);
+      this.apply();
+    },
+    apply() {
+      var dark = this.mode === 'dark' || (this.mode === 'system' && matchMedia('(prefers-color-scheme:dark)').matches);
+      document.documentElement.classList.toggle('dark', dark);
+    }
+  };
+};
+"#))
                 }
             }
         }
@@ -333,6 +353,14 @@ pub(crate) fn empty_state(message: &str) -> Markup {
 fn source_url() -> String {
     std::env::var("SOURCE_URL")
         .unwrap_or_else(|_| "https://github.com/hgzimmerman/oarful".to_string())
+}
+
+/// Inline `<script>` that applies the `.dark` class to `<html>` before
+/// first paint, avoiding a flash of wrong theme. Must be placed in `<head>`.
+pub(crate) fn theme_init_script() -> Markup {
+    html! {
+        script { (maud::PreEscaped(r#"(function(){var t=localStorage.getItem('theme');if(t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')})();"#)) }
+    }
 }
 
 /// Generic page header: large title + optional subtitle.

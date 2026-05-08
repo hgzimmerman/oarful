@@ -12,6 +12,7 @@ fn auth_shell(title: &str, body: Markup) -> Markup {
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Oarful" }
                 link rel="stylesheet" href="/tailwind.css";
+                (super::layout::theme_init_script())
             }
             body class="bg-paper text-ink min-h-screen flex items-center justify-center" {
                 div class="w-full max-w-sm" {

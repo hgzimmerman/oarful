@@ -31,36 +31,37 @@
   --nav-text: #f3eee3;
 }
 
-/* ── Dark palette ────────────────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --input-bg:#1e2d3d;
-    --paper:   #0f1923;
-    --paper-2: #172432;
-    --paper-3: #1e2f40;
-    --ink:     #e2ddd0;
-    --ink-2:   #c0b9aa;
-    --ink-3:   #8e8778;
-    --muted:   #7a7566;
-    --rule:    #2f4458;
-    --rule-2:  #283a4c;
-    --accent:  #d77a4a;
-    --accent-2:#e89565;
-    --port:    #e05555;
-    --stbd:    #4cad62;
-    --cox:     #8b7abf;
-    --either:  #8e8778;
-    --good:    #4cad62;
-    --warn:    #daa53a;
-    --bad:     #e05555;
-    --link:    #6ea4d4;
-    --link-2:  #8dbde6;
-    --shadow-soft: inset 0 0 0 1px var(--rule), 0 8px 22px -14px rgba(0,0,0,0.50);
-    --shadow-card: inset 0 0 0 1px var(--rule), 0 18px 40px -28px rgba(0,0,0,0.60);
-    --nav-bg:   #172432;
-    --nav-text: #e2ddd0;
-  }
+/* ── Dark palette ──────────────────────────────────────────────────
+   Applied via .dark class on <html>. A tiny inline script in <head>
+   adds the class before first paint based on localStorage or
+   prefers-color-scheme, so there is no flash of wrong theme. */
+html.dark {
+  color-scheme: dark;
+  --input-bg:#1e2d3d;
+  --paper:   #0f1923;
+  --paper-2: #172432;
+  --paper-3: #1e2f40;
+  --ink:     #e2ddd0;
+  --ink-2:   #c0b9aa;
+  --ink-3:   #8e8778;
+  --muted:   #7a7566;
+  --rule:    #2f4458;
+  --rule-2:  #283a4c;
+  --accent:  #d77a4a;
+  --accent-2:#e89565;
+  --port:    #e05555;
+  --stbd:    #4cad62;
+  --cox:     #8b7abf;
+  --either:  #8e8778;
+  --good:    #4cad62;
+  --warn:    #daa53a;
+  --bad:     #e05555;
+  --link:    #6ea4d4;
+  --link-2:  #8dbde6;
+  --shadow-soft: inset 0 0 0 1px var(--rule), 0 8px 22px -14px rgba(0,0,0,0.50);
+  --shadow-card: inset 0 0 0 1px var(--rule), 0 18px 40px -28px rgba(0,0,0,0.60);
+  --nav-bg:   #172432;
+  --nav-text: #e2ddd0;
 }
 
 /* ── Font stacks ──────────────────────────────────────────────────── */

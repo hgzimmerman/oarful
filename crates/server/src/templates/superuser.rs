@@ -13,6 +13,7 @@ fn su_shell(title: &str, content: Markup) -> Markup {
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Oarful Admin" }
                 link rel="stylesheet" href="/tailwind.css";
+                (super::layout::theme_init_script())
                 script src="/htmx.min.js" {}
             }
             body class="bg-paper text-ink min-h-screen flex flex-col" {
