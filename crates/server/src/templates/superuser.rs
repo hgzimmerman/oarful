@@ -69,7 +69,7 @@ pub(crate) fn su_dashboard(tenants: &[Tenant]) -> Markup {
                     }
                     div class="sm:col-span-2" {
                         button type="submit"
-                               class="bg-ink hover:bg-ink-2 text-paper font-semibold text-sm px-4 py-2 rounded shadow-soft transition" {
+                               class="btn-warm-ink py-2 px-4 text-sm" {
                             "Create tenant"
                         }
                     }
@@ -131,7 +131,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
                         }
                     }
                     button type="submit"
-                           class="text-xs bg-ink-2 text-paper px-2 py-1 rounded hover:bg-ink transition" {
+                           class="btn-warm-ink text-xs px-2 py-1" {
                         "Save"
                     }
                 }

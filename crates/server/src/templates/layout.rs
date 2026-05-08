@@ -128,7 +128,7 @@ fn navbar(role: Role) -> Markup {
     let is_pd = r.at_least(Role::ProgramDirector);
 
     html! {
-        nav class="bg-ink text-paper px-4 sm:px-6 py-3 sticky top-0 z-40 shadow"
+        nav class="px-4 sm:px-6 py-3 sticky top-0 z-40 shadow" style="background: var(--nav-bg); color: var(--nav-text)"
              x-data="{ open: false }" {
             // Top bar: team name + hamburger on mobile, full links on desktop
             div class="flex items-center justify-between" {

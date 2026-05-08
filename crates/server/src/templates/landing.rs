@@ -26,7 +26,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                         }
                         @if !signup_disabled {
                             a href="/signup"
-                              class="text-sm font-semibold bg-ink text-paper px-4 py-2 rounded hover:bg-ink-2 transition" {
+                              class="btn-warm-ink py-2 px-4 text-sm" {
                                 "Get started"
                             }
                         }
@@ -47,7 +47,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                             @if !signup_disabled {
                                 div class="text-center" {
                                     a href="/signup"
-                                      class="block bg-ink text-paper font-semibold px-8 py-3 rounded-lg hover:bg-ink-2 transition text-sm" {
+                                      class="block btn-warm-ink py-3 px-8 text-sm rounded-lg" {
                                         "Get started free"
                                     }
                                     p class="mt-2 text-xs text-muted" { "Free plan, no credit card" }
@@ -96,7 +96,7 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                     @if !signup_disabled {
                         div class="mt-16 text-center" {
                             a href="/signup"
-                              class="bg-ink text-paper font-semibold px-6 py-3 rounded-lg hover:bg-ink-2 transition text-sm" {
+                              class="btn-warm-ink py-3 px-6 text-sm rounded-lg" {
                                 "Get started free"
                             }
                             p class="mt-2 text-xs text-muted" {

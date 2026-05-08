@@ -119,7 +119,7 @@ pub(crate) fn unified_page(
                            hx-get={"/practices/lineup-preview?" (ready_dates_query)}
                            hx-target="body"
                            hx-swap="beforeend"
-                           class="bg-ink hover:bg-ink-2 text-paper font-semibold px-4 py-2 rounded shadow-soft transition text-sm" {
+                           class="btn-warm-ink py-2 px-4 text-sm" {
                         "Send all ready (" (ready_count) ")"
                     }
                 }
