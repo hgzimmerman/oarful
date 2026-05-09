@@ -248,27 +248,14 @@ can resume without re-deriving context.
   content type, stale `tr[]` → `div[]` selectors, XPath → CSS
   locator for Generate button, added `#tab-bar` to streaming page
   for SSE alternative tabs.
+- **Progressive Web App (installable)** — manifest.json, service worker,
+  navigation audit for standalone mode, 192x192 + 512x512 icons.
+- **Oar inventory** — team-scoped oar sets assigned to boats per
+  practice, displayed in editor and history detail.
+- **Fly.io deployment** — Dockerfile, persistent volume, env vars, TLS.
+- **GitHub repo** — source hosted, pushing to GitHub.
 
 ## Open work
-
-### Quick wins
-
-#### Progressive Web App (installable)
-
-Add a `manifest.json`, minimal service worker, and `<link rel="manifest">`
-in the base maud template so the app is installable to phone home screens.
-`display: standalone` removes browser chrome. No offline caching needed —
-just the install prompt. Complements kiosk check-in (rowers get a home
-screen icon instead of a bookmark). Icons needed at 192x192 and 512x512.
-
-Prerequisite: navigation audit. `standalone` mode has no browser
-back button, so every page needs a clear way to navigate back/home.
-Audit all pages for dead-end flows (modals, detail pages, post-submit
-states) and add explicit back/breadcrumb links where missing. Tackle
-this alongside the PWA manifest work.
-
-Future: push notifications (VAPID keys, subscription storage) as an
-alternative to email for lineup/reminder alerts. Separate, larger effort.
 
 ### Architecture / platform
 
@@ -357,17 +344,6 @@ Admin UI at `/admin/kiosk` for token generation/revocation (Coach+).
 Laptop kiosk is the priority. TV kiosk shares most infrastructure.
 
 Full design: [docs/design-kiosk-mode.md](docs/design-kiosk-mode.md)
-
-#### Oar inventory
-
-Oar sets (team-scoped, free-text names) assigned to boats per practice.
-Fill priorities suggest oar sets for specific boats. Displayed in the
-practice editor, history detail, and kiosk views so rowers know what
-equipment to bring to the dock.
-
-Prerequisite for oar display in kiosk mode, but independently useful.
-
-Full design: [docs/design-oar-inventory.md](docs/design-oar-inventory.md)
 
 ### Long-term / parked
 
@@ -539,26 +515,9 @@ culprit) remains parked pending a Pumpkin API dive.
 
 ### Launch infrastructure
 
-#### Domain + naming
+#### Connect domain to Fly.io
 
-Pick a domain name. The project currently uses "Oarful" as the
-brand in the landing page / onboarding flow. GitHub repo name,
-fly.io app name, and email sender domain all depend on this.
-Decide before setting up the rest.
-
-#### Host source on GitHub
-
-Create a GitHub repo (private or public per AGPL preference).
-Repo name depends on domain/brand decision above.
-
-#### Fly.io deployment
-
-Set up a Fly.io app with:
-- Dockerfile (already have nix-based Docker build in CI)
-- Persistent volume for SQLite data dir + master DB
-- Environment variables: `JWT_SECRET`, `MASTER_DB_PATH`,
-  `DATA_DIR`, `PUBLIC_DIR`, `SOURCE_URL`, plus service keys below
-- Custom domain + TLS
+Domain acquired. Needs DNS pointed at Fly.io + TLS cert setup.
 
 #### Stripe account
 
@@ -577,7 +536,6 @@ Create a SendGrid account, verify sender domain. Set:
 
 ## Suggested next moves
 
-1. **Domain + naming** — unblocks everything else.
-2. **GitHub repo** — get source hosted.
-3. **Fly.io** — deploy and verify the app runs.
-4. **Stripe + SendGrid** — wire up payments and email.
+1. **Connect domain to Fly.io** — DNS + TLS.
+2. **Stripe + SendGrid** — wire up payments and email.
+3. **Kiosk mode** — laptop check-in first.
