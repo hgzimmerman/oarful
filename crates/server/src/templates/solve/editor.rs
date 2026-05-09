@@ -402,7 +402,7 @@ pub(crate) fn lineup_editor(
             }
 
             // Boat cards (all rendered; inactive ones hidden via style)
-            div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" {
+            div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4" {
                 @for eb in &editor.boats {
                     (editor_boat_card(snapshot, practice_id, eb, flags))
                 }

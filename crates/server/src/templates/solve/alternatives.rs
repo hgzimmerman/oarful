@@ -102,7 +102,7 @@ pub(crate) fn alternative_block(
             @if used.is_empty() {
                 div class="italic text-muted" { "No boats fielded." }
             } @else {
-                div class="grid grid-cols-1 md:grid-cols-2 gap-4" {
+                div class="grid grid-cols-1 xl:grid-cols-2 gap-4" {
                     @for lineup in &used {
                         (boat_card(snapshot, lineup, Some(&diff), flags))
                     }

@@ -600,15 +600,23 @@ html.dark {
   /* 2-column layout: bench sidebar + main content */
   .cv-layout {
     display: grid;
-    grid-template-columns: 260px 1fr 260px;
+    grid-template-columns: 260px 1fr;
     min-height: calc(100vh - 52px);
+  }
+  .cv-spacer {
+    display: none;
+  }
+  @media (min-width: 1536px) {
+    .cv-layout {
+      grid-template-columns: 260px 1fr 260px;
+    }
+    .cv-spacer {
+      display: block;
+    }
   }
   @media (max-width: 900px) {
     .cv-layout {
       grid-template-columns: 1fr;
-    }
-    .cv-spacer {
-      display: none;
     }
   }
 
