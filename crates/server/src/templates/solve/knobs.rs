@@ -396,7 +396,30 @@ pub(crate) fn preset_bar(
                 }
             }
             input type="hidden" name="preset" value=(current);
+
+            // Description of the selected preset
+            @let desc = preset_description(current, custom_profiles);
+            @if let Some(d) = desc {
+                p class="text-[10px] italic mt-1 mb-0 px-2 text-muted" { (d) }
+            }
         }
+    }
+}
+
+/// Short description for a preset (built-in or custom).
+fn preset_description<'a>(
+    name: &'a str,
+    custom_profiles: &'a [(String, Option<String>)],
+) -> Option<&'a str> {
+    match name {
+        "balanced" => Some("Even-handed defaults with no particular emphasis."),
+        "even_speed" => Some("Minimise speed gaps between boats."),
+        "tiered" => Some("Stack talent into the top boat."),
+        "random" => Some("Shuffle seats, ignoring skill and social preferences."),
+        _ => custom_profiles
+            .iter()
+            .find(|(n, _)| n == name)
+            .and_then(|(_, d)| d.as_deref()),
     }
 }
 
