@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 512 512"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="icon2.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <inkscape:path-effect
+       effect="powerclip"
+       message=""
+       id="path-effect5"
+       is_visible="true"
+       lpeversion="1"
+       inverse="true"
+       flatten="false"
+       hide_clip="false" />
+    <clipPath
+       clipPathUnits="userSpaceOnUse"
+       id="clipPath5">
+      <path
+         d="m 150,295.69531 a 20,20 0 0 0 -20,20 20,20 0 0 0 20,20 20,20 0 0 0 20,-20 20,20 0 0 0 -20,-20 z"
+         style="display:none;opacity:1;fill:#f59e0b;stroke-width:10"
+         id="path5" />
+      <path
+         id="lpe_path-effect5"
+         style="opacity:1;fill:#f59e0b;stroke-width:10"
+         class="powerclip"
+         d="m 125,290.646 h 30 v 30 h -30 z m 25,5.04931 a 20,20 0 0 0 -20,20 20,20 0 0 0 20,20 20,20 0 0 0 20,-20 20,20 0 0 0 -20,-20 z" />
+    </clipPath>
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.321682"
+     inkscape:cx="-282.21614"
+     inkscape:cy="227.3618"
+     inkscape:window-width="2560"
+     inkscape:window-height="1412"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg1" />
+  <rect
+     width="512"
+     height="512"
+     rx="96"
+     fill="#1e293b"
+     id="rect1" />
+  <text
+     x="256"
+     y="340"
+     font-size="280px"
+     text-anchor="middle"
+     font-family="serif"
+     font-weight="bold"
+     fill="#f8fafc"
+     id="text1">O</text>
+  <line
+     x1="140"
+     y1="376.78439"
+     x2="372"
+     y2="376.78439"
+     stroke="#f59e0b"
+     stroke-width="16"
+     stroke-linecap="round"
+     id="line1"
+     style="stroke-width:9;stroke-dasharray:none;stroke-miterlimit:2.5" />
+  <rect
+     style="fill:#f59e0b;fill-opacity:1;stroke-width:0.728271;stroke-dasharray:none"
+     id="rect2"
+     width="65.521004"
+     height="31.216"
+     x="175.71227"
+     y="356.08838"
+     transform="matrix(0.99702768,0.07704413,-0.115459,0.99331225,0,0)" />
+  <path
+     style="fill:#f59e0b;fill-opacity:1;stroke-width:10;stroke-dasharray:none"
+     id="rect3"
+     width="20"
+     height="20"
+     x="130"
+     y="295.646"
+     clip-path="url(#clipPath5)"
+     sodipodi:type="rect"
+     transform="matrix(0.63575344,0.01271809,-0.01985887,0.99270814,119.75989,85.854091)"
+     d="m 130,295.646 h 20 v 20 h -20 z"
+     inkscape:path-effect="#path-effect5" />
+  <line
+     x1="335.56647"
+     y1="369.54248"
+     x2="335.56647"
+     y2="383.66626"
+     stroke="#f59e0b"
+     stroke-width="16"
+     stroke-linecap="round"
+     id="line6"
+     style="stroke-width:2.4;stroke-linecap:butt;stroke-dasharray:none" />
+</svg>
