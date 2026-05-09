@@ -8,7 +8,7 @@ use axum::{
 use axum_htmx::HxRequest;
 use lineup_db::app_user::Role;
 use lineup_db::boat::Boat;
-use lineup_db::oar_set::types::OarSetId;
+use lineup_db::oar_set::types::{OarSetId, OarType};
 use lineup_db::oar_set::{NewOarSet, OarSet, OarSetPreference};
 use lineup_db::state::Db;
 use serde::Deserialize;
@@ -71,6 +71,7 @@ pub(crate) async fn create_handler(
                     name: parsed.name,
                     oar_count: parsed.oar_count,
                     notes: parsed.notes,
+                    oar_type: parsed.oar_type,
                 },
             )
         })
@@ -158,6 +159,7 @@ pub(crate) async fn update_handler(
     oar_set.name = parsed.name;
     oar_set.oar_count = parsed.oar_count;
     oar_set.notes = parsed.notes;
+    oar_set.oar_type = parsed.oar_type;
 
     let saved = tenant
         .db
@@ -282,12 +284,19 @@ pub(crate) struct OarSetFormInput {
     pub(crate) oar_count: String,
     #[serde(default)]
     pub(crate) notes: String,
+    #[serde(default = "default_oar_type")]
+    pub(crate) oar_type: String,
+}
+
+fn default_oar_type() -> String {
+    "sweep".into()
 }
 
 pub(crate) struct OarSetFormData {
     pub(crate) name: String,
     pub(crate) oar_count: String,
     pub(crate) notes: String,
+    pub(crate) oar_type: String,
 }
 
 impl OarSetFormData {
@@ -296,6 +305,7 @@ impl OarSetFormData {
             name: String::new(),
             oar_count: "8".into(),
             notes: String::new(),
+            oar_type: "sweep".into(),
         }
     }
 
@@ -304,6 +314,7 @@ impl OarSetFormData {
             name: input.name.clone(),
             oar_count: input.oar_count.clone(),
             notes: input.notes.clone(),
+            oar_type: input.oar_type.clone(),
         }
     }
 
@@ -312,6 +323,10 @@ impl OarSetFormData {
             name: os.name.clone(),
             oar_count: os.oar_count.to_string(),
             notes: os.notes.clone().unwrap_or_default(),
+            oar_type: match os.oar_type {
+                OarType::Sweep => "sweep".into(),
+                OarType::Sculling => "sculling".into(),
+            },
         }
     }
 }
@@ -326,6 +341,7 @@ struct ParsedOarSet {
     name: String,
     oar_count: i32,
     notes: Option<String>,
+    oar_type: OarType,
 }
 
 fn parse_input(input: &OarSetFormInput) -> Result<ParsedOarSet, String> {
@@ -352,10 +368,16 @@ fn parse_input(input: &OarSetFormInput) -> Result<ParsedOarSet, String> {
         }
     };
 
+    let oar_type = match input.oar_type.trim() {
+        "sculling" => OarType::Sculling,
+        _ => OarType::Sweep,
+    };
+
     Ok(ParsedOarSet {
         name,
         oar_count,
         notes,
+        oar_type,
     })
 }
 
@@ -375,7 +397,15 @@ pub(crate) async fn pick_handler(
         .with_conn(move |conn| {
             let boat = lineup_db::boat::Boat::get(conn, boat_id)?
                 .ok_or(diesel::result::Error::NotFound)?;
-            let oar_sets = OarSet::list_active(conn)?;
+            let expected_type = if boat.is_scull() {
+                OarType::Sculling
+            } else {
+                OarType::Sweep
+            };
+            let oar_sets: Vec<OarSet> = OarSet::list_active(conn)?
+                .into_iter()
+                .filter(|os| os.oar_type == expected_type)
+                .collect();
             let assignments = lineup_db::oar_set::PracticeBoatOars::list_for_practice_with_names(
                 conn,
                 practice_id,

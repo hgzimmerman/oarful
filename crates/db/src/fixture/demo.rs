@@ -77,13 +77,14 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
 
     // Oar sets with boat preferences
     {
-        use crate::oar_set::{NewOarSet, OarSet, OarSetPreference};
+        use crate::oar_set::{NewOarSet, OarSet, OarSetPreference, OarType};
         let oar_specs: Vec<(NewOarSet, Vec<usize>)> = vec![
             (
                 NewOarSet {
                     name: "Blue".into(),
                     oar_count: 8,
                     notes: None,
+                    oar_type: OarType::Sweep,
                 },
                 vec![0], // prefers Titan
             ),
@@ -92,6 +93,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
                     name: "Gold".into(),
                     oar_count: 8,
                     notes: None,
+                    oar_type: OarType::Sweep,
                 },
                 vec![1], // prefers Athena
             ),
@@ -100,6 +102,7 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
                     name: "Pink".into(),
                     oar_count: 8,
                     notes: None,
+                    oar_type: OarType::Sweep,
                 },
                 vec![2], // prefers Demeter
             ),
@@ -108,8 +111,18 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
                     name: "White".into(),
                     oar_count: 4,
                     notes: Some("shorter shafts".into()),
+                    oar_type: OarType::Sweep,
                 },
                 vec![3, 4], // prefers Artemis, then Hestia
+            ),
+            (
+                NewOarSet {
+                    name: "Green".into(),
+                    oar_count: 4,
+                    notes: Some("sculling blades".into()),
+                    oar_type: OarType::Sculling,
+                },
+                vec![], // no boat preferences (no scull boats in demo)
             ),
         ];
         for (new_oar, pref_boat_indices) in oar_specs {

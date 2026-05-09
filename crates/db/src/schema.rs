@@ -318,6 +318,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::sql_types::*;
+
     oar_set (id) {
         id -> Integer,
         name -> Text,
@@ -325,6 +328,7 @@ diesel::table! {
         notes -> Nullable<Text>,
         active -> Integer,
         created_at -> Timestamp,
+        oar_type -> OarTypeMapping,
     }
 }
 

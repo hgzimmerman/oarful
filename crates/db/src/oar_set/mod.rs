@@ -1,7 +1,7 @@
 pub mod queries;
 pub mod types;
 
-use types::OarSetId;
+pub use types::{OarSetId, OarType};
 
 use crate::boat::types::BoatId;
 use crate::practice::PracticeId;
@@ -27,6 +27,7 @@ pub struct OarSet {
     pub notes: Option<String>,
     pub active: IntBool,
     pub created_at: chrono::NaiveDateTime,
+    pub oar_type: OarType,
 }
 
 #[derive(Debug, Clone, diesel::Insertable)]
@@ -35,6 +36,7 @@ pub struct NewOarSet {
     pub name: String,
     pub oar_count: i32,
     pub notes: Option<String>,
+    pub oar_type: OarType,
 }
 
 #[derive(

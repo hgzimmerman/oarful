@@ -60,6 +60,7 @@ fn oar_set_table(heading: &str, oar_sets: &[&OarSet]) -> Markup {
                     thead {
                         tr style="background: var(--paper-2)" {
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Name" }
+                            th scope="col" class=(th_class) style="color: var(--ink-2)" { "Type" }
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Count" }
                             th scope="col" class=(th_class) style="color: var(--ink-2)" { "Notes" }
                         }
@@ -86,6 +87,11 @@ fn oar_set_row(os: &OarSet) -> Markup {
                   hx-push-url="true"
                   class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                     (os.name)
+                }
+            }
+            td class="px-4 py-2.5" {
+                span class="font-mono-stat text-[11px]" style="color: var(--ink-2)" {
+                    (os.oar_type)
                 }
             }
             td class="px-4 py-2.5" {
@@ -125,7 +131,7 @@ pub(crate) fn detail_content(
                     h1 class="font-serif-heading text-2xl font-medium tracking-tight" style="color: var(--ink)" { (&oar_set.name) }
                     div class="flex items-center gap-2 mt-1" {
                         span class="font-mono-stat text-xs" style="color: var(--muted)" {
-                            (oar_set.oar_count) " oars"
+                            (oar_set.oar_type) " · " (oar_set.oar_count) " oars"
                             @if !oar_set.active.as_bool() {
                                 " · retired"
                             }
@@ -158,6 +164,7 @@ pub(crate) fn detail_content(
             div class="rounded-lg p-6" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                 h2 class="font-serif-heading text-lg font-medium tracking-tight mb-4" style="color: var(--ink)" { "Details" }
                 dl class="grid grid-cols-2 gap-y-3 gap-x-4 text-sm" {
+                    (detail_item("Type", &oar_set.oar_type.to_string()))
                     (detail_item("Oar count", &oar_set.oar_count.to_string()))
                     @if let Some(notes) = &oar_set.notes {
                         (detail_item("Notes", notes))
@@ -294,6 +301,19 @@ pub(crate) fn form_content(mode: FormMode, data: &OarSetFormData, error: Option<
                     input id="name" name="name" type="text" value=(data.name) required
                           placeholder="e.g. Blue, Gold White"
                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none";
+                }
+
+                // Oar type
+                div {
+                    label for="oar_type" class="block text-sm font-semibold text-ink-2 mb-1" { "Type" }
+                    select id="oar_type" name="oar_type" required
+                           class="w-full border border-rule rounded px-3 py-2 text-sm focus:border-ink-3 focus:outline-none" {
+                        option value="sweep" selected[data.oar_type == "sweep"] { "Sweep" }
+                        option value="sculling" selected[data.oar_type == "sculling"] { "Sculling" }
+                    }
+                    p class="text-xs text-ink-3 mt-1" {
+                        "Sweep oars (one per rower) and sculling oars (two per rower) are not interchangeable."
+                    }
                 }
 
                 // Oar count

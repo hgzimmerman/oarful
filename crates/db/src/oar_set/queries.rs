@@ -204,10 +204,21 @@ impl PracticeBoatOars {
 
         for boat in &target_boats {
             let oars_needed = boat.seat_count.as_int() * boat.oars_per_seat.as_int();
+            let expected_type = if boat.is_scull() {
+                super::types::OarType::Sculling
+            } else {
+                super::types::OarType::Sweep
+            };
+
+            // Only consider oar sets matching this boat's type.
+            let compatible: Vec<&OarSet> = oar_sets
+                .iter()
+                .filter(|os| os.oar_type == expected_type)
+                .collect();
 
             // Try preferred sets first (by priority order).
             let mut assigned = false;
-            for os in &oar_sets {
+            for os in &compatible {
                 if let Some(prefs) = pref_map.get(&os.id) {
                     if prefs.iter().any(|(bid, _)| *bid == boat.id) {
                         if let Some(rem) = remaining.get_mut(&os.id) {
@@ -223,7 +234,7 @@ impl PracticeBoatOars {
             }
 
             if !assigned {
-                let mut candidates: Vec<(OarSetId, i32, i32)> = oar_sets
+                let mut candidates: Vec<(OarSetId, i32, i32)> = compatible
                     .iter()
                     .filter_map(|os| {
                         let rem = *remaining.get(&os.id)?;
@@ -344,15 +355,44 @@ mod tests {
     }
 
     fn make_oar(conn: &mut SqliteConnection, name: &str, count: i32) -> OarSet {
+        make_oar_typed(conn, name, count, crate::oar_set::OarType::Sweep)
+    }
+
+    fn make_oar_typed(
+        conn: &mut SqliteConnection,
+        name: &str,
+        count: i32,
+        oar_type: crate::oar_set::OarType,
+    ) -> OarSet {
         OarSet::insert(
             conn,
             NewOarSet {
                 name: name.into(),
                 oar_count: count,
                 notes: None,
+                oar_type,
             },
         )
         .unwrap()
+    }
+
+    fn setup_scull_boat(conn: &mut SqliteConnection, name: &str, seats: i32) -> BoatId {
+        Boat::insert(
+            conn,
+            NewBoat {
+                name: name.into(),
+                weight_class: WeightClass::Heavy,
+                seat_count: SeatCount::new(seats),
+                has_cox: IntBool::FALSE,
+                oars_per_seat: OarsPerSeat::new(2),
+                acquired_at: None,
+                manufactured_at: None,
+                stroke_side: Side::Starboard,
+                cox_position: CoxPosition::Stern,
+            },
+        )
+        .unwrap()
+        .id
     }
 
     #[test]
@@ -364,6 +404,7 @@ mod tests {
                 name: "Blue".into(),
                 oar_count: 8,
                 notes: Some("racing oars".into()),
+                oar_type: crate::oar_set::OarType::Sweep,
             },
         )
         .unwrap();
@@ -514,5 +555,59 @@ mod tests {
         let map = PracticeBoatOars::map_for_practice(&mut conn, practice_id).unwrap();
         assert_eq!(map.get(&four_a), Some(&blue.id));
         assert_eq!(map.get(&four_b), Some(&blue.id));
+    }
+
+    #[test]
+    fn auto_assign_filters_by_oar_type() {
+        let mut conn = in_memory_conn();
+        let team_id = setup_team(&mut conn);
+        let sweep_boat = setup_boat_with_seats(&mut conn, "Four", 4);
+        let scull_boat = setup_scull_boat(&mut conn, "Double", 2);
+        let practice_id = Practice::upsert(
+            &mut conn,
+            team_id,
+            chrono::NaiveDate::from_ymd_opt(2026, 6, 4).unwrap(),
+            None,
+            None,
+        )
+        .unwrap()
+        .id;
+
+        let sweep_oars = make_oar(&mut conn, "Sweep set", 4);
+        let scull_oars =
+            make_oar_typed(&mut conn, "Scull set", 4, crate::oar_set::OarType::Sculling);
+
+        PracticeBoatOars::auto_assign(&mut conn, practice_id, &[sweep_boat, scull_boat]).unwrap();
+
+        let map = PracticeBoatOars::map_for_practice(&mut conn, practice_id).unwrap();
+        // Sweep boat gets sweep oars, scull boat gets sculling oars.
+        assert_eq!(map.get(&sweep_boat), Some(&sweep_oars.id));
+        assert_eq!(map.get(&scull_boat), Some(&scull_oars.id));
+    }
+
+    #[test]
+    fn auto_assign_skips_wrong_type_even_if_preferred() {
+        let mut conn = in_memory_conn();
+        let team_id = setup_team(&mut conn);
+        let scull_boat = setup_scull_boat(&mut conn, "Double", 2);
+        let practice_id = Practice::upsert(
+            &mut conn,
+            team_id,
+            chrono::NaiveDate::from_ymd_opt(2026, 6, 5).unwrap(),
+            None,
+            None,
+        )
+        .unwrap()
+        .id;
+
+        // Only sweep oars available — scull boat should get nothing.
+        let sweep_oars = make_oar(&mut conn, "Sweep set", 8);
+        OarSetPreference::replace_for_oar_set(&mut conn, sweep_oars.id, &[(scull_boat, 0)])
+            .unwrap();
+
+        PracticeBoatOars::auto_assign(&mut conn, practice_id, &[scull_boat]).unwrap();
+
+        let map = PracticeBoatOars::map_for_practice(&mut conn, practice_id).unwrap();
+        assert!(map.get(&scull_boat).is_none());
     }
 }
