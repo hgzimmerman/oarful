@@ -3,7 +3,7 @@
    viewBox="0 0 512 512"
    version="1.1"
    id="svg1"
-   sodipodi:docname="icon2.svg"
+   sodipodi:docname="icon-src.svg"
    inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -43,11 +43,11 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="1.321682"
-     inkscape:cx="-282.21614"
-     inkscape:cy="227.3618"
-     inkscape:window-width="2560"
-     inkscape:window-height="1412"
+     inkscape:zoom="1.8691406"
+     inkscape:cx="81.8558"
+     inkscape:cy="275.52769"
+     inkscape:window-width="1108"
+     inkscape:window-height="1041"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
@@ -76,14 +76,14 @@
      stroke-width="16"
      stroke-linecap="round"
      id="line1"
-     style="stroke-width:9;stroke-dasharray:none;stroke-miterlimit:2.5" />
+     style="stroke-width:14;stroke-dasharray:none;stroke-miterlimit:2.5;stroke-linecap:round" />
   <rect
      style="fill:#f59e0b;fill-opacity:1;stroke-width:0.728271;stroke-dasharray:none"
      id="rect2"
-     width="65.521004"
-     height="31.216"
-     x="175.71227"
-     y="356.08838"
+     width="76"
+     height="36"
+     x="165.33124"
+     y="353.72446"
      transform="matrix(0.99702768,0.07704413,-0.115459,0.99331225,0,0)" />
   <path
      style="fill:#f59e0b;fill-opacity:1;stroke-width:10;stroke-dasharray:none"
@@ -94,17 +94,7 @@
      y="295.646"
      clip-path="url(#clipPath5)"
      sodipodi:type="rect"
-     transform="matrix(0.63575344,0.01271809,-0.01985887,0.99270814,119.75989,85.854091)"
+     transform="matrix(0.63575344,0.01271809,-0.01985887,0.99270814,119.60418,88.340779)"
      d="m 130,295.646 h 20 v 20 h -20 z"
      inkscape:path-effect="#path-effect5" />
-  <line
-     x1="335.56647"
-     y1="369.54248"
-     x2="335.56647"
-     y2="383.66626"
-     stroke="#f59e0b"
-     stroke-width="16"
-     stroke-linecap="round"
-     id="line6"
-     style="stroke-width:2.4;stroke-linecap:butt;stroke-dasharray:none" />
 </svg>
