@@ -62,6 +62,7 @@ pub(crate) async fn list_handler(
                 super::admin::TABS,
                 "plan-templates",
                 super::admin::TARGET,
+                tenant.claims.role(),
                 tab_content,
             )
             .into_string(),
@@ -71,9 +72,16 @@ pub(crate) async fn list_handler(
         super::admin::TABS,
         "plan-templates",
         super::admin::TARGET,
+        tenant.claims.role(),
         tab_content,
     );
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+pub(crate) async fn list_content_for(
+    tenant: &TenantContext,
+) -> Result<maud::Markup, ErrorResponse> {
+    list_content(tenant).await
 }
 
 async fn list_content(tenant: &TenantContext) -> Result<maud::Markup, ErrorResponse> {
@@ -125,6 +133,7 @@ pub(crate) async fn create_handler(
             super::admin::TABS,
             "plan-templates",
             super::admin::TARGET,
+            tenant.claims.role(),
             tab_content,
         )
         .into_string(),
@@ -147,6 +156,7 @@ pub(crate) async fn detail_handler(
                 super::admin::TABS,
                 "plan-templates",
                 super::admin::TARGET,
+                tenant.claims.role(),
                 tab_content,
             )
             .into_string(),
@@ -156,6 +166,7 @@ pub(crate) async fn detail_handler(
         super::admin::TABS,
         "plan-templates",
         super::admin::TARGET,
+        tenant.claims.role(),
         tab_content,
     );
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
@@ -257,6 +268,7 @@ pub(crate) async fn delete_handler(
             super::admin::TABS,
             "plan-templates",
             super::admin::TARGET,
+            tenant.claims.role(),
             tab_content,
         )
         .into_string(),
@@ -287,6 +299,7 @@ pub(crate) async fn duplicate_handler(
             super::admin::TABS,
             "plan-templates",
             super::admin::TARGET,
+            tenant.claims.role(),
             tab_content,
         )
         .into_string(),

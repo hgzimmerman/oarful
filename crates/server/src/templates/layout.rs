@@ -171,7 +171,7 @@ fn navbar(role: Role) -> Markup {
                     @if is_coach {
                         (nav_link("/team", "Team"))
                     }
-                    @if is_pd {
+                    @if is_coach {
                         (nav_link("/admin", "Admin"))
                     }
                     li class="ml-4" {}
@@ -279,6 +279,7 @@ pub(crate) struct TabDef {
     pub label: &'static str,
     pub url: &'static str,
     pub id: &'static str,
+    pub min_role: Role,
 }
 
 /// Shared tabbed page wrapper used by `/team` and `/admin`.
@@ -288,6 +289,7 @@ pub(crate) fn tabbed_section(
     tabs: &[TabDef],
     active_tab: &str,
     target_id: &str,
+    role: Role,
     tab_content: Markup,
 ) -> Markup {
     let bar_id = format!("{target_id}-bar");
@@ -295,7 +297,7 @@ pub(crate) fn tabbed_section(
         div id=(bar_id)
             class="border-b border-rule-2 bg-paper px-4 sm:px-8 pt-3" {
             div class="flex gap-1" {
-                @for tab in tabs {
+                @for tab in tabs.iter().filter(|t| role.at_least(t.min_role)) {
                     (section_tab(tab, active_tab, target_id))
                 }
             }
@@ -313,6 +315,7 @@ pub(crate) fn tab_swap(
     tabs: &[TabDef],
     active_tab: &str,
     target_id: &str,
+    role: Role,
     tab_content: Markup,
 ) -> Markup {
     let bar_id = format!("{target_id}-bar");
@@ -323,7 +326,7 @@ pub(crate) fn tab_swap(
         div id=(bar_id) hx-swap-oob="true"
             class="border-b border-rule-2 bg-paper px-4 sm:px-8 pt-3" {
             div class="flex gap-1" {
-                @for tab in tabs {
+                @for tab in tabs.iter().filter(|t| role.at_least(t.min_role)) {
                     (section_tab(tab, active_tab, target_id))
                 }
             }

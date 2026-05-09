@@ -6,6 +6,8 @@ use lineup_db::availability::types::AvailabilityStatus;
 use lineup_db::practice::PracticeId;
 use maud::{html, Markup};
 
+use lineup_db::app_user::Role;
+
 use super::layout::{empty_state, tab_swap, tabbed_section, TabDef};
 
 const MY_TABS: &[TabDef] = &[
@@ -13,16 +15,19 @@ const MY_TABS: &[TabDef] = &[
         label: "Profile",
         url: "/my/profile",
         id: "profile",
+        min_role: Role::Member,
     },
     TabDef {
         label: "Availability",
         url: "/my/availability",
         id: "availability",
+        min_role: Role::Member,
     },
     TabDef {
         label: "Preferences",
         url: "/my/preferences",
         id: "email",
+        min_role: Role::Member,
     },
 ];
 const MY_TARGET: &str = "my-tab-content";
@@ -36,14 +41,14 @@ pub(crate) fn tabbed_page(active_tab: &str, tab_content: Markup) -> Markup {
             }
         }
         div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto space-y-6" {
-            (tabbed_section(MY_TABS, active_tab, MY_TARGET, tab_content))
+            (tabbed_section(MY_TABS, active_tab, MY_TARGET, Role::Member, tab_content))
         }
     }
 }
 
 /// HTMX partial: tab content + OOB tab bar swap.
 pub(crate) fn tab_content_swap(active_tab: &str, content: Markup) -> Markup {
-    tab_swap(MY_TABS, active_tab, MY_TARGET, content)
+    tab_swap(MY_TABS, active_tab, MY_TARGET, Role::Member, content)
 }
 
 /// Shown when the authenticated user has no linked rower record.

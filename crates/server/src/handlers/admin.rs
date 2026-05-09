@@ -21,57 +21,76 @@ pub(crate) const TABS: &[TabDef] = &[
         label: "Users",
         url: "/admin/users",
         id: "users",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Teams",
         url: "/admin/teams",
         id: "teams",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Roster",
         url: "/admin/roster",
         id: "roster",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Fleet",
         url: "/admin/fleet",
         id: "fleet",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Audit",
         url: "/admin/audit",
         id: "audit",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Plan Templates",
         url: "/admin/plan-templates",
         id: "plan-templates",
+        min_role: Role::Coach,
     },
     TabDef {
         label: "Settings",
         url: "/admin/settings",
         id: "settings",
+        min_role: Role::ProgramDirector,
     },
 ];
 pub(crate) const TARGET: &str = "admin-tab-content";
 
-/// `GET /admin` — render the default tab (Users).
+/// `GET /admin` — render the first visible tab for the user's role.
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn index_handler(
     Extension(tenant): Extension<TenantContext>,
     hx: HxRequest,
     headers: HeaderMap,
 ) -> Result<Html<String>, ErrorResponse> {
-    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
-    let tab_content = handlers::users::users_content(&tenant).await?;
-
-    if is_tab_swap(&headers) {
-        return Ok(Html(
-            tab_swap(TABS, "users", TARGET, tab_content).into_string(),
-        ));
+    handlers::users::require_at_least_role(&tenant.claims, Role::Coach)?;
+    let role = tenant.claims.role();
+    // PDs land on Users, coaches land on Plan Templates.
+    if role.at_least(Role::ProgramDirector) {
+        let tab_content = handlers::users::users_content(&tenant).await?;
+        if is_tab_swap(&headers) {
+            return Ok(Html(
+                tab_swap(TABS, "users", TARGET, role, tab_content).into_string(),
+            ));
+        }
+        let page = tabbed_section(TABS, "users", TARGET, role, tab_content);
+        Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+    } else {
+        let tab_content = handlers::plan_templates::list_content_for(&tenant).await?;
+        if is_tab_swap(&headers) {
+            return Ok(Html(
+                tab_swap(TABS, "plan-templates", TARGET, role, tab_content).into_string(),
+            ));
+        }
+        let page = tabbed_section(TABS, "plan-templates", TARGET, role, tab_content);
+        Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
     }
-    let page = tabbed_section(TABS, "users", TARGET, tab_content);
-    Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
 /// `GET /admin/users`
@@ -86,10 +105,10 @@ pub(crate) async fn users_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "users", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "users", TARGET, tenant.claims.role(), tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "users", TARGET, tab_content);
+    let page = tabbed_section(TABS, "users", TARGET, tenant.claims.role(), tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -105,10 +124,10 @@ pub(crate) async fn teams_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "teams", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "teams", TARGET, tenant.claims.role(), tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "teams", TARGET, tab_content);
+    let page = tabbed_section(TABS, "teams", TARGET, tenant.claims.role(), tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -124,10 +143,10 @@ pub(crate) async fn roster_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "roster", TARGET, tenant.claims.role(), tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "roster", TARGET, tab_content);
+    let page = tabbed_section(TABS, "roster", TARGET, tenant.claims.role(), tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -137,16 +156,19 @@ const FLEET_SUBTABS: &[TabDef] = &[
         label: "Boats",
         url: "/admin/fleet/boats",
         id: "boats",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Team defaults",
         url: "/admin/fleet/defaults",
         id: "defaults",
+        min_role: Role::ProgramDirector,
     },
     TabDef {
         label: "Oar sets",
         url: "/admin/fleet/oars",
         id: "oars",
+        min_role: Role::ProgramDirector,
     },
 ];
 const FLEET_TARGET: &str = "admin-fleet-content";
@@ -160,14 +182,20 @@ pub(crate) async fn fleet_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
     let boats_content = handlers::boats::fleet_content(&tenant).await?;
-    let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
+    let fleet_section = tabbed_section(
+        FLEET_SUBTABS,
+        "boats",
+        FLEET_TARGET,
+        tenant.claims.role(),
+        boats_content,
+    );
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+            tab_swap(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    let page = tabbed_section(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -183,16 +211,29 @@ pub(crate) async fn fleet_boats_handler(
 
     if is_fleet_subtab_swap(&headers) {
         return Ok(Html(
-            tab_swap(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content).into_string(),
+            tab_swap(
+                FLEET_SUBTABS,
+                "boats",
+                FLEET_TARGET,
+                tenant.claims.role(),
+                boats_content,
+            )
+            .into_string(),
         ));
     }
-    let fleet_section = tabbed_section(FLEET_SUBTABS, "boats", FLEET_TARGET, boats_content);
+    let fleet_section = tabbed_section(
+        FLEET_SUBTABS,
+        "boats",
+        FLEET_TARGET,
+        tenant.claims.role(),
+        boats_content,
+    );
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+            tab_swap(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    let page = tabbed_section(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -208,16 +249,29 @@ pub(crate) async fn fleet_defaults_handler(
 
     if is_fleet_subtab_swap(&headers) {
         return Ok(Html(
-            tab_swap(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content).into_string(),
+            tab_swap(
+                FLEET_SUBTABS,
+                "defaults",
+                FLEET_TARGET,
+                tenant.claims.role(),
+                defaults_content,
+            )
+            .into_string(),
         ));
     }
-    let fleet_section = tabbed_section(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content);
+    let fleet_section = tabbed_section(
+        FLEET_SUBTABS,
+        "defaults",
+        FLEET_TARGET,
+        tenant.claims.role(),
+        defaults_content,
+    );
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+            tab_swap(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    let page = tabbed_section(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -233,16 +287,29 @@ pub(crate) async fn fleet_oars_handler(
 
     if is_fleet_subtab_swap(&headers) {
         return Ok(Html(
-            tab_swap(FLEET_SUBTABS, "oars", FLEET_TARGET, oars_content).into_string(),
+            tab_swap(
+                FLEET_SUBTABS,
+                "oars",
+                FLEET_TARGET,
+                tenant.claims.role(),
+                oars_content,
+            )
+            .into_string(),
         ));
     }
-    let fleet_section = tabbed_section(FLEET_SUBTABS, "oars", FLEET_TARGET, oars_content);
+    let fleet_section = tabbed_section(
+        FLEET_SUBTABS,
+        "oars",
+        FLEET_TARGET,
+        tenant.claims.role(),
+        oars_content,
+    );
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+            tab_swap(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    let page = tabbed_section(TABS, "fleet", TARGET, tenant.claims.role(), fleet_section);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -263,10 +330,10 @@ pub(crate) async fn audit_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "audit", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "audit", TARGET, tenant.claims.role(), tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "audit", TARGET, tab_content);
+    let page = tabbed_section(TABS, "audit", TARGET, tenant.claims.role(), tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -284,10 +351,10 @@ pub(crate) async fn settings_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "settings", TARGET, tenant.claims.role(), tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "settings", TARGET, tab_content);
+    let page = tabbed_section(TABS, "settings", TARGET, tenant.claims.role(), tab_content);
     Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
 }
 
@@ -484,7 +551,7 @@ pub(crate) async fn settings_update_handler(
     // Re-load and re-render with fresh config.
     let tab_content = settings_content(&tdb, &tenant, stripe_ctx.is_some()).await?;
     Ok(Html(
-        tab_swap(TABS, "settings", TARGET, tab_content).into_string(),
+        tab_swap(TABS, "settings", TARGET, tenant.claims.role(), tab_content).into_string(),
     ))
 }
 

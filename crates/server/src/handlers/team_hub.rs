@@ -14,16 +14,19 @@ const TABS: &[TabDef] = &[
         label: "Roster",
         url: "/team/roster",
         id: "roster",
+        min_role: Role::Coach,
     },
     TabDef {
         label: "Attendance",
         url: "/team/attendance",
         id: "attendance",
+        min_role: Role::Coach,
     },
     TabDef {
         label: "Sync",
         url: "/team/sync",
         id: "sync",
+        min_role: Role::Coach,
     },
 ];
 const TARGET: &str = "team-tab-content";
@@ -41,10 +44,10 @@ pub(crate) async fn index_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "roster", TARGET, Role::Coach, tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "roster", TARGET, tab_content);
+    let page = tabbed_section(TABS, "roster", TARGET, Role::Coach, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
@@ -61,10 +64,10 @@ pub(crate) async fn roster_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "roster", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "roster", TARGET, Role::Coach, tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "roster", TARGET, tab_content);
+    let page = tabbed_section(TABS, "roster", TARGET, Role::Coach, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
@@ -81,10 +84,10 @@ pub(crate) async fn sync_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "sync", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "sync", TARGET, Role::Coach, tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "sync", TARGET, tab_content);
+    let page = tabbed_section(TABS, "sync", TARGET, Role::Coach, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 
@@ -102,10 +105,10 @@ pub(crate) async fn attendance_handler(
 
     if is_tab_swap(&headers) {
         return Ok(Html(
-            tab_swap(TABS, "attendance", TARGET, tab_content).into_string(),
+            tab_swap(TABS, "attendance", TARGET, Role::Coach, tab_content).into_string(),
         ));
     }
-    let page = tabbed_section(TABS, "attendance", TARGET, tab_content);
+    let page = tabbed_section(TABS, "attendance", TARGET, Role::Coach, tab_content);
     Ok(handlers::maybe_page_authed("Team", page, hx, &tenant))
 }
 

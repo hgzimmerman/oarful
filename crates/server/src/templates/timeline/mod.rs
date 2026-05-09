@@ -161,6 +161,84 @@ fn summary_inner(
     }
 }
 
+/// Read-only preview of plan contents (no header, no actions).
+pub(crate) fn preview(tl: &Timeline) -> Markup {
+    let lines = tl.summary_lines();
+    let planned = tl.planned_minutes();
+    html! {
+        div class="space-y-1" {
+            span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
+                (format!("{:.0}", planned)) " min planned"
+            }
+            @if lines.is_empty() {
+                p class="text-sm italic" style="color: var(--muted)" { "Empty plan." }
+            } @else {
+                ol class="list-none m-0 p-0 space-y-1" {
+                    @for line in &lines {
+                        li {
+                            @match &line.item_type {
+                                ItemDisplayType::Group(gt) => {
+                                    div class="flex items-center gap-2" {
+                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                             style=(group_type_css(*gt)) {
+                                            (gt.label())
+                                        }
+                                        span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" {
+                                            (line.label)
+                                        }
+                                        span class="font-mono-stat text-[9px]" style="color: var(--muted)" {
+                                            (line.duration_label)
+                                        }
+                                        @if let Some(ref rot) = line.rotation_label {
+                                            span class="font-mono-stat text-[9px] italic" style="color: var(--muted)" {
+                                                " · " (rot)
+                                            }
+                                        }
+                                    }
+                                    ul class="list-none m-0 pl-5 mt-0.5 space-y-0.5" {
+                                        @for seg in &line.children {
+                                            li class="flex items-center gap-1.5 text-xs" {
+                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                                     style=(seg_type_css(seg.seg_type)) {
+                                                    (seg.seg_type.label())
+                                                }
+                                                span class="font-mono-stat" style="color: var(--ink-2)" { (seg.label) }
+                                                @if !seg.note.is_empty() {
+                                                    span class="italic" style="color: var(--muted)" { "— " (seg.note) }
+                                                }
+                                            }
+                                        }
+                                        @if let Some(ref instr) = line.repeat_instruction {
+                                            li class="flex items-center gap-1.5 text-xs mt-0.5" {
+                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                                     style="color: var(--bad); background: color-mix(in oklch, var(--bad) 10%, var(--paper)); border-color: color-mix(in oklch, var(--bad) 25%, var(--rule))" {
+                                                    "Repeat"
+                                                }
+                                                span class="font-mono-stat" style="color: var(--ink-2)" { (instr) }
+                                            }
+                                        }
+                                    }
+                                }
+                                ItemDisplayType::Block(bt) => {
+                                    div class="flex items-center gap-1.5 text-xs" {
+                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(block_type_css(*bt)) {
+                                            (bt.label())
+                                        }
+                                        span class="font-mono-stat" style="color: var(--ink-2)" { (line.duration_label) }
+                                        @if !line.note.is_empty() {
+                                            span class="italic" style="color: var(--muted)" { "— " (line.note) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Editor (expanded view) ───────────────────────────────────────────
 
 pub(crate) fn editor(tl: &Timeline, base_url: &str, selected_id: Option<&str>) -> Markup {
