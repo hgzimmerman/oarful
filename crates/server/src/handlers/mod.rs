@@ -169,7 +169,6 @@ pub(crate) fn create_router(state: AppState) -> Router {
             post(solve::clear_draft_handler),
         )
         .route("/practices/{id}/detail", get(history::detail_handler))
-        .route("/practices/{id}/notes", post(history::notes_handler))
         .route("/practices/{id}/timeline/edit", get(timeline::open_editor))
         .route("/practices/{id}/timeline/add", post(timeline::add_block))
         .route(

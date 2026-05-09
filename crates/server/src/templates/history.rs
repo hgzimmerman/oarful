@@ -218,13 +218,6 @@ pub(crate) fn detail_content(
                     }
                 }
 
-                // Practice notes
-                @if is_coach {
-                    div class="no-print mb-5" {
-                        (notes_section(practice, practice_id))
-                    }
-                }
-
                 // Practice timeline summary
                 @if is_coach {
                     @let timeline = practice.and_then(|p| p.timeline());
@@ -299,61 +292,6 @@ pub(crate) fn detail_content(
 }
 
 // ── Notes section ────────────────────────────────────────────────────
-
-fn notes_section(practice: Option<&Practice>, practice_id: PracticeId) -> Markup {
-    let existing_notes = practice.and_then(|p| p.notes.as_deref()).unwrap_or("");
-    html! {
-        div id="practice-notes" "aria-live"="polite" {
-            (notes_display_inner(existing_notes, practice_id))
-        }
-    }
-}
-
-/// Rendered by the HTMX swap after saving notes.
-pub(crate) fn notes_display(practice: &Practice) -> Markup {
-    let notes = practice.notes.as_deref().unwrap_or("");
-    html! {
-        div id="practice-notes" "aria-live"="polite" {
-            (notes_display_inner(notes, practice.id))
-        }
-    }
-}
-
-fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
-    let action = format!("/practices/{practice_id}/notes");
-    html! {
-        form
-            hx-post=(action)
-            hx-target="#practice-notes"
-            hx-swap="outerHTML"
-            class="rounded-lg p-4"
-            style="border-left: 3px solid var(--accent); max-width: 720px"
-        {
-            div class="flex items-baseline justify-between mb-1 gap-2" {
-                span class="font-mono-stat text-[9.5px] tracking-[0.16em] uppercase font-semibold" style="color: var(--accent)" {
-                    "Practice notes"
-                }
-            }
-            textarea
-                name="notes"
-                rows="2"
-                placeholder="Add notes for this practice…"
-                class="w-full border rounded px-3 py-2 text-sm focus:outline-none resize-y"
-                style="background: var(--paper-2); border-color: var(--rule); color: var(--ink)"
-            {
-                (notes)
-            }
-            div class="mt-2 flex justify-end" {
-                button
-                    type="submit"
-                    class="btn-warm-ink text-xs py-1.5 px-3"
-                {
-                    "Save notes"
-                }
-            }
-        }
-    }
-}
 
 // ── Boat card ────────────────────────────────────────────────────────
 
