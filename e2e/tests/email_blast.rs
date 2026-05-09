@@ -34,16 +34,15 @@ async fn setup_demo(base: &str, client: &reqwest::Client) -> String {
     url
 }
 
-/// Parse practice IDs from the practices page by finding `/solve/N` links.
+/// Parse practice IDs from the practices page by finding `/practices/N/lineup` links.
 fn parse_practice_ids(html: &str) -> Vec<String> {
     let mut ids = Vec::new();
-    for segment in html.split("/solve/") {
-        // The ID ends at a quote or query string: /solve/3" or /solve/3?...
+    for segment in html.split("/practices/") {
         let end = segment
             .find(|c: char| !c.is_ascii_digit())
             .unwrap_or(segment.len());
         let id = &segment[..end];
-        if !id.is_empty() {
+        if !id.is_empty() && segment[end..].starts_with("/lineup") {
             ids.push(id.to_string());
         }
     }
@@ -52,13 +51,13 @@ fn parse_practice_ids(html: &str) -> Vec<String> {
     ids
 }
 
-/// Parse committed practice dates from the history page.
-/// The template renders dates as YYYY-MM-DD inside the history rows.
+/// Parse committed practice dates from the practices page.
+/// The template renders dates as YYYY-MM-DD inside the practice rows.
 fn parse_history_dates(html: &str) -> Vec<String> {
     let mut dates = Vec::new();
-    for segment in html.split("/history/") {
-        // Extract the practice ID from /history/N links.
-        if let Some(end) = segment.find('"') {
+    for segment in html.split("/practices/") {
+        // Extract the practice ID from /practices/N/detail links.
+        if let Some(end) = segment.find('/') {
             let _id = &segment[..end];
         }
     }
@@ -161,7 +160,7 @@ async fn lineup_preview_shows_recipients() {
 
     // Fetch the history page to find a committed practice date.
     let history_html = client
-        .get(format!("{base}/history"))
+        .get(format!("{base}/practices"))
         .send()
         .await
         .unwrap()
@@ -258,7 +257,7 @@ async fn send_lineups_blocked_for_demo() {
 
     // Fetch the history page to find a committed practice date.
     let history_html = client
-        .get(format!("{base}/history"))
+        .get(format!("{base}/practices"))
         .send()
         .await
         .unwrap()

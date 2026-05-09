@@ -28,7 +28,7 @@ pub(crate) async fn preset_bar_handler(
 ) -> Result<impl IntoResponse, ErrorResponse> {
     // Redirect to the solve page if accessed directly (not via HTMX).
     if !hx.0 {
-        return Ok(Redirect::to(&format!("/solve/{practice_id}")).into_response());
+        return Ok(Redirect::to(&format!("/practices/{practice_id}/lineup")).into_response());
     }
     let result = preset_bar_inner(jar, &tenant, practice_id, &knobs).await?;
     Ok(result.into_response())

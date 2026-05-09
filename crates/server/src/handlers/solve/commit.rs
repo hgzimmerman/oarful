@@ -103,7 +103,7 @@ pub(crate) async fn commit_handler(
     );
     tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::GenerateLineup);
 
-    Ok(Redirect::to(&format!("/history/{practice_id}")))
+    Ok(Redirect::to(&format!("/practices/{practice_id}/detail")))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -174,7 +174,7 @@ pub(crate) async fn commit_lineup_handler(
     );
     tenant.complete_onboarding_step(lineup_db::onboarding::OnboardingStep::GenerateLineup);
 
-    Ok(Redirect::to(&format!("/history/{practice_id}")))
+    Ok(Redirect::to(&format!("/practices/{practice_id}/detail")))
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -271,5 +271,5 @@ pub(crate) async fn clear_draft_handler(
     );
 
     // Redirect to reload the solver page with a clean editor.
-    Ok(Redirect::to(&format!("/solve/{practice_id}")))
+    Ok(Redirect::to(&format!("/practices/{practice_id}/lineup")))
 }

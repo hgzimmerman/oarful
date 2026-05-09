@@ -472,8 +472,8 @@ pub(crate) async fn send_lineups_handler(
 
         for (user_id, email, name) in &recipients {
             let redirect = match first_practice_id {
-                Some(pid) => format!("/history/{pid}"),
-                None => "/history".to_string(),
+                Some(pid) => format!("/practices/{pid}/detail"),
+                None => "/practices".to_string(),
             };
             let created = create_magic_link(*user_id, &redirect, expires_at, Some(team_id));
             let raw_token = created.raw_token.clone();

@@ -174,8 +174,8 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
     html! {
         th scope="col" class=(class) title=(full_date) {
             @if let Some(pid) = practice_id {
-                a href=(format!("/history/{pid}"))
-                  hx-get=(format!("/history/{pid}"))
+                a href=(format!("/practices/{pid}/detail"))
+                  hx-get=(format!("/practices/{pid}/detail"))
                   hx-target="#content"
                   hx-push-url="true"
                   class="hover:opacity-80" style="color: var(--link)" {

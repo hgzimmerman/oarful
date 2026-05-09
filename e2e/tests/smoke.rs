@@ -24,7 +24,7 @@ async fn history_page_loads() {
     let client = instance.connect().await;
 
     client
-        .goto(&format!("{}/history", instance.base_url()))
+        .goto(&format!("{}/practices", instance.base_url()))
         .await
         .unwrap();
 
@@ -40,7 +40,7 @@ async fn history_page_loads() {
     // The demo fixture commits lineups for Monday.
     let source = client.source().await.unwrap();
     assert!(
-        source.contains("Steady state pieces") || source.contains("/history/"),
+        source.contains("Steady state pieces") || source.contains("/detail"),
         "expected committed practice content"
     );
 

@@ -12,11 +12,17 @@ async fn streamed_alternative_creates_tab() {
     // Find a solve link from the practices page.
     let source = client.source().await.unwrap();
     let solve_path = source
-        .split("href=\"/solve/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .map(|id| format!("/solve/{id}"))
-        .expect("expected a /solve/ link on the practices page");
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                Some(format!("/practices/{id}/lineup"))
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected a lineup link on the practices page");
 
     // Navigate to the solve page with generate + 1 alternative.
     // partial=2 allows up to 2 optional seats empty per boat.
@@ -92,8 +98,8 @@ async fn streamed_alternative_creates_tab() {
     // Verify we're on the solve page (not an error page).
     let url = client.current_url().await.unwrap();
     assert!(
-        url.path().starts_with("/solve/"),
-        "expected to stay on /solve/ page after tab switch, got {}",
+        url.path().contains("/lineup"),
+        "expected to stay on lineup page after tab switch, got {}",
         url.path()
     );
 

@@ -133,7 +133,7 @@ async fn switch_teams() {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let source = client.source().await.unwrap();
     assert!(
-        source.contains("/solve/") || source.contains("Practices"),
+        source.contains("/lineup") || source.contains("Practices"),
         "expected original team's practices after switching back"
     );
 

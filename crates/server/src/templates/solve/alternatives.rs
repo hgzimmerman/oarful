@@ -76,7 +76,7 @@ pub(crate) fn alternative_block(
                 params.push(format!("seat={}:{}:{}", rower_id, lineup.boat_id, seat));
             }
         }
-        format!("/solve/{}?{}", practice_id, params.join("&"))
+        format!("/practices/{}/lineup?{}", practice_id, params.join("&"))
     };
 
     html! {

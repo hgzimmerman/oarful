@@ -45,8 +45,8 @@ function removeTabState(id) {
 function _getPracticeId() {
     var el = document.getElementById('lineup-editor');
     if (el) return el.dataset.practiceId;
-    // Fallback: extract from current URL (/solve/{id}...).
-    var match = window.location.pathname.match(/\/solve\/(\d+)/);
+    // Fallback: extract from current URL (/practices/{id}/lineup...).
+    var match = window.location.pathname.match(/\/practices\/(\d+)\/lineup/);
     return match ? match[1] : null;
 }
 
@@ -61,12 +61,12 @@ function _saveCurrentTabState() {
 function _reloadSolvePage() {
     var practiceId = _getPracticeId();
     if (practiceId && typeof htmx !== 'undefined') {
-        htmx.ajax('GET', '/solve/' + practiceId, {
+        htmx.ajax('GET', '/practices/' + practiceId + '/lineup', {
             target: '#content',
             swap: 'innerHTML'
         });
     } else if (practiceId) {
-        window.location.href = '/solve/' + practiceId;
+        window.location.href = '/practices/' + practiceId + '/lineup';
     } else {
         window.location.reload();
     }
@@ -151,21 +151,21 @@ function createTabFromSSE(label, seatParams) {
     }
 }
 
-// Clear all tab cookies when navigating away from the solve page.
+// Clear all tab cookies when navigating away from the lineup page.
 function clearAllTabCookies() {
     var meta = getEditorTabs();
     meta.tabs.forEach(function(t) { removeTabState(t.id); });
     _deleteCookie('editor_tabs');
 }
 
-// Clear stale tab cookies when navigating away from a solve page.
-// Listen on click for any link/element that navigates to a non-solve path.
+// Clear stale tab cookies when navigating away from a lineup page.
+// Listen on click for any link/element that navigates to a non-lineup path.
 document.addEventListener('click', function(evt) {
-    if (!window.location.pathname.startsWith('/solve/')) return;
+    if (!window.location.pathname.match(/\/practices\/\d+\/lineup/)) return;
     var link = evt.target.closest('a[href], [hx-get], [hx-post]');
     if (!link) return;
     var dest = link.getAttribute('href') || link.getAttribute('hx-get') || link.getAttribute('hx-post') || '';
-    if (dest && !dest.startsWith('/solve/')) {
+    if (dest && !dest.match(/\/practices\/\d+\/lineup/)) {
         clearAllTabCookies();
     }
 });

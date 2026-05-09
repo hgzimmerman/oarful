@@ -43,7 +43,7 @@ async fn stale_alert_email_sent_on_availability_change() {
 
     // Get a committed practice from the history page.
     let history_html = pd_client
-        .get(format!("{base}/history"))
+        .get(format!("{base}/practices"))
         .send()
         .await
         .unwrap()
@@ -51,15 +51,21 @@ async fn stale_alert_email_sent_on_availability_change() {
         .await
         .unwrap();
     let practice_id: i32 = history_html
-        .split("href=\"/history/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .and_then(|s| s.parse().ok())
-        .expect("expected a committed practice on history page");
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if s.contains("/detail") && id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                id.parse().ok()
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected a committed practice detail link");
 
     // Get a rower ID from the committed lineup.
     let detail_html = pd_client
-        .get(format!("{base}/history/{practice_id}"))
+        .get(format!("{base}/practices/{practice_id}/detail"))
         .send()
         .await
         .unwrap()

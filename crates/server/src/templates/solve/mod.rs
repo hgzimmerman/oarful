@@ -595,7 +595,7 @@ pub(crate) fn streaming_page(
 /// Contains the SSE connection that streams solver results.
 pub(crate) fn streaming_skeleton(practice_id: PracticeId, knobs: &SolveKnobs) -> Markup {
     let sse_url = format!(
-        "/solve/{practice_id}/stream?{}",
+        "/practices/{practice_id}/lineup/stream?{}",
         serde_html_form::to_string(knobs).unwrap_or_default()
     );
 

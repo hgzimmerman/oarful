@@ -251,8 +251,8 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
                     h3 class="font-mono-stat text-[10px] tracking-widest uppercase font-semibold mb-2" style="color: var(--ink-2)" { "Recent outings" }
                     div class="text-sm" style="divide-color: var(--rule-2)" {
                         @for (pid, date) in usage.recent_uses.iter().take(20) {
-                            a href=(format!("/history/{pid}"))
-                              hx-get=(format!("/history/{pid}"))
+                            a href=(format!("/practices/{pid}/detail"))
+                              hx-get=(format!("/practices/{pid}/detail"))
                               hx-target="#admin-fleet-content"
                               hx-push-url="true"
                               class="block px-2 py-1.5 rounded hover:bg-paper-2 font-serif-heading text-[14px]" style="color: var(--link)" {

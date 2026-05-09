@@ -2,7 +2,7 @@ function updateActiveNav() {
     var path = location.pathname;
     // Map related paths to a single nav section.
     var aliases = {
-        '/practices': ['/history', '/solve', '/commit'],
+        '/practices': [],
         '/team': ['/rowers', '/sync'],
         '/admin': ['/users', '/teams', '/audit', '/boats']
     };
