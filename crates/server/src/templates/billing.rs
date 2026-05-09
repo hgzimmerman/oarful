@@ -20,6 +20,10 @@ pub(crate) fn suspended_page(tenant_name: &str, webmaster_email: &str) -> Markup
                     p class="text-sm text-ink-3 mb-6" { (message) }
 
                     div class="space-y-3" {
+                        a href="/signup"
+                          class="block w-full btn-accent py-2 text-sm font-semibold" {
+                            "Create an account"
+                        }
                         a href={"mailto:" (webmaster_email)}
                           class="block w-full btn-warm-ink py-2 text-sm" {
                             "Contact us"
