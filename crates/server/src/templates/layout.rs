@@ -18,6 +18,11 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { (title) " · Oarful" }
+                link rel="manifest" href="/manifest.json";
+                meta name="theme-color" content="#1e293b";
+                meta name="apple-mobile-web-app-capable" content="yes";
+                link rel="icon" href="/icon.svg" type="image/svg+xml";
+                link rel="apple-touch-icon" href="/icon.svg";
                 // Pre-built Tailwind CSS. Rebuild with:
                 //   tailwindcss -i tailwind.input.css -o crates/server/public/tailwind.css --minify
                 link rel="stylesheet" href="/tailwind.css";
@@ -65,6 +70,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                     }
                 "# }
                 (theme_init_script())
+                script { (maud::PreEscaped("if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}")) }
             }
             body class="min-h-screen flex flex-col bg-paper text-ink" {
                 a href="#content" class="skip-link" { "Skip to content" }

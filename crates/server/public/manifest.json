@@ -1,0 +1,22 @@
+{
+  "name": "Oarful",
+  "short_name": "Oarful",
+  "description": "Lineup generator for rowing clubs",
+  "start_url": "/practices",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "32x32",
+      "type": "image/x-icon"
+    }
+  ]
+}
