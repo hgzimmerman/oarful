@@ -13,8 +13,14 @@ pub(crate) fn landing_page(signup_disabled: bool, stripe_enabled: bool) -> Marku
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
                 title { "Oarful 🚣 Lineup Generator for Rowing Clubs" }
+                link rel="manifest" href="/manifest.json";
+                meta name="theme-color" content="#1e293b";
+                meta name="apple-mobile-web-app-capable" content="yes";
+                link rel="icon" href="/icon.svg" type="image/svg+xml";
+                link rel="apple-touch-icon" href="/icon.svg";
                 link rel="stylesheet" href="/tailwind.css";
                 (super::layout::theme_init_script())
+                script { (maud::PreEscaped("if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}")) }
             }
             body class="bg-paper text-ink min-h-screen flex flex-col" {
                 // Nav bar

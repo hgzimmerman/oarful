@@ -21,7 +21,10 @@ fn standalone_page(title: &str, body: Markup) -> Markup {
                      margin: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; } \
                      h1 { font-size: 20px; margin: 0 0 12px; } \
                      p { font-size: 14px; color: #475569; line-height: 1.5; margin: 8px 0; } \
-                     .muted { font-size: 12px; color: #94a3b8; margin-top: 20px; }"
+                     .muted { font-size: 12px; color: #94a3b8; margin-top: 20px; } \
+                     .back-link { display: inline-block; margin-top: 24px; font-size: 13px; \
+                     color: #3b82f6; text-decoration: none; } \
+                     .back-link:hover { text-decoration: underline; }"
                 }
             }
             body {
@@ -51,6 +54,7 @@ pub(crate) fn success_page(club_name: &str, email_type: EmailType) -> Markup {
             p class="muted" {
                 "To re-subscribe, log in and visit your email preferences."
             }
+            a href="/login" class="back-link" { "← Back to sign in" }
         },
     )
 }
@@ -61,6 +65,7 @@ pub(crate) fn error_page(message: &str) -> Markup {
         html! {
             h1 { "Unsubscribe" }
             p { (message) }
+            a href="/login" class="back-link" { "← Back to sign in" }
         },
     )
 }
