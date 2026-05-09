@@ -73,14 +73,19 @@ pub(crate) async fn detail_handler(
     hx: HxRequest,
 ) -> Result<Html<String>, ErrorResponse> {
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (snapshot, practice, committed) = tenant
+    let (snapshot, practice, committed, oar_assignments) = tenant
         .db
         .with_conn(move |conn| {
             let practice =
                 Practice::get(conn, practice_id)?.ok_or(diesel::result::Error::NotFound)?;
             let snapshot = DbSnapshot::for_practice(conn, &practice)?;
             let lineups = Lineup::for_practice(conn, practice.id)?;
-            Ok((snapshot, practice, lineups))
+            let oar_assignments =
+                lineup_db::oar_set::PracticeBoatOars::list_for_practice_with_names(
+                    conn,
+                    practice.id,
+                )?;
+            Ok((snapshot, practice, lineups, oar_assignments))
         })
         .await
         .map_err(internal_error)?;
@@ -98,6 +103,7 @@ pub(crate) async fn detail_handler(
         &committed,
         tenant.config.force_cox_stern,
         is_coach,
+        &oar_assignments,
     );
     Ok(super::maybe_page_authed(
         &format!("Lineups · {date}"),

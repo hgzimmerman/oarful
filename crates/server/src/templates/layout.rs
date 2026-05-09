@@ -350,6 +350,60 @@ pub(crate) fn empty_state(message: &str) -> Markup {
     }
 }
 
+/// Inline crossed-oars icon for use next to oar set names.
+pub(crate) fn crossed_oars_icon() -> Markup {
+    html! {
+        svg width="14" height="14" viewBox="0 0 28 28" fill="none" style="display:inline-block;vertical-align:middle" {
+            g transform="rotate(50 14 14)" {
+                line x1="0" y1="14" x2="28" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" {}
+                rect x="-1" y="13.2" width="8" height="4" rx="0.8" fill="currentColor" {}
+            }
+            g transform="rotate(-50 14 14)" {
+                line x1="0" y1="14" x2="28" y2="14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" {}
+                rect x="21" y="13.2" width="8" height="4" rx="0.8" fill="currentColor" {}
+            }
+        }
+    }
+}
+
+/// Inline rowing seat icon for use next to seat counts.
+/// Uses a single path with evenodd fill to cut out sit-bone holes and
+/// tailbone scallop, avoiding SVG mask ID collisions on pages with
+/// multiple instances.
+pub(crate) fn seat_icon() -> Markup {
+    // Outer rounded rect + holes as subpaths. With evenodd, the inner
+    // shapes cut out from the outer.
+    html! {
+        svg width="14" height="10" viewBox="0 0 18 12" fill="none" style="display:inline-block;vertical-align:middle" {
+            path fill-rule="evenodd" fill="currentColor"
+                 d="M4.5 0.5 h9 a4 4 0 0 1 4 4 v3 a4 4 0 0 1 -4 4 h-9 a4 4 0 0 1 -4 -4 v-3 a4 4 0 0 1 4 -4 z M6 3 a2 2 0 1 0 0 4 a2 2 0 1 0 0 -4 z M12 3 a2 2 0 1 0 0 4 a2 2 0 1 0 0 -4 z M5 12 a4 3.5 0 0 1 8 0 z" {}
+        }
+    }
+}
+
+/// Inline rigger icon indicating port or starboard rigging.
+/// Starboard: rigger extends left. Port: rigger extends right.
+pub(crate) fn rigger_icon(side: lineup_db::rower::types::Side) -> Markup {
+    let is_port = matches!(side, lineup_db::rower::types::Side::Port);
+    html! {
+        svg width="11" height="11" viewBox="0 0 18 18" fill="none" style="display:inline-block;vertical-align:middle" {
+            @if is_port {
+                // Port: rigger extends right
+                line x1="6" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" {}
+                line x1="2" y1="-3" x2="16" y2="9" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" {}
+                line x1="2" y1="21" x2="16" y2="9" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" {}
+                line x1="16" y1="9" x2="16" y2="6" stroke="currentColor" stroke-width="0.9" stroke-linecap="square" {}
+            } @else {
+                // Starboard: rigger extends left
+                line x1="12" y1="9" x2="2" y2="9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" {}
+                line x1="16" y1="-3" x2="2" y2="9" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" {}
+                line x1="16" y1="21" x2="2" y2="9" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" {}
+                line x1="2" y1="9" x2="2" y2="6" stroke="currentColor" stroke-width="0.9" stroke-linecap="square" {}
+            }
+        }
+    }
+}
+
 fn source_url() -> String {
     std::env::var("SOURCE_URL")
         .unwrap_or_else(|_| "https://github.com/hgzimmerman/oarful".to_string())

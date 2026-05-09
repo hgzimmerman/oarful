@@ -187,6 +187,41 @@ pub(crate) async fn view_handler(
         .iter()
         .map(|p| (p.name.clone(), p.description.clone()))
         .collect();
+    let view_oar_sets = tenant
+        .db
+        .with_conn(|conn| {
+            let sets = lineup_db::oar_set::OarSet::list_active(conn)?;
+            Ok(sets
+                .into_iter()
+                .map(|os| (os.id, os.name, os.oar_count))
+                .collect())
+        })
+        .await
+        .unwrap_or_else(|_| Vec::new());
+    // Only load oar assignments if there are committed or draft lineups.
+    // Otherwise clear stale assignments from previous editing sessions.
+    let has_lineups = has_committed || !draft_lineups.is_empty();
+    let view_oar_assignments = {
+        let pid = practice_id;
+        if has_lineups {
+            tenant
+                .db
+                .with_conn(move |conn| {
+                    lineup_db::oar_set::PracticeBoatOars::list_for_practice_with_names(conn, pid)
+                })
+                .await
+                .unwrap_or_else(|_| std::collections::HashMap::new())
+        } else {
+            // No lineups — clear any stale oar assignments.
+            let _ = tenant
+                .db
+                .with_conn(move |conn| {
+                    lineup_db::oar_set::PracticeBoatOars::clear_for_practice(conn, pid)
+                })
+                .await;
+            std::collections::HashMap::new()
+        }
+    };
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
@@ -197,6 +232,13 @@ pub(crate) async fn view_handler(
         was_pinned_boats: SolveKnobs::boat_id_set(&effective_knobs.boat_was_pin),
         locked_boats: SolveKnobs::boat_id_set(&effective_knobs.boat_lock),
         boats_in_use_by: std::collections::HashMap::new(),
+        oar_sets: view_oar_sets,
+        oar_usage: templates::solve::DisplayFlags::compute_oar_usage(
+            &view_oar_assignments,
+            &snapshot.boats,
+            &view_oar_assignments.keys().copied().collect(),
+        ),
+        oar_assignments: view_oar_assignments,
     };
     let content = templates::solve::landing_content(
         &snapshot,

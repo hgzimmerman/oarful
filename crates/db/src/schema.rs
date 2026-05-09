@@ -317,7 +317,41 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    oar_set (id) {
+        id -> Integer,
+        name -> Text,
+        oar_count -> Integer,
+        notes -> Nullable<Text>,
+        active -> Integer,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    oar_set_preference (id) {
+        id -> Integer,
+        oar_set_id -> Integer,
+        boat_id -> Integer,
+        priority -> Integer,
+    }
+}
+
+diesel::table! {
+    practice_boat_oars (id) {
+        id -> Integer,
+        practice_id -> Integer,
+        boat_id -> Integer,
+        oar_set_id -> Integer,
+    }
+}
+
 diesel::joinable!(onboarding_progress -> app_user (app_user_id));
+diesel::joinable!(oar_set_preference -> oar_set (oar_set_id));
+diesel::joinable!(oar_set_preference -> boat (boat_id));
+diesel::joinable!(practice_boat_oars -> practice (practice_id));
+diesel::joinable!(practice_boat_oars -> boat (boat_id));
+diesel::joinable!(practice_boat_oars -> oar_set (oar_set_id));
 diesel::joinable!(audit_log -> app_user (user_id));
 diesel::joinable!(team_threshold -> team (team_id));
 diesel::joinable!(sync_source -> team (team_id));
@@ -370,4 +404,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     lineup_notification,
     stale_digest_log,
     onboarding_progress,
+    oar_set,
+    oar_set_preference,
+    practice_boat_oars,
 );

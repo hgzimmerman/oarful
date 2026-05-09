@@ -15,6 +15,7 @@ pub mod fixture;
 pub mod lineup;
 pub mod lineup_notification;
 pub mod magic_link;
+pub mod oar_set;
 pub mod onboarding;
 pub mod pair_affinity;
 pub mod practice;

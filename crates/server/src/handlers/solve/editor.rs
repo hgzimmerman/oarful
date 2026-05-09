@@ -175,6 +175,44 @@ pub(crate) async fn editor_handler(
 
     let editor =
         templates::solve::EditorData::from_placements(&snapshot, &placements, &active_boats);
+    // Boats that are active AND have at least one rower placed.
+    let filled_active_boats: std::collections::HashSet<BoatId> = placements
+        .keys()
+        .filter(|bid| active_boats.contains(bid))
+        .copied()
+        .collect();
+
+    // Load oar sets + assignments for this practice.
+    // Only clear assignments for boats that are deselected (not active).
+    let active_for_oars = active_boats.clone();
+    let (oar_sets_list, oar_assignments) = tenant
+        .db
+        .with_conn(move |conn| {
+            let oar_sets = lineup_db::oar_set::OarSet::list_active(conn)?;
+            let oar_sets_list: Vec<_> = oar_sets
+                .into_iter()
+                .map(|os| (os.id, os.name, os.oar_count))
+                .collect();
+            let mut assignments =
+                lineup_db::oar_set::PracticeBoatOars::list_for_practice_with_names(
+                    conn,
+                    practice_id,
+                )?;
+            // Clear oar assignments for deselected boats only.
+            let deselected: Vec<_> = assignments
+                .keys()
+                .filter(|bid| !active_for_oars.contains(bid))
+                .copied()
+                .collect();
+            for bid in &deselected {
+                lineup_db::oar_set::PracticeBoatOars::unassign(conn, practice_id, *bid)?;
+                assignments.remove(bid);
+            }
+            Ok((oar_sets_list, assignments))
+        })
+        .await
+        .map_err(internal_error)?;
+
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
@@ -185,6 +223,13 @@ pub(crate) async fn editor_handler(
         was_pinned_boats: SolveKnobs::boat_id_set(&params.boat_was_pin),
         locked_boats: SolveKnobs::boat_id_set(&params.boat_lock),
         boats_in_use_by: boats_in_use,
+        oar_sets: oar_sets_list,
+        oar_usage: templates::solve::DisplayFlags::compute_oar_usage(
+            &oar_assignments,
+            &snapshot.boats,
+            &filled_active_boats,
+        ),
+        oar_assignments,
     };
 
     // Unavailable rowers for the walk-on dropdown.

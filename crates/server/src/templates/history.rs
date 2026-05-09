@@ -7,9 +7,13 @@
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
+use std::collections::HashMap;
+
 use lineup_db::{
     availability::types::AvailabilityStatus,
+    boat::types::BoatId,
     lineup::CommittedLineup,
+    oar_set::types::OarSetId,
     practice::{Practice, PracticeId},
     rower::{
         types::{RowerId, Side},
@@ -19,6 +23,8 @@ use lineup_db::{
     timeline::BlockType,
 };
 use maud::{html, Markup};
+
+use super::layout::crossed_oars_icon;
 
 use super::layout::{empty_state, page_header};
 use super::solve::{commit_meter, seat_badge, seat_label};
@@ -91,6 +97,7 @@ pub(crate) fn detail_content(
     committed: &[CommittedLineup],
     force_cox_stern: bool,
     is_coach: bool,
+    oar_assignments: &HashMap<BoatId, (OarSetId, String)>,
 ) -> Markup {
     // Detect stale rowers: committed but availability is no longer "Yes".
     let stale_rowers: HashSet<RowerId> = committed
@@ -340,7 +347,7 @@ pub(crate) fn detail_content(
                         form id="noshow-form" method="get" action={"/solve/" (practice_id)} {
                             div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr))" {
                                 @for c in committed {
-                                    (boat_card(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                                    (boat_card(snapshot, c, force_cox_stern, &stale_rowers, is_coach, oar_assignments.get(&c.lineup.boat_id).map(|(_, name)| name.as_str())))
                                 }
                             }
                         }
@@ -352,7 +359,7 @@ pub(crate) fn detail_content(
                         }
                         div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr))" {
                             @for c in committed {
-                                (boat_card(snapshot, c, force_cox_stern, &stale_rowers, is_coach))
+                                (boat_card(snapshot, c, force_cox_stern, &stale_rowers, is_coach, oar_assignments.get(&c.lineup.boat_id).map(|(_, name)| name.as_str())))
                             }
                         }
                     }
@@ -440,6 +447,7 @@ fn boat_card(
     force_cox_stern: bool,
     stale_rowers: &HashSet<RowerId>,
     is_coach: bool,
+    oar_set_name: Option<&str>,
 ) -> Markup {
     let boat = snapshot
         .boats
@@ -490,10 +498,17 @@ fn boat_card(
         .map(|b| format!("{}", b.weight_class))
         .unwrap_or_default();
 
-    // Cox position label
+    // Cox position label — only show for non-default (bow-loader) positions.
+    // 8+s are always stern-loaded (default), 4+s can be bow or stern.
     let cox_pos_label = if has_cox {
-        boat.map(|b| format!("{}", b.cox_position))
-            .unwrap_or_default()
+        boat.and_then(|b| {
+            if b.cox_position == lineup_db::boat::types::CoxPosition::Bow {
+                Some("bow-loader".to_string())
+            } else {
+                None // stern is default, elide
+            }
+        })
+        .unwrap_or_default()
     } else {
         String::new()
     };
@@ -533,13 +548,34 @@ fn boat_card(
                         span { (weight_class.to_lowercase()) }
                     }
                     span style="color: var(--rule)" { "·" }
-                    span { (rig) }
+                    @if is_sweep {
+                        @if let Some(b) = boat {
+                            span class="inline-flex items-center gap-0.5" {
+                                (super::layout::rigger_icon(b.stroke_side))
+                                (rig)
+                            }
+                        } @else {
+                            span { (rig) }
+                        }
+                    } @else {
+                        span { (rig) }
+                    }
                     @if !cox_pos_label.is_empty() {
                         span style="color: var(--rule)" { "·" }
                         span { (cox_pos_label.to_lowercase()) }
                     }
+                    @if let Some(oars) = oar_set_name {
+                        span style="color: var(--rule)" { "·" }
+                        span class="inline-flex items-center gap-1" {
+                            (crossed_oars_icon())
+                            (oars) " oars"
+                        }
+                    }
                     span style="color: var(--rule)" { "·" }
-                    span { (filled) "/" (all_positions.len()) }
+                    span class="inline-flex items-center gap-1" {
+                        (super::layout::seat_icon())
+                        (filled) "/" (all_positions.len()) " seated"
+                    }
                 }
             }
 

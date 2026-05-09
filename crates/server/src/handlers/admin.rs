@@ -138,6 +138,11 @@ const FLEET_SUBTABS: &[TabDef] = &[
         url: "/admin/fleet/defaults",
         id: "defaults",
     },
+    TabDef {
+        label: "Oar sets",
+        url: "/admin/fleet/oars",
+        id: "oars",
+    },
 ];
 const FLEET_TARGET: &str = "admin-fleet-content";
 
@@ -202,6 +207,31 @@ pub(crate) async fn fleet_defaults_handler(
         ));
     }
     let fleet_section = tabbed_section(FLEET_SUBTABS, "defaults", FLEET_TARGET, defaults_content);
+    if is_tab_swap(&headers) {
+        return Ok(Html(
+            tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),
+        ));
+    }
+    let page = tabbed_section(TABS, "fleet", TARGET, fleet_section);
+    Ok(handlers::maybe_page_authed("Admin", page, hx, &tenant))
+}
+
+/// `GET /admin/fleet/oars` — oar sets subtab.
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub(crate) async fn fleet_oars_handler(
+    Extension(tenant): Extension<TenantContext>,
+    hx: HxRequest,
+    headers: HeaderMap,
+) -> Result<Html<String>, ErrorResponse> {
+    handlers::users::require_at_least_role(&tenant.claims, Role::ProgramDirector)?;
+    let oars_content = handlers::oar_sets::list_content(&tenant).await?;
+
+    if is_fleet_subtab_swap(&headers) {
+        return Ok(Html(
+            tab_swap(FLEET_SUBTABS, "oars", FLEET_TARGET, oars_content).into_string(),
+        ));
+    }
+    let fleet_section = tabbed_section(FLEET_SUBTABS, "oars", FLEET_TARGET, oars_content);
     if is_tab_swap(&headers) {
         return Ok(Html(
             tab_swap(TABS, "fleet", TARGET, fleet_section).into_string(),

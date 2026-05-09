@@ -36,7 +36,7 @@ pub(crate) fn list_content(boats: &[Boat], can_export: bool) -> Markup {
                     }
                     a href="/boats/new"
                       hx-get="/boats/new"
-                      hx-target="#content"
+                      hx-target="#admin-fleet-content"
                       hx-push-url="true"
                       class="btn-warm-ink text-sm py-2 px-4" {
                         "Add shell"
@@ -142,7 +142,7 @@ fn boat_row(b: &Boat) -> Markup {
             td class="px-4 py-2.5" {
                 a href=(href)
                   hx-get=(href)
-                  hx-target="#content"
+                  hx-target="#admin-fleet-content"
                   hx-push-url="true"
                   class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                     (b.name)
@@ -196,7 +196,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
                 @if can_edit {
                     a href=(format!("/boats/{}/edit", boat.id))
                       hx-get=(format!("/boats/{}/edit", boat.id))
-                      hx-target="#content"
+                      hx-target="#admin-fleet-content"
                       hx-push-url="true"
                       class="btn-warm-ghost text-xs py-2" {
                         "Edit"
@@ -253,7 +253,7 @@ pub(crate) fn detail_content(boat: &Boat, usage: &BoatUsageSummary, can_edit: bo
                         @for (pid, date) in usage.recent_uses.iter().take(20) {
                             a href=(format!("/history/{pid}"))
                               hx-get=(format!("/history/{pid}"))
-                              hx-target="#content"
+                              hx-target="#admin-fleet-content"
                               hx-push-url="true"
                               class="block px-2 py-1.5 rounded hover:bg-paper-2 font-serif-heading text-[14px]" style="color: var(--link)" {
                                 (date.format("%A, %b %-d, %Y"))
@@ -316,7 +316,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
             // natively and the handler accepts both verbs.
             form method="post" action=(action)
                  hx-post=(action)
-                 hx-target="#content"
+                 hx-target="#admin-fleet-content"
                  hx-push-url="/admin/fleet"
                  class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
                 // Name
@@ -410,7 +410,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
                     }
                     a href=(cancel_href)
                       hx-get=(cancel_href)
-                      hx-target="#content"
+                      hx-target="#admin-fleet-content"
                       hx-push-url="true"
                       class="text-ink-3 hover:text-ink text-sm font-semibold" {
                         "Cancel"

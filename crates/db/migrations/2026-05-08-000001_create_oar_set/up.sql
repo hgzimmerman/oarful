@@ -1,0 +1,24 @@
+CREATE TABLE oar_set (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    oar_count INTEGER NOT NULL,
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE oar_set_preference (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    oar_set_id INTEGER NOT NULL REFERENCES oar_set(id) ON DELETE CASCADE,
+    boat_id INTEGER NOT NULL REFERENCES boat(id) ON DELETE CASCADE,
+    priority INTEGER NOT NULL,
+    UNIQUE(oar_set_id, boat_id)
+);
+
+CREATE TABLE practice_boat_oars (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    practice_id INTEGER NOT NULL REFERENCES practice(id) ON DELETE CASCADE,
+    boat_id INTEGER NOT NULL REFERENCES boat(id) ON DELETE CASCADE,
+    oar_set_id INTEGER NOT NULL REFERENCES oar_set(id),
+    UNIQUE(practice_id, boat_id)
+);
