@@ -481,10 +481,16 @@ fn editor_boat_card(
                         span "aria-hidden"="true" { "\u{00b7}" }
                         span { (boat.weight_class) }
                         span "aria-hidden"="true" { "\u{00b7}" }
-                        span { (rig_label(boat)) }
+                        span class="inline-flex items-center gap-0.5" {
+                            (crate::templates::layout::rigger_icon(boat.stroke_side))
+                            (rig_label(boat))
+                        }
                         span "aria-hidden"="true" { "\u{00b7}" }
                         @let filled = seats.iter().filter(|(_, r)| r.is_some()).count();
-                        span { (filled) "/" (seats.len()) " seated" }
+                        span class="inline-flex items-center gap-0.5" {
+                            (crate::templates::layout::seat_icon())
+                            (filled) "/" (seats.len())
+                        }
                     }
                     @if !flags.oar_sets.is_empty() {
                         @let current_oar = flags.oar_assignments.get(&boat.id);
@@ -508,7 +514,8 @@ fn editor_boat_card(
                                hx-get=(format!("/oars/pick?practice_id={}&boat_id={}", practice_id, boat.id))
                                hx-target="body"
                                hx-swap="beforeend" {
-                            @if current_over { "oars: " (oar_label) " !" } @else { "oars: " (oar_label) }
+                            (crate::templates::layout::crossed_oars_icon())
+                            @if current_over { (oar_label) " !" } @else { (oar_label) }
                         }
                     }
                 }

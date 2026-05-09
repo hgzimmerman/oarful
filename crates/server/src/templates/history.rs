@@ -24,6 +24,8 @@ use lineup_db::{
 };
 use maud::{html, Markup};
 
+use super::layout::crossed_oars_icon;
+
 use super::layout::{empty_state, page_header};
 use super::solve::{commit_meter, seat_badge, seat_label};
 
@@ -496,10 +498,17 @@ fn boat_card(
         .map(|b| format!("{}", b.weight_class))
         .unwrap_or_default();
 
-    // Cox position label
+    // Cox position label — only show for non-default (bow-loader) positions.
+    // 8+s are always stern-loaded (default), 4+s can be bow or stern.
     let cox_pos_label = if has_cox {
-        boat.map(|b| format!("{}", b.cox_position))
-            .unwrap_or_default()
+        boat.and_then(|b| {
+            if b.cox_position == lineup_db::boat::types::CoxPosition::Bow {
+                Some("bow-loader".to_string())
+            } else {
+                None // stern is default, elide
+            }
+        })
+        .unwrap_or_default()
     } else {
         String::new()
     };
@@ -539,17 +548,34 @@ fn boat_card(
                         span { (weight_class.to_lowercase()) }
                     }
                     span style="color: var(--rule)" { "·" }
-                    span { (rig) }
+                    @if is_sweep {
+                        @if let Some(b) = boat {
+                            span class="inline-flex items-center gap-0.5" {
+                                (super::layout::rigger_icon(b.stroke_side))
+                                (rig)
+                            }
+                        } @else {
+                            span { (rig) }
+                        }
+                    } @else {
+                        span { (rig) }
+                    }
                     @if !cox_pos_label.is_empty() {
                         span style="color: var(--rule)" { "·" }
                         span { (cox_pos_label.to_lowercase()) }
                     }
                     @if let Some(oars) = oar_set_name {
                         span style="color: var(--rule)" { "·" }
-                        span { (oars) }
+                        span class="inline-flex items-center gap-1" {
+                            (crossed_oars_icon())
+                            (oars) " oars"
+                        }
                     }
                     span style="color: var(--rule)" { "·" }
-                    span { (filled) "/" (all_positions.len()) }
+                    span class="inline-flex items-center gap-1" {
+                        (super::layout::seat_icon())
+                        (filled) "/" (all_positions.len()) " seated"
+                    }
                 }
             }
 
