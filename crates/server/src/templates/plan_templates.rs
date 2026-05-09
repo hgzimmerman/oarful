@@ -86,7 +86,7 @@ pub(crate) fn detail_content(
                        hx-push-url="true" {
                     "← Templates"
                 }
-                h1 class="font-serif-heading text-xl font-medium tracking-tight" style="color: var(--ink)" { (tmpl.name) }
+                h1 id="template-name" class="font-serif-heading text-xl font-medium tracking-tight" style="color: var(--ink)" { (tmpl.name) }
             }
         }
         div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
@@ -126,13 +126,19 @@ pub(crate) fn meta_section(
     tmpl_cats: &[Category],
     all_cats: &[Category],
 ) -> Markup {
-    let cats_csv: String = tmpl_cats
-        .iter()
-        .map(|c| c.name.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
+    let cats_json: String =
+        serde_json::to_string(&tmpl_cats.iter().map(|c| &c.name).collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string());
+    let all_cats_json: String =
+        serde_json::to_string(&all_cats.iter().map(|c| &c.name).collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string());
 
     html! {
+        // OOB swap to keep header name in sync
+        h1 id="template-name" hx-swap-oob="true"
+           class="font-serif-heading text-xl font-medium tracking-tight" style="color: var(--ink)" {
+            (tmpl.name)
+        }
         form hx-post=(format!("/admin/plan-templates/{}/meta", tmpl.id))
              hx-target="#template-meta"
              hx-swap="innerHTML"
@@ -145,17 +151,76 @@ pub(crate) fn meta_section(
                           style="border-color: var(--rule); background: var(--paper); color: var(--ink)"
                           value=(tmpl.name);
                 }
-                div {
-                    label class="block font-mono-stat text-[10px] tracking-widest uppercase mb-1" style="color: var(--muted)" for="tmpl-categories" { "Categories" }
-                    input type="text" name="categories" id="tmpl-categories"
-                          class="w-full rounded border px-3 py-2 text-sm"
-                          style="border-color: var(--rule); background: var(--paper); color: var(--ink)"
-                          value=(cats_csv)
-                          placeholder="comma-separated"
-                          list="category-list";
-                    datalist id="category-list" {
-                        @for cat in all_cats {
-                            option value=(&cat.name) {}
+                // Category picker
+                (maud::PreEscaped(r#"<script>
+                  window.__catPicker = function(sel, all) {
+                    return {
+                      open: false, search: '', selected: sel, all: all,
+                      get filtered() { return this.all.filter(c => !this.selected.includes(c) && c.includes(this.search.toLowerCase())) },
+                      get canAddNew() { let v = this.search.trim().toLowerCase(); return v && !this.all.includes(v) && !this.selected.includes(v) },
+                      get showEmpty() { return !this.filtered.length && !this.canAddNew },
+                      add(c) { this.selected.push(c); this.search = ''; },
+                      remove(c) { this.selected = this.selected.filter(s => s !== c); },
+                      addNew() { let v = this.search.trim().toLowerCase(); if (v && !this.selected.includes(v)) { this.selected.push(v); this.search = ''; } },
+                      backspace() { if (!this.search && this.selected.length) this.remove(this.selected[this.selected.length - 1]); }
+                    }
+                  }
+                </script>"#))
+                div "x-data"=(format!("__catPicker({cats_json}, {all_cats_json})")) {
+                    label class="block font-mono-stat text-[10px] tracking-widest uppercase mb-1" style="color: var(--muted)" { "Categories" }
+                    input type="hidden" name="categories" ":value"="selected.join(',')";
+                    // Tag input — pills + text input share the same bordered row
+                    div class="relative" {
+                        div class="flex flex-wrap items-center gap-1 rounded border px-2 py-1.5"
+                             style="border-color: var(--rule); background: var(--paper); min-height: 2.25rem"
+                             "@click"="$refs.catInput.focus()" {
+                            template "x-for"="cat in selected" ":key"="cat" {
+                                span class="inline-flex items-center gap-1 font-mono-stat text-[10px] px-1.5 py-px rounded"
+                                     style="color: var(--ink-2); background: var(--paper-2); border: 1px solid var(--rule)" {
+                                    span x-text="cat" {}
+                                    button type="button" class="hover:opacity-60 cursor-pointer"
+                                           style="background: none; border: none; color: var(--muted); font-size: 12px; line-height: 1; padding: 0"
+                                           "@click.stop"="remove(cat)" { "×" }
+                                }
+                            }
+                            input type="text" autocomplete="off"
+                                  class="flex-1 text-sm outline-none"
+                                  style="background: transparent; color: var(--ink); border: none; min-width: 4rem; padding: 0"
+                                  placeholder="Add..."
+                                  "x-model"="search"
+                                  "x-ref"="catInput"
+                                  "@focus"="open = true"
+                                  "@click.outside"="open = false"
+                                  "@keydown.enter.prevent"="addNew()"
+                                  "@keydown.backspace"="backspace()";
+                        }
+                        // Dropdown
+                        div x-show="open" x-cloak
+                            class="absolute z-10 mt-1 w-full rounded border shadow-lg overflow-y-auto"
+                            style="background: var(--paper); border-color: var(--rule); max-height: 12rem" {
+                            template "x-for"="cat in filtered" ":key"="cat" {
+                                button type="button"
+                                       class="w-full text-left px-3 py-1.5 text-sm cursor-pointer hover:opacity-80"
+                                       style="background: transparent; border: none; color: var(--ink)"
+                                       "@click"="add(cat); open = false" {
+                                    span x-text="cat" {}
+                                }
+                            }
+                            // "+ add" option
+                            button type="button"
+                                   x-show="canAddNew"
+                                   class="w-full text-left px-3 py-1.5 text-sm cursor-pointer hover:opacity-80"
+                                   style="background: transparent; border: none; color: var(--accent)"
+                                   "@click"="addNew(); open = false" {
+                                span { "+" }
+                                " add \""
+                                span x-text="search.trim()" {}
+                                "\""
+                            }
+                            p x-show="showEmpty"
+                              class="px-3 py-1.5 text-xs" style="color: var(--muted)" {
+                                "No matching categories"
+                            }
                         }
                     }
                 }
