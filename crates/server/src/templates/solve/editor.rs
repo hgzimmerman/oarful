@@ -272,10 +272,10 @@ pub(crate) fn lineup_editor(
     flags: &DisplayFlags,
     _has_draft: bool,
 ) -> Markup {
-    let commit_action = format!("/commit-lineup/{practice_id}");
-    let draft_action = format!("/draft-lineup/{practice_id}");
-    let clear_action = format!("/clear-draft/{practice_id}");
-    let editor_url = format!("/solve/{practice_id}/editor");
+    let commit_action = format!("/practices/{practice_id}/commit-lineup");
+    let draft_action = format!("/practices/{practice_id}/draft-lineup");
+    let clear_action = format!("/practices/{practice_id}/clear-draft");
+    let editor_url = format!("/practices/{practice_id}/lineup/editor");
 
     html! {
         // Hidden forms that carry seat data — buttons in the page header
@@ -781,7 +781,7 @@ pub(crate) fn roster_pool(
                         }
                     }
                     @if has_addable {
-                        @let walkon_action = format!("/solve/{practice_id}");
+                        @let walkon_action = format!("/practices/{practice_id}/lineup");
                         form method="get" action=(walkon_action)
                              hx-get=(walkon_action)
                              hx-target="#content"

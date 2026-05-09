@@ -171,24 +171,30 @@ async fn nav_stale_badge_reflects_availability_changes() {
 
     // Get committed practice IDs from the history page.
     let history_html = client
-        .get(format!("{base}/history"))
+        .get(format!("{base}/practices"))
         .send()
         .await
         .unwrap()
         .text()
         .await
         .unwrap();
-    let history_id = history_html
-        .split("href=\"/history/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .expect("expected at least one committed practice on history page");
-    let practice_id: i32 = history_id.parse().expect("practice id should be numeric");
+    let practice_id: i32 = history_html
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if s.contains("/detail") && id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                id.parse().ok()
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected at least one committed practice detail link");
 
     // Get a rower ID from the committed lineup via the no-show checkbox
     // values on the history detail page: name="no_show" value="{rower_id}".
     let detail_html = client
-        .get(format!("{base}/history/{practice_id}"))
+        .get(format!("{base}/practices/{practice_id}/detail"))
         .send()
         .await
         .unwrap()

@@ -405,6 +405,6 @@ pub(crate) async fn dismiss_plan_handler(
         None,
     );
 
-    let redirect = format!("/history/{practice_id}");
+    let redirect = format!("/practices/{practice_id}/detail");
     Ok(Redirect::to(&redirect))
 }

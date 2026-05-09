@@ -79,8 +79,8 @@ pub(crate) fn availability_content(
                 div #stale-warning class="rounded px-4 py-3 text-sm" style="background: color-mix(in oklch, var(--warn) 10%, var(--paper)); border-left: 4px solid var(--warn); color: var(--ink)" {
                     strong { "Heads up: " }
                     "Your change affects a "
-                    a href={"/history/" (pid)}
-                      hx-get={"/history/" (pid)}
+                    a href={"/practices/" (pid) "/detail"}
+                      hx-get={"/practices/" (pid) "/detail"}
                       hx-target="#content"
                       hx-push-url="true"
                       class="font-semibold underline" style="color: var(--warn)" {
@@ -126,8 +126,8 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
                     span class="font-serif-heading font-medium text-[15px]" style="color: var(--ink)" { (row.date) }
                     span class="font-mono-stat text-[11px]" style="color: var(--muted)" { (weekday) }
                     @if row.has_committed {
-                        a href={"/history/" (row.practice_id)}
-                          hx-get={"/history/" (row.practice_id)}
+                        a href={"/practices/" (row.practice_id) "/detail"}
+                          hx-get={"/practices/" (row.practice_id) "/detail"}
                           hx-target="#content"
                           hx-push-url="true"
                           class="stat-badge text-[9px] cursor-pointer" style="color: var(--good); background: color-mix(in oklch, var(--good) 10%, var(--paper)); border-color: color-mix(in oklch, var(--good) 22%, var(--rule))" {

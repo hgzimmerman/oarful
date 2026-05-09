@@ -4,10 +4,8 @@
 //! a read-only lineup display with a bench sidebar, summary strip, and
 //! boat cards styled with side-tinted seat tags.
 
-use std::collections::HashSet;
-
 use chrono::NaiveDate;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use lineup_db::{
     availability::types::AvailabilityStatus,
@@ -26,66 +24,8 @@ use maud::{html, Markup};
 
 use super::layout::crossed_oars_icon;
 
-use super::layout::{empty_state, page_header};
+use super::layout::empty_state;
 use super::solve::{commit_meter, seat_badge, seat_label};
-
-// ── List view ────────────────────────────────────────────────────────
-
-pub(crate) fn list_content(practices: &[Practice], stale_ids: &HashSet<PracticeId>) -> Markup {
-    html! {
-        (page_header("Committed practices", Some("Lineups that have been saved and sent out.")))
-        div class="px-4 sm:px-8 py-6 max-w-3xl mx-auto" {
-            @if practices.is_empty() {
-                (empty_state("No practices committed yet."))
-            } @else {
-                div class="bg-paper rounded-lg shadow-soft divide-y divide-rule-2" {
-                    @for p in practices {
-                        (row(p, stale_ids.contains(&p.id)))
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn row(p: &Practice, is_stale: bool) -> Markup {
-    let href = format!("/history/{}", p.id);
-    let weekday = p.date.format("%A").to_string();
-    html! {
-        a href=(href)
-          class="flex items-center justify-between px-6 py-4 hover:bg-paper-2 transition cursor-pointer"
-          hx-get=(href)
-          hx-target="#content"
-          hx-push-url="true" {
-            div {
-                div class="flex items-center gap-2" {
-                    span class="font-semibold text-ink" { (p.date) }
-                    @if is_stale {
-                        span class="text-xs bg-warn/15 text-warn px-1.5 py-0.5 rounded-full" {
-                            "Availability changed"
-                        }
-                    }
-                }
-                div class="text-sm text-ink-3" {
-                    (weekday)
-                    @if let Some(ref notes) = p.notes {
-                        @if !notes.is_empty() {
-                            " — "
-                            span class="text-muted italic" {
-                                @if notes.len() > 60 {
-                                    (&notes[..60]) "…"
-                                } @else {
-                                    (notes)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            span class="text-muted" "aria-hidden"="true" { "→" }
-        }
-    }
-}
 
 // ── Detail view ──────────────────────────────────────────────────────
 
@@ -344,7 +284,7 @@ pub(crate) fn detail_content(
                         span class="font-mono-stat text-[9.5px] tracking-[0.16em] uppercase font-semibold block py-2 pl-4" style="color: var(--accent)" {
                             "Lineups"
                         }
-                        form id="noshow-form" method="get" action={"/solve/" (practice_id)} {
+                        form id="noshow-form" method="get" action={"/practices/" (practice_id) "/lineup"} {
                             div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr))" {
                                 @for c in committed {
                                     (boat_card(snapshot, c, force_cox_stern, &stale_rowers, is_coach, oar_assignments.get(&c.lineup.boat_id).map(|(_, name)| name.as_str())))
@@ -404,7 +344,7 @@ pub(crate) fn notes_display(practice: &Practice) -> Markup {
 }
 
 fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
-    let action = format!("/history/{practice_id}/notes");
+    let action = format!("/practices/{practice_id}/notes");
     html! {
         form
             hx-post=(action)
@@ -801,7 +741,7 @@ fn edit_lineup_js(
             noshows.forEach(function(rid){{
                 parts.push('no_show=' + rid);
             }});
-            window.location.href = '/solve/{practice_id}?' + parts.join('&');
+            window.location.href = '/practices/{practice_id}/lineup?' + parts.join('&');
         }})()"#
     )
 }

@@ -27,7 +27,7 @@ pub(super) fn knobs_form(
     } else {
         "Generate lineup"
     };
-    let action = format!("/solve/{practice_id}");
+    let action = format!("/practices/{practice_id}/lineup");
 
     // Last run summary
     let last_run_label = if let Some(result) = solve_result {
@@ -316,7 +316,10 @@ fn preset_url_with(practice_id: PracticeId, knobs: &SolveKnobs, new_preset: &str
     for bl in &knobs.boat_lock {
         parts.push(format!("boat_lock={bl}"));
     }
-    format!("/solve/{practice_id}/preset-bar?{}", parts.join("&"))
+    format!(
+        "/practices/{practice_id}/lineup/preset-bar?{}",
+        parts.join("&")
+    )
 }
 
 /// Render the preset list for HTMX `outerHTML` swaps.

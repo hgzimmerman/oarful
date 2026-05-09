@@ -7,11 +7,17 @@ async fn generate_lineup(client: &fantoccini::Client, base_url: &str) {
     // Find a solve link from the practices page.
     let source = client.source().await.unwrap();
     let solve_path = source
-        .split("href=\"/solve/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .map(|id| format!("/solve/{id}"))
-        .expect("expected a /solve/ link on the practices page");
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                Some(format!("/practices/{id}/lineup"))
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected a lineup link on the practices page");
 
     // Generate with budget=1, partial=1 to allow partial fills.
     let url = format!(

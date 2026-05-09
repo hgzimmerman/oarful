@@ -1,69 +1,22 @@
-//! `GET /history` — list of committed practices.
-//! `GET /history/{id}` — detail view for one committed practice.
-//! `POST /history/{id}/notes` — update practice notes.
+//! `GET /practices/{id}/detail` — detail view for one committed practice.
+//! `POST /practices/{id}/notes` — update practice notes.
 
 use axum::{extract::Path, response::Html, Extension, Form};
 use axum_extra::extract::CookieJar;
 use axum_htmx::HxRequest;
 use lineup_db::{
     app_user::Role,
-    availability::Availability,
     lineup::Lineup,
     practice::{Practice, PracticeId},
     snapshot::DbSnapshot,
 };
 use serde::Deserialize;
-use std::collections::HashSet;
 
 use crate::{
     handlers::{internal_error, ErrorResponse},
     state::TenantContext,
     templates,
 };
-
-#[tracing::instrument(level = "debug", skip_all, err)]
-pub(crate) async fn list_handler(
-    jar: CookieJar,
-    Extension(tenant): Extension<TenantContext>,
-    hx: HxRequest,
-) -> Result<Html<String>, ErrorResponse> {
-    let team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
-    let (practices, stale_ids) = tenant
-        .db
-        .with_conn(move |conn| {
-            let practices = Practice::list_committed(conn, team_id)?;
-            let pids: Vec<PracticeId> = practices.iter().map(|p| p.id).collect();
-
-            let assume_available = lineup_db::team::Team::get(conn, team_id)?
-                .map(|t| t.assume_available.as_bool())
-                .unwrap_or(false);
-
-            // For each committed practice, check if any placed rower is no
-            // longer available — that makes the lineup "stale".
-            let committed_rowers = Lineup::committed_rower_ids_for_practices(conn, &pids)?;
-            let avail = Availability::map_for_practices(conn, &pids)?;
-
-            let stale_ids: HashSet<PracticeId> = committed_rowers
-                .iter()
-                .filter(|(pid, rower_ids)| {
-                    rower_ids.iter().any(|rid| {
-                        !avail
-                            .get(&(*rid, **pid))
-                            .map(|s| s.is_available())
-                            .unwrap_or(assume_available)
-                    })
-                })
-                .map(|(pid, _)| *pid)
-                .collect();
-
-            Ok((practices, stale_ids))
-        })
-        .await
-        .map_err(internal_error)?;
-
-    let content = templates::history::list_content(&practices, &stale_ids);
-    Ok(super::maybe_page_authed("Lineups", content, hx, &tenant))
-}
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub(crate) async fn detail_handler(

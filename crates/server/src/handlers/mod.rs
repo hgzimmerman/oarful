@@ -141,69 +141,86 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/practices/{id}/dismiss-plan",
             post(practices::dismiss_plan_handler),
         )
-        .route("/solve/{id}", get(solve::view_handler))
-        .route("/solve/{id}/stream", get(solve::stream_handler))
-        .route("/solve/{id}/editor", get(solve::editor_handler))
-        .route("/solve/{id}/preset-bar", get(solve::preset_bar_handler))
+        .route("/practices/{id}/lineup", get(solve::view_handler))
+        .route("/practices/{id}/lineup/stream", get(solve::stream_handler))
+        .route("/practices/{id}/lineup/editor", get(solve::editor_handler))
+        .route(
+            "/practices/{id}/lineup/preset-bar",
+            get(solve::preset_bar_handler),
+        )
         .route("/solver-profile", post(solve::save_profile_handler))
         .route("/solver-profile/edit", get(solve::edit_profile_handler))
         .route(
             "/solver-profile/{name}",
             delete(solve::delete_profile_handler),
         )
-        .route("/commit/{id}", post(solve::commit_handler))
-        .route("/commit-lineup/{id}", post(solve::commit_lineup_handler))
-        .route("/draft-lineup/{id}", post(solve::draft_lineup_handler))
-        .route("/clear-draft/{id}", post(solve::clear_draft_handler))
-        .route("/history", get(history::list_handler))
-        .route("/history/{id}", get(history::detail_handler))
-        .route("/history/{id}/notes", post(history::notes_handler))
-        .route("/history/{id}/timeline/edit", get(timeline::open_editor))
-        .route("/history/{id}/timeline/add", post(timeline::add_block))
+        .route("/practices/{id}/commit", post(solve::commit_handler))
         .route(
-            "/history/{id}/timeline/delete",
+            "/practices/{id}/commit-lineup",
+            post(solve::commit_lineup_handler),
+        )
+        .route(
+            "/practices/{id}/draft-lineup",
+            post(solve::draft_lineup_handler),
+        )
+        .route(
+            "/practices/{id}/clear-draft",
+            post(solve::clear_draft_handler),
+        )
+        .route("/practices/{id}/detail", get(history::detail_handler))
+        .route("/practices/{id}/notes", post(history::notes_handler))
+        .route("/practices/{id}/timeline/edit", get(timeline::open_editor))
+        .route("/practices/{id}/timeline/add", post(timeline::add_block))
+        .route(
+            "/practices/{id}/timeline/delete",
             post(timeline::delete_block),
         )
         .route(
-            "/history/{id}/timeline/patch-block",
+            "/practices/{id}/timeline/patch-block",
             post(timeline::patch_block),
         )
         .route(
-            "/history/{id}/timeline/patch-segment",
+            "/practices/{id}/timeline/patch-segment",
             post(timeline::patch_segment),
         )
         .route(
-            "/history/{id}/timeline/target",
+            "/practices/{id}/timeline/target",
             post(timeline::update_target),
         )
-        .route("/history/{id}/timeline/save", post(timeline::save_timeline))
-        .route("/history/{id}/timeline/close", post(timeline::close_editor))
         .route(
-            "/history/{id}/timeline/reorder",
+            "/practices/{id}/timeline/save",
+            post(timeline::save_timeline),
+        )
+        .route(
+            "/practices/{id}/timeline/close",
+            post(timeline::close_editor),
+        )
+        .route(
+            "/practices/{id}/timeline/reorder",
             post(timeline::reorder_block),
         )
         .route(
-            "/history/{id}/timeline/duplicate",
+            "/practices/{id}/timeline/duplicate",
             post(timeline::duplicate_block),
         )
         .route(
-            "/history/{id}/timeline/group-add",
+            "/practices/{id}/timeline/group-add",
             post(timeline::group_add_segment),
         )
         .route(
-            "/history/{id}/timeline/group-delete",
+            "/practices/{id}/timeline/group-delete",
             post(timeline::group_delete_segment),
         )
         .route(
-            "/history/{id}/timeline/group-patch",
+            "/practices/{id}/timeline/group-patch",
             post(timeline::group_patch),
         )
         .route(
-            "/history/{id}/timeline/group-reorder",
+            "/practices/{id}/timeline/group-reorder",
             post(timeline::group_reorder_segment),
         )
         .route(
-            "/history/{id}/timeline/template",
+            "/practices/{id}/timeline/template",
             post(timeline::insert_template),
         )
         // Club hub (Coach+)

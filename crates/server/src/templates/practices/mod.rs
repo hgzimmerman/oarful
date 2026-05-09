@@ -178,7 +178,7 @@ fn phase_badge(phase: PracticePhase, is_stale: bool) -> Markup {
 fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Markup> {
     let pid = pwp.practice.id;
     if pwp.is_stale && !matches!(pwp.phase, PracticePhase::Created | PracticePhase::Cancelled) {
-        let href = format!("/solve/{pid}");
+        let href = format!("/practices/{pid}/lineup");
         return Some(html! {
             a href=(href)
               hx-get=(href)
@@ -206,7 +206,7 @@ fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Mar
                     }
                 })
             } else {
-                let href = format!("/solve/{pid}");
+                let href = format!("/practices/{pid}/lineup");
                 Some(html! {
                     a href=(href)
                       hx-get=(href)
@@ -219,7 +219,7 @@ fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Mar
             }
         }
         PracticePhase::Committed => {
-            let href = format!("/history/{pid}");
+            let href = format!("/practices/{pid}/detail");
             Some(html! {
                 a href=(href)
                   hx-get=(href)
@@ -256,12 +256,12 @@ fn unified_row(pwp: &PracticeWithPhase, is_coach: bool, assume_available: bool) 
     let href = match pwp.phase {
         PracticePhase::Created => {
             if is_coach {
-                Some(format!("/solve/{}", p.id))
+                Some(format!("/practices/{}/lineup", p.id))
             } else {
                 None
             }
         }
-        _ => Some(format!("/history/{}", p.id)),
+        _ => Some(format!("/practices/{}/detail", p.id)),
     };
 
     html! {
@@ -356,8 +356,8 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                             && pwp.yes_count < 4;
                         @if needs_reminders {
                             // Primary is "Send reminders", so secondary is "Generate lineup".
-                            a href={"/solve/" (pid)}
-                              hx-get={"/solve/" (pid)}
+                            a href={"/practices/" (pid) "/lineup"}
+                              hx-get={"/practices/" (pid) "/lineup"}
                               hx-target="#content"
                               hx-push-url="true"
                               class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
@@ -386,8 +386,8 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                                 "Send without plan"
                             }
                         }
-                        a href={"/solve/" (pid)}
-                          hx-get={"/solve/" (pid)}
+                        a href={"/practices/" (pid) "/lineup"}
+                          hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
@@ -395,15 +395,15 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                         }
                     }
                     PracticePhase::Ready => {
-                        a href={"/history/" (pid)}
-                          hx-get={"/history/" (pid)}
+                        a href={"/practices/" (pid) "/detail"}
+                          hx-get={"/practices/" (pid) "/detail"}
                           hx-target="#content"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit plan"
                         }
-                        a href={"/solve/" (pid)}
-                          hx-get={"/solve/" (pid)}
+                        a href={"/practices/" (pid) "/lineup"}
+                          hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
@@ -421,8 +421,8 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                                 "Re-send lineups"
                             }
                         }
-                        a href={"/solve/" (pid)}
-                          hx-get={"/solve/" (pid)}
+                        a href={"/practices/" (pid) "/lineup"}
+                          hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {

@@ -46,7 +46,7 @@ pub(crate) fn summary(tl: &Timeline, practice_id: PracticeId) -> Markup {
                         }
                         button class="font-mono-stat text-[10.5px] hover:underline cursor-pointer px-1"
                                style="color: var(--muted); background: none; border: none"
-                               hx-get={"/history/" (practice_id) "/timeline/edit"}
+                               hx-get={"/practices/" (practice_id) "/timeline/edit"}
                                hx-target="#timeline-section"
                                hx-swap="outerHTML" {
                             "edit plan"
@@ -184,7 +184,7 @@ fn editor_inner(
         None => Sel::None,
     };
 
-    let base_url = format!("/history/{practice_id}/timeline");
+    let base_url = format!("/practices/{practice_id}/timeline");
 
     html! {
         div id="timeline-section" class="rounded-lg pl-4 py-1 mb-4" style="border-left: 3px solid var(--accent)" {

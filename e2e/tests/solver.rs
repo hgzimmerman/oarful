@@ -11,13 +11,19 @@ async fn generate_and_commit_lineup() {
     // Find a solve link from the practices page to get a practice ID.
     let source = client.source().await.unwrap();
     let solve_path = source
-        .split("href=\"/solve/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .map(|id| format!("/solve/{id}"))
-        .expect("expected a /solve/ link on the practices page");
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                Some(format!("/practices/{id}/lineup"))
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected a lineup link on the practices page");
 
-    // Navigate directly to the solve page (avoid HTMX partial swap issues).
+    // Navigate directly to the lineup page (avoid HTMX partial swap issues).
     client
         .goto(&format!("{}{}", instance.base_url(), solve_path))
         .await
@@ -80,13 +86,16 @@ async fn generate_and_commit_lineup() {
     for _ in 0..20 {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         if let Ok(url) = client.current_url().await {
-            if url.path().starts_with("/history/") {
+            if url.path().contains("/detail") {
                 redirected = true;
                 break;
             }
         }
     }
-    assert!(redirected, "expected redirect to /history/ after commit");
+    assert!(
+        redirected,
+        "expected redirect to practice detail after commit"
+    );
 
     // Verify committed lineup content.
     let source = client.source().await.unwrap();
@@ -107,11 +116,17 @@ async fn demo_solves_with_default_knobs() {
 
     let source = client.source().await.unwrap();
     let solve_path = source
-        .split("href=\"/solve/")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .map(|id| format!("/solve/{id}"))
-        .expect("expected a /solve/ link");
+        .split("href=\"/practices/")
+        .filter_map(|s| {
+            let id = s.split('/').next()?;
+            if id.chars().all(|c| c.is_ascii_digit()) && !id.is_empty() {
+                Some(format!("/practices/{id}/lineup"))
+            } else {
+                None
+            }
+        })
+        .next()
+        .expect("expected a lineup link");
 
     // Default knobs: 5s budget, partial=0 (strict)
     let url = format!(

@@ -39,8 +39,8 @@ async fn create_practice() {
     // It should link to the solve page.
     let source = client.source().await.unwrap();
     assert!(
-        source.contains("/solve/"),
-        "expected solve link for the new practice"
+        source.contains("/lineup"),
+        "expected lineup link for the new practice"
     );
 
     client.close().await.unwrap();
