@@ -81,6 +81,27 @@ pub(crate) async fn stream_handler(
     let pinned_rowers: std::collections::HashSet<lineup_db::rower::types::RowerId> =
         knobs.pin.iter().map(|t| t.rower_id).collect();
 
+    let stream_oar_sets = tenant
+        .db
+        .with_conn(|conn| {
+            let sets = lineup_db::oar_set::OarSet::list_active(conn)?;
+            Ok(sets
+                .into_iter()
+                .map(|os| (os.id, os.name, os.oar_count))
+                .collect())
+        })
+        .await
+        .unwrap_or_else(|_| Vec::new());
+    let stream_oar_assignments = {
+        let pid = practice_id;
+        tenant
+            .db
+            .with_conn(move |conn| {
+                lineup_db::oar_set::PracticeBoatOars::list_for_practice_with_names(conn, pid)
+            })
+            .await
+            .unwrap_or_else(|_| std::collections::HashMap::new())
+    };
     let flags = templates::solve::DisplayFlags {
         show_attributes: tenant.show_attributes(),
         force_cox_stern: tenant.config.force_cox_stern,
@@ -91,6 +112,11 @@ pub(crate) async fn stream_handler(
         was_pinned_boats: SolveKnobs::boat_id_set(&knobs.boat_was_pin),
         locked_boats: SolveKnobs::boat_id_set(&knobs.boat_lock),
         boats_in_use_by: std::collections::HashMap::new(),
+        oar_sets: stream_oar_sets,
+        // Usage is recomputed on the next editor rerender (which knows
+        // actual placements). The streamed render is transient.
+        oar_usage: std::collections::HashMap::new(),
+        oar_assignments: stream_oar_assignments,
     };
 
     // Spawn solver on rayon, bridging to a tokio channel.

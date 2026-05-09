@@ -6,6 +6,11 @@ Oar sets are team equipment assigned to boats per practice. Rowers need
 to know which oars to bring to the dock, so this information appears in
 the practice editor, history, and kiosk views.
 
+Oar sets have a total count and can be split across multiple boats.
+For example, a set of 8 sweep oars can serve one 8+ or be split between
+two 4+s. The system tracks how many oars remain available from each set
+and warns when a set is over-allocated.
+
 ---
 
 ## Data Model
@@ -13,11 +18,12 @@ the practice editor, history, and kiosk views.
 ```
 oar_set (tenant DB)
   id          INTEGER PRIMARY KEY
-  team_id     INTEGER NOT NULL REFERENCES team(id)
+  team_id     INTEGER NOT NULL REFERENCES team(id) ON DELETE CASCADE
   name        TEXT NOT NULL              -- e.g. "Blue", "Pink", "Gold White"
+  oar_count   INTEGER NOT NULL           -- total oars in this set (e.g. 8, 4)
   notes       TEXT                       -- e.g. "shorter shafts", "heavy blades"
   active      INTEGER NOT NULL DEFAULT 1 -- soft-delete
-  created_at  TEXT NOT NULL
+  created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 
   UNIQUE(team_id, name)
 ```
@@ -32,16 +38,30 @@ practice_boat_oars (tenant DB)
   UNIQUE(practice_id, boat_id)
 ```
 
+### Oar consumption per boat
+
+Each boat consumes `seat_count * oars_per_seat` oars from its assigned
+set. For a given practice, the total consumed from an oar set is the sum
+across all boats assigned that set. If total consumed > `oar_count`, the
+set is over-allocated and the UI shows a warning.
+
+Examples:
+- 8+ sweep (8 seats, 1 oar/seat) = 8 oars from the set
+- 4+ sweep (4 seats, 1 oar/seat) = 4 oars — two 4+s can share an 8-oar set
+- 2x scull (2 seats, 2 oars/seat) = 4 oars
+- 1x scull (1 seat, 2 oars/seat) = 2 oars
+
 ### Notes
 
 - Oar sets belong to a team. Different teams may name their oars
   differently — no shared/global oar pool.
 - `name` is free-text. No color enum — teams may use any naming
   convention.
+- `oar_count` is the total physical oars in the set.
 - `notes` is optional, for distinguishing special equipment.
-- One oar set per boat per practice. If a boat needs mixed oars,
-  that's noted in the oar set's `notes` or by creating a combined
-  set entry.
+- Multiple boats per practice can share the same oar set (splitting).
+  The `UNIQUE(practice_id, boat_id)` constraint ensures one oar set
+  per boat, but the same oar set can appear on multiple boats.
 - `active` flag for soft-delete (oars break, get retired).
 
 ---
@@ -60,9 +80,24 @@ oar_set_preference (tenant DB)
   UNIQUE(oar_set_id, boat_id)
 ```
 
-When a coach assigns oars in the practice editor, the UI can suggest
-oar sets sorted by their preference for the selected boat. This is a
-convenience, not a constraint — coaches can override freely.
+### Auto-suggest logic
+
+When a coach assigns oars to a boat in the practice editor, the
+dropdown shows oar sets sorted by:
+
+1. Oar sets with a preference for this boat (by priority order)
+2. All other active oar sets alphabetically
+
+Each option shows remaining availability: e.g. "Blue (4/8 available)".
+Sets that would be over-allocated are shown but marked with a warning.
+Sets with zero remaining are grayed out but still selectable (coach
+override).
+
+The system could also auto-distribute: given the boats in use for a
+practice, assign oar sets greedily by preference priority, consuming
+from highest-priority first and splitting sets across multiple boats
+when the set has enough oars. This is a convenience — coaches can
+always override.
 
 ---
 
@@ -70,17 +105,19 @@ convenience, not a constraint — coaches can override freely.
 
 ### Oar Set CRUD — `/oars` (Coach+ gated)
 
-- List of oar sets for the current team: name, notes, status.
+- List of oar sets for the current team: name, oar count, notes, status.
 - Add/edit/deactivate. Same inline-edit pattern as boats page.
 - Preference management: on the oar set detail/edit view, a sortable
   list of boats showing priority order. "Add boat preference" dropdown.
 
 ### Practice Editor
 
-- Per-boat dropdown or pill selector for oar set assignment.
-- Dropdown sorted by: (1) oar sets with a preference for this boat
-  (by priority), then (2) all other active oar sets alphabetically.
-- Selected oar set name displayed on the boat card.
+- Per-boat dropdown for oar set assignment.
+- Dropdown sorted by preference priority, then alphabetically.
+- Shows remaining oar count per set (accounting for other boats in
+  the same practice already using that set).
+- Selected oar set name displayed on the boat card header.
+- Over-allocation warning (amber) if total consumed exceeds oar_count.
 
 ### History Detail
 
@@ -104,6 +141,7 @@ convenience, not a constraint — coaches can override freely.
 ### Phase 2: Practice Integration
 - `practice_boat_oars` table + migration
 - Oar set selector in practice editor (per-boat)
+- Remaining-oar tracking and over-allocation warnings
 - Oar set display on history detail
 
 ### Phase 3: Kiosk Integration

@@ -75,6 +75,54 @@ fn seed_demo_inner(conn: &mut SqliteConnection) -> Result<DemoSeed, diesel::resu
         boat_ids.push(inserted.id);
     }
 
+    // Oar sets with boat preferences
+    {
+        use crate::oar_set::{NewOarSet, OarSet, OarSetPreference};
+        let oar_specs: Vec<(NewOarSet, Vec<usize>)> = vec![
+            (
+                NewOarSet {
+                    name: "Blue".into(),
+                    oar_count: 8,
+                    notes: None,
+                },
+                vec![0], // prefers Titan
+            ),
+            (
+                NewOarSet {
+                    name: "Gold".into(),
+                    oar_count: 8,
+                    notes: None,
+                },
+                vec![1], // prefers Athena
+            ),
+            (
+                NewOarSet {
+                    name: "Pink".into(),
+                    oar_count: 8,
+                    notes: None,
+                },
+                vec![2], // prefers Demeter
+            ),
+            (
+                NewOarSet {
+                    name: "White".into(),
+                    oar_count: 4,
+                    notes: Some("shorter shafts".into()),
+                },
+                vec![3, 4], // prefers Artemis, then Hestia
+            ),
+        ];
+        for (new_oar, pref_boat_indices) in oar_specs {
+            let oar = OarSet::insert(conn, new_oar)?;
+            let prefs: Vec<_> = pref_boat_indices
+                .iter()
+                .enumerate()
+                .map(|(priority, &boat_idx)| (boat_ids[boat_idx], priority as i32))
+                .collect();
+            OarSetPreference::replace_for_oar_set(conn, oar.id, &prefs)?;
+        }
+    }
+
     let rower_specs = demo_rowers();
     let rower_names: Vec<String> = rower_specs.iter().map(|r| r.name.clone()).collect();
     let mut rower_ids = Vec::new();

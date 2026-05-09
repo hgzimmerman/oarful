@@ -47,6 +47,36 @@ pub(crate) struct DisplayFlags {
     /// Boats currently in use by another team's committed lineup.
     /// Maps boat_id → team name for display.
     pub(crate) boats_in_use_by: HashMap<BoatId, String>,
+    /// Active oar sets available for assignment: (id, name, total_count).
+    pub(crate) oar_sets: Vec<(lineup_db::oar_set::types::OarSetId, String, i32)>,
+    /// Current oar assignments for this practice: boat_id → (oar_set_id, name).
+    pub(crate) oar_assignments: HashMap<BoatId, (lineup_db::oar_set::types::OarSetId, String)>,
+    /// Pre-computed: oar_set_id → total oars consumed across all boats in this practice.
+    pub(crate) oar_usage: HashMap<lineup_db::oar_set::types::OarSetId, i32>,
+}
+
+impl DisplayFlags {
+    /// Compute oar usage from assignments and the boat list.
+    /// Only counts boats in `filled_boats` (boats that have at least one rower placed).
+    pub(crate) fn compute_oar_usage(
+        assignments: &HashMap<BoatId, (lineup_db::oar_set::types::OarSetId, String)>,
+        boats: &[lineup_db::boat::Boat],
+        filled_boats: &HashSet<BoatId>,
+    ) -> HashMap<lineup_db::oar_set::types::OarSetId, i32> {
+        let mut usage: HashMap<lineup_db::oar_set::types::OarSetId, i32> = HashMap::new();
+        for (boat_id, (oar_set_id, _)) in assignments {
+            if !filled_boats.contains(boat_id) {
+                continue;
+            }
+            let oars_needed = boats
+                .iter()
+                .find(|b| b.id == *boat_id)
+                .map(|b| b.seat_count.as_int() * b.oars_per_seat.as_int())
+                .unwrap_or(0);
+            *usage.entry(*oar_set_id).or_insert(0) += oars_needed;
+        }
+        usage
+    }
 }
 
 /// A boat in the unified lineup editor, with optional seat assignments.
@@ -337,12 +367,44 @@ pub(crate) fn lineup_editor(
                                "@click"="deselectAllBoats()" { "none" }
                     }
                 }
+                @if !flags.oar_sets.is_empty() {
+                    @let active_boat_ids: Vec<String> = editor.boats.iter()
+                        .filter(|eb| eb.active)
+                        .map(|eb| eb.boat.id.to_string())
+                        .collect();
+                    span class="inline-flex items-center gap-1 ml-1 no-print" {
+                        span class="text-xs text-rule" "aria-hidden"="true" { "\u{00b7}" }
+                        form class="inline" hx-post="/oars/auto-assign" hx-swap="none"
+                             "hx-on::after-request"="oarAutoAssignDone()" {
+                            input type="hidden" name="practice_id" value=(practice_id);
+                            @for bid in &active_boat_ids {
+                                input type="hidden" name="boat_ids" value=(bid);
+                            }
+                            button type="submit"
+                                   class="px-2 py-1 text-xs font-medium font-mono-stat rounded cursor-pointer"
+                                   style="color: var(--ink-2)" {
+                                "auto-assign oars"
+                            }
+                        }
+                    }
+                    script { (maud::PreEscaped("
+                        function oarAutoAssignDone() {
+                            var ed = document.getElementById('lineup-editor');
+                            if (ed) {
+                                var d = Alpine.$data(ed);
+                                if (d && d.gatherState) {
+                                    htmx.ajax('GET', ed.dataset.editorUrl + '?' + d.gatherState(), {target: ed, swap: 'outerHTML'});
+                                }
+                            }
+                        }
+                    ")) }
+                }
             }
 
             // Boat cards (all rendered; inactive ones hidden via style)
             div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4" {
                 @for eb in &editor.boats {
-                    (editor_boat_card(snapshot, eb, flags))
+                    (editor_boat_card(snapshot, practice_id, eb, flags))
                 }
             }
 
@@ -359,7 +421,12 @@ pub(crate) fn lineup_editor(
 }
 
 /// Render one boat card in the unified editor.
-fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags) -> Markup {
+fn editor_boat_card(
+    snapshot: &DbSnapshot,
+    practice_id: PracticeId,
+    eb: &EditorBoat,
+    flags: &DisplayFlags,
+) -> Markup {
     let boat = eb.boat;
     let seat_count = boat.seat_count.as_int();
     let cox_at_top = cox_first(snapshot, boat.id, flags.force_cox_stern);
@@ -418,6 +485,31 @@ fn editor_boat_card(snapshot: &DbSnapshot, eb: &EditorBoat, flags: &DisplayFlags
                         span "aria-hidden"="true" { "\u{00b7}" }
                         @let filled = seats.iter().filter(|(_, r)| r.is_some()).count();
                         span { (filled) "/" (seats.len()) " seated" }
+                    }
+                    @if !flags.oar_sets.is_empty() {
+                        @let current_oar = flags.oar_assignments.get(&boat.id);
+                        @let oar_label = current_oar.map(|(_, name)| name.as_str()).unwrap_or("—");
+                        @let current_over = current_oar
+                            .and_then(|(oid, _)| {
+                                let total = flags.oar_sets.iter().find(|(id, _, _)| id == oid).map(|(_, _, c)| *c).unwrap_or(0);
+                                let used = flags.oar_usage.get(oid).copied().unwrap_or(0);
+                                if used > total { Some(()) } else { None }
+                            })
+                            .is_some();
+                        button type="button"
+                               class="font-mono-stat text-[10px] mt-1 no-print px-1.5 py-0.5 rounded cursor-pointer border"
+                               style=(if current_over {
+                                   "border-color: var(--warn); color: var(--warn); background: color-mix(in oklch, var(--warn) 8%, var(--paper))"
+                               } else if current_oar.is_some() {
+                                   "border-color: var(--rule); color: var(--ink-2); background: var(--paper-2)"
+                               } else {
+                                   "border-color: var(--rule-2); color: var(--muted); border-style: dashed"
+                               })
+                               hx-get=(format!("/oars/pick?practice_id={}&boat_id={}", practice_id, boat.id))
+                               hx-target="body"
+                               hx-swap="beforeend" {
+                            @if current_over { "oars: " (oar_label) " !" } @else { "oars: " (oar_label) }
+                        }
                     }
                 }
                 // Transfer button

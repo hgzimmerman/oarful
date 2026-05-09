@@ -29,6 +29,7 @@ pub(crate) mod boats;
 pub(crate) mod demo;
 pub(crate) mod history;
 pub(crate) mod my;
+pub(crate) mod oar_sets;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;
@@ -235,6 +236,7 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/admin/fleet/defaults",
             get(admin::fleet_defaults_handler).post(teams::fleet_matrix_save_handler),
         )
+        .route("/admin/fleet/oars", get(admin::fleet_oars_handler))
         .route("/admin/audit", get(admin::audit_handler))
         .route(
             "/admin/settings",
@@ -281,6 +283,29 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(|| async { Redirect::permanent("/admin/teams") }).post(teams::create_handler),
         )
         // Detail routes (unchanged)
+        // Oar sets (PD+, lives under Admin > Fleet > Oar sets)
+        .route(
+            "/oars",
+            get(|| async { Redirect::permanent("/admin/fleet/oars") })
+                .post(oar_sets::create_handler),
+        )
+        .route("/oars/new", get(oar_sets::new_handler))
+        .route(
+            "/oars/{id}",
+            get(oar_sets::detail_handler).post(oar_sets::update_handler),
+        )
+        .route("/oars/{id}/edit", get(oar_sets::edit_handler))
+        .route(
+            "/oars/{id}/toggle-active",
+            post(oar_sets::toggle_active_handler),
+        )
+        .route(
+            "/oars/{id}/preferences",
+            post(oar_sets::preferences_handler),
+        )
+        .route("/oars/pick", get(oar_sets::pick_handler))
+        .route("/oars/assign", post(oar_sets::assign_handler))
+        .route("/oars/auto-assign", post(oar_sets::auto_assign_handler))
         .route("/boats/new", get(boats::new_handler))
         .route("/boats/export.csv", get(boats::export_csv_handler))
         .route(
