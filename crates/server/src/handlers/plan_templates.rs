@@ -28,13 +28,18 @@ use crate::{
 use super::timeline::{default_segment, make_id, practice_timeline_url, CommaSep, TimelineForm};
 
 fn next_template_name(existing: &[PlanTemplate]) -> String {
+    let names: Vec<&str> = existing.iter().map(|t| t.name.as_str()).collect();
+    next_available_name(&names)
+}
+
+fn next_available_name(names: &[&str]) -> String {
     let base = "new-template";
-    if !existing.iter().any(|t| t.name == base) {
+    if !names.contains(&base) {
         return base.to_string();
     }
     for n in 2.. {
         let candidate = format!("{base}-{n}");
-        if !existing.iter().any(|t| t.name == candidate) {
+        if !names.iter().any(|&n| n == candidate) {
             return candidate;
         }
     }
@@ -1089,3 +1094,39 @@ tl_mutation_handler!(
         Html(templates::timeline::editor(&tl, base_url, Some(&input.drag_id)).into_string())
     }
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_name_empty() {
+        assert_eq!(next_available_name(&[]), "new-template");
+    }
+
+    #[test]
+    fn next_name_no_collision() {
+        assert_eq!(next_available_name(&["race day", "steady"]), "new-template");
+    }
+
+    #[test]
+    fn next_name_first_collision() {
+        assert_eq!(next_available_name(&["new-template"]), "new-template-2");
+    }
+
+    #[test]
+    fn next_name_multiple_collisions() {
+        assert_eq!(
+            next_available_name(&["new-template", "new-template-2", "new-template-3"]),
+            "new-template-4"
+        );
+    }
+
+    #[test]
+    fn next_name_gap() {
+        assert_eq!(
+            next_available_name(&["new-template", "new-template-3"]),
+            "new-template-2"
+        );
+    }
+}

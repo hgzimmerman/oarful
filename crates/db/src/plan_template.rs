@@ -272,3 +272,183 @@ pub fn set_categories_by_name(
     set_categories(conn, template_id, &ids)?;
     Ok(cats)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::in_memory_conn;
+    use crate::timeline::Timeline;
+
+    fn make_template(conn: &mut SqliteConnection, name: &str) -> PlanTemplate {
+        PlanTemplate::create(
+            conn,
+            NewPlanTemplate {
+                name: name.to_string(),
+                description: String::new(),
+                author_id: None,
+                timeline_json: Timeline::default_empty(90).to_json(),
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn create_and_get() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "Race day");
+        assert_eq!(t.name, "Race day");
+
+        let found = PlanTemplate::get(&mut conn, t.id).unwrap().unwrap();
+        assert_eq!(found.id, t.id);
+        assert_eq!(found.name, "Race day");
+    }
+
+    #[test]
+    fn list_ordered_by_name() {
+        let mut conn = in_memory_conn();
+        make_template(&mut conn, "Zebra");
+        make_template(&mut conn, "Alpha");
+
+        let list = PlanTemplate::list(&mut conn).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "Alpha");
+        assert_eq!(list[1].name, "Zebra");
+    }
+
+    #[test]
+    fn delete() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "Doomed");
+        assert_eq!(PlanTemplate::delete(&mut conn, t.id).unwrap(), 1);
+        assert!(PlanTemplate::get(&mut conn, t.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn update_meta() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "Old name");
+        PlanTemplate::update_meta(&mut conn, t.id, "New name", "A description").unwrap();
+
+        let updated = PlanTemplate::get(&mut conn, t.id).unwrap().unwrap();
+        assert_eq!(updated.name, "New name");
+        assert_eq!(updated.description, "A description");
+    }
+
+    #[test]
+    fn update_timeline() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "T");
+        let tl = t.timeline().unwrap();
+        assert_eq!(tl.target_minutes, 90);
+
+        let mut new_tl = tl;
+        new_tl.target_minutes = 120;
+        PlanTemplate::update_timeline(&mut conn, t.id, &new_tl).unwrap();
+
+        let updated = PlanTemplate::get(&mut conn, t.id).unwrap().unwrap();
+        assert_eq!(updated.timeline().unwrap().target_minutes, 120);
+    }
+
+    #[test]
+    fn timeline_versioned_round_trip() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "V");
+        // Stored as versioned JSON, readable back.
+        let tl = t.timeline().unwrap();
+        assert_eq!(tl.target_minutes, 90);
+        assert!(t.timeline_json.contains("\"version\""));
+    }
+
+    #[test]
+    fn duplicate_copies_categories() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "Original");
+        set_categories_by_name(&mut conn, t.id, &["steady".to_string(), "race".to_string()])
+            .unwrap();
+
+        let dup = PlanTemplate::duplicate(&mut conn, t.id, "Copy".into()).unwrap();
+        assert_eq!(dup.name, "Copy");
+
+        let orig_cats = categories_for(&mut conn, t.id).unwrap();
+        let dup_cats = categories_for(&mut conn, dup.id).unwrap();
+        assert_eq!(orig_cats.len(), 2);
+        assert_eq!(dup_cats.len(), 2);
+        assert_eq!(
+            orig_cats.iter().map(|c| &c.name).collect::<Vec<_>>(),
+            dup_cats.iter().map(|c| &c.name).collect::<Vec<_>>(),
+        );
+    }
+
+    // ── Category tests ───────────────────────────────────────────────
+
+    #[test]
+    fn get_or_create_is_idempotent() {
+        let mut conn = in_memory_conn();
+        let c1 = get_or_create_category(&mut conn, "Steady State").unwrap();
+        let c2 = get_or_create_category(&mut conn, "steady state").unwrap();
+        assert_eq!(c1.id, c2.id);
+        assert_eq!(c1.name, "steady state");
+    }
+
+    #[test]
+    fn set_categories_by_name_creates_and_assigns() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "T");
+        let cats = set_categories_by_name(&mut conn, t.id, &["foo".into(), "bar".into()]).unwrap();
+        assert_eq!(cats.len(), 2);
+
+        let fetched = categories_for(&mut conn, t.id).unwrap();
+        assert_eq!(fetched.len(), 2);
+        let names: Vec<&str> = fetched.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"foo"));
+        assert!(names.contains(&"bar"));
+    }
+
+    #[test]
+    fn set_categories_replaces_previous() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "T");
+        set_categories_by_name(&mut conn, t.id, &["old".into()]).unwrap();
+        set_categories_by_name(&mut conn, t.id, &["new".into()]).unwrap();
+
+        let cats = categories_for(&mut conn, t.id).unwrap();
+        assert_eq!(cats.len(), 1);
+        assert_eq!(cats[0].name, "new");
+    }
+
+    #[test]
+    fn set_categories_skips_empty_strings() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "T");
+        let cats =
+            set_categories_by_name(&mut conn, t.id, &["".into(), "  ".into(), "real".into()])
+                .unwrap();
+        assert_eq!(cats.len(), 1);
+        assert_eq!(cats[0].name, "real");
+    }
+
+    #[test]
+    fn all_categories_lists_alphabetically() {
+        let mut conn = in_memory_conn();
+        get_or_create_category(&mut conn, "zzz").unwrap();
+        get_or_create_category(&mut conn, "aaa").unwrap();
+
+        let all = all_categories(&mut conn).unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].name, "aaa");
+        assert_eq!(all[1].name, "zzz");
+    }
+
+    #[test]
+    fn delete_template_cascades_category_links() {
+        let mut conn = in_memory_conn();
+        let t = make_template(&mut conn, "T");
+        set_categories_by_name(&mut conn, t.id, &["cat".into()]).unwrap();
+        PlanTemplate::delete(&mut conn, t.id).unwrap();
+
+        // Category itself survives, just the link is gone.
+        let all = all_categories(&mut conn).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].name, "cat");
+    }
+}
