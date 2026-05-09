@@ -204,19 +204,6 @@ impl Practice {
             .get_results(conn)
     }
 
-    /// Update the notes on an existing practice row.
-    #[tracing::instrument(level = "debug", skip(conn), err)]
-    pub fn update_notes_by_id(
-        conn: &mut SqliteConnection,
-        id: PracticeId,
-        notes: Option<String>,
-    ) -> Result<Practice, diesel::result::Error> {
-        diesel::update(practice::table.find(id))
-            .set(practice::notes.eq(notes))
-            .returning(Practice::as_returning())
-            .get_result(conn)
-    }
-
     /// Future practices (on or after `today`), ordered ascending.
     /// Excludes cancelled practices.
     #[tracing::instrument(level = "debug", skip_all, err)]
@@ -370,9 +357,7 @@ impl Practice {
 
     /// Parse the stored timeline JSON, if present.
     pub fn timeline(&self) -> Option<Timeline> {
-        self.timeline_json
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
+        self.timeline_json.as_deref().and_then(Timeline::from_json)
     }
 
     /// Save a timeline to this practice.
@@ -382,7 +367,7 @@ impl Practice {
         id: PracticeId,
         timeline: Option<&Timeline>,
     ) -> Result<Practice, diesel::result::Error> {
-        let json = timeline.map(|t| serde_json::to_string(t).expect("timeline serializes"));
+        let json = timeline.map(|t| t.to_json());
         diesel::update(practice::table.find(id))
             .set(practice::timeline_json.eq(json))
             .returning(Practice::as_returning())
@@ -711,18 +696,6 @@ mod tests {
         assert!(Practice::get(&mut conn, PracticeId::new(9999))
             .unwrap()
             .is_none());
-    }
-
-    #[test]
-    fn update_notes() {
-        let mut conn = in_memory_conn();
-        let tid = seed_team(&mut conn);
-        let p = Practice::upsert(&mut conn, tid, d(2026, 5, 1), None, None).unwrap();
-        assert!(p.notes.is_none());
-
-        let updated =
-            Practice::update_notes_by_id(&mut conn, p.id, Some("new note".into())).unwrap();
-        assert_eq!(updated.notes.as_deref(), Some("new note"));
     }
 
     #[test]

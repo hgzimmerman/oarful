@@ -704,6 +704,40 @@ impl Timeline {
     }
 }
 
+// ── Versioned envelope ───────────────────────────────────────────────
+//
+// Wraps Timeline in a version tag for forward-compatible serialization.
+// Deserialization accepts both the versioned envelope and the bare
+// legacy format (target_minutes + items at the top level).
+
+/// Versioned envelope for timeline JSON. Always serialize as V1.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "version")]
+enum TimelineVersioned {
+    #[serde(rename = "1")]
+    V1 { timeline: Timeline },
+}
+
+impl Timeline {
+    /// Serialize to JSON with a version envelope.
+    pub fn to_json(&self) -> String {
+        let envelope = TimelineVersioned::V1 {
+            timeline: self.clone(),
+        };
+        serde_json::to_string(&envelope).unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Deserialize from JSON, accepting both versioned and legacy formats.
+    pub fn from_json(s: &str) -> Option<Self> {
+        // Try versioned envelope first.
+        if let Ok(TimelineVersioned::V1 { timeline }) = serde_json::from_str(s) {
+            return Some(timeline);
+        }
+        // Fall back to legacy bare format.
+        serde_json::from_str(s).ok()
+    }
+}
+
 // ── Summary types ────────────────────────────────────────────────────
 
 /// How to display an item in the summary.
@@ -1189,6 +1223,26 @@ mod tests {
     #[test]
     fn hand_drill_display_matches_serde() {
         assert_display_serde_round_trip(HandDrill::ALL);
+    }
+
+    #[test]
+    fn versioned_round_trip() {
+        let tl = Timeline::default_empty(90);
+        let json = tl.to_json();
+        // Should contain version tag.
+        assert!(json.contains(r#""version":"1""#));
+        let back = Timeline::from_json(&json).unwrap();
+        assert_eq!(tl, back);
+    }
+
+    #[test]
+    fn legacy_json_deserializes() {
+        // Legacy format: bare Timeline without version envelope.
+        let tl = Timeline::default_empty(60);
+        let legacy_json = serde_json::to_string(&tl).unwrap();
+        assert!(!legacy_json.contains("version"));
+        let back = Timeline::from_json(&legacy_json).unwrap();
+        assert_eq!(tl, back);
     }
 
     #[test]

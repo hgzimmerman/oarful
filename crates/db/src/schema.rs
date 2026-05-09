@@ -350,6 +350,35 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    practice_plan_template (id) {
+        id -> Integer,
+        name -> Text,
+        description -> Text,
+        author_id -> Nullable<Integer>,
+        timeline_json -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    category (id) {
+        id -> Integer,
+        name -> Text,
+    }
+}
+
+diesel::table! {
+    plan_template_category (template_id, category_id) {
+        template_id -> Integer,
+        category_id -> Integer,
+    }
+}
+
+diesel::joinable!(practice_plan_template -> app_user (author_id));
+diesel::joinable!(plan_template_category -> practice_plan_template (template_id));
+diesel::joinable!(plan_template_category -> category (category_id));
 diesel::joinable!(onboarding_progress -> app_user (app_user_id));
 diesel::joinable!(oar_set_preference -> oar_set (oar_set_id));
 diesel::joinable!(oar_set_preference -> boat (boat_id));
@@ -411,4 +440,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oar_set,
     oar_set_preference,
     practice_boat_oars,
+    practice_plan_template,
+    category,
+    plan_template_category,
 );

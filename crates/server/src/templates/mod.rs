@@ -16,6 +16,7 @@ pub(crate) mod layout;
 pub(crate) mod my;
 pub(crate) mod oar_sets;
 pub(crate) mod onboarding;
+pub(crate) mod plan_templates;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;

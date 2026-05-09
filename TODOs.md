@@ -326,6 +326,21 @@ turn-around points) appear as markers above the strip bars.
   independently from lineups, with or without specific boats.
 - Multiple practice plans per practice.
 
+#### Plan template category picker UI
+
+Categories are stored as a many-to-many relation (`category` +
+`plan_template_category` tables). The current UI is a comma-separated
+text input with a datalist. Build a filterable category picker: shows
+existing categories as selectable pills, filters as you type, with a
+persistent "create new" option. Same picker reused for drill library
+categories when Phase 2 lands.
+
+#### Drill & piece library (Phase 2)
+
+Reusable saved groups (warmups, drills, pieces) that can be inserted
+into any practice plan or template. Replaces the hardcoded built-in
+templates. See `docs/practice-plan-templates.md` §2 for full spec.
+
 #### Kiosk mode (laptop + TV)
 
 Two kiosk surfaces for boathouse use: a laptop for rower self-check-in

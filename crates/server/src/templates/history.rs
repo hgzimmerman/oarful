@@ -218,53 +218,22 @@ pub(crate) fn detail_content(
                     }
                 }
 
-                // Practice notes
-                @if is_coach {
-                    div class="no-print mb-5" {
-                        (notes_section(practice, practice_id))
-                    }
-                }
-
-                // Plan gate: prompt coach to build a plan or dismiss
-                @if is_coach && !committed.is_empty() {
-                    @let has_plan = practice.and_then(|p| p.timeline()).is_some();
-                    @let plan_dismissed = practice.map(|p| p.plan_dismissed.as_bool()).unwrap_or(false);
-                    @if !has_plan && !plan_dismissed {
-                        div class="mb-5 no-print rounded px-4 py-3 text-sm flex items-center justify-between"
-                             style="background: color-mix(in oklch, var(--accent) 8%, var(--paper)); border-left: 4px solid var(--accent); color: var(--ink)" {
-                            div {
-                                strong { "Practice plan. " }
-                                "Build a practice plan below, or skip if you don't need one."
-                            }
-                            form method="post" action={"/practices/" (practice_id) "/dismiss-plan"}
-                                 hx-post={"/practices/" (practice_id) "/dismiss-plan"}
-                                 hx-target="#content" {
-                                button type="submit"
-                                       class="text-sm font-semibold underline ml-4 shrink-0" style="color: var(--accent)" {
-                                    "Skip plan"
-                                }
-                            }
-                        }
-                    }
-                    @if plan_dismissed && !has_plan {
-                        div class="mb-5 no-print rounded px-4 py-3 text-sm flex items-center justify-between"
-                             style="background: var(--paper-2); border-left: 4px solid var(--rule); color: var(--muted)" {
-                            span { "Plan skipped. You can still build one below." }
-                        }
-                    }
-                }
-
                 // Practice timeline summary
                 @if is_coach {
                     @let timeline = practice.and_then(|p| p.timeline());
+                    @let has_plan = timeline.is_some();
+                    @let plan_dismissed = practice.map(|p| p.plan_dismissed.as_bool()).unwrap_or(false);
+                    @let skip_url = if !has_plan && !plan_dismissed { Some(format!("/practices/{practice_id}/dismiss-plan")) } else { None };
                     div class="mb-5 no-print" {
+                        @let base_url = format!("/practices/{practice_id}/timeline");
+                        @let import_url = format!("/practices/{practice_id}/import-template");
                         @if let Some(ref tl) = timeline {
-                            (super::timeline::summary(tl, practice_id))
+                            (super::timeline::practice_summary(tl, &base_url, &import_url, skip_url.as_deref()))
                         } @else {
                             @let default_tl = lineup_db::timeline::Timeline::default_empty(
                                 practice.and_then(|p| p.duration_minutes.map(|d| d.as_int() as u32)).unwrap_or(90)
                             );
-                            (super::timeline::summary(&default_tl, practice_id))
+                            (super::timeline::practice_summary(&default_tl, &base_url, &import_url, skip_url.as_deref()))
                         }
                     }
                 }
@@ -323,61 +292,6 @@ pub(crate) fn detail_content(
 }
 
 // ── Notes section ────────────────────────────────────────────────────
-
-fn notes_section(practice: Option<&Practice>, practice_id: PracticeId) -> Markup {
-    let existing_notes = practice.and_then(|p| p.notes.as_deref()).unwrap_or("");
-    html! {
-        div id="practice-notes" "aria-live"="polite" {
-            (notes_display_inner(existing_notes, practice_id))
-        }
-    }
-}
-
-/// Rendered by the HTMX swap after saving notes.
-pub(crate) fn notes_display(practice: &Practice) -> Markup {
-    let notes = practice.notes.as_deref().unwrap_or("");
-    html! {
-        div id="practice-notes" "aria-live"="polite" {
-            (notes_display_inner(notes, practice.id))
-        }
-    }
-}
-
-fn notes_display_inner(notes: &str, practice_id: PracticeId) -> Markup {
-    let action = format!("/practices/{practice_id}/notes");
-    html! {
-        form
-            hx-post=(action)
-            hx-target="#practice-notes"
-            hx-swap="outerHTML"
-            class="rounded-lg p-4"
-            style="border-left: 3px solid var(--accent); max-width: 720px"
-        {
-            div class="flex items-baseline justify-between mb-1 gap-2" {
-                span class="font-mono-stat text-[9.5px] tracking-[0.16em] uppercase font-semibold" style="color: var(--accent)" {
-                    "Practice notes"
-                }
-            }
-            textarea
-                name="notes"
-                rows="2"
-                placeholder="Add notes for this practice…"
-                class="w-full border rounded px-3 py-2 text-sm focus:outline-none resize-y"
-                style="background: var(--paper-2); border-color: var(--rule); color: var(--ink)"
-            {
-                (notes)
-            }
-            div class="mt-2 flex justify-end" {
-                button
-                    type="submit"
-                    class="btn-warm-ink text-xs py-1.5 px-3"
-                {
-                    "Save notes"
-                }
-            }
-        }
-    }
-}
 
 // ── Boat card ────────────────────────────────────────────────────────
 
