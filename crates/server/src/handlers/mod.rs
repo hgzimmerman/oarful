@@ -30,6 +30,7 @@ pub(crate) mod demo;
 pub(crate) mod history;
 pub(crate) mod my;
 pub(crate) mod oar_sets;
+pub(crate) mod plan_templates;
 pub(crate) mod practices;
 pub(crate) mod rowers;
 pub(crate) mod signup;
@@ -258,6 +259,93 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route(
             "/admin/settings",
             get(admin::settings_handler).post(admin::settings_update_handler),
+        )
+        // Plan templates (Coach+)
+        .route(
+            "/admin/plan-templates",
+            get(plan_templates::list_handler).post(plan_templates::create_handler),
+        )
+        .route(
+            "/admin/plan-templates/{id}",
+            get(plan_templates::detail_handler),
+        )
+        .route(
+            "/admin/plan-templates/{id}/meta",
+            post(plan_templates::update_meta_handler),
+        )
+        .route(
+            "/admin/plan-templates/{id}/delete",
+            post(plan_templates::delete_handler),
+        )
+        .route(
+            "/admin/plan-templates/{id}/duplicate",
+            post(plan_templates::duplicate_handler),
+        )
+        // Template timeline editing
+        .route(
+            "/admin/plan-templates/{id}/timeline/edit",
+            get(plan_templates::tl_open_editor),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/save",
+            post(plan_templates::tl_save),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/close",
+            post(plan_templates::tl_close),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/add",
+            post(plan_templates::tl_add_block),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/delete",
+            post(plan_templates::tl_delete_block),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/patch-block",
+            post(plan_templates::tl_patch_block),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/patch-segment",
+            post(plan_templates::tl_patch_segment),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/target",
+            post(plan_templates::tl_update_target),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/reorder",
+            post(plan_templates::tl_reorder_block),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/duplicate",
+            post(plan_templates::tl_duplicate_block),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/group-add",
+            post(plan_templates::tl_group_add_segment),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/group-delete",
+            post(plan_templates::tl_group_delete_segment),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/group-patch",
+            post(plan_templates::tl_group_patch),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/group-reorder",
+            post(plan_templates::tl_group_reorder_segment),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/template",
+            post(plan_templates::tl_insert_template),
+        )
+        // Import template into practice
+        .route(
+            "/practices/{id}/import-template",
+            get(plan_templates::import_picker_handler).post(plan_templates::import_handler),
         )
         .route("/admin/export", get(admin::export_handler))
         .route(

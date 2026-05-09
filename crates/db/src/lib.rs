@@ -18,6 +18,7 @@ pub mod magic_link;
 pub mod oar_set;
 pub mod onboarding;
 pub mod pair_affinity;
+pub mod plan_template;
 pub mod practice;
 pub mod rower;
 pub mod schema;

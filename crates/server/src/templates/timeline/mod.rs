@@ -8,9 +8,8 @@ mod segment_editor;
 mod strip;
 mod tooltips;
 
-use lineup_db::{
-    practice::PracticeId,
-    timeline::{self, Block, BlockType, Group, GroupType, ItemDisplayType, Timeline, TimelineItem},
+use lineup_db::timeline::{
+    self, Block, BlockType, Group, GroupType, ItemDisplayType, Timeline, TimelineItem,
 };
 use maud::{html, Markup};
 
@@ -19,7 +18,29 @@ use css::{group_type_css, seg_type_css};
 
 // ── Summary (collapsed view) ─────────────────────────────────────────
 
-pub(crate) fn summary(tl: &Timeline, practice_id: PracticeId) -> Markup {
+pub(crate) fn summary(tl: &Timeline, base_url: &str) -> Markup {
+    summary_inner(tl, base_url, None, None)
+}
+
+pub(crate) fn summary_with_import(tl: &Timeline, base_url: &str, import_url: &str) -> Markup {
+    summary_inner(tl, base_url, Some(import_url), None)
+}
+
+pub(crate) fn practice_summary(
+    tl: &Timeline,
+    base_url: &str,
+    import_url: &str,
+    skip_url: Option<&str>,
+) -> Markup {
+    summary_inner(tl, base_url, Some(import_url), skip_url)
+}
+
+fn summary_inner(
+    tl: &Timeline,
+    base_url: &str,
+    import_url: Option<&str>,
+    skip_url: Option<&str>,
+) -> Markup {
     let lines = tl.summary_lines();
     let planned = tl.planned_minutes();
     let slack = tl.slack_minutes();
@@ -46,10 +67,27 @@ pub(crate) fn summary(tl: &Timeline, practice_id: PracticeId) -> Markup {
                         }
                         button class="font-mono-stat text-[10.5px] hover:underline cursor-pointer px-1"
                                style="color: var(--muted); background: none; border: none"
-                               hx-get={"/practices/" (practice_id) "/timeline/edit"}
+                               hx-get={(base_url) "/edit"}
                                hx-target="#timeline-section"
                                hx-swap="outerHTML" {
                             "edit plan"
+                        }
+                        @if let Some(url) = import_url {
+                            button class="font-mono-stat text-[10.5px] hover:underline cursor-pointer px-1"
+                                   style="color: var(--muted); background: none; border: none"
+                                   hx-get=(url)
+                                   hx-target="body"
+                                   hx-swap="beforeend" {
+                                "use template"
+                            }
+                        }
+                        @if let Some(url) = skip_url {
+                            button class="font-mono-stat text-[10.5px] hover:underline cursor-pointer px-1"
+                                   style="color: var(--muted); background: none; border: none"
+                                   hx-post=(url)
+                                   hx-target="#content" {
+                                "skip plan"
+                            }
                         }
                     }
                 }
@@ -125,24 +163,19 @@ pub(crate) fn summary(tl: &Timeline, practice_id: PracticeId) -> Markup {
 
 // ── Editor (expanded view) ───────────────────────────────────────────
 
-pub(crate) fn editor(tl: &Timeline, practice_id: PracticeId, selected_id: Option<&str>) -> Markup {
-    editor_inner(tl, practice_id, selected_id, true)
+pub(crate) fn editor(tl: &Timeline, base_url: &str, selected_id: Option<&str>) -> Markup {
+    editor_inner(tl, base_url, selected_id, true)
 }
 
 pub(crate) fn editor_no_animate(
     tl: &Timeline,
-    practice_id: PracticeId,
+    base_url: &str,
     selected_id: Option<&str>,
 ) -> Markup {
-    editor_inner(tl, practice_id, selected_id, false)
+    editor_inner(tl, base_url, selected_id, false)
 }
 
-fn editor_inner(
-    tl: &Timeline,
-    practice_id: PracticeId,
-    selected_id: Option<&str>,
-    animate: bool,
-) -> Markup {
+fn editor_inner(tl: &Timeline, base_url: &str, selected_id: Option<&str>, animate: bool) -> Markup {
     let tl_json = serde_json::to_string(tl).unwrap_or_else(|_| "{}".to_string());
     let planned = tl.planned_minutes();
     let slack = tl.slack_minutes();
@@ -183,8 +216,6 @@ fn editor_inner(
         }
         None => Sel::None,
     };
-
-    let base_url = format!("/practices/{practice_id}/timeline");
 
     html! {
         div id="timeline-section" class="rounded-lg pl-4 py-1 mb-4" style="border-left: 3px solid var(--accent)" {
@@ -274,12 +305,12 @@ fn editor_inner(
             }
 
             // Timeline strip
-            (strip::timeline_strip(tl, &base_url, &tl_json, selected_id))
+            (strip::timeline_strip(tl, base_url, &tl_json, selected_id))
 
             // Editor for selected item
             @match &selected {
-                Sel::Block(block) => { (block_editor::bare_block_editor(block, &base_url, &tl_json, animate)) }
-                Sel::Group(group) => { (group_editor::group_editor(group, &base_url, &tl_json, selected_id, animate)) }
+                Sel::Block(block) => { (block_editor::bare_block_editor(block, base_url, &tl_json, animate)) }
+                Sel::Group(group) => { (group_editor::group_editor(group, base_url, &tl_json, selected_id, animate)) }
                 Sel::None => {}
             }
 

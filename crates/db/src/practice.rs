@@ -370,9 +370,7 @@ impl Practice {
 
     /// Parse the stored timeline JSON, if present.
     pub fn timeline(&self) -> Option<Timeline> {
-        self.timeline_json
-            .as_deref()
-            .and_then(|s| serde_json::from_str(s).ok())
+        self.timeline_json.as_deref().and_then(Timeline::from_json)
     }
 
     /// Save a timeline to this practice.
@@ -382,7 +380,7 @@ impl Practice {
         id: PracticeId,
         timeline: Option<&Timeline>,
     ) -> Result<Practice, diesel::result::Error> {
-        let json = timeline.map(|t| serde_json::to_string(t).expect("timeline serializes"));
+        let json = timeline.map(|t| t.to_json());
         diesel::update(practice::table.find(id))
             .set(practice::timeline_json.eq(json))
             .returning(Practice::as_returning())

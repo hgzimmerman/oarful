@@ -16,7 +16,7 @@ use crate::handlers::{self, not_found, ErrorResponse};
 use crate::state::{TenantContext, TenantDb};
 use crate::templates::layout::{tab_swap, tabbed_section, TabDef};
 
-const TABS: &[TabDef] = &[
+pub(crate) const TABS: &[TabDef] = &[
     TabDef {
         label: "Users",
         url: "/admin/users",
@@ -43,12 +43,17 @@ const TABS: &[TabDef] = &[
         id: "audit",
     },
     TabDef {
+        label: "Plan Templates",
+        url: "/admin/plan-templates",
+        id: "plan-templates",
+    },
+    TabDef {
         label: "Settings",
         url: "/admin/settings",
         id: "settings",
     },
 ];
-const TARGET: &str = "admin-tab-content";
+pub(crate) const TARGET: &str = "admin-tab-content";
 
 /// `GET /admin` — render the default tab (Users).
 #[tracing::instrument(level = "debug", skip_all, err)]
@@ -483,7 +488,7 @@ pub(crate) async fn settings_update_handler(
     ))
 }
 
-fn is_tab_swap(headers: &HeaderMap) -> bool {
+pub(crate) fn is_tab_swap(headers: &HeaderMap) -> bool {
     headers.get("HX-Target").and_then(|v| v.to_str().ok()) == Some(TARGET)
 }
 
