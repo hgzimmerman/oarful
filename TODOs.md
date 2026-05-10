@@ -549,6 +549,16 @@ Create a SendGrid account, verify sender domain. Set:
 - `FROM_EMAIL` / `FROM_NAME` env vars
 - DNS records (SPF, DKIM) on the domain for deliverability
 
+### Practices
+
+#### Historical practice browser
+The practices list only shows the last 14 days of past practices
+(`history_since = today - 14`). Older practices silently drop off with
+no way to navigate back to them. Add a paginated or date-filtered view
+so coaches can browse historical practices — see what plans and lineups
+were used, reference them when planning future sessions. The detail page
+already works (`/practices/{id}/detail`), just needs a way to get there.
+
 ### Animation polish
 
 #### List item removal animation
