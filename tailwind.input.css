@@ -963,3 +963,16 @@ textarea::placeholder {
   color: var(--muted);
   opacity: 0.7;
 }
+
+/* ── View transitions for HTMX navigation ─────────────────────── */
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 150ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}
