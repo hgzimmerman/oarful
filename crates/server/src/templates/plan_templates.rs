@@ -245,16 +245,16 @@ pub(crate) fn import_picker_modal(
     practice_id: PracticeId,
     has_existing_timeline: bool,
 ) -> Markup {
-    let close_js = "document.getElementById('template-picker-backdrop').remove(); document.getElementById('template-picker-modal').remove()";
+    let close_js = "dismissModal('template-picker-modal', 'template-picker-backdrop')";
     html! {
         // Backdrop
         div id="template-picker-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(close_js) {}
         // Modal wrapper (centered)
         div id="template-picker-modal"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-        div class="bg-paper rounded-lg shadow-xl w-full max-w-3xl pointer-events-auto flex flex-col"
+        div class="bg-paper rounded-lg shadow-xl w-full max-w-3xl pointer-events-auto flex flex-col modal-card"
             style="max-height: calc(100vh - 8rem); min-height: min(36rem, calc(100vh - 8rem)); min-width: min(56rem, calc(100vw - 4rem))"
             "x-data"=(maud::PreEscaped(format!("{{ selected: {}, search: '', names: [{}] }}",
                 if templates.is_empty() { "-1".to_string() } else { "0".to_string() },

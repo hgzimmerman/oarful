@@ -964,6 +964,45 @@ textarea::placeholder {
   opacity: 0.7;
 }
 
+/* ── Modal animations ─────────────────────────────────────────── */
+@keyframes modal-drop-in {
+  from { opacity: 0; transform: translateY(-20px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes modal-drop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(-20px) scale(0.98); }
+}
+@keyframes backdrop-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes backdrop-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.modal-backdrop {
+  animation: backdrop-fade-in 200ms ease-out;
+}
+.modal-backdrop.modal-backdrop-exit {
+  animation: backdrop-fade-out 150ms ease-in forwards;
+}
+.modal-card {
+  animation: modal-drop-in 200ms ease-out;
+}
+.modal-exit .modal-card {
+  animation: modal-drop-out 150ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop,
+  .modal-backdrop.modal-backdrop-exit,
+  .modal-card,
+  .modal-exit .modal-card {
+    animation: none;
+  }
+}
+
 /* ── View transitions for HTMX navigation ─────────────────────── */
 ::view-transition-old(*),
 ::view-transition-new(*) {

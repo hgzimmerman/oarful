@@ -6,6 +6,7 @@
   var _prevFocus = null;
 
   window.trapFocus = function(el) {
+    if (!el) return;
     _prevFocus = document.activeElement;
     _trapEl = el;
     el.addEventListener('keydown', _onKeyDown);
@@ -21,6 +22,28 @@
     }
     if (_prevFocus && _prevFocus.focus) _prevFocus.focus();
     _prevFocus = null;
+  };
+
+  // Animate-out and remove a modal + backdrop pair.
+  // Expects .modal-card inside the modal for the drop animation.
+  window.dismissModal = function(modalId, backdropId) {
+    releaseFocus();
+    var m = document.getElementById(modalId);
+    var b = document.getElementById(backdropId);
+    if (!m && !b) return;
+    if (b) b.classList.add('modal-backdrop-exit');
+    if (m) m.classList.add('modal-exit');
+    function cleanup() {
+      if (m) m.remove();
+      if (b) b.remove();
+    }
+    var card = m && m.querySelector('.modal-card');
+    if (card) {
+      card.addEventListener('animationend', cleanup, { once: true });
+      setTimeout(cleanup, 300); // fallback
+    } else {
+      cleanup();
+    }
   };
 
   function _onKeyDown(e) {

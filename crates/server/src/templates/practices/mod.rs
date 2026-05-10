@@ -452,7 +452,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
 
 // ── Cancel confirmation modal ────────────────────────────────────────
 
-const CANCEL_CLOSE_JS: &str = "releaseFocus(); document.getElementById('cancel-modal').remove(); document.getElementById('cancel-modal-backdrop').remove()";
+const CANCEL_CLOSE_JS: &str = "dismissModal('cancel-modal', 'cancel-modal-backdrop')";
 
 pub(crate) fn cancel_confirm_modal(practice_id: PracticeId) -> Markup {
     let silent_url = format!("/practices/{practice_id}/cancel-silent");
@@ -460,14 +460,14 @@ pub(crate) fn cancel_confirm_modal(practice_id: PracticeId) -> Markup {
 
     html! {
         div id="cancel-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(CANCEL_CLOSE_JS) {}
         div id="cancel-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-label"="Cancel practice"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto modal-card" {
                 div class="px-6 py-4 border-b border-rule-2 flex items-center justify-between" {
                     h2 class="text-lg font-bold text-ink" { "Cancel practice" }
                     button type="button"

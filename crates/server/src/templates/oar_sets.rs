@@ -387,17 +387,17 @@ pub(crate) fn pick_modal(
         entry.1.push(name.to_string());
     }
 
-    let close_js = "releaseFocus(); document.getElementById('oar-pick-modal').remove(); document.getElementById('oar-pick-backdrop').remove()";
+    let close_js = "dismissModal('oar-pick-modal', 'oar-pick-backdrop')";
 
     html! {
         div id="oar-pick-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(close_js) {}
         div id="oar-pick-modal"
             role="dialog"
             "aria-modal"="true"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto pointer-events-auto modal-card" {
                 // Header
                 div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
                     div {
@@ -498,11 +498,7 @@ pub(crate) fn pick_modal(
         script { (maud::PreEscaped("
             trapFocus(document.getElementById('oar-pick-modal'));
             function oarPickDone() {
-                releaseFocus();
-                var m = document.getElementById('oar-pick-modal');
-                var b = document.getElementById('oar-pick-backdrop');
-                if (m) m.remove();
-                if (b) b.remove();
+                dismissModal('oar-pick-modal', 'oar-pick-backdrop');
                 var ed = document.getElementById('lineup-editor');
                 if (!ed) return;
                 var data = Alpine.$data(ed);

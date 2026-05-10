@@ -9,8 +9,7 @@
 
 use maud::{html, Markup};
 
-const CLOSE_JS: &str =
-    "releaseFocus(); document.getElementById('confirm-modal').remove(); document.getElementById('confirm-modal-backdrop').remove()";
+const CLOSE_JS: &str = "dismissModal('confirm-modal', 'confirm-modal-backdrop')";
 
 /// Render a confirmation modal.
 ///
@@ -23,14 +22,14 @@ const CLOSE_JS: &str =
 pub(crate) fn confirm_modal(title: &str, message: &str, action_markup: Markup) -> Markup {
     html! {
         div id="confirm-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(CLOSE_JS) {}
         div id="confirm-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-labelledby"="confirm-modal-title"
             class="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-md pointer-events-auto modal-card" {
                 div class="px-6 py-4 border-b border-rule-2 flex items-center justify-between" {
                     h2 id="confirm-modal-title" class="text-lg font-bold text-ink" { (title) }
                     button type="button"

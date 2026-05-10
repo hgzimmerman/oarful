@@ -14,7 +14,7 @@ pub(crate) struct AlsoReadyPractice {
     pub(crate) rower_count: usize,
 }
 
-const CLOSE_JS: &str = "releaseFocus(); document.getElementById('lineup-modal').remove(); document.getElementById('lineup-modal-backdrop').remove()";
+const CLOSE_JS: &str = "dismissModal('lineup-modal', 'lineup-modal-backdrop')";
 
 pub(crate) fn lineup_preview_modal(
     recipients: &[LineupRecipientPreview],
@@ -27,14 +27,14 @@ pub(crate) fn lineup_preview_modal(
 
     html! {
         div id="lineup-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(CLOSE_JS) {}
         div id="lineup-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-label"="Send lineups"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto modal-card" {
                 div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
                     h2 class="text-lg font-bold text-ink" { "Send lineups" }
                     button type="button"

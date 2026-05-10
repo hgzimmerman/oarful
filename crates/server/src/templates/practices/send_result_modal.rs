@@ -17,8 +17,7 @@ pub(crate) enum SendStatus {
     Failed,
 }
 
-const CLOSE_JS: &str = "releaseFocus(); document.getElementById('send-result-modal').remove(); \
-                         document.getElementById('send-result-modal-backdrop').remove()";
+const CLOSE_JS: &str = "dismissModal('send-result-modal', 'send-result-modal-backdrop')";
 
 /// Modal shown when email sending is blocked by billing status.
 /// When `stripe_enabled` is true, shows an "Upgrade" button linking to checkout.
@@ -98,14 +97,14 @@ pub(crate) fn send_result_modal(title: &str, recipients: &[SendResultRecipient])
 fn result_modal_shell(title: &str, body: Markup) -> Markup {
     html! {
         div id="send-result-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(CLOSE_JS) {}
         div id="send-result-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-label"="Send results"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto modal-card" {
                 div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
                     h2 class="text-lg font-bold text-ink" { (title) }
                     button type="button"
