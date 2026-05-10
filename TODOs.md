@@ -549,6 +549,13 @@ Create a SendGrid account, verify sender domain. Set:
 - `FROM_EMAIL` / `FROM_NAME` env vars
 - DNS records (SPF, DKIM) on the domain for deliverability
 
+### Animation polish
+
+#### List item removal animation
+Animate individual row deletion (shrink/fade out) instead of full-page
+re-render. Requires refactoring delete handlers to target the specific
+row element rather than `#content`.
+
 ## Suggested next moves
 
 1. **Connect domain to Fly.io** — DNS + TLS.
