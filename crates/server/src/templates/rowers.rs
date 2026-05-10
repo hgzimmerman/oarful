@@ -819,7 +819,7 @@ pub(crate) fn seat_affinities_section(
 
             // Add form — only for coaches
             @if can_edit {
-            form hx-post=(upsert_url)
+            form hx-post=(upsert_url) hx-disabled-elt="find button"
                  hx-target="#seat-affinities"
                  hx-swap="outerHTML"
                  class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-rule-2" {
@@ -919,7 +919,7 @@ pub(crate) fn pair_affinities_section(
             }
 
             @if can_edit {
-            form hx-post=(upsert_url)
+            form hx-post=(upsert_url) hx-disabled-elt="find button"
                  hx-target="#pair-affinities"
                  hx-swap="outerHTML"
                  class="flex flex-col sm:flex-row sm:items-end gap-2 pt-3 border-t border-rule-2" {

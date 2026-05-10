@@ -141,6 +141,7 @@ pub(crate) fn detail_content(
                 div class="flex items-center gap-2" {
                     form method="post" action=(format!("/oars/{}/toggle-active", oar_set.id))
                          hx-post=(format!("/oars/{}/toggle-active", oar_set.id))
+                         hx-disabled-elt="find button"
                          hx-target="#admin-fleet-content"
                          hx-push-url="/admin/fleet/oars"
                          class="inline" {
@@ -204,7 +205,7 @@ fn preferences_form(oar_set: &OarSet, prefs: &[OarSetPreference], boats: &[Boat]
     let action = format!("/oars/{}/preferences", oar_set.id);
     html! {
         form method="post" action=(action)
-             hx-post=(action)
+             hx-post=(action) hx-disabled-elt="find button"
              hx-target="#admin-fleet-content"
              class="space-y-3"
              x-data="{ items: [] }"
@@ -291,7 +292,7 @@ pub(crate) fn form_content(mode: FormMode, data: &OarSetFormData, error: Option<
             }
 
             form method="post" action=(action)
-                 hx-post=(action)
+                 hx-post=(action) hx-disabled-elt="find button"
                  hx-target="#admin-fleet-content"
                  hx-push-url="/admin/fleet/oars"
                  class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {
@@ -423,7 +424,7 @@ pub(crate) fn pick_modal(
                            } else {
                                "border: 1px solid var(--rule-2)"
                            })
-                           hx-post="/oars/assign"
+                           hx-post="/oars/assign" hx-disabled-elt="find button"
                            hx-vals=(format!("{{\"practice_id\":\"{}\",\"boat_id\":\"{}\",\"oar_set_id\":\"\"}}", practice_id, boat.id))
                            hx-swap="none"
                            "hx-on::after-request"="oarPickDone()" {
@@ -450,6 +451,7 @@ pub(crate) fn pick_modal(
                                 "border: 1px solid var(--rule-2); cursor: pointer"
                             })
                             hx-post=(if can_select { "/oars/assign" } else { "" })
+                            hx-disabled-elt="find button"
                             hx-vals=(if can_select { format!("{{\"practice_id\":\"{}\",\"boat_id\":\"{}\",\"oar_set_id\":\"{}\"}}", practice_id, boat.id, os.id) } else { String::new() })
                             hx-swap=(if can_select { "none" } else { "" })
                             "hx-on::after-request"=(if can_select { "oarPickDone()" } else { "" }) {

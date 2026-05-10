@@ -375,7 +375,7 @@ pub(crate) fn lineup_editor(
                         .collect();
                     span class="inline-flex items-center gap-1 ml-1 no-print" {
                         span class="text-xs text-rule" "aria-hidden"="true" { "\u{00b7}" }
-                        form class="inline" hx-post="/oars/auto-assign" hx-swap="none"
+                        form class="inline" hx-post="/oars/auto-assign" hx-disabled-elt="find button" hx-swap="none"
                              "hx-on::after-request"="oarAutoAssignDone()" {
                             input type="hidden" name="practice_id" value=(practice_id);
                             @for bid in &active_boat_ids {

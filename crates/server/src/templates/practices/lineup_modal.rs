@@ -91,7 +91,7 @@ pub(crate) fn lineup_preview_modal(
                 @if !date_strs.is_empty() && !recipients.is_empty() {
                     div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-4" {
                         form method="post" action="/practices/send-lineups"
-                             hx-post="/practices/send-lineups"
+                             hx-post="/practices/send-lineups" hx-disabled-elt="find button"
                              hx-target="body"
                              hx-swap="beforeend"
                              hx-include="[name='extra_dates']:checked"

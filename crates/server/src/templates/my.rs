@@ -145,7 +145,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
             }
             td class="px-4 py-2.5" {
                 form method="post" action="/my/availability"
-                     hx-post="/my/availability"
+                     hx-post="/my/availability" hx-disabled-elt="find button"
                      hx-target="#content"
                      class="flex items-center gap-2" {
                     input type="hidden" name="practice_id" value=(row.practice_id);
@@ -176,7 +176,7 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                     "Email notifications"
                 }
                 form method="post" action="/my/preferences"
-                     hx-post="/my/preferences"
+                     hx-post="/my/preferences" hx-disabled-elt="find button"
                      hx-target="#content"
                      hx-swap="innerHTML transition:true"
                      hx-push-url="true"

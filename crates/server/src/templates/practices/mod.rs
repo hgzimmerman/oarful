@@ -69,7 +69,7 @@ pub(crate) fn unified_page(
             // Create practice form (coach only)
             @if is_coach {
                 form method="post" action="/practices"
-                     hx-post="/practices"
+                     hx-post="/practices" hx-disabled-elt="find button"
                      hx-target="#content"
                      hx-swap="innerHTML transition:true"
                      hx-push-url="true" {
@@ -445,7 +445,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                 @if !matches!(pwp.phase, PracticePhase::Complete) {
                     div class="border-t border-rule my-1" {}
                     form method="post" action=(cancel_action)
-                         hx-post=(cancel_action)
+                         hx-post=(cancel_action) hx-disabled-elt="find button"
                          hx-target="body"
                          hx-swap="beforeend" {
                         button type="submit"
@@ -494,7 +494,7 @@ pub(crate) fn cancel_confirm_modal(practice_id: PracticeId) -> Markup {
                 }
                 div class="px-6 py-4 border-t border-rule-2 flex justify-end gap-3" {
                     form method="post" action=(silent_url)
-                         hx-post=(silent_url)
+                         hx-post=(silent_url) hx-disabled-elt="find button"
                          hx-target="#content"
                          onclick=(CANCEL_CLOSE_JS) {
                         button type="submit"
@@ -503,7 +503,7 @@ pub(crate) fn cancel_confirm_modal(practice_id: PracticeId) -> Markup {
                         }
                     }
                     form method="post" action=(notify_url)
-                         hx-post=(notify_url)
+                         hx-post=(notify_url) hx-disabled-elt="find button"
                          hx-target="body"
                          hx-swap="beforeend"
                          onclick=(CANCEL_CLOSE_JS) {

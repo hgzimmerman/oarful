@@ -43,7 +43,7 @@ pub(crate) fn form_content(
             }
 
             form method="post" action="/sync"
-                 hx-post="/sync"
+                 hx-post="/sync" hx-disabled-elt="find button"
                  hx-target="#content"
                  hx-push-url="false"
                  hx-indicator="#sync-spinner"

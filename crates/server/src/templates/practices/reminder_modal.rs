@@ -72,7 +72,7 @@ pub(crate) fn reminder_preview_modal(
                 @if !recipients.is_empty() {
                     div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-4 flex justify-end" {
                         form method="post" action="/practices/send-reminders"
-                             hx-post="/practices/send-reminders"
+                             hx-post="/practices/send-reminders" hx-disabled-elt="find button"
                              hx-target="body"
                              hx-swap="beforeend"
                              onclick=(PreEscaped(CLOSE_JS)) {

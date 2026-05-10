@@ -120,6 +120,7 @@ pub(crate) fn su_tenant_row(tenant: &Tenant) -> Markup {
             td class="px-4 py-3 font-mono text-xs text-ink-3" { (tenant.slug) }
             td class="px-4 py-3" {
                 form hx-post=(format!("/su/billing/{}", tenant.id))
+                     hx-disabled-elt="find button"
                      hx-target=(format!("#{row_id}"))
                      hx-swap="outerHTML"
                      class="flex items-center gap-2" {

@@ -143,6 +143,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/resend-invite"}
                          hx-post={"/users/" (u.id) "/resend-invite"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {
@@ -156,6 +157,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {
@@ -169,6 +171,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {

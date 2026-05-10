@@ -140,6 +140,7 @@ pub(crate) fn meta_section(
             (tmpl.name)
         }
         form hx-post=(format!("/admin/plan-templates/{}/meta", tmpl.id))
+             hx-disabled-elt="find button"
              hx-target="#template-meta"
              hx-swap="innerHTML"
              class="space-y-3" {

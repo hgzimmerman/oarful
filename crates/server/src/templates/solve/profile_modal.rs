@@ -130,7 +130,7 @@ pub(crate) fn profile_editor_modal(
 
                 // Form
                 form method="post" action="/solver-profile"
-                     hx-post="/solver-profile"
+                     hx-post="/solver-profile" hx-disabled-elt="find button"
                      hx-target="#profile-modal"
                      hx-swap="delete"
                      class="px-6 py-4 space-y-6" {

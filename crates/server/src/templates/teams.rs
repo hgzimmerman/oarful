@@ -68,7 +68,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                 }
                 // Create team form — inline in header
                 form method="post" action="/teams"
-                     hx-post="/teams"
+                     hx-post="/teams" hx-disabled-elt="find button"
                      hx-target="#content"
                      hx-swap="innerHTML transition:true"
                      hx-push-url="true"
@@ -138,7 +138,7 @@ pub(crate) fn detail_content(
         }
         div class="px-4 sm:px-8 py-6 max-w-2xl mx-auto space-y-6" {
             form method="post" action=(action)
-                 hx-post=(action)
+                 hx-post=(action) hx-disabled-elt="find button"
                  hx-target="#content"
                  class="rounded-lg p-6 space-y-4" style="background: var(--paper); box-shadow: var(--shadow-soft)" {
                 div {
@@ -270,6 +270,7 @@ pub(crate) fn detail_content(
                         span class="text-sm font-medium" style="color: var(--bad)" { "This team is archived." }
                         form method="post" action={"/teams/" (team.id) "/toggle-archive"}
                              hx-post={"/teams/" (team.id) "/toggle-archive"}
+                             hx-disabled-elt="find button"
                              hx-target="#content" {
                             button type="submit"
                                    class="text-sm font-medium py-2 hover:underline" style="color: var(--good)" {
@@ -719,7 +720,7 @@ fn roster_matrix_inner(
 ) -> Markup {
     html! {
         form method="post" action="/admin/roster"
-             hx-post="/admin/roster"
+             hx-post="/admin/roster" hx-disabled-elt="find button"
              hx-target="#admin-tab-content" {
             header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
                 div class="flex items-center justify-between" {
@@ -833,7 +834,7 @@ fn fleet_matrix_inner(
 ) -> Markup {
     html! {
         form method="post" action="/admin/fleet/defaults"
-             hx-post="/admin/fleet/defaults"
+             hx-post="/admin/fleet/defaults" hx-disabled-elt="find button"
              hx-target="#admin-fleet-content" {
             header class="border-b px-4 sm:px-8 py-3 sm:py-4" style="border-color: var(--rule); background: var(--paper)" {
                 div class="flex items-center justify-between" {
