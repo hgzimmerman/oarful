@@ -170,6 +170,7 @@ fn filter_bar(
         form method="get" action="/admin/audit"
              hx-get="/admin/audit"
              hx-target="#content"
+             hx-swap="innerHTML transition:true"
              hx-push-url="true"
              class="flex flex-wrap items-end gap-3" {
 
@@ -227,6 +228,7 @@ fn filter_bar(
                 a href="/admin/audit"
                   hx-get="/admin/audit"
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="font-mono-stat text-xs hover:underline" style="color: var(--muted)" {
                     "Clear"

@@ -43,7 +43,7 @@ pub(crate) fn form_content(
             }
 
             form method="post" action="/sync"
-                 hx-post="/sync"
+                 hx-post="/sync" hx-disabled-elt="find button"
                  hx-target="#content"
                  hx-push-url="false"
                  hx-indicator="#sync-spinner"
@@ -221,6 +221,7 @@ fn summary_panel(s: &SyncSummary) -> Markup {
                 a href="/practices"
                   hx-get="/practices"
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="font-mono-stat text-xs font-semibold hover:underline" style="color: var(--accent)" {
                     "→ View practices dashboard"

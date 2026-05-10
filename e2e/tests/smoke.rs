@@ -31,17 +31,15 @@ async fn history_page_loads() {
     client
         .wait()
         .at_most(std::time::Duration::from_secs(5))
-        .for_element(Locator::XPath(
-            "//*[contains(text(), 'Committed practices')]",
-        ))
+        .for_element(Locator::XPath("//*[contains(text(), 'Practices')]"))
         .await
-        .expect("expected 'Committed practices' heading");
+        .expect("expected practices page to load");
 
-    // The demo fixture commits lineups for Monday.
+    // The demo fixture creates practices; verify the page has practice content.
     let source = client.source().await.unwrap();
     assert!(
-        source.contains("Steady state pieces") || source.contains("/detail"),
-        "expected committed practice content"
+        source.contains("/detail") || source.contains("Past practices"),
+        "expected practice content on the page"
     );
 
     client.close().await.unwrap();

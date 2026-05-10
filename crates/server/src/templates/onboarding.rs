@@ -118,6 +118,7 @@ pub(crate) fn onboarding_bell(state: &OnboardingState) -> Markup {
                                       class="text-sm font-medium text-ink hover:underline"
                                       hx-get=(step.href)
                                       hx-target="#content"
+                                      hx-swap="innerHTML transition:true"
                                       hx-push-url="true"
                                       "@click"="open = false" {
                                         (step.label)

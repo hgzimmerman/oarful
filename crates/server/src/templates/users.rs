@@ -118,6 +118,7 @@ pub(crate) fn user_row(
                     a href={"/rowers/" (rid)}
                       hx-get={"/rowers/" (rid)}
                       hx-target="#content"
+                      hx-swap="innerHTML transition:true"
                       hx-push-url="true"
                       class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                         (u.display_name())
@@ -142,6 +143,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/resend-invite"}
                          hx-post={"/users/" (u.id) "/resend-invite"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {
@@ -155,6 +157,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {
@@ -168,6 +171,7 @@ pub(crate) fn user_row(
                     form method="post"
                          action={"/users/" (u.id) "/toggle-status"}
                          hx-post={"/users/" (u.id) "/toggle-status"}
+                         hx-disabled-elt="find button"
                          hx-target={"#user-" (u.id)}
                          hx-swap="outerHTML"
                          class="inline" {

@@ -9,7 +9,7 @@ pub(crate) struct ReminderRecipientPreview {
     pub(crate) dates: Vec<NaiveDate>,
 }
 
-const CLOSE_JS: &str = "releaseFocus(); document.getElementById('reminder-modal').remove(); document.getElementById('reminder-modal-backdrop').remove()";
+const CLOSE_JS: &str = "dismissModal('reminder-modal', 'reminder-modal-backdrop')";
 
 pub(crate) fn reminder_preview_modal(
     recipients: &[ReminderRecipientPreview],
@@ -25,14 +25,14 @@ pub(crate) fn reminder_preview_modal(
 
     html! {
         div id="reminder-modal-backdrop"
-            class="fixed inset-0 bg-black/40 z-40"
+            class="fixed inset-0 bg-black/40 z-40 modal-backdrop"
             onclick=(CLOSE_JS) {}
         div id="reminder-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-label"="Send reminders"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto" {
+            div class="bg-paper rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto pointer-events-auto modal-card" {
                 div class="sticky top-0 bg-paper border-b border-rule-2 px-6 py-4 flex items-center justify-between" {
                     h2 class="text-lg font-bold text-ink" { "Send reminders" }
                     button type="button"
@@ -72,7 +72,7 @@ pub(crate) fn reminder_preview_modal(
                 @if !recipients.is_empty() {
                     div class="sticky bottom-0 bg-paper border-t border-rule-2 px-6 py-4 flex justify-end" {
                         form method="post" action="/practices/send-reminders"
-                             hx-post="/practices/send-reminders"
+                             hx-post="/practices/send-reminders" hx-disabled-elt="find button"
                              hx-target="body"
                              hx-swap="beforeend"
                              onclick=(PreEscaped(CLOSE_JS)) {

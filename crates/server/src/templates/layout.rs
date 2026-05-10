@@ -86,7 +86,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                     }
                 }
                 (navbar(role))
-                main #content class="flex-grow" "aria-live"="polite" {
+                main #content class="flex-grow" "aria-live"="polite" style="view-transition-name: content" {
                     (content)
                 }
                 footer class="text-center text-xs py-2 no-print text-muted bg-paper border-t"
@@ -106,7 +106,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                         button type="button"
                                class="font-bold text-lg leading-none opacity-60 hover:opacity-100"
                                "aria-label"="Dismiss"
-                               onclick="document.getElementById('toast').classList.add('hidden')" {
+                               onclick="_dismissToast()" {
                             span "aria-hidden"="true" { "\u{00d7}" }
                         }
                     }
@@ -245,6 +245,7 @@ fn nav_link(href: &str, label: &str) -> Markup {
               data-nav=(href)
               hx-get=(href)
               hx-target="#content"
+              hx-swap="innerHTML transition:true"
               hx-push-url="true"
               { (label) }
         }
@@ -259,6 +260,7 @@ fn nav_link_with_badge(href: &str, label: &str, show_badge: bool) -> Markup {
               data-nav=(href)
               hx-get=(href)
               hx-target="#content"
+              hx-swap="innerHTML transition:true"
               hx-push-url="true"
             {
                 (label)
@@ -302,7 +304,7 @@ pub(crate) fn tabbed_section(
                 }
             }
         }
-        div id=(target_id) "aria-live"="polite" {
+        div id=(target_id) "aria-live"="polite" style=(format!("view-transition-name: {target_id}")) {
             (tab_content)
         }
     }
@@ -345,6 +347,7 @@ fn section_tab(tab: &TabDef, active: &str, target_id: &str) -> Markup {
     html! {
         button hx-get=(tab.url)
                hx-target=(format!("#{target_id}"))
+               hx-swap="innerHTML transition:true"
                hx-push-url="true"
                class=(classes) {
             (tab.label)

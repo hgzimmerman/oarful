@@ -12,10 +12,8 @@ pub(super) fn group_editor(
     base_url: &str,
     tl_json: &str,
     selected_id: Option<&str>,
-    animate: bool,
 ) -> Markup {
     let selected_seg = selected_id.and_then(|sid| group.segments.iter().find(|s| s.id == sid));
-    let cur_seg_type = selected_seg.map(|s| s.seg_type);
 
     html! {
         div class="mt-3 pt-3" style="border-top: 1px solid var(--rule-2)" {
@@ -32,7 +30,7 @@ pub(super) fn group_editor(
                     // Type toggle
                     @let other_type = if group.group_type == GroupType::Warmup { "piece" } else { "warmup" };
                     @let other_label = if group.group_type == GroupType::Warmup { "→ Piece" } else { "→ Warmup" };
-                    form class="inline" hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                    form class="inline" hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="selected" value=(group.id);
@@ -44,7 +42,7 @@ pub(super) fn group_editor(
             }
 
             // Group fields
-            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="outerHTML" hx-trigger="change" {
+            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                 input type="hidden" name="timeline" value=(tl_json);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="selected" value=(group.id);
@@ -141,13 +139,10 @@ pub(super) fn group_editor(
                         }
                         // Click to select
                         form class="flex-1 flex items-center gap-2 min-w-0"
-                             hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                             hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(seg.id);
-                            @if let Some(cst) = cur_seg_type {
-                                input type="hidden" name="prev_seg_type" value=(cst);
-                            }
                             button type="submit" class="flex items-center gap-2 flex-1 min-w-0 text-left" style="background: none; border: none; font: inherit; cursor: pointer; padding: 0" {
                                 span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(seg_type_css(seg.seg_type)) { (seg.seg_type.label()) }
                                 span class="font-mono-stat text-xs flex-1 min-w-0 truncate" style="color: var(--ink-2)" {
@@ -162,7 +157,7 @@ pub(super) fn group_editor(
                         }
                         // Delete segment
                         @if group.segments.len() > 1 {
-                            form class="inline" hx-post={(base_url) "/group-delete"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                            form class="inline" hx-post={(base_url) "/group-delete"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                 input type="hidden" name="timeline" value=(tl_json);
                                 input type="hidden" name="group_id" value=(group.id);
                                 input type="hidden" name="segment_id" value=(seg.id);
@@ -175,7 +170,7 @@ pub(super) fn group_editor(
             // Add segment buttons
             div class="flex gap-1 mt-1" {
                 @for (st, label) in &[("work", "+ Segment"), ("rest", "+ Rest"), ("turn", "+ Turn")] {
-                    form class="inline" hx-post={(base_url) "/group-add"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                    form class="inline" hx-post={(base_url) "/group-add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="seg_type" value=(st);
@@ -187,7 +182,7 @@ pub(super) fn group_editor(
 
             // Selected segment detail editor
             @if let Some(seg) = selected_seg {
-                (segment_editor::segment_editor(seg, group, base_url, tl_json, animate))
+                (segment_editor::segment_editor(seg, group, base_url, tl_json))
             }
         }
     }

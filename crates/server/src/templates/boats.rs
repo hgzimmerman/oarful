@@ -315,7 +315,7 @@ pub(crate) fn form_content(mode: FormMode, data: &BoatFormData, error: Option<&s
             // form sticks with POST since <form> doesn't support PUT
             // natively and the handler accepts both verbs.
             form method="post" action=(action)
-                 hx-post=(action)
+                 hx-post=(action) hx-disabled-elt="find button"
                  hx-target="#admin-fleet-content"
                  hx-push-url="/admin/fleet"
                  class="bg-paper rounded-lg shadow-soft p-6 space-y-4" {

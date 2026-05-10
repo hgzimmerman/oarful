@@ -103,16 +103,16 @@ pub(crate) fn profile_editor_modal(
     html! {
         // Backdrop
         div id="profile-modal-backdrop"
-            class="fixed inset-0 z-40"
+            class="fixed inset-0 z-40 modal-backdrop"
             style="background: color-mix(in oklch, var(--ink) 50%, transparent)"
-            "@click"="releaseFocus(); document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {}
+            "@click"="dismissModal('profile-modal', 'profile-modal-backdrop')" {}
         // Modal
         div id="profile-modal"
             role="dialog"
             "aria-modal"="true"
             "aria-label"="Generator profile"
             class="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4 pointer-events-none" {
-            div class="rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto"
+            div class="rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto pointer-events-auto modal-card"
                 style="background: var(--paper); border: 1px solid var(--rule)" {
                 // Header
                 div class="sticky top-0 px-6 py-4 flex items-center justify-between"
@@ -123,14 +123,14 @@ pub(crate) fn profile_editor_modal(
                     button type="button"
                            class="text-xl leading-none cursor-pointer text-muted"
                            "aria-label"="Close"
-                           "@click"="releaseFocus(); document.getElementById('profile-modal').remove(); document.getElementById('profile-modal-backdrop').remove()" {
+                           "@click"="dismissModal('profile-modal', 'profile-modal-backdrop')" {
                         span "aria-hidden"="true" { "\u{00d7}" }
                     }
                 }
 
                 // Form
                 form method="post" action="/solver-profile"
-                     hx-post="/solver-profile"
+                     hx-post="/solver-profile" hx-disabled-elt="find button"
                      hx-target="#profile-modal"
                      hx-swap="delete"
                      class="px-6 py-4 space-y-6" {

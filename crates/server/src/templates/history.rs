@@ -112,6 +112,7 @@ pub(crate) fn detail_content(
                   style="color: var(--muted)"
                   hx-get="/practices"
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true" {
                     "← All practices"
                 }
@@ -137,7 +138,7 @@ pub(crate) fn detail_content(
                 @if is_coach && !committed.is_empty() && !is_cancelled {
                     div class="no-print flex items-center gap-2" {
                         form method="post" action=(cancel_action)
-                             hx-post=(cancel_action)
+                             hx-post=(cancel_action) hx-disabled-elt="find button"
                              hx-target="#content" {
                             button type="submit"
                                    class="btn-warm-ghost text-xs py-2" style="color: var(--muted)" {
@@ -206,7 +207,7 @@ pub(crate) fn detail_content(
                         }
                         @if is_coach {
                             form method="post" action=(cancel_action)
-                                 hx-post=(cancel_action)
+                                 hx-post=(cancel_action) hx-disabled-elt="find button"
                                  hx-target="#content"
                                  class="no-print" {
                                 button type="submit"
