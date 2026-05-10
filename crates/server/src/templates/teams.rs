@@ -70,6 +70,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                 form method="post" action="/teams"
                      hx-post="/teams"
                      hx-target="#content"
+                     hx-swap="innerHTML transition:true"
                      hx-push-url="true"
                      class="flex items-center gap-2" {
                     input id="team_name" name="name" type="text" required placeholder="Team name"
@@ -89,6 +90,7 @@ pub(crate) fn list_content(teams: &[Team]) -> Markup {
                         a href={"/teams/" (t.id)}
                           hx-get={"/teams/" (t.id)}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="flex items-center justify-between px-6 py-4 hover:bg-paper-2 transition cursor-pointer" {
                             div {
@@ -121,6 +123,7 @@ pub(crate) fn detail_content(
                 a href="/teams"
                   hx-get="/teams"
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="font-mono-stat text-xs tracking-wider hover:underline" style="color: var(--muted)" {
                     "← All teams"
@@ -768,6 +771,7 @@ fn roster_matrix_inner(
                                             a href={"/rowers/" (rower.id)}
                                               hx-get={"/rowers/" (rower.id)}
                                               hx-target="#content"
+                                              hx-swap="innerHTML transition:true"
                                               hx-push-url="true"
                                               class="hover:underline" style="color: var(--link)" {
                                                 (rower.display_name())
@@ -885,6 +889,7 @@ fn fleet_matrix_inner(
                                             a href={"/boats/" (boat.id)}
                                               hx-get={"/boats/" (boat.id)}
                                               hx-target="#content"
+                                              hx-swap="innerHTML transition:true"
                                               hx-push-url="true"
                                               class="hover:underline" style="color: var(--link)" {
                                                 (boat.name)

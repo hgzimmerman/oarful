@@ -112,6 +112,7 @@ pub(crate) fn detail_content(
                   style="color: var(--muted)"
                   hx-get="/practices"
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true" {
                     "← All practices"
                 }

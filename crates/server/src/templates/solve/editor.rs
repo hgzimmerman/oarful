@@ -311,6 +311,7 @@ pub(crate) fn lineup_editor(
         form #clear-form method="post" action=(clear_action)
              hx-post=(clear_action)
              hx-target="#content"
+             hx-swap="innerHTML transition:true"
              hx-push-url="true"
              class="hidden" {}
 
@@ -785,6 +786,7 @@ pub(crate) fn roster_pool(
                         form method="get" action=(walkon_action)
                              hx-get=(walkon_action)
                              hx-target="#content"
+                             hx-swap="innerHTML transition:true"
                              hx-push-url="true"
                              class="inline-flex items-center gap-2" {
                             input type="hidden" name="partial" value="0";

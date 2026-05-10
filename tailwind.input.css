@@ -1006,7 +1006,7 @@ textarea::placeholder {
 /* ── View transitions for HTMX navigation ─────────────────────── */
 ::view-transition-old(*),
 ::view-transition-new(*) {
-  animation-duration: 150ms;
+  animation-duration: 100ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

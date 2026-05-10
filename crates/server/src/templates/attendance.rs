@@ -177,6 +177,7 @@ fn date_header(date: &NaiveDate, today: NaiveDate, practice_id: Option<&Practice
                 a href=(format!("/practices/{pid}/detail"))
                   hx-get=(format!("/practices/{pid}/detail"))
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="hover:opacity-80" style="color: var(--link)" {
                     div class="text-[9px] uppercase tracking-wider" { (date.format("%a")) }

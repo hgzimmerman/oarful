@@ -118,6 +118,7 @@ pub(crate) fn user_row(
                     a href={"/rowers/" (rid)}
                       hx-get={"/rowers/" (rid)}
                       hx-target="#content"
+                      hx-swap="innerHTML transition:true"
                       hx-push-url="true"
                       class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                         (u.display_name())

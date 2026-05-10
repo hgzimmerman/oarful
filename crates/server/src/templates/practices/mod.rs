@@ -71,6 +71,7 @@ pub(crate) fn unified_page(
                 form method="post" action="/practices"
                      hx-post="/practices"
                      hx-target="#content"
+                     hx-swap="innerHTML transition:true"
                      hx-push-url="true" {
                   fieldset class="flex items-end gap-3 flex-wrap mb-2" style="border: none; padding: 0; margin: 0" {
                     legend class="sr-only" { "Add practice" }
@@ -183,6 +184,7 @@ fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Mar
             a href=(href)
               hx-get=(href)
               hx-target="#content"
+              hx-swap="innerHTML transition:true"
               hx-push-url="true"
               class="btn-warm-ink text-xs py-1.5 px-3" {
                 "Fix lineup"
@@ -211,6 +213,7 @@ fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Mar
                     a href=(href)
                       hx-get=(href)
                       hx-target="#content"
+                      hx-swap="innerHTML transition:true"
                       hx-push-url="true"
                       class="btn-warm-ink text-xs py-1.5 px-3" {
                         "Generate lineup"
@@ -224,6 +227,7 @@ fn primary_action(pwp: &PracticeWithPhase, assume_available: bool) -> Option<Mar
                 a href=(href)
                   hx-get=(href)
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="btn-warm-ink text-xs py-1.5 px-3" {
                     "Build plan"
@@ -272,6 +276,7 @@ fn unified_row(pwp: &PracticeWithPhase, is_coach: bool, assume_available: bool) 
                     a href=(href)
                       hx-get=(href)
                       hx-target="#content"
+                      hx-swap="innerHTML transition:true"
                       hx-push-url="true"
                       class="block cursor-pointer" {
                         (row_info(pwp, &weekday))
@@ -359,6 +364,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                             a href={"/practices/" (pid) "/lineup"}
                               hx-get={"/practices/" (pid) "/lineup"}
                               hx-target="#content"
+                              hx-swap="innerHTML transition:true"
                               hx-push-url="true"
                               class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                                 "Generate lineup"
@@ -389,6 +395,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                         a href={"/practices/" (pid) "/lineup"}
                           hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit lineup"
@@ -398,6 +405,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                         a href={"/practices/" (pid) "/detail"}
                           hx-get={"/practices/" (pid) "/detail"}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit plan"
@@ -405,6 +413,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                         a href={"/practices/" (pid) "/lineup"}
                           hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit lineup"
@@ -424,6 +433,7 @@ fn secondary_actions(pwp: &PracticeWithPhase, assume_available: bool) -> Markup 
                         a href={"/practices/" (pid) "/lineup"}
                           hx-get={"/practices/" (pid) "/lineup"}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="block w-full text-left px-3 py-2 text-sm hover:bg-paper-2" {
                             "Edit lineup"

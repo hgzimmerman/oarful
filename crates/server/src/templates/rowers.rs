@@ -174,6 +174,7 @@ fn mobile_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
         a href={"/rowers/" (r.id)}
           hx-get={"/rowers/" (r.id)}
           hx-target="#content"
+          hx-swap="innerHTML transition:true"
           hx-push-url="true"
           class="flex items-center justify-between px-4 py-3 hover:bg-paper-2 transition" {
             div class="min-w-0" {
@@ -202,6 +203,7 @@ fn static_row(r: &Rower, email: Option<&str>, show_emails: bool) -> Markup {
                 a href={"/rowers/" (r.id)}
                   hx-get={"/rowers/" (r.id)}
                   hx-target="#content"
+                  hx-swap="innerHTML transition:true"
                   hx-push-url="true"
                   class="font-serif-heading font-medium text-[15px] tracking-tight hover:underline" style="color: var(--link)" {
                     (r.display_name())

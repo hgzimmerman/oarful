@@ -87,6 +87,7 @@ pub(crate) fn availability_content(
                     a href={"/practices/" (pid) "/detail"}
                       hx-get={"/practices/" (pid) "/detail"}
                       hx-target="#content"
+                      hx-swap="innerHTML transition:true"
                       hx-push-url="true"
                       class="font-semibold underline" style="color: var(--warn)" {
                         "committed lineup for " (date)
@@ -134,6 +135,7 @@ fn availability_row(row: &AvailabilityRow) -> Markup {
                         a href={"/practices/" (row.practice_id) "/detail"}
                           hx-get={"/practices/" (row.practice_id) "/detail"}
                           hx-target="#content"
+                          hx-swap="innerHTML transition:true"
                           hx-push-url="true"
                           class="stat-badge text-[9px] cursor-pointer" style="color: var(--good); background: color-mix(in oklch, var(--good) 10%, var(--paper)); border-color: color-mix(in oklch, var(--good) 22%, var(--rule))" {
                             "View lineup"
@@ -176,6 +178,7 @@ pub(crate) fn email_prefs_content(user: &AppUser) -> Markup {
                 form method="post" action="/my/preferences"
                      hx-post="/my/preferences"
                      hx-target="#content"
+                     hx-swap="innerHTML transition:true"
                      hx-push-url="true"
                      class="space-y-4" {
                     p class="text-sm mb-4" style="color: var(--muted)" {
