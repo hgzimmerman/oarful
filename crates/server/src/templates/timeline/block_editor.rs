@@ -24,7 +24,7 @@ pub(super) fn bare_block_editor(block: &Block, base_url: &str, tl_json: &str) ->
                 }
             }
             @if block.block_type != BlockType::Dock {
-                form hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" {
+                form hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                     input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="patch_id" value=(block.id);
                     input type="hidden" name="selected" value=(block.id);

@@ -15,7 +15,7 @@ pub(super) fn segment_editor(
     let is_work = seg.seg_type.is_work();
     html! {
         div class="mt-3 pt-3" style="border-top: 1px dashed var(--rule-2)" {
-            form hx-post={(base_url) "/patch-segment"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" {
+            form hx-post={(base_url) "/patch-segment"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                 input type="hidden" name="timeline" value=(tl_json);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);

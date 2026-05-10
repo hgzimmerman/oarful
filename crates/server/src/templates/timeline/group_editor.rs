@@ -42,7 +42,7 @@ pub(super) fn group_editor(
             }
 
             // Group fields
-            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" {
+            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                 input type="hidden" name="timeline" value=(tl_json);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="selected" value=(group.id);
