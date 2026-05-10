@@ -275,7 +275,7 @@ pub(crate) fn import_picker_modal(
                                        class="btn-warm-ink text-xs py-1.5 px-4"
                                        hx-post=(format!("/practices/{}/import-template", practice_id))
                                        hx-target="#timeline-section"
-                                       hx-swap="outerHTML"
+                                       hx-swap="innerHTML"
                                        "hx-on::after-request"=(close_js)
                                        hx-confirm=(if has_existing_timeline { "Replace current practice plan with this template?" } else { "" }) {
                                     "Use"

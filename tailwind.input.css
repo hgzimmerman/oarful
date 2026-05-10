@@ -897,22 +897,7 @@ html.dark {
     border-radius: 3px;
   }
 
-  /* Editor section appear animation */
-  @keyframes tl-appear {
-    from {
-      opacity: 0.5;
-      max-height: 0;
-      overflow: hidden;
-    }
-    to {
-      opacity: 1;
-      max-height: 2000px;
-      overflow: visible;
-    }
-  }
-  .tl-animate-in {
-    animation: tl-appear 500ms ease-out forwards;
-  }
+  /* Height transition for editor swaps is driven by JS in section_wrapper */
 
   /* Drag-and-drop reorder */
   .tl-dragging {

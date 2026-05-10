@@ -354,7 +354,7 @@ pub(crate) async fn import_handler(
     let base_url = practice_timeline_url(practice_id);
     let import_url = format!("/practices/{practice_id}/import-template");
     Ok(Html(
-        templates::timeline::summary_with_import(&tl, &base_url, &import_url).into_string(),
+        templates::timeline::summary_content(&tl, &base_url, Some(&import_url), None).into_string(),
     ))
 }
 
@@ -404,7 +404,7 @@ pub(crate) async fn tl_open_editor(
         .unwrap_or_else(|| Timeline::default_empty(90));
     let base_url = template_timeline_url(template_id);
     Ok(Html(
-        templates::timeline::editor(&timeline, &base_url, None).into_string(),
+        templates::timeline::editor_content(&timeline, &base_url, None).into_string(),
     ))
 }
 
@@ -424,7 +424,7 @@ pub(crate) async fn tl_save(
         .map_err(internal_error)?;
     let base_url = template_timeline_url(template_id);
     Ok(Html(
-        templates::timeline::summary(&tl, &base_url).into_string(),
+        templates::timeline::summary_content(&tl, &base_url, None, None).into_string(),
     ))
 }
 
@@ -445,7 +445,7 @@ pub(crate) async fn tl_close(
         .unwrap_or_else(|| Timeline::default_empty(90));
     let base_url = template_timeline_url(template_id);
     Ok(Html(
-        templates::timeline::summary(&timeline, &base_url).into_string(),
+        templates::timeline::summary_content(&timeline, &base_url, None, None).into_string(),
     ))
 }
 
@@ -536,13 +536,13 @@ tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
         }
         _ => {
             return Html(
-                templates::timeline::editor(&tl, base_url, input.base.selected.as_deref())
+                templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
                     .into_string(),
             )
         }
     };
     tl.insert_before_dock(vec![new_item]);
-    Html(templates::timeline::editor(&tl, base_url, Some(&select_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string())
 });
 
 // ── Delete block ──
@@ -561,7 +561,7 @@ tl_mutation_handler!(
         let mut tl = input.base.parse();
         tl.items
             .retain(|it| it.is_structural() || it.id() != input.delete_id);
-        Html(templates::timeline::editor(&tl, base_url, None).into_string())
+        Html(templates::timeline::editor_content(&tl, base_url, None).into_string())
     }
 );
 
@@ -602,8 +602,7 @@ tl_mutation_handler!(
             }
         }
         Html(
-            templates::timeline::editor_no_animate(&tl, base_url, Some(&input.patch_id))
-                .into_string(),
+            templates::timeline::editor_content(&tl, base_url, Some(&input.patch_id)).into_string(),
         )
     }
 );
@@ -700,7 +699,7 @@ tl_mutation_handler!(
             }
         }
         Html(
-            templates::timeline::editor_no_animate(&tl, base_url, Some(&input.segment_id))
+            templates::timeline::editor_content(&tl, base_url, Some(&input.segment_id))
                 .into_string(),
         )
     }
@@ -722,7 +721,7 @@ tl_mutation_handler!(
         let mut tl = input.base.parse();
         tl.target_minutes = input.new_target.clamp(20, 240);
         Html(
-            templates::timeline::editor_no_animate(&tl, base_url, input.base.selected.as_deref())
+            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
                 .into_string(),
         )
     }
@@ -775,7 +774,7 @@ tl_mutation_handler!(
             let drop_idx = drop_idx.max(launch_end);
             tl.items.insert(drop_idx, item);
         }
-        Html(templates::timeline::editor(&tl, base_url, Some(&input.drag_id)).into_string())
+        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
     }
 );
 
@@ -809,12 +808,12 @@ tl_mutation_handler!(
                 }
                 tl.items.insert(idx + 1, dup);
                 return Html(
-                    templates::timeline::editor(&tl, base_url, Some(&new_id)).into_string(),
+                    templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string(),
                 );
             }
         }
         Html(
-            templates::timeline::editor(&tl, base_url, input.base.selected.as_deref())
+            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
                 .into_string(),
         )
     }
@@ -847,8 +846,6 @@ pub(crate) struct GroupPatchForm {
     group_note: Option<String>,
     #[serde(default)]
     group_type: Option<GroupType>,
-    #[serde(default)]
-    prev_seg_type: Option<SegmentType>,
 }
 
 tl_mutation_handler!(
@@ -927,24 +924,7 @@ tl_mutation_handler!(
             }
         }
         let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
-        let new_seg_type = tl.items.iter().find_map(|it| {
-            if let TimelineItem::Group(g) = it {
-                g.segments.iter().find(|s| s.id == sel).map(|s| s.seg_type)
-            } else {
-                None
-            }
-        });
-        let type_changed = match (input.prev_seg_type, new_seg_type) {
-            (Some(prev), Some(new_type)) => prev != new_type,
-            (None, Some(_)) => true,
-            _ => false,
-        };
-        let render = if type_changed {
-            templates::timeline::editor
-        } else {
-            templates::timeline::editor_no_animate
-        };
-        Html(render(&tl, base_url, Some(sel)).into_string())
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
     }
 );
 
@@ -980,7 +960,7 @@ tl_mutation_handler!(
                 }
             }
         }
-        Html(templates::timeline::editor(&tl, base_url, Some(&new_id)).into_string())
+        Html(templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string())
     }
 );
 
@@ -1009,7 +989,9 @@ tl_mutation_handler!(
         }
         tl.items
             .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
-        Html(templates::timeline::editor(&tl, base_url, Some(&input.group_id)).into_string())
+        Html(
+            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
+        )
     }
 );
 
@@ -1048,11 +1030,11 @@ tl_mutation_handler!(
             let select_id = g.id.clone();
             tl.insert_before_dock(vec![TimelineItem::Group(g)]);
             return Html(
-                templates::timeline::editor(&tl, base_url, Some(&select_id)).into_string(),
+                templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string(),
             );
         }
         Html(
-            templates::timeline::editor(&tl, base_url, input.base.selected.as_deref())
+            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
                 .into_string(),
         )
     }
@@ -1091,7 +1073,7 @@ tl_mutation_handler!(
                 }
             }
         }
-        Html(templates::timeline::editor(&tl, base_url, Some(&input.drag_id)).into_string())
+        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
     }
 );
 

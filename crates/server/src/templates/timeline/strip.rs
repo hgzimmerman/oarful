@@ -44,7 +44,7 @@ pub(super) fn timeline_strip(
                         @let tooltip = block_tooltip(b, is_dock, slack);
                         @let is_structural = b.block_type.is_structural();
                         form class="inline" style={"flex: " (format!("{:.2}", pct)) "; min-width: 0; " (bg) "; " (border)}
-                             title=(tooltip) hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="outerHTML"
+                             title=(tooltip) hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="innerHTML"
                              draggable={@if !is_structural { "true" } @else { "false" }}
                              data-drag-id=[(!is_structural).then_some(id)]
                              data-drop-id=[(!is_structural).then_some(id)]
@@ -78,7 +78,7 @@ pub(super) fn timeline_strip(
                             data-drag-zone="strip" {
                             @if !g.name.is_empty() {
                                 form class="block" style="line-height: 0"
-                                     hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                                     hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                     input type="hidden" name="timeline" value=(tl_json);
                                     input type="hidden" name="group_id" value=(id);
                                     input type="hidden" name="selected" value=(g.segments.first().map(|s| s.id.as_str()).unwrap_or(id));
@@ -102,7 +102,7 @@ pub(super) fn timeline_strip(
                                     @let rotation_gap = if bar_idx > 0 && bar_idx % seg_count == 0 { "margin-left: 2px" } else { "" };
                                     @let seg_tip = segment_tooltip(s);
                                     form class="inline" style={"flex: " (format!("{:.1}", spct)) "; min-width: 0; " (strip_bg_seg(s.seg_type, g.group_type)) "; border-radius: 1px; " (seg_border) "; " (rotation_gap)}
-                                         title=(seg_tip) hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="outerHTML" {
+                                         title=(seg_tip) hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                         input type="hidden" name="timeline" value=(tl_json);
                                         input type="hidden" name="group_id" value=(id);
                                         input type="hidden" name="selected" value=(s.id);

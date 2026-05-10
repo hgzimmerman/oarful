@@ -158,7 +158,7 @@ pub(crate) async fn open_editor(
     });
 
     let base_url = practice_timeline_url(practice_id);
-    let html = templates::timeline::editor(&timeline, &base_url, None);
+    let html = templates::timeline::editor_content(&timeline, &base_url, None);
     Ok(Html(html.into_string()))
 }
 
@@ -238,14 +238,14 @@ pub(crate) async fn add_block(
         }
         _ => {
             return Html(
-                templates::timeline::editor(&tl, &base_url, input.base.selected.as_deref())
+                templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
                     .into_string(),
             )
         }
     };
 
     tl.insert_before_dock(vec![new_item]);
-    Html(templates::timeline::editor(&tl, &base_url, Some(&select_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/delete` — remove a block or group.
@@ -264,7 +264,7 @@ pub(crate) async fn delete_block(
     let mut tl = input.base.parse();
     tl.items
         .retain(|it| it.is_structural() || it.id() != input.delete_id);
-    Html(templates::timeline::editor(&tl, &base_url, None).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, None).into_string())
 }
 
 /// `POST /history/{id}/timeline/patch-block` — update fields on a bare block.
@@ -305,9 +305,7 @@ pub(crate) async fn patch_block(
         }
     }
 
-    Html(
-        templates::timeline::editor_no_animate(&tl, &base_url, Some(&input.patch_id)).into_string(),
-    )
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.patch_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/patch-segment` — update fields on a segment inside a group.
@@ -404,10 +402,7 @@ pub(crate) async fn patch_segment(
     }
 
     // Keep the segment selected so its editor stays open.
-    Html(
-        templates::timeline::editor_no_animate(&tl, &base_url, Some(&input.segment_id))
-            .into_string(),
-    )
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.segment_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/target` — update target minutes.
@@ -426,7 +421,7 @@ pub(crate) async fn update_target(
     let mut tl = input.base.parse();
     tl.target_minutes = input.new_target.clamp(20, 240);
     Html(
-        templates::timeline::editor_no_animate(&tl, &base_url, input.base.selected.as_deref())
+        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
             .into_string(),
     )
 }
@@ -447,7 +442,7 @@ pub(crate) async fn save_timeline(
         .await
         .map_err(internal_error)?;
     Ok(Html(
-        templates::timeline::summary_with_import(&tl, &base_url, &import_url).into_string(),
+        templates::timeline::summary_content(&tl, &base_url, Some(&import_url), None).into_string(),
     ))
 }
 
@@ -466,10 +461,11 @@ pub(crate) async fn close_editor(
         .ok_or_else(|| internal_error(diesel::result::Error::NotFound))?;
     let timeline = practice.timeline();
     Ok(Html(
-        templates::timeline::summary_with_import(
+        templates::timeline::summary_content(
             timeline.as_ref().unwrap_or(&Timeline::default_empty(90)),
             &base_url,
-            &import_url,
+            Some(&import_url),
+            None,
         )
         .into_string(),
     ))
@@ -528,7 +524,7 @@ pub(crate) async fn reorder_block(
         let drop_idx = drop_idx.max(launch_end);
         tl.items.insert(drop_idx, item);
     }
-    Html(templates::timeline::editor(&tl, &base_url, Some(&input.drag_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.drag_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/duplicate` — duplicate an item.
@@ -560,10 +556,15 @@ pub(crate) async fn duplicate_block(
                 }
             }
             tl.items.insert(idx + 1, dup);
-            return Html(templates::timeline::editor(&tl, &base_url, Some(&new_id)).into_string());
+            return Html(
+                templates::timeline::editor_content(&tl, &base_url, Some(&new_id)).into_string(),
+            );
         }
     }
-    Html(templates::timeline::editor(&tl, &base_url, input.base.selected.as_deref()).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
+            .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/group-patch` — update group name/rotation/type.
@@ -592,8 +593,6 @@ pub(crate) struct GroupPatchForm {
     group_note: Option<String>,
     #[serde(default)]
     group_type: Option<GroupType>,
-    #[serde(default)]
-    prev_seg_type: Option<SegmentType>,
 }
 
 pub(crate) async fn group_patch(
@@ -682,26 +681,7 @@ pub(crate) async fn group_patch(
     // Use selected from form (may be a segment ID) or fall back to group.
     let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
 
-    // Determine if the segment type changed (to decide animation).
-    let new_seg_type = tl.items.iter().find_map(|it| {
-        if let TimelineItem::Group(g) = it {
-            g.segments.iter().find(|s| s.id == sel).map(|s| s.seg_type)
-        } else {
-            None
-        }
-    });
-    let type_changed = match (input.prev_seg_type, new_seg_type) {
-        (Some(prev), Some(new_type)) => prev != new_type,
-        (None, Some(_)) => true, // no previous = first selection, animate
-        _ => false,
-    };
-
-    let render = if type_changed {
-        templates::timeline::editor
-    } else {
-        templates::timeline::editor_no_animate
-    };
-    Html(render(&tl, &base_url, Some(sel)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
 }
 
 /// `POST /history/{id}/timeline/group-add` — add a segment to a group.
@@ -737,7 +717,7 @@ pub(crate) async fn group_add_segment(
             }
         }
     }
-    Html(templates::timeline::editor(&tl, &base_url, Some(&new_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&new_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/group-delete` — remove a segment from a group.
@@ -766,7 +746,7 @@ pub(crate) async fn group_delete_segment(
     // If group has no segments, remove it.
     tl.items
         .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
-    Html(templates::timeline::editor(&tl, &base_url, Some(&input.group_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.group_id)).into_string())
 }
 
 /// `POST /history/{id}/timeline/template` — insert a built-in template.
@@ -803,9 +783,14 @@ pub(crate) async fn insert_template(
         };
         let select_id = g.id.clone();
         tl.insert_before_dock(vec![TimelineItem::Group(g)]);
-        return Html(templates::timeline::editor(&tl, &base_url, Some(&select_id)).into_string());
+        return Html(
+            templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string(),
+        );
     }
-    Html(templates::timeline::editor(&tl, &base_url, input.base.selected.as_deref()).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
+            .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/group-reorder` — reorder segments within a group.
@@ -841,7 +826,7 @@ pub(crate) async fn group_reorder_segment(
             }
         }
     }
-    Html(templates::timeline::editor(&tl, &base_url, Some(&input.drag_id)).into_string())
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.drag_id)).into_string())
 }
 
 #[cfg(test)]
@@ -951,10 +936,9 @@ mod tests {
     // ── GroupPatchForm ──
 
     #[test]
-    fn group_patch_form_parses_group_type_and_prev_seg_type() {
-        let f: GroupPatchForm = form("group_id=g1&group_type=piece&prev_seg_type=turn");
+    fn group_patch_form_parses_group_type() {
+        let f: GroupPatchForm = form("group_id=g1&group_type=piece");
         assert_eq!(f.group_type, Some(GroupType::Piece));
-        assert_eq!(f.prev_seg_type, Some(SegmentType::Turn));
     }
 
     // ── GroupAddForm ──
