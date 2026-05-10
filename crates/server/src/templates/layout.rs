@@ -106,7 +106,7 @@ pub(crate) fn page(title: &str, content: Markup, role: Role, is_superuser: bool)
                         button type="button"
                                class="font-bold text-lg leading-none opacity-60 hover:opacity-100"
                                "aria-label"="Dismiss"
-                               onclick="document.getElementById('toast').classList.add('hidden')" {
+                               onclick="_dismissToast()" {
                             span "aria-hidden"="true" { "\u{00d7}" }
                         }
                     }

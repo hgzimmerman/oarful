@@ -11,6 +11,18 @@ var _toastStyles = {
     neutral: 'bg-paper text-ink border-rule border-l-ink-3'
 };
 
+function _dismissToast() {
+    var toast = document.getElementById('toast');
+    if (!toast || toast.classList.contains('hidden')) return;
+    toast.classList.remove('toast-enter');
+    toast.classList.add('toast-exit');
+    toast.addEventListener('animationend', function handler() {
+        toast.classList.add('hidden');
+        toast.classList.remove('toast-exit');
+        toast.removeEventListener('animationend', handler);
+    }, { once: true });
+}
+
 function showToast(msg, type) {
     var toast = document.getElementById('toast');
     var inner = document.getElementById('toast-inner');
@@ -20,11 +32,10 @@ function showToast(msg, type) {
     // Reset style classes, apply the right variant.
     var styles = _toastStyles[type] || _toastStyles.neutral;
     inner.className = 'px-4 py-3 rounded-lg shadow-lg flex items-start gap-3 text-sm border border-l-4 ' + styles;
-    toast.classList.remove('hidden');
+    toast.classList.remove('hidden', 'toast-exit');
+    toast.classList.add('toast-enter');
     clearTimeout(window._toastTimer);
-    window._toastTimer = setTimeout(function() {
-        toast.classList.add('hidden');
-    }, type === 'error' ? 6000 : 4000);
+    window._toastTimer = setTimeout(_dismissToast, type === 'error' ? 6000 : 4000);
 }
 
 // Convenience wrappers.
