@@ -257,15 +257,6 @@ can resume without re-deriving context.
 
 ## Open work
 
-### Architecture / platform
-
-#### Zone reward × side-preference scaling — shipped
-
-Zone reward (S3) is now discounted when the seat is on the rower's
-wrong side, proportional to `side_strength` (12% per level:
-strength 1→88%, 2→76%, 3→64%, 4→52%, 5→40%). Applied in both the
-CP solver and SA post-processor. `Either` rowers are unaffected.
-
 ### Practice timeline
 
 #### River map + landmark overlay on timeline strip
@@ -509,18 +500,6 @@ spinner runs.
 **Touches:** `lib.rs` (ProgressTracker decode + throttle),
 `handlers/solve/stream.rs` (SSE event), `templates/solve/editor.rs`
 (JS animation handler).
-
-#### Simulated annealing post-processor for lineup optimization — shipped
-
-SA post-processor in `crates/solver/src/anneal.rs`. Runs 10k
-iterations after the CP solve, exploring cross-boat swaps,
-within-boat swaps, and bench swaps. Standalone objective evaluator
-mirrors all S1–S21 soft constraints. `sa_postprocess: bool` on
-`SolveRequest` (default true). Applied to primary in both `solve()`
-and `solve_streaming()`. Alternatives not yet SA-processed.
-
-Future tuning: adaptive initial temperature, SA on alternatives,
-seeded RNG for deterministic benchmarks.
 
 #### #48 — Deeper unsat diagnostics (relaxation pass / Pumpkin unsat core)
 
