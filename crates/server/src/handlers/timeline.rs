@@ -244,7 +244,10 @@ pub(crate) async fn add_block(
         }
     };
 
-    tl.insert_before_dock(vec![new_item]);
+    match input.base.selected.as_deref().filter(|s| !s.is_empty()) {
+        Some(sel) => tl.insert_after_item(sel, vec![new_item]),
+        None => tl.insert_before_dock(vec![new_item]),
+    }
     Html(templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string())
 }
 
@@ -782,7 +785,10 @@ pub(crate) async fn insert_template(
             note: String::new(),
         };
         let select_id = g.id.clone();
-        tl.insert_before_dock(vec![TimelineItem::Group(g)]);
+        match input.base.selected.as_deref().filter(|s| !s.is_empty()) {
+            Some(sel) => tl.insert_after_item(sel, vec![TimelineItem::Group(g)]),
+            None => tl.insert_before_dock(vec![TimelineItem::Group(g)]),
+        }
         return Html(
             templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string(),
         );

@@ -322,6 +322,7 @@ pub(crate) fn editor_content(tl: &Timeline, base_url: &str, selected_id: Option<
             ] {
                 form class="inline" hx-post={(base_url) "/add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="selected" value=(selected_id.unwrap_or(""));
                     input type="hidden" name="add_type" value=(add_type);
                     button type="submit" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80" style=(css) { (label) }
                 }
@@ -329,6 +330,7 @@ pub(crate) fn editor_content(tl: &Timeline, base_url: &str, selected_id: Option<
             @for bt in BlockType::USER_ADDABLE {
                 form class="inline" hx-post={(base_url) "/add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="selected" value=(selected_id.unwrap_or(""));
                     input type="hidden" name="add_type" value=(bt.label().to_lowercase());
                     button type="submit" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80" style=(block_type_css(*bt)) { (bt.label()) }
                 }
@@ -337,6 +339,7 @@ pub(crate) fn editor_content(tl: &Timeline, base_url: &str, selected_id: Option<
             @for tmpl in &timeline::built_in_templates() {
                 form class="inline" hx-post={(base_url) "/template"} hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="selected" value=(selected_id.unwrap_or(""));
                     input type="hidden" name="template_id" value=(tmpl.id);
                     button type="submit" class="font-mono-stat text-[9px] px-2 py-1 rounded border cursor-pointer hover:opacity-80"
                            style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)" title=(tmpl.description) { (tmpl.name) }
