@@ -691,6 +691,40 @@ impl Timeline {
             .collect()
     }
 
+    /// Insert items after the item with the given ID, or before the dock if not found.
+    pub fn insert_after_item(&mut self, after_id: &str, new_items: Vec<TimelineItem>) {
+        // Find the top-level item matching after_id (or containing a segment with that ID).
+        let after_idx = self.items.iter().position(|it| {
+            it.id() == after_id
+                || matches!(it, TimelineItem::Group(g) if g.segments.iter().any(|s| s.id == after_id))
+        });
+        let insert_at = match after_idx {
+            Some(idx) => {
+                // Insert after the matched item, but never past the dock.
+                let dock_idx = self
+                    .items
+                    .iter()
+                    .position(|it| {
+                        matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Dock)
+                    })
+                    .unwrap_or(self.items.len());
+                (idx + 1).min(dock_idx)
+            }
+            None => {
+                // Fallback: before dock.
+                self.items
+                    .iter()
+                    .position(|it| {
+                        matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Dock)
+                    })
+                    .unwrap_or(self.items.len())
+            }
+        };
+        for (i, item) in new_items.into_iter().enumerate() {
+            self.items.insert(insert_at + i, item);
+        }
+    }
+
     /// Insert items immediately before the trailing dock.
     pub fn insert_before_dock(&mut self, new_items: Vec<TimelineItem>) {
         let dock_idx = self

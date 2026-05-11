@@ -24,7 +24,7 @@ pub(super) fn timeline_strip(
         .max(1.0);
 
     html! {
-        div class="flex gap-px mb-3 rounded overflow-hidden" style="height: 45px; background: var(--paper-2)" {
+        div id="tl-strip" class="flex gap-px mb-3 rounded overflow-hidden" style="height: 45px; background: var(--paper-2)" {
             @for item in &tl.items {
                 @let id = item.id();
                 @let is_selected = selected_id == Some(id) || match item {
@@ -46,6 +46,7 @@ pub(super) fn timeline_strip(
                         form class="inline" style={"flex: " (format!("{:.2}", pct)) "; min-width: 0; " (bg) "; " (border)}
                              title=(tooltip) hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="innerHTML"
                              draggable={@if !is_structural { "true" } @else { "false" }}
+                             data-tl-id=(id)
                              data-drag-id=[(!is_structural).then_some(id)]
                              data-drop-id=[(!is_structural).then_some(id)]
                              data-drag-zone="strip" {
@@ -73,6 +74,7 @@ pub(super) fn timeline_strip(
                         div style={"flex: " (format!("{:.2}", pct)) "; min-width: 0; " (bg) "; " (border)
                                     "; display: flex; flex-direction: column; border-radius: 2px; overflow: hidden"}
                             draggable="true"
+                            data-tl-id=(id)
                             data-drag-id=(id)
                             data-drop-id=(id)
                             data-drag-zone="strip" {
