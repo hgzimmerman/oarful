@@ -596,7 +596,7 @@ const STRIP_FLIP_JS: &str = r#"<script>
       }
     });
 
-    // Deleted items: overlay a clone and shrink it out to the right
+    // Deleted items: overlay a clone and collapse it leftward
     Object.keys(saved).forEach(function(id) {
       if (newIds[id]) return;
       var or = saved[id];
@@ -608,7 +608,7 @@ const STRIP_FLIP_JS: &str = r#"<script>
       ghost.style.height = or.height + 'px';
       ghost.style.zIndex = '10';
       ghost.style.pointerEvents = 'none';
-      ghost.style.transformOrigin = 'right center';
+      ghost.style.transformOrigin = 'left center';
       ghost.style.margin = '0';
       document.body.appendChild(ghost);
       void ghost.offsetWidth;
