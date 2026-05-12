@@ -223,6 +223,34 @@ pub(crate) fn create_router(state: AppState) -> Router {
             "/practices/{id}/timeline/template",
             post(timeline::insert_template),
         )
+        .route(
+            "/practices/{id}/timeline/group-split",
+            post(timeline::group_split),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-add",
+            post(timeline::modifier_add),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-remove",
+            post(timeline::modifier_remove),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-update",
+            post(timeline::modifier_update),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-toggle",
+            post(timeline::modifier_toggle),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-override",
+            post(timeline::modifier_override),
+        )
+        .route(
+            "/practices/{id}/timeline/modifier-revert",
+            post(timeline::modifier_revert),
+        )
         // Club hub (Coach+)
         .route("/team", get(team_hub::index_handler))
         .route("/team/roster", get(team_hub::roster_handler))
@@ -340,6 +368,34 @@ pub(crate) fn create_router(state: AppState) -> Router {
         .route(
             "/admin/plan-templates/{id}/timeline/template",
             post(plan_templates::tl_insert_template),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/group-split",
+            post(plan_templates::tl_group_split),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-add",
+            post(plan_templates::tl_modifier_add),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-remove",
+            post(plan_templates::tl_modifier_remove),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-update",
+            post(plan_templates::tl_modifier_update),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-toggle",
+            post(plan_templates::tl_modifier_toggle),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-override",
+            post(plan_templates::tl_modifier_override),
+        )
+        .route(
+            "/admin/plan-templates/{id}/timeline/modifier-revert",
+            post(plan_templates::tl_modifier_revert),
         )
         // Import template into practice
         .route(

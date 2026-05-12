@@ -8,48 +8,14 @@ use axum::{extract::Path, response::Html, Extension, Form};
 use lineup_db::{
     practice::{Practice, PracticeId},
     timeline::{
-        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, HandDrill, Intensity,
-        PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide, Timeline, TimelineItem,
+        self, Blade, Block, BlockType, Duration, DurationUnit, Group, GroupType, HandDrill,
+        Intensity, Modifier, PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide,
+        Timeline, TimelineItem,
     },
 };
 use serde::Deserialize;
 
 use crate::{handlers::internal_error, state::TenantContext, templates};
-
-/// A comma-separated list of values deserialized from a single form field.
-///
-/// Used for multi-select chip groups (pause points, drills) where the
-/// template writes selected values into one hidden input as CSV.
-/// Invalid items are silently skipped (same as the old manual parsing).
-#[derive(Debug)]
-pub(crate) struct CommaSep<T>(pub Vec<T>);
-
-impl<T> Default for CommaSep<T> {
-    fn default() -> Self {
-        Self(vec![])
-    }
-}
-
-impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for CommaSep<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let items = s
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .filter_map(|p| {
-                use serde::de::IntoDeserializer;
-                let de: serde::de::value::StringDeserializer<serde::de::value::Error> =
-                    p.to_owned().into_deserializer();
-                T::deserialize(de).ok()
-            })
-            .collect();
-        Ok(CommaSep(items))
-    }
-}
 
 /// Shared form field: the current timeline JSON + selected item id.
 #[derive(Debug, Deserialize)]
@@ -127,11 +93,7 @@ pub(crate) fn default_segment() -> Segment {
         },
         rate: Some([20, 20]),
         intensity: Some(timeline::Intensity::Paddle),
-        partial: None,
-        pause: vec![],
-        pause_every: None,
-        blade: None,
-        drills: vec![],
+        modifiers: vec![],
         note: String::new(),
     }
 }
@@ -218,6 +180,7 @@ pub(crate) async fn add_block(
                 segments: vec![default_segment()],
                 repeat: None,
                 rotation: Rotation::default(),
+                modifiers: vec![],
                 note: String::new(),
             };
             let sid = g.id.clone();
@@ -231,6 +194,7 @@ pub(crate) async fn add_block(
                 segments: vec![default_segment()],
                 repeat: None,
                 rotation: Rotation::default(),
+                modifiers: vec![],
                 note: String::new(),
             };
             let sid = g.id.clone();
@@ -311,7 +275,7 @@ pub(crate) async fn patch_block(
     Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.patch_id)).into_string())
 }
 
-/// `POST /history/{id}/timeline/patch-segment` — update fields on a segment inside a group.
+/// `POST /history/{id}/timeline/patch-segment` — update base fields on a segment inside a group.
 #[derive(Debug, Deserialize)]
 pub(crate) struct PatchSegmentForm {
     #[serde(flatten)]
@@ -331,16 +295,6 @@ pub(crate) struct PatchSegmentForm {
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
-    partial: Option<Slide>,
-    #[serde(default)]
-    blade: Option<String>,
-    #[serde(default)]
-    pause_points: CommaSep<PausePoint>,
-    #[serde(default)]
-    pause_every: Option<u32>,
-    #[serde(default)]
-    drills: CommaSep<HandDrill>,
-    #[serde(default)]
     _range_toggle: Option<String>,
     #[serde(default)]
     seg_type: Option<SegmentType>,
@@ -348,7 +302,7 @@ pub(crate) struct PatchSegmentForm {
 
 pub(crate) async fn patch_segment(
     Path(practice_id): Path<PracticeId>,
-    Form(mut input): Form<PatchSegmentForm>,
+    Form(input): Form<PatchSegmentForm>,
 ) -> Html<String> {
     let base_url = practice_timeline_url(practice_id);
     let mut tl = input.base.parse();
@@ -370,6 +324,9 @@ pub(crate) async fn patch_segment(
                             let mut hi = input.rate_high.unwrap_or(cur[1]).clamp(lo, 50);
                             if input._range_toggle.is_none() {
                                 hi = lo;
+                            } else if lo == hi {
+                                // Toggling range on: bump hi so two inputs appear
+                                hi = (lo + 2).clamp(lo, 50);
                             }
                             s.rate = Some([lo, hi]);
                         }
@@ -379,20 +336,6 @@ pub(crate) async fn patch_segment(
                         if let Some(ref n) = input.note {
                             s.note = n.clone();
                         }
-                        if let Some(sl) = input.partial {
-                            s.partial = Some(sl);
-                        }
-                        if let Some(ref bl) = input.blade {
-                            s.blade = match bl.as_str() {
-                                "square" => Some(timeline::Blade::Square),
-                                "partial-feather" => Some(timeline::Blade::PartialFeather),
-                                "none" => None,
-                                _ => Some(timeline::Blade::Feather),
-                            };
-                        }
-                        s.pause = std::mem::take(&mut input.pause_points.0);
-                        s.pause_every = input.pause_every.filter(|&n| n > 0);
-                        s.drills = std::mem::take(&mut input.drills.0);
                         if let Some(st) = input.seg_type {
                             s.seg_type = st;
                         }
@@ -782,6 +725,7 @@ pub(crate) async fn insert_template(
             segments,
             repeat: tmpl.repeat,
             rotation: tmpl.rotation.clone(),
+            modifiers: tmpl.modifiers.clone(),
             note: String::new(),
         };
         let select_id = g.id.clone();
@@ -835,52 +779,306 @@ pub(crate) async fn group_reorder_segment(
     Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.drag_id)).into_string())
 }
 
+/// `POST .../group-split` — expand a repeated group into N independent copies.
+#[derive(Debug, Deserialize)]
+pub(crate) struct GroupSplitForm {
+    #[serde(flatten)]
+    pub(crate) base: TimelineForm,
+    pub(crate) group_id: String,
+}
+
+pub(crate) async fn group_split(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupSplitForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+
+    for item in &mut tl.items {
+        if let TimelineItem::Group(g) = item {
+            if g.id == input.group_id {
+                let reps = g.repeat.unwrap_or(1).max(1) as usize;
+                if reps > 1 {
+                    // Duplicate the segment sequence N times with fresh IDs
+                    let original_segs = g.segments.clone();
+                    for _ in 1..reps {
+                        for s in &original_segs {
+                            let mut copy = s.clone();
+                            copy.id = make_id();
+                            g.segments.push(copy);
+                        }
+                    }
+                    g.repeat = None;
+                }
+                break;
+            }
+        }
+    }
+
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.group_id)).into_string())
+}
+
+// ── Modifier mutation handlers ──────────────────────────────────────────
+
+/// Shared form for modifier mutations.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ModifierForm {
+    #[serde(flatten)]
+    pub(crate) base: TimelineForm,
+    pub(crate) group_id: String,
+    #[serde(default)]
+    pub(crate) segment_id: Option<String>,
+    pub(crate) kind: String,
+    #[serde(default)]
+    pub(crate) scope: Option<String>,
+    #[serde(default)]
+    pub(crate) value: Option<String>,
+    #[serde(default)]
+    pub(crate) subfield: Option<String>,
+    // Repeating emphasis compound fields
+    #[serde(default)]
+    pub(crate) re_every: Option<u32>,
+    #[serde(default)]
+    pub(crate) re_every_unit: Option<DurationUnit>,
+    #[serde(default)]
+    pub(crate) re_count: Option<u32>,
+    #[serde(default)]
+    pub(crate) re_label: Option<String>,
+}
+
+/// Helper: find the modifier list to mutate (group or segment).
+pub(crate) fn find_modifier_target<'a>(
+    tl: &'a mut Timeline,
+    group_id: &str,
+    segment_id: Option<&str>,
+    scope: Option<&str>,
+) -> Option<&'a mut Vec<Modifier>> {
+    for item in &mut tl.items {
+        if let TimelineItem::Group(g) = item {
+            if g.id == group_id {
+                if scope == Some("group") {
+                    return Some(&mut g.modifiers);
+                }
+                if let Some(sid) = segment_id {
+                    if let Some(s) = g.segments.iter_mut().find(|s| s.id == sid) {
+                        return Some(&mut s.modifiers);
+                    }
+                }
+                // Default to group if no segment specified
+                return Some(&mut g.modifiers);
+            }
+        }
+    }
+    None
+}
+
+/// `POST .../modifier-add` — add a modifier with default value.
+pub(crate) async fn modifier_add(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    if let Some(m) = Modifier::default_for_kind(&input.kind) {
+        if let Some(mods) = find_modifier_target(
+            &mut tl,
+            &input.group_id,
+            input.segment_id.as_deref(),
+            input.scope.as_deref(),
+        ) {
+            // Don't add duplicate kinds
+            if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
+                mods.push(m);
+            }
+        }
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
+/// `POST .../modifier-remove` — remove a modifier by kind.
+pub(crate) async fn modifier_remove(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    if let Some(mods) = find_modifier_target(
+        &mut tl,
+        &input.group_id,
+        input.segment_id.as_deref(),
+        input.scope.as_deref(),
+    ) {
+        mods.retain(|m| m.kind_id() != input.kind);
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
+/// `POST .../modifier-update` — update a modifier's value (picks-one, free text, pause every).
+pub(crate) async fn modifier_update(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    if let Some(mods) = find_modifier_target(
+        &mut tl,
+        &input.group_id,
+        input.segment_id.as_deref(),
+        input.scope.as_deref(),
+    ) {
+        if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+            let val = input.value.as_deref().unwrap_or("");
+            match m {
+                Modifier::Blade { value } => {
+                    *value = match val {
+                        "square" => Blade::Square,
+                        "partial-feather" => Blade::PartialFeather,
+                        _ => Blade::Feather,
+                    };
+                }
+                Modifier::Partial { value } => {
+                    if let Ok(v) = val.parse::<Slide>() {
+                        *value = v;
+                    }
+                }
+                Modifier::PauseAt { every, .. } => {
+                    if input.subfield.as_deref() == Some("every") {
+                        *every = val.parse::<u32>().ok().filter(|&n| n > 0);
+                    }
+                }
+                Modifier::Emphasis { text } => {
+                    *text = val.to_string();
+                }
+                Modifier::RepeatingEmphasis {
+                    every,
+                    every_unit,
+                    count,
+                    label,
+                } => {
+                    if let Some(v) = input.re_every {
+                        *every = v.max(1);
+                    }
+                    if let Some(u) = input.re_every_unit {
+                        *every_unit = u;
+                    }
+                    if let Some(c) = input.re_count {
+                        *count = c.max(1);
+                    }
+                    if let Some(ref l) = input.re_label {
+                        *label = l.clone();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
+/// `POST .../modifier-toggle` — toggle a value in a multi-select modifier (pause, drills).
+pub(crate) async fn modifier_toggle(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    if let Some(mods) = find_modifier_target(
+        &mut tl,
+        &input.group_id,
+        input.segment_id.as_deref(),
+        input.scope.as_deref(),
+    ) {
+        if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+            let val = input.value.as_deref().unwrap_or("");
+            match m {
+                Modifier::PauseAt { points, .. } => {
+                    if let Ok(pp) = val.parse::<PausePoint>() {
+                        if let Some(pos) = points.iter().position(|p| *p == pp) {
+                            points.remove(pos);
+                        } else {
+                            points.push(pp);
+                        }
+                    }
+                }
+                Modifier::Drills { values } => {
+                    if let Ok(hd) = val.parse::<HandDrill>() {
+                        if let Some(pos) = values.iter().position(|d| *d == hd) {
+                            values.remove(pos);
+                        } else {
+                            values.push(hd);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
+/// `POST .../modifier-override` — copy an inherited modifier to the segment for local editing.
+pub(crate) async fn modifier_override(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    // Find the group modifier and clone it to the segment
+    for item in &mut tl.items {
+        if let TimelineItem::Group(g) = item {
+            if g.id == input.group_id {
+                if let Some(gm) = g.modifiers.iter().find(|m| m.kind_id() == input.kind) {
+                    let cloned = gm.clone();
+                    if let Some(sid) = &input.segment_id {
+                        if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
+                            // Only add if not already overridden
+                            if !s.modifiers.iter().any(|m| m.kind_id() == input.kind) {
+                                s.modifiers.push(cloned);
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
+/// `POST .../modifier-revert` — remove a segment-level override, restoring inheritance.
+pub(crate) async fn modifier_revert(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    let base_url = practice_timeline_url(practice_id);
+    let mut tl = input.base.parse();
+    for item in &mut tl.items {
+        if let TimelineItem::Group(g) = item {
+            if g.id == input.group_id {
+                if let Some(sid) = &input.segment_id {
+                    if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
+                        s.modifiers.retain(|m| m.kind_id() != input.kind);
+                    }
+                }
+                break;
+            }
+        }
+    }
+    let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn form<T: serde::de::DeserializeOwned>(qs: &str) -> T {
         serde_html_form::from_str(qs).unwrap()
-    }
-
-    // ── CommaSep ──
-
-    #[derive(Debug, Deserialize)]
-    struct PauseCsv {
-        #[serde(default)]
-        val: CommaSep<PausePoint>,
-    }
-    #[derive(Debug, Deserialize)]
-    struct DrillCsv {
-        #[serde(default)]
-        val: CommaSep<HandDrill>,
-    }
-
-    #[test]
-    fn comma_sep_parses_pause_points() {
-        let w: PauseCsv = form("val=release%2Carms-away%2Ccatch");
-        assert_eq!(
-            w.val.0,
-            vec![PausePoint::Release, PausePoint::ArmsAway, PausePoint::Catch]
-        );
-    }
-
-    #[test]
-    fn comma_sep_skips_invalid_entries() {
-        let w: DrillCsv = form("val=feet-out%2Cbogus%2Cwide-grip");
-        assert_eq!(w.val.0, vec![HandDrill::FeetOut, HandDrill::WideGrip]);
-    }
-
-    #[test]
-    fn comma_sep_empty_string_gives_empty_vec() {
-        let w: PauseCsv = form("val=");
-        assert!(w.val.0.is_empty());
-    }
-
-    #[test]
-    fn comma_sep_missing_field_gives_empty_vec() {
-        let w: PauseCsv = form("other=1");
-        assert!(w.val.0.is_empty());
     }
 
     // ── PatchBlockForm ──
@@ -904,27 +1102,16 @@ mod tests {
     // ── PatchSegmentForm ──
 
     #[test]
-    fn patch_segment_form_parses_all_concrete_types() {
+    fn patch_segment_form_parses_base_fields() {
         let f: PatchSegmentForm = form(
             "group_id=g1&segment_id=s1\
              &duration_unit=strokes\
              &intensity=ut2\
-             &partial=arms-only\
-             &seg_type=rest\
-             &pause_points=release%2Ccatch\
-             &drills=feet-out%2Cwide-grip\
-             &pause_every=3",
+             &seg_type=rest",
         );
         assert_eq!(f.duration_unit, Some(DurationUnit::Strokes));
         assert_eq!(f.intensity, Some(Intensity::Ut2));
-        assert_eq!(f.partial, Some(Slide::ArmsOnly));
         assert_eq!(f.seg_type, Some(SegmentType::Rest));
-        assert_eq!(
-            f.pause_points.0,
-            vec![PausePoint::Release, PausePoint::Catch]
-        );
-        assert_eq!(f.drills.0, vec![HandDrill::FeetOut, HandDrill::WideGrip]);
-        assert_eq!(f.pause_every, Some(3));
     }
 
     #[test]
@@ -932,11 +1119,7 @@ mod tests {
         let f: PatchSegmentForm = form("group_id=g1&segment_id=s1");
         assert_eq!(f.duration_unit, None);
         assert_eq!(f.intensity, None);
-        assert_eq!(f.partial, None);
         assert_eq!(f.seg_type, None);
-        assert!(f.pause_points.0.is_empty());
-        assert!(f.drills.0.is_empty());
-        assert_eq!(f.pause_every, None);
     }
 
     // ── GroupPatchForm ──
