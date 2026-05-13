@@ -407,7 +407,13 @@ pub(crate) async fn tl_open_editor(
         .unwrap_or_else(|| Timeline::default_empty(90));
     let base_url = template_timeline_url(template_id);
     Ok(Html(
-        templates::timeline::editor_content(&timeline, &base_url, None).into_string(),
+        templates::timeline::editor_content(
+            &timeline,
+            &base_url,
+            None,
+            templates::timeline::PlanEditorState::OpenPreview,
+        )
+        .into_string(),
     ))
 }
 
@@ -541,8 +547,13 @@ tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
         }
         _ => {
             return Html(
-                templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                    .into_string(),
+                templates::timeline::editor_content(
+                    &tl,
+                    base_url,
+                    input.base.selected.as_deref(),
+                    input.base.editor_state(),
+                )
+                .into_string(),
             )
         }
     };
@@ -550,7 +561,15 @@ tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
         Some(sel) => tl.insert_after_item(sel, vec![new_item]),
         None => tl.insert_before_dock(vec![new_item]),
     }
-    Html(templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            base_url,
+            Some(&select_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 });
 
 // ── Delete block ──
@@ -569,7 +588,10 @@ tl_mutation_handler!(
         let mut tl = input.base.parse();
         tl.items
             .retain(|it| it.is_structural() || it.id() != input.delete_id);
-        Html(templates::timeline::editor_content(&tl, base_url, None).into_string())
+        Html(
+            templates::timeline::editor_content(&tl, base_url, None, input.base.editor_state())
+                .into_string(),
+        )
     }
 );
 
@@ -610,7 +632,13 @@ tl_mutation_handler!(
             }
         }
         Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.patch_id)).into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.patch_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -685,8 +713,13 @@ tl_mutation_handler!(
             }
         }
         Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.segment_id))
-                .into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.segment_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -707,8 +740,13 @@ tl_mutation_handler!(
         let mut tl = input.base.parse();
         tl.target_minutes = input.new_target.clamp(20, 240);
         Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                input.base.selected.as_deref(),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -760,7 +798,15 @@ tl_mutation_handler!(
             let drop_idx = drop_idx.max(launch_end);
             tl.items.insert(drop_idx, item);
         }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.drag_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -794,13 +840,24 @@ tl_mutation_handler!(
                 }
                 tl.items.insert(idx + 1, dup);
                 return Html(
-                    templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string(),
+                    templates::timeline::editor_content(
+                        &tl,
+                        base_url,
+                        Some(&new_id),
+                        input.base.editor_state(),
+                    )
+                    .into_string(),
                 );
             }
         }
         Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                input.base.selected.as_deref(),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -910,7 +967,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -946,7 +1011,15 @@ tl_mutation_handler!(
                 }
             }
         }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&new_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -976,7 +1049,13 @@ tl_mutation_handler!(
         tl.items
             .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
         Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.group_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -1020,12 +1099,23 @@ tl_mutation_handler!(
                 None => tl.insert_before_dock(vec![TimelineItem::Group(g)]),
             }
             return Html(
-                templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string(),
+                templates::timeline::editor_content(
+                    &tl,
+                    base_url,
+                    Some(&select_id),
+                    input.base.editor_state(),
+                )
+                .into_string(),
             );
         }
         Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                input.base.selected.as_deref(),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -1063,7 +1153,15 @@ tl_mutation_handler!(
                 }
             }
         }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.drag_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1096,7 +1194,13 @@ tl_mutation_handler!(
             }
         }
         Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(&input.group_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
         )
     }
 );
@@ -1123,7 +1227,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1141,7 +1253,15 @@ tl_mutation_handler!(
             mods.retain(|m| m.kind_id() != input.kind);
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1203,7 +1323,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1244,7 +1372,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1271,7 +1407,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 
@@ -1293,7 +1437,15 @@ tl_mutation_handler!(
             }
         }
         let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+        Html(
+            templates::timeline::editor_content(
+                &tl,
+                base_url,
+                Some(sel),
+                input.base.editor_state(),
+            )
+            .into_string(),
+        )
     }
 );
 

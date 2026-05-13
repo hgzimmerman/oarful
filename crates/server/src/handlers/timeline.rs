@@ -26,6 +26,19 @@ pub(crate) struct TimelineForm {
     pub selected: Option<String>,
     #[serde(default)]
     pub target_minutes: Option<u32>,
+    /// Editor visibility state carried through HTMX round-trips.
+    #[serde(default)]
+    pub plan_editor: Option<String>,
+}
+
+impl TimelineForm {
+    pub(crate) fn editor_state(&self) -> templates::timeline::PlanEditorState {
+        match self.plan_editor.as_deref() {
+            Some("open") => templates::timeline::PlanEditorState::Open,
+            Some("open_preview") => templates::timeline::PlanEditorState::OpenPreview,
+            _ => templates::timeline::PlanEditorState::Open, // default to Open when in editor forms
+        }
+    }
 }
 
 impl TimelineForm {
@@ -98,10 +111,27 @@ pub(crate) fn default_segment() -> Segment {
     }
 }
 
+/// Query params for editor state.
+#[derive(Debug, Deserialize)]
+pub(crate) struct EditorQuery {
+    #[serde(default)]
+    pub plan_editor: Option<String>,
+}
+
+impl EditorQuery {
+    pub(crate) fn state(&self) -> templates::timeline::PlanEditorState {
+        match self.plan_editor.as_deref() {
+            Some("open_preview") => templates::timeline::PlanEditorState::OpenPreview,
+            _ => templates::timeline::PlanEditorState::Open,
+        }
+    }
+}
+
 /// `GET /history/{id}/timeline/edit` — open the timeline editor.
 pub(crate) async fn open_editor(
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
+    axum::extract::Query(query): axum::extract::Query<EditorQuery>,
 ) -> Result<Html<String>, crate::handlers::ErrorResponse> {
     let practice = tenant
         .db
@@ -120,7 +150,7 @@ pub(crate) async fn open_editor(
     });
 
     let base_url = practice_timeline_url(practice_id);
-    let html = templates::timeline::editor_content(&timeline, &base_url, None);
+    let html = templates::timeline::editor_content(&timeline, &base_url, None, query.state());
     Ok(Html(html.into_string()))
 }
 
@@ -202,8 +232,13 @@ pub(crate) async fn add_block(
         }
         _ => {
             return Html(
-                templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
-                    .into_string(),
+                templates::timeline::editor_content(
+                    &tl,
+                    &base_url,
+                    input.base.selected.as_deref(),
+                    input.base.editor_state(),
+                )
+                .into_string(),
             )
         }
     };
@@ -212,7 +247,15 @@ pub(crate) async fn add_block(
         Some(sel) => tl.insert_after_item(sel, vec![new_item]),
         None => tl.insert_before_dock(vec![new_item]),
     }
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&select_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/delete` — remove a block or group.
@@ -231,7 +274,10 @@ pub(crate) async fn delete_block(
     let mut tl = input.base.parse();
     tl.items
         .retain(|it| it.is_structural() || it.id() != input.delete_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, None).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, None, input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/patch-block` — update fields on a bare block.
@@ -272,7 +318,15 @@ pub(crate) async fn patch_block(
         }
     }
 
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.patch_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.patch_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/patch-segment` — update base fields on a segment inside a group.
@@ -348,7 +402,15 @@ pub(crate) async fn patch_segment(
     }
 
     // Keep the segment selected so its editor stays open.
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.segment_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.segment_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/target` — update target minutes.
@@ -367,8 +429,13 @@ pub(crate) async fn update_target(
     let mut tl = input.base.parse();
     tl.target_minutes = input.new_target.clamp(20, 240);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
-            .into_string(),
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            input.base.selected.as_deref(),
+            input.base.editor_state(),
+        )
+        .into_string(),
     )
 }
 
@@ -470,7 +537,15 @@ pub(crate) async fn reorder_block(
         let drop_idx = drop_idx.max(launch_end);
         tl.items.insert(drop_idx, item);
     }
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.drag_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.drag_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/duplicate` — duplicate an item.
@@ -503,13 +578,24 @@ pub(crate) async fn duplicate_block(
             }
             tl.items.insert(idx + 1, dup);
             return Html(
-                templates::timeline::editor_content(&tl, &base_url, Some(&new_id)).into_string(),
+                templates::timeline::editor_content(
+                    &tl,
+                    &base_url,
+                    Some(&new_id),
+                    input.base.editor_state(),
+                )
+                .into_string(),
             );
         }
     }
     Html(
-        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
-            .into_string(),
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            input.base.selected.as_deref(),
+            input.base.editor_state(),
+        )
+        .into_string(),
     )
 }
 
@@ -627,7 +713,10 @@ pub(crate) async fn group_patch(
     // Use selected from form (may be a segment ID) or fall back to group.
     let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
 
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/group-add` — add a segment to a group.
@@ -663,7 +752,15 @@ pub(crate) async fn group_add_segment(
             }
         }
     }
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&new_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&new_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/group-delete` — remove a segment from a group.
@@ -692,7 +789,15 @@ pub(crate) async fn group_delete_segment(
     // If group has no segments, remove it.
     tl.items
         .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.group_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.group_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST /history/{id}/timeline/template` — insert a built-in template.
@@ -734,12 +839,23 @@ pub(crate) async fn insert_template(
             None => tl.insert_before_dock(vec![TimelineItem::Group(g)]),
         }
         return Html(
-            templates::timeline::editor_content(&tl, &base_url, Some(&select_id)).into_string(),
+            templates::timeline::editor_content(
+                &tl,
+                &base_url,
+                Some(&select_id),
+                input.base.editor_state(),
+            )
+            .into_string(),
         );
     }
     Html(
-        templates::timeline::editor_content(&tl, &base_url, input.base.selected.as_deref())
-            .into_string(),
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            input.base.selected.as_deref(),
+            input.base.editor_state(),
+        )
+        .into_string(),
     )
 }
 
@@ -776,7 +892,15 @@ pub(crate) async fn group_reorder_segment(
             }
         }
     }
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.drag_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.drag_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 /// `POST .../group-split` — expand a repeated group into N independent copies.
@@ -815,7 +939,15 @@ pub(crate) async fn group_split(
         }
     }
 
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(&input.group_id)).into_string())
+    Html(
+        templates::timeline::editor_content(
+            &tl,
+            &base_url,
+            Some(&input.group_id),
+            input.base.editor_state(),
+        )
+        .into_string(),
+    )
 }
 
 // ── Modifier mutation handlers ──────────────────────────────────────────
@@ -893,7 +1025,10 @@ pub(crate) async fn modifier_add(
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST .../modifier-remove` — remove a modifier by kind.
@@ -912,7 +1047,10 @@ pub(crate) async fn modifier_remove(
         mods.retain(|m| m.kind_id() != input.kind);
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST .../modifier-update` — update a modifier's value (picks-one, free text, pause every).
@@ -975,7 +1113,10 @@ pub(crate) async fn modifier_update(
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST .../modifier-toggle` — toggle a value in a multi-select modifier (pause, drills).
@@ -1017,7 +1158,10 @@ pub(crate) async fn modifier_toggle(
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST .../modifier-override` — copy an inherited modifier to the segment for local editing.
@@ -1047,7 +1191,10 @@ pub(crate) async fn modifier_override(
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 /// `POST .../modifier-revert` — remove a segment-level override, restoring inheritance.
@@ -1070,7 +1217,10 @@ pub(crate) async fn modifier_revert(
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-    Html(templates::timeline::editor_content(&tl, &base_url, Some(sel)).into_string())
+    Html(
+        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+            .into_string(),
+    )
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ pub(super) fn group_editor(
     base_url: &str,
     tl_json: &str,
     selected_id: Option<&str>,
+    pe: &str,
 ) -> Markup {
     let selected_seg = selected_id.and_then(|sid| group.segments.iter().find(|s| s.id == sid));
 
@@ -35,6 +36,7 @@ pub(super) fn group_editor(
                     @let other_label = if group.group_type == GroupType::Warmup { "→ Piece" } else { "→ Warmup" };
                     form class="inline" hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="selected" value=(group.id);
                         input type="hidden" name="group_type" value=(other_type);
@@ -44,19 +46,21 @@ pub(super) fn group_editor(
                     @if group.repeat.unwrap_or(1) > 1 {
                         form class="inline" hx-post={(base_url) "/group-split"} hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             button type="submit" class="font-mono-stat text-[9px] px-1.5 py-0.5 rounded border cursor-pointer"
                                    style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)"
                                    title="Expand repetitions into individual segments" { "Split" }
                         }
                     }
-                    (action_buttons(base_url, tl_json, &group.id))
+                    (action_buttons(base_url, tl_json, &group.id, pe))
                 }
             }
 
             // Group fields
             form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                 input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="selected" value=(group.id);
                 div class="flex flex-wrap gap-4 items-start mb-3" {
@@ -145,6 +149,7 @@ pub(super) fn group_editor(
                          hx-target="#timeline-section"
                          hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="selected" value=(if is_sel { &group.id } else { &seg.id });
                     }
@@ -177,6 +182,7 @@ pub(super) fn group_editor(
                             @if group.segments.len() > 1 {
                                 form class="inline" hx-post={(base_url) "/group-delete"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                                     input type="hidden" name="group_id" value=(group.id);
                                     input type="hidden" name="segment_id" value=(seg.id);
                                     button type="submit" class="font-mono-stat text-xs px-1 cursor-pointer"
@@ -188,6 +194,7 @@ pub(super) fn group_editor(
                         // Inline editable fields: duration, intensity, rate
                         form hx-post={(base_url) "/patch-segment"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="segment_id" value=(seg.id);
                             input type="hidden" name="selected" value=(selected_id.unwrap_or(&group.id));
@@ -226,6 +233,7 @@ pub(super) fn group_editor(
                 @for (st, label) in &[("work", "+ Segment"), ("rest", "+ Rest"), ("turn", "+ Turn")] {
                     form class="inline" hx-post={(base_url) "/group-add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="seg_type" value=(st);
                         button type="submit" class="font-mono-stat text-[9px] px-1.5 py-0.5 rounded border cursor-pointer hover:opacity-80"
@@ -236,12 +244,12 @@ pub(super) fn group_editor(
 
             // Group-level modifiers
             @if selected_seg.is_none() {
-                (group_modifiers_section(group, base_url, tl_json))
+                (group_modifiers_section(pe, group, base_url, tl_json))
             }
 
             // Selected segment detail editor
             @if let Some(seg) = selected_seg {
-                (segment_editor::segment_editor(seg, group, base_url, tl_json))
+                (segment_editor::segment_editor(seg, group, base_url, tl_json, pe))
             }
         }
     }
@@ -309,6 +317,7 @@ fn modifier_indicator(
 
 /// Inline value editor for a group-level modifier.
 fn group_modifier_value_editor(
+    pe: &str,
     m: &Modifier,
     group: &Group,
     base_url: &str,
@@ -320,6 +329,7 @@ fn group_modifier_value_editor(
         ($kind:expr) => {
             html! {
                 input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="selected" value=(group.id);
                 input type="hidden" name="kind" value=($kind);
@@ -439,7 +449,7 @@ fn group_modifier_value_editor(
 }
 
 /// Group-level modifiers section with add/remove.
-fn group_modifiers_section(group: &Group, base_url: &str, tl_json: &str) -> Markup {
+fn group_modifiers_section(pe: &str, group: &Group, base_url: &str, tl_json: &str) -> Markup {
     let catalogue = lineup_db::timeline::modifier_catalogue();
     let present_kinds: Vec<&str> = group.modifiers.iter().map(|m| m.kind_id()).collect();
 
@@ -473,7 +483,7 @@ fn group_modifiers_section(group: &Group, base_url: &str, tl_json: &str) -> Mark
                         span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
                              style="color: var(--ink-2)" { (m.kind_label()) }
                         span class="flex-1" {
-                            (group_modifier_value_editor(m, group, base_url, tl_json))
+                            (group_modifier_value_editor(pe, m, group, base_url, tl_json))
                         }
                         // Show which segments have overrides
                         @let overridden_segs: Vec<&str> = group.segments.iter()
@@ -487,6 +497,7 @@ fn group_modifiers_section(group: &Group, base_url: &str, tl_json: &str) -> Mark
                         }
                         form class="inline" hx-post={(base_url) "/modifier-remove"} hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(group.id);
                             input type="hidden" name="kind" value=(m.kind_id());
@@ -508,7 +519,7 @@ fn group_modifiers_section(group: &Group, base_url: &str, tl_json: &str) -> Mark
                 div x-show="open" "@click.outside"="open = false" x-cloak=""
                     class="absolute z-10 rounded-md shadow-lg"
                     style="width: 300px; background: var(--paper); border: 1px solid var(--ink); left: 0; bottom: 100%; margin-bottom: 4px" {
-                    (group_picker_items(&catalogue, &present_kinds, group, base_url, tl_json))
+                    (group_picker_items(pe, &catalogue, &present_kinds, group, base_url, tl_json))
                     div class="font-mono-stat text-[9px] px-3 py-1.5 flex justify-between"
                          style="border-top: 1px solid var(--rule); color: var(--muted); background: color-mix(in oklch, var(--ink) 3%, var(--paper))" {
                         span { "click to add" }
@@ -521,6 +532,7 @@ fn group_modifiers_section(group: &Group, base_url: &str, tl_json: &str) -> Mark
 }
 
 fn group_picker_items(
+    pe: &str,
     catalogue: &[lineup_db::timeline::ModifierCatalogueEntry],
     present_kinds: &[&str],
     group: &Group,
@@ -553,6 +565,7 @@ fn group_picker_items(
                     } @else {
                         form class="contents" hx-post={(base_url) "/modifier-add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(group.id);
                             input type="hidden" name="kind" value=(entry.kind_id);

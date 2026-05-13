@@ -64,16 +64,18 @@ pub(super) fn rate_field_compact(rate: [u8; 2], is_range: bool) -> Markup {
     }
 }
 
-pub(super) fn action_buttons(base_url: &str, tl_json: &str, item_id: &str) -> Markup {
+pub(super) fn action_buttons(base_url: &str, tl_json: &str, item_id: &str, pe: &str) -> Markup {
     html! {
         div class="flex items-center gap-1" {
             form class="inline" hx-post={(base_url) "/duplicate"} hx-target="#timeline-section" hx-swap="innerHTML" {
                 input type="hidden" name="timeline" value=(tl_json);
+                input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="dup_id" value=(item_id);
                 button type="submit" class="font-mono-stat text-[9px] px-1.5 py-0.5 rounded border cursor-pointer" style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)" { "Duplicate" }
             }
             form class="inline" hx-post={(base_url) "/delete"} hx-target="#timeline-section" hx-swap="innerHTML" {
                 input type="hidden" name="timeline" value=(tl_json);
+                input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="delete_id" value=(item_id);
                 button type="submit" class="font-mono-stat text-[9px] px-1.5 py-0.5 rounded border cursor-pointer" style="color: var(--bad); border-color: color-mix(in oklch, var(--bad) 30%, var(--rule)); background: var(--paper)" { "Delete" }
             }

@@ -868,7 +868,7 @@ impl Timeline {
                             .iter()
                             .map(|s| SegmentSummary {
                                 seg_type: s.seg_type,
-                                label: summarize_segment_with_modifiers(s, &g.modifiers),
+                                parts: summarize_segment_with_modifiers(s, &g.modifiers),
                                 note: s.note.clone(),
                             })
                             .collect(),
@@ -984,20 +984,32 @@ pub struct SummaryLine {
 
 pub struct SegmentSummary {
     pub seg_type: SegmentType,
-    pub label: String,
+    /// Structured parts: core label followed by modifier spans.
+    pub parts: Vec<SegmentSummaryPart>,
     pub note: String,
+}
+
+/// One piece of a segment summary line — either plain text or modifier-tagged.
+#[derive(Debug, PartialEq)]
+pub struct SegmentSummaryPart {
+    pub text: String,
+    /// `None` for core text (duration/rate/intensity), `Some(kind_id)` for modifier spans.
+    pub modifier_kind: Option<&'static str>,
 }
 
 /// Summarize a segment with no group modifiers.
 #[allow(dead_code)]
-pub fn summarize_segment(s: &Segment) -> String {
+pub fn summarize_segment(s: &Segment) -> Vec<SegmentSummaryPart> {
     summarize_segment_with_modifiers(s, &[])
 }
 
 /// Summarize a segment, merging its own modifiers with any inherited
 /// group-level modifiers. Group modifiers are shown unless the segment
 /// has an override of the same kind.
-fn summarize_segment_with_modifiers(s: &Segment, group_modifiers: &[Modifier]) -> String {
+fn summarize_segment_with_modifiers(
+    s: &Segment,
+    group_modifiers: &[Modifier],
+) -> Vec<SegmentSummaryPart> {
     // Core: duration + rate + intensity
     let mut core = vec![s.duration.display()];
     if s.seg_type.is_work() {
@@ -1013,34 +1025,38 @@ fn summarize_segment_with_modifiers(s: &Segment, group_modifiers: &[Modifier]) -
         }
     }
 
+    let mut parts = vec![SegmentSummaryPart {
+        text: core.join(" "),
+        modifier_kind: None,
+    }];
+
     // Collect effective modifiers: group-level (cascading, unless overridden) + segment-level
-    let mut mods = Vec::new();
     for gm in group_modifiers {
-        // Skip non-cascading modifiers (emphasis stays at group level)
         if !gm.cascades() {
             continue;
         }
-        // Skip if the segment overrides this kind
         if s.modifiers.iter().any(|m| m.kind_id() == gm.kind_id()) {
             continue;
         }
         let label = gm.summary_label();
         if !label.is_empty() {
-            mods.push(label);
+            parts.push(SegmentSummaryPart {
+                text: label,
+                modifier_kind: Some(gm.kind_id()),
+            });
         }
     }
     for m in &s.modifiers {
         let label = m.summary_label();
         if !label.is_empty() {
-            mods.push(label);
+            parts.push(SegmentSummaryPart {
+                text: label,
+                modifier_kind: Some(m.kind_id()),
+            });
         }
     }
 
-    if mods.is_empty() {
-        core.join(" ")
-    } else {
-        format!("{} \u{00b7} {}", core.join(" "), mods.join(" \u{00b7} "))
-    }
+    parts
 }
 
 // ── Built-in templates ───────────────────────────────────────────────
@@ -1410,7 +1426,10 @@ mod tests {
             vec![],
             "",
         );
-        assert_eq!(summarize_segment(&s), "15' r20-22 @UT2");
+        let parts = summarize_segment(&s);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].text, "15' r20-22 @UT2");
+        assert_eq!(parts[0].modifier_kind, None);
     }
 
     // ── strum Display ↔ serde Deserialize round-trip ──

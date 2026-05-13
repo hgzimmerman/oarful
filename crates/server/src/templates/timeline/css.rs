@@ -49,6 +49,19 @@ pub(crate) fn strip_bg_seg(st: SegmentType, gt: GroupType) -> &'static str {
     }
 }
 
+/// Human label for a modifier kind_id, used in tooltips.
+pub(super) fn modifier_kind_label(kind: &str) -> &'static str {
+    match kind {
+        "blade" => "Blade",
+        "partial" => "Partial strokes",
+        "pause_at" => "Pause pattern",
+        "drills" => "Drills",
+        "emphasis" => "Notes",
+        "repeating_emphasis" => "Repeating",
+        _ => "Modifier",
+    }
+}
+
 pub(crate) fn chip_style(active: bool) -> &'static str {
     if active {
         "color: var(--ink); background: var(--paper-2); border-color: var(--ink-3)"

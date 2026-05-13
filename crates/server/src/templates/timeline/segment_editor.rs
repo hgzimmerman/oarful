@@ -55,6 +55,7 @@ pub(super) fn segment_editor(
     group: &Group,
     base_url: &str,
     tl_json: &str,
+    pe: &str,
 ) -> Markup {
     let is_work = seg.seg_type.is_work();
     let rows = effective_modifiers(seg, group);
@@ -62,13 +63,14 @@ pub(super) fn segment_editor(
     html! {
         // Only work segments have modifiers
         @if is_work {
-            (modifier_section(seg, group, base_url, tl_json, &rows))
+            (modifier_section(pe, seg, group, base_url, tl_json, &rows))
         }
     }
 }
 
 /// Render the modifiers section: inherited rows, local rows, and the add button.
 fn modifier_section(
+    pe: &str,
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -119,26 +121,27 @@ fn modifier_section(
                 @for row in rows {
                     @match row {
                         ModRow::Inherited(m) => {
-                            (inherited_row(m, seg, group, base_url, tl_json))
+                            (inherited_row(pe, m, seg, group, base_url, tl_json))
                         }
                         ModRow::Overridden { local, inherited } => {
-                            (overridden_row(local, inherited, seg, group, base_url, tl_json))
+                            (overridden_row(pe, local, inherited, seg, group, base_url, tl_json))
                         }
                         ModRow::Local(m) => {
-                            (local_row(m, seg, group, base_url, tl_json))
+                            (local_row(pe, m, seg, group, base_url, tl_json))
                         }
                     }
                 }
             }
 
             // Add modifier picker
-            (modifier_picker(seg, group, base_url, tl_json, &present_kinds))
+            (modifier_picker(pe, seg, group, base_url, tl_json, &present_kinds))
         }
     }
 }
 
 /// An inherited modifier row — read-only with "override here" action.
 fn inherited_row(
+    pe: &str,
     m: &Modifier,
     seg: &Segment,
     group: &Group,
@@ -155,6 +158,7 @@ fn inherited_row(
             }
             form class="inline" hx-post={(base_url) "/modifier-override"} hx-target="#timeline-section" hx-swap="innerHTML" {
                 input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
@@ -168,6 +172,7 @@ fn inherited_row(
 
 /// An overridden modifier — shows edited value with "was..." note and revert.
 fn overridden_row(
+    pe: &str,
     local: &Modifier,
     inherited: &Modifier,
     seg: &Segment,
@@ -183,13 +188,14 @@ fn overridden_row(
             span class="flex-1 flex items-center gap-2 flex-wrap" {
                 span class="font-mono-stat text-[7px] tracking-wider uppercase font-bold px-1 py-px rounded"
                      style="background: var(--cox); color: var(--paper)" { "EDITED HERE" }
-                (modifier_value_editor(local, seg, group, base_url, tl_json))
+                (modifier_value_editor(pe, local, seg, group, base_url, tl_json))
                 span class="font-mono-stat text-[9px] italic" style="color: var(--muted); border-left: 1px solid var(--rule); padding-left: 6px" {
                     "was " (modifier_value_display(inherited))
                 }
             }
             form class="inline" hx-post={(base_url) "/modifier-revert"} hx-target="#timeline-section" hx-swap="innerHTML" {
                 input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
@@ -202,17 +208,25 @@ fn overridden_row(
 }
 
 /// A locally-added modifier — editable with remove button.
-fn local_row(m: &Modifier, seg: &Segment, group: &Group, base_url: &str, tl_json: &str) -> Markup {
+fn local_row(
+    pe: &str,
+    m: &Modifier,
+    seg: &Segment,
+    group: &Group,
+    base_url: &str,
+    tl_json: &str,
+) -> Markup {
     html! {
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
              style="background: color-mix(in oklch, var(--accent) 4%, var(--paper)); border: 1px solid color-mix(in oklch, var(--accent) 20%, var(--rule)); border-left: 2px solid var(--accent)" {
             span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
                  style="color: var(--ink-2)" { (m.kind_label()) }
             span class="flex-1" {
-                (modifier_value_editor(m, seg, group, base_url, tl_json))
+                (modifier_value_editor(pe, m, seg, group, base_url, tl_json))
             }
             form class="inline" hx-post={(base_url) "/modifier-remove"} hx-target="#timeline-section" hx-swap="innerHTML" {
                 input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
@@ -266,6 +280,7 @@ pub(super) fn modifier_value_display(m: &Modifier) -> Markup {
 
 /// Interactive editor for a modifier's value — chips, toggles, text input.
 fn modifier_value_editor(
+    pe: &str,
     m: &Modifier,
     seg: &Segment,
     group: &Group,
@@ -281,6 +296,7 @@ fn modifier_value_editor(
                         @let is_active = value == v;
                         form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="segment_id" value=(seg.id);
                             input type="hidden" name="selected" value=(seg.id);
@@ -299,6 +315,7 @@ fn modifier_value_editor(
                         @let is_active = value == v;
                         form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="segment_id" value=(seg.id);
                             input type="hidden" name="selected" value=(seg.id);
@@ -312,14 +329,15 @@ fn modifier_value_editor(
                 }
             }
             Modifier::PauseAt { points, every } => {
-                (pause_at_editor(points, *every, seg, group, base_url, tl_json))
+                (pause_at_editor(pe, points, *every, seg, group, base_url, tl_json))
             }
             Modifier::Drills { values } => {
-                (drills_editor(values, seg, group, base_url, tl_json))
+                (drills_editor(pe, values, seg, group, base_url, tl_json))
             }
             Modifier::Emphasis { text } => {
                 form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
                     input type="hidden" name="segment_id" value=(seg.id);
                     input type="hidden" name="selected" value=(seg.id);
@@ -332,7 +350,7 @@ fn modifier_value_editor(
                 }
             }
             Modifier::RepeatingEmphasis { every, every_unit, count, label } => {
-                (repeating_emphasis_editor(*every, *every_unit, *count, label, seg, group, base_url, tl_json))
+                (repeating_emphasis_editor(pe, *every, *every_unit, *count, label, seg, group, base_url, tl_json))
             }
         }
     }
@@ -340,6 +358,7 @@ fn modifier_value_editor(
 
 /// Pause-at multi-select editor with frequency input.
 fn pause_at_editor(
+    pe: &str,
     points: &[PausePoint],
     every: Option<u32>,
     seg: &Segment,
@@ -354,6 +373,7 @@ fn pause_at_editor(
                 @let is_active = points.contains(pp);
                 form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
                     input type="hidden" name="segment_id" value=(seg.id);
                     input type="hidden" name="selected" value=(seg.id);
@@ -372,6 +392,7 @@ fn pause_at_editor(
                 span class="font-mono-stat text-[9px] ml-1" style="color: var(--muted)" { "every" }
                 form class="inline" hx-post={(base_url) "/modifier-update"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
                     input type="hidden" name="segment_id" value=(seg.id);
                     input type="hidden" name="selected" value=(seg.id);
@@ -390,6 +411,7 @@ fn pause_at_editor(
 
 /// Drills multi-select editor.
 fn drills_editor(
+    pe: &str,
     values: &[HandDrill],
     seg: &Segment,
     group: &Group,
@@ -403,6 +425,7 @@ fn drills_editor(
                 @let is_active = values.contains(hd);
                 form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
                     input type="hidden" name="segment_id" value=(seg.id);
                     input type="hidden" name="selected" value=(seg.id);
@@ -423,6 +446,7 @@ fn drills_editor(
 
 /// Repeating emphasis compound editor — sentence-shaped inline form.
 fn repeating_emphasis_editor(
+    pe: &str,
     every: u32,
     every_unit: DurationUnit,
     count: u32,
@@ -437,6 +461,7 @@ fn repeating_emphasis_editor(
         form class="flex flex-wrap items-center gap-1.5 font-mono-stat text-[10px]"
              hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
             input type="hidden" name="group_id" value=(group.id);
             input type="hidden" name="segment_id" value=(seg.id);
             input type="hidden" name="selected" value=(seg.id);
@@ -469,6 +494,7 @@ fn repeating_emphasis_editor(
 
 /// The "+ Add modifier" button and picker popover.
 fn modifier_picker(
+    pe: &str,
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -488,7 +514,7 @@ fn modifier_picker(
                 class="absolute z-10 rounded-md shadow-lg"
                 style="width: 300px; background: var(--paper); border: 1px solid var(--ink); left: 0; bottom: 100%; margin-bottom: 4px" {
                 div class="py-1" {
-                    (picker_items(&catalogue, present_kinds, seg, group, base_url, tl_json))
+                    (picker_items(pe, &catalogue, present_kinds, seg, group, base_url, tl_json))
                 }
                 div class="font-mono-stat text-[9px] px-3 py-1.5 flex justify-between"
                      style="border-top: 1px solid var(--rule); color: var(--muted); background: color-mix(in oklch, var(--ink) 3%, var(--paper))" {
@@ -502,6 +528,7 @@ fn modifier_picker(
 
 /// Render picker items grouped by category.
 fn picker_items(
+    pe: &str,
     catalogue: &[ModifierCatalogueEntry],
     present_kinds: &[&str],
     seg: &Segment,
@@ -536,6 +563,7 @@ fn picker_items(
                 } @else {
                     form class="contents" hx-post={(base_url) "/modifier-add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="segment_id" value=(seg.id);
                         input type="hidden" name="selected" value=(seg.id);

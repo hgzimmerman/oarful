@@ -6,7 +6,7 @@ use maud::{html, Markup};
 use super::css;
 use super::helpers::{action_buttons, duration_field};
 
-pub(super) fn bare_block_editor(block: &Block, base_url: &str, tl_json: &str) -> Markup {
+pub(super) fn bare_block_editor(block: &Block, base_url: &str, tl_json: &str, pe: &str) -> Markup {
     let is_structural = block.block_type.is_structural();
     html! {
         div class="mt-3 pt-3" style="border-top: 1px solid var(--rule-2)" {
@@ -20,12 +20,13 @@ pub(super) fn bare_block_editor(block: &Block, base_url: &str, tl_json: &str) ->
                     }
                 }
                 @if !is_structural {
-                    (action_buttons(base_url, tl_json, &block.id))
+                    (action_buttons(base_url, tl_json, &block.id, pe))
                 }
             }
             @if block.block_type != BlockType::Dock {
                 form hx-post={(base_url) "/patch-block"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="patch_id" value=(block.id);
                     input type="hidden" name="selected" value=(block.id);
                     div class="flex flex-wrap gap-4 items-start" {

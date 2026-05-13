@@ -11,6 +11,7 @@ pub(super) fn timeline_strip(
     base_url: &str,
     tl_json: &str,
     selected_id: Option<&str>,
+    pe: &str,
 ) -> Markup {
     let slack = tl.slack_minutes();
     let total_min: f64 = tl
@@ -51,6 +52,7 @@ pub(super) fn timeline_strip(
                              data-drop-id=[(!is_structural).then_some(id)]
                              data-drag-zone="strip" {
                             input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="patch_id" value=(id);
                             input type="hidden" name="selected" value=(id);
                             button type="submit" class="w-full h-full flex flex-col items-center cursor-pointer overflow-hidden px-1 pt-1"
@@ -82,6 +84,7 @@ pub(super) fn timeline_strip(
                                 form class="block" style="line-height: 0"
                                      hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                     input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                                     input type="hidden" name="group_id" value=(id);
                                     input type="hidden" name="selected" value=(id);
                                     button type="submit" class="w-full cursor-pointer truncate"
@@ -106,6 +109,7 @@ pub(super) fn timeline_strip(
                                     form class="inline" style={"flex: " (format!("{:.1}", spct)) "; min-width: 0; " (strip_bg_seg(s.seg_type, g.group_type)) "; border-radius: 1px; " (seg_border) "; " (rotation_gap)}
                                          title=(seg_tip) hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                         input type="hidden" name="timeline" value=(tl_json);
+                    input type="hidden" name="plan_editor" value=(pe);
                                         input type="hidden" name="group_id" value=(id);
                                         input type="hidden" name="selected" value=(s.id);
                                         button type="submit" class="w-full h-full cursor-pointer"
