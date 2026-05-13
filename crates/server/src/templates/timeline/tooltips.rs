@@ -1,6 +1,6 @@
 //! Tooltip and short-format helpers for timeline items.
 
-use lineup_db::timeline::{Blade, Block, Group, Segment, Slide};
+use lineup_db::timeline::{Block, Group, Segment};
 
 pub(super) fn format_duration_short(minutes: f64) -> String {
     if minutes >= 1.0 {
@@ -37,22 +37,11 @@ pub(super) fn segment_tooltip(s: &Segment) -> String {
     if let Some(int) = s.intensity {
         parts.push(format!("@ {}", int.full_name()));
     }
-    if let Some(sl) = s.partial {
-        if sl != Slide::Full {
-            parts.push(sl.label().to_string());
+    for m in &s.modifiers {
+        let label = m.summary_label();
+        if !label.is_empty() {
+            parts.push(label);
         }
-    }
-    if !s.pause.is_empty() {
-        let labels: Vec<&str> = s.pause.iter().map(|p| p.label()).collect();
-        parts.push(format!("pause @ {}", labels.join(" + ")));
-    }
-    match s.blade {
-        Some(Blade::Square) => parts.push("on square".to_string()),
-        Some(Blade::PartialFeather) => parts.push("partial feather".to_string()),
-        _ => {}
-    }
-    for hd in &s.drills {
-        parts.push(hd.label().to_string());
     }
     if !s.note.is_empty() {
         parts.push(format!("— {}", s.note));

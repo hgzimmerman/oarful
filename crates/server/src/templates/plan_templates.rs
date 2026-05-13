@@ -89,7 +89,7 @@ pub(crate) fn detail_content(
                 h1 id="template-name" class="font-serif-heading text-xl font-medium tracking-tight" style="color: var(--ink)" { (tmpl.name) }
             }
         }
-        div class="px-4 sm:px-8 py-6 max-w-4xl mx-auto space-y-6" {
+        div class="px-4 sm:px-8 py-6 max-w-7xl mx-auto space-y-6" {
             // Meta section
             div id="template-meta" {
                 (meta_section(tmpl, tmpl_cats, all_cats))

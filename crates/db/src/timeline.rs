@@ -89,6 +89,8 @@ pub struct Group {
     #[serde(default)]
     pub rotation: Rotation,
     #[serde(default)]
+    pub modifiers: Vec<Modifier>,
+    #[serde(default)]
     pub note: String,
 }
 
@@ -127,19 +129,8 @@ pub struct Segment {
     pub rate: Option<[u8; 2]>,
     #[serde(default)]
     pub intensity: Option<Intensity>,
-    /// Partial stroke modifier (was "slide").
-    #[serde(default, alias = "slide")]
-    pub partial: Option<Slide>,
-    /// Pause points in the recovery — multi-select.
     #[serde(default)]
-    pub pause: Vec<PausePoint>,
-    /// Pause frequency: every N strokes. None = every stroke.
-    #[serde(default)]
-    pub pause_every: Option<u32>,
-    #[serde(default)]
-    pub blade: Option<Blade>,
-    #[serde(default, alias = "hand_drills")]
-    pub drills: Vec<HandDrill>,
+    pub modifiers: Vec<Modifier>,
     #[serde(default)]
     pub note: String,
 }
@@ -372,6 +363,194 @@ impl HandDrill {
         Self::WideGrip,
         Self::SlapCatches,
     ];
+}
+
+// ── Unified modifier ─────────────────────────────────────────────────
+
+/// A modifier attached to a Group or Segment.
+///
+/// Group-level modifiers inherit to all child segments.  A segment can
+/// override an inherited modifier by carrying its own `Modifier` of the
+/// same kind.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+pub enum Modifier {
+    #[serde(rename = "blade")]
+    Blade { value: Blade },
+    #[serde(rename = "partial")]
+    Partial { value: Slide },
+    #[serde(rename = "pause_at")]
+    PauseAt {
+        points: Vec<PausePoint>,
+        #[serde(default)]
+        every: Option<u32>,
+    },
+    #[serde(rename = "drills")]
+    Drills { values: Vec<HandDrill> },
+    #[serde(rename = "emphasis")]
+    Emphasis { text: String },
+    #[serde(rename = "repeating_emphasis")]
+    RepeatingEmphasis {
+        /// How often (e.g. every 2 minutes).
+        every: u32,
+        /// Unit for the interval.
+        every_unit: DurationUnit,
+        /// How many strokes per burst (e.g. 10).
+        count: u32,
+        /// Short name shown on the plan (e.g. "power 10").
+        label: String,
+    },
+}
+
+impl Modifier {
+    /// Whether this modifier cascades from group to segments.
+    /// Emphasis and RepeatingEmphasis are group-level notes that don't inherit.
+    pub fn cascades(&self) -> bool {
+        !matches!(self, Self::Emphasis { .. } | Self::RepeatingEmphasis { .. })
+    }
+
+    /// String key used to match modifiers across group↔segment for inheritance.
+    pub fn kind_id(&self) -> &'static str {
+        match self {
+            Self::Blade { .. } => "blade",
+            Self::Partial { .. } => "partial",
+            Self::PauseAt { .. } => "pause_at",
+            Self::Drills { .. } => "drills",
+            Self::Emphasis { .. } => "emphasis",
+            Self::RepeatingEmphasis { .. } => "repeating_emphasis",
+        }
+    }
+
+    /// Human-readable label.
+    pub fn kind_label(&self) -> &'static str {
+        match self {
+            Self::Blade { .. } => "Blade",
+            Self::Partial { .. } => "Partial strokes",
+            Self::PauseAt { .. } => "Pause at",
+            Self::Drills { .. } => "Drills",
+            Self::Emphasis { .. } => "Notes",
+            Self::RepeatingEmphasis { .. } => "Repeating",
+        }
+    }
+
+    /// Default value for a freshly-added modifier.
+    pub fn default_for_kind(kind_id: &str) -> Option<Self> {
+        match kind_id {
+            "blade" => Some(Self::Blade {
+                value: Blade::Feather,
+            }),
+            "partial" => Some(Self::Partial { value: Slide::Full }),
+            "pause_at" => Some(Self::PauseAt {
+                points: vec![],
+                every: None,
+            }),
+            "drills" => Some(Self::Drills { values: vec![] }),
+            "emphasis" => Some(Self::Emphasis {
+                text: String::new(),
+            }),
+            "repeating_emphasis" => Some(Self::RepeatingEmphasis {
+                every: 2,
+                every_unit: DurationUnit::Min,
+                count: 10,
+                label: "power".to_string(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Short summary of this modifier's value for display in badges/summaries.
+    pub fn summary_label(&self) -> String {
+        match self {
+            Self::Blade { value } => value.label().to_string(),
+            Self::Partial { value } => value.label().to_string(),
+            Self::PauseAt { points, every } => {
+                if points.is_empty() {
+                    return String::new();
+                }
+                let labels: Vec<&str> = points.iter().map(|p| p.label()).collect();
+                let mut s = format!("pause @ {}", labels.join(" + "));
+                if let Some(e) = every {
+                    if *e > 1 {
+                        s.push_str(&format!(" every {e} str"));
+                    }
+                }
+                s
+            }
+            Self::Drills { values } => values
+                .iter()
+                .map(|d| d.label())
+                .collect::<Vec<_>>()
+                .join(", "),
+            Self::Emphasis { text } => text.clone(),
+            Self::RepeatingEmphasis {
+                every,
+                every_unit,
+                count,
+                label,
+            } => {
+                let unit = every_unit.label();
+                let name = if label.is_empty() { "emphasis" } else { label };
+                format!("{name} {count} every {every}{unit}")
+            }
+        }
+    }
+}
+
+/// Catalogue entry for the modifier picker UI.
+pub struct ModifierCatalogueEntry {
+    pub kind_id: &'static str,
+    pub name: &'static str,
+    pub group: &'static str,
+    pub description: &'static str,
+    pub value_shape: &'static str,
+}
+
+/// All known modifier kinds, in picker display order.
+pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
+    vec![
+        ModifierCatalogueEntry {
+            kind_id: "blade",
+            name: "Blade",
+            group: "Stroke shape",
+            description: "feather · partial feather · on square",
+            value_shape: "picks one",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "partial",
+            name: "Partial strokes",
+            group: "Stroke shape",
+            description: "full · arms only · arms + body · \u{00bc} · \u{00bd} · \u{00be} slide",
+            value_shape: "picks one",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "pause_at",
+            name: "Pause at",
+            group: "Stroke shape",
+            description: "release · arms away · bodies over · \u{00bd} slide · catch",
+            value_shape: "multi",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "drills",
+            name: "Drills",
+            group: "Skill focus",
+            description: "feet out, inside arm, cut the cake, gunnel taps\u{2026}",
+            value_shape: "multi",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "emphasis",
+            name: "Notes",
+            group: "Skill focus",
+            description: "a coaching cue, e.g. \u{201c}connection at the catch\u{201d}",
+            value_shape: "free text",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "repeating_emphasis",
+            name: "Repeating emphasis",
+            group: "Pacing",
+            description: "power 10s, focus 5s \u{2014} every N min or strokes",
+            value_shape: "compound",
+        },
+    ]
 }
 
 #[derive(
@@ -620,6 +799,7 @@ impl Timeline {
                     duration_label: b.duration.display(),
                     rotation_label: None,
                     repeat_instruction: None,
+                    modifier_labels: vec![],
                     children: vec![],
                     note: b.note.clone(),
                 },
@@ -665,6 +845,13 @@ impl Timeline {
                         None
                     };
 
+                    let modifier_labels: Vec<String> = g
+                        .modifiers
+                        .iter()
+                        .map(|m| format!("{}: {}", m.kind_label(), m.summary_label()))
+                        .filter(|s| !s.ends_with(": "))
+                        .collect();
+
                     SummaryLine {
                         item_type: ItemDisplayType::Group(g.group_type),
                         label: if g.name.is_empty() {
@@ -675,12 +862,13 @@ impl Timeline {
                         duration_label: format!("{:.0}'", g.approx_minutes()),
                         rotation_label,
                         repeat_instruction,
+                        modifier_labels,
                         children: g
                             .segments
                             .iter()
                             .map(|s| SegmentSummary {
                                 seg_type: s.seg_type,
-                                label: summarize_segment(s),
+                                label: summarize_segment_with_modifiers(s, &g.modifiers),
                                 note: s.note.clone(),
                             })
                             .collect(),
@@ -788,6 +976,8 @@ pub struct SummaryLine {
     pub rotation_label: Option<String>,
     /// Shown as a "Repeat" pill after the segment list.
     pub repeat_instruction: Option<String>,
+    /// Group-level modifier summaries.
+    pub modifier_labels: Vec<String>,
     pub children: Vec<SegmentSummary>,
     pub note: String,
 }
@@ -798,7 +988,16 @@ pub struct SegmentSummary {
     pub note: String,
 }
 
-fn summarize_segment(s: &Segment) -> String {
+/// Summarize a segment with no group modifiers.
+#[allow(dead_code)]
+pub fn summarize_segment(s: &Segment) -> String {
+    summarize_segment_with_modifiers(s, &[])
+}
+
+/// Summarize a segment, merging its own modifiers with any inherited
+/// group-level modifiers. Group modifiers are shown unless the segment
+/// has an override of the same kind.
+fn summarize_segment_with_modifiers(s: &Segment, group_modifiers: &[Modifier]) -> String {
     // Core: duration + rate + intensity
     let mut core = vec![s.duration.display()];
     if s.seg_type.is_work() {
@@ -814,31 +1013,27 @@ fn summarize_segment(s: &Segment) -> String {
         }
     }
 
-    // Modifiers: partial strokes, pause, blade, drills
+    // Collect effective modifiers: group-level (cascading, unless overridden) + segment-level
     let mut mods = Vec::new();
-    if let Some(sl) = s.partial {
-        if sl != Slide::Full {
-            mods.push(sl.label().to_string());
+    for gm in group_modifiers {
+        // Skip non-cascading modifiers (emphasis stays at group level)
+        if !gm.cascades() {
+            continue;
+        }
+        // Skip if the segment overrides this kind
+        if s.modifiers.iter().any(|m| m.kind_id() == gm.kind_id()) {
+            continue;
+        }
+        let label = gm.summary_label();
+        if !label.is_empty() {
+            mods.push(label);
         }
     }
-    if !s.pause.is_empty() {
-        let labels: Vec<&str> = s.pause.iter().map(|p| p.label()).collect();
-        let mut pause_str = format!("pause @ {}", labels.join(" + "));
-        if let Some(every) = s.pause_every {
-            if every > 1 {
-                pause_str.push_str(&format!(" every {every} str"));
-            }
+    for m in &s.modifiers {
+        let label = m.summary_label();
+        if !label.is_empty() {
+            mods.push(label);
         }
-        mods.push(pause_str);
-    }
-    match s.blade {
-        Some(Blade::Square) => mods.push("on square".to_string()),
-        Some(Blade::PartialFeather) => mods.push("partial feather".to_string()),
-        _ => {}
-    }
-    if !s.drills.is_empty() {
-        let drill_labels: Vec<&str> = s.drills.iter().map(|d| d.label()).collect();
-        mods.push(drill_labels.join(", "));
     }
 
     if mods.is_empty() {
@@ -859,6 +1054,8 @@ pub struct Template {
     /// Group repeat count. None or 1 = no repeat.
     pub repeat: Option<u8>,
     pub rotation: Rotation,
+    /// Group-level modifiers that inherit to all segments.
+    pub modifiers: Vec<Modifier>,
     pub segments: fn() -> Vec<Segment>,
 }
 
@@ -868,7 +1065,7 @@ fn seg(
     unit: DurationUnit,
     rate: Option<[u8; 2]>,
     intensity: Option<Intensity>,
-    partial: Option<Slide>,
+    modifiers: Vec<Modifier>,
     note: &str,
 ) -> Segment {
     Segment {
@@ -877,11 +1074,7 @@ fn seg(
         duration: Duration { value: dur, unit },
         rate,
         intensity,
-        partial,
-        pause: vec![],
-        pause_every: None,
-        blade: None,
-        drills: vec![],
+        modifiers,
         note: note.to_string(),
     }
 }
@@ -906,6 +1099,9 @@ pub fn built_in_templates() -> Vec<Template> {
                 rotate_per: RotatePer::Group,
                 rotations: Some(2),
             },
+            modifiers: vec![Modifier::Blade {
+                value: Blade::Square,
+            }],
             segments: || {
                 vec![
                     seg(
@@ -914,7 +1110,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([26, 30]),
                         Some(Paddle),
-                        Some(ArmsOnly),
+                        vec![Modifier::Partial { value: ArmsOnly }],
                         "arms only, no body",
                     ),
                     seg(
@@ -923,7 +1119,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([24, 26]),
                         Some(Paddle),
-                        Some(ArmsBody),
+                        vec![Modifier::Partial { value: ArmsBody }],
                         "add body swing",
                     ),
                     seg(
@@ -932,7 +1128,9 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([22, 24]),
                         Some(Paddle),
-                        Some(ThreeQuarter),
+                        vec![Modifier::Partial {
+                            value: ThreeQuarter,
+                        }],
                         "arms + body + short slide",
                     ),
                     seg(
@@ -941,7 +1139,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([20, 22]),
                         Some(Paddle),
-                        Some(Half),
+                        vec![Modifier::Partial { value: Half }],
                         "",
                     ),
                     seg(
@@ -950,25 +1148,11 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([18, 22]),
                         Some(Paddle),
-                        Some(Quarter),
+                        vec![Modifier::Partial { value: Quarter }],
                         "",
                     ),
-                    seg(
-                        Work,
-                        10.0,
-                        Strokes,
-                        Some([18, 20]),
-                        Some(Ut2),
-                        Some(Full),
-                        "",
-                    ),
+                    seg(Work, 10.0, Strokes, Some([18, 20]), Some(Ut2), vec![], ""),
                 ]
-                .into_iter()
-                .map(|mut s| {
-                    s.blade = Some(Blade::Square);
-                    s
-                })
-                .collect()
             },
         },
         Template {
@@ -984,6 +1168,9 @@ pub fn built_in_templates() -> Vec<Template> {
                 rotate_per: RotatePer::Group,
                 rotations: Some(2),
             },
+            modifiers: vec![Modifier::Blade {
+                value: Blade::Square,
+            }],
             segments: || {
                 vec![
                     seg(
@@ -992,7 +1179,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([24, 26]),
                         Some(Paddle),
-                        Some(Quarter),
+                        vec![Modifier::Partial { value: Quarter }],
                         "legs only, no body",
                     ),
                     seg(
@@ -1001,7 +1188,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([22, 24]),
                         Some(Paddle),
-                        Some(Half),
+                        vec![Modifier::Partial { value: Half }],
                         "",
                     ),
                     seg(
@@ -1010,25 +1197,11 @@ pub fn built_in_templates() -> Vec<Template> {
                         Strokes,
                         Some([18, 22]),
                         Some(Paddle),
-                        Some(LegsBody),
+                        vec![Modifier::Partial { value: LegsBody }],
                         "add body swing",
                     ),
-                    seg(
-                        Work,
-                        10.0,
-                        Strokes,
-                        Some([18, 20]),
-                        Some(Ut2),
-                        Some(Full),
-                        "",
-                    ),
+                    seg(Work, 10.0, Strokes, Some([18, 20]), Some(Ut2), vec![], ""),
                 ]
-                .into_iter()
-                .map(|mut s| {
-                    s.blade = Some(Blade::Square);
-                    s
-                })
-                .collect()
             },
         },
         Template {
@@ -1039,18 +1212,33 @@ pub fn built_in_templates() -> Vec<Template> {
             group_name: "Pause drill",
             repeat: None,
             rotation: Rotation::default(),
+            modifiers: vec![],
             segments: || {
                 vec![
-                    {
-                        let mut s = seg(Work, 4.0, Min, Some([18, 20]), Some(Paddle), None, "");
-                        s.pause = vec![PausePoint::Release];
-                        s
-                    },
-                    {
-                        let mut s = seg(Work, 4.0, Min, Some([18, 20]), Some(Paddle), None, "");
-                        s.pause = vec![PausePoint::Release, PausePoint::ArmsAway];
-                        s
-                    },
+                    seg(
+                        Work,
+                        4.0,
+                        Min,
+                        Some([18, 20]),
+                        Some(Paddle),
+                        vec![Modifier::PauseAt {
+                            points: vec![PausePoint::Release],
+                            every: None,
+                        }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        4.0,
+                        Min,
+                        Some([18, 20]),
+                        Some(Paddle),
+                        vec![Modifier::PauseAt {
+                            points: vec![PausePoint::Release, PausePoint::ArmsAway],
+                            every: None,
+                        }],
+                        "",
+                    ),
                 ]
             },
         },
@@ -1062,12 +1250,19 @@ pub fn built_in_templates() -> Vec<Template> {
             group_name: "Square blade",
             repeat: None,
             rotation: Rotation::default(),
+            modifiers: vec![Modifier::Blade {
+                value: Blade::Square,
+            }],
             segments: || {
-                vec![{
-                    let mut s = seg(Work, 6.0, Min, Some([18, 20]), Some(Paddle), None, "");
-                    s.blade = Some(Blade::Square);
-                    s
-                }]
+                vec![seg(
+                    Work,
+                    6.0,
+                    Min,
+                    Some([18, 20]),
+                    Some(Paddle),
+                    vec![],
+                    "",
+                )]
             },
         },
         Template {
@@ -1078,10 +1273,11 @@ pub fn built_in_templates() -> Vec<Template> {
             group_name: "4x15' UT2",
             repeat: Some(4),
             rotation: Rotation::default(),
+            modifiers: vec![],
             segments: || {
                 vec![
-                    seg(Work, 15.0, Min, Some([20, 22]), Some(Ut2), None, ""),
-                    seg(Rest, 3.0, Min, None, None, None, ""),
+                    seg(Work, 15.0, Min, Some([20, 22]), Some(Ut2), vec![], ""),
+                    seg(Rest, 3.0, Min, None, None, vec![], ""),
                 ]
             },
         },
@@ -1093,10 +1289,11 @@ pub fn built_in_templates() -> Vec<Template> {
             group_name: "3x10' UT1",
             repeat: Some(3),
             rotation: Rotation::default(),
+            modifiers: vec![],
             segments: || {
                 vec![
-                    seg(Work, 10.0, Min, Some([22, 26]), Some(Ut1), None, ""),
-                    seg(Rest, 3.0, Min, None, None, None, ""),
+                    seg(Work, 10.0, Min, Some([22, 26]), Some(Ut1), vec![], ""),
+                    seg(Rest, 3.0, Min, None, None, vec![], ""),
                 ]
             },
         },
@@ -1108,10 +1305,11 @@ pub fn built_in_templates() -> Vec<Template> {
             group_name: "3x500m race",
             repeat: Some(3),
             rotation: Rotation::default(),
+            modifiers: vec![],
             segments: || {
                 vec![
-                    seg(Work, 500.0, Meters, Some([30, 34]), Some(Tr), None, ""),
-                    seg(Rest, 4.0, Min, None, None, None, ""),
+                    seg(Work, 500.0, Meters, Some([30, 34]), Some(Tr), vec![], ""),
+                    seg(Rest, 4.0, Min, None, None, vec![], ""),
                 ]
             },
         },
@@ -1167,7 +1365,7 @@ mod tests {
                             DurationUnit::Min,
                             Some([18, 20]),
                             Some(Intensity::Paddle),
-                            None,
+                            vec![],
                             "",
                         ),
                         seg(
@@ -1176,12 +1374,13 @@ mod tests {
                             DurationUnit::Min,
                             None,
                             None,
-                            None,
+                            vec![],
                             "",
                         ),
                     ],
                     repeat: None,
                     rotation: Rotation::default(),
+                    modifiers: vec![],
                     note: String::new(),
                 }),
                 TimelineItem::Block(Block {
@@ -1208,7 +1407,7 @@ mod tests {
             DurationUnit::Min,
             Some([20, 22]),
             Some(Intensity::Ut2),
-            None,
+            vec![],
             "",
         );
         assert_eq!(summarize_segment(&s), "15' r20-22 @UT2");

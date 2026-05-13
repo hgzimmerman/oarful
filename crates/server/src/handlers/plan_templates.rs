@@ -11,8 +11,8 @@ use lineup_db::{
     app_user::Role,
     plan_template::{self, NewPlanTemplate, PlanTemplate, PlanTemplateId},
     timeline::{
-        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, HandDrill, Intensity,
-        PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide, Timeline, TimelineItem,
+        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, Intensity, RotatePer,
+        Rotation, Segment, SegmentType, Timeline, TimelineItem,
     },
 };
 use serde::Deserialize;
@@ -25,7 +25,10 @@ use crate::{
     templates,
 };
 
-use super::timeline::{default_segment, make_id, practice_timeline_url, CommaSep, TimelineForm};
+use super::timeline::{
+    default_segment, find_modifier_target, make_id, practice_timeline_url, ModifierForm,
+    TimelineForm,
+};
 
 fn next_template_name(existing: &[PlanTemplate]) -> String {
     let names: Vec<&str> = existing.iter().map(|t| t.name.as_str()).collect();
@@ -516,6 +519,7 @@ tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
                 segments: vec![default_segment()],
                 repeat: None,
                 rotation: Rotation::default(),
+                modifiers: vec![],
                 note: String::new(),
             };
             let sid = g.id.clone();
@@ -529,6 +533,7 @@ tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
                 segments: vec![default_segment()],
                 repeat: None,
                 rotation: Rotation::default(),
+                modifiers: vec![],
                 note: String::new(),
             };
             let sid = g.id.clone();
@@ -631,16 +636,6 @@ pub(crate) struct PatchSegmentForm {
     #[serde(default)]
     note: Option<String>,
     #[serde(default)]
-    partial: Option<Slide>,
-    #[serde(default)]
-    blade: Option<String>,
-    #[serde(default)]
-    pause_points: CommaSep<PausePoint>,
-    #[serde(default)]
-    pause_every: Option<u32>,
-    #[serde(default)]
-    drills: CommaSep<HandDrill>,
-    #[serde(default)]
     _range_toggle: Option<String>,
     #[serde(default)]
     seg_type: Option<SegmentType>,
@@ -649,7 +644,7 @@ pub(crate) struct PatchSegmentForm {
 tl_mutation_handler!(
     tl_patch_segment,
     PatchSegmentForm,
-    |mut input: PatchSegmentForm, base_url: &str| {
+    |input: PatchSegmentForm, base_url: &str| {
         let mut tl = input.base.parse();
         for item in &mut tl.items {
             if let TimelineItem::Group(g) = item {
@@ -668,6 +663,8 @@ tl_mutation_handler!(
                                 let mut hi = input.rate_high.unwrap_or(cur[1]).clamp(lo, 50);
                                 if input._range_toggle.is_none() {
                                     hi = lo;
+                                } else if lo == hi {
+                                    hi = (lo + 2).clamp(lo, 50);
                                 }
                                 s.rate = Some([lo, hi]);
                             }
@@ -677,20 +674,6 @@ tl_mutation_handler!(
                             if let Some(ref n) = input.note {
                                 s.note = n.clone();
                             }
-                            if let Some(sl) = input.partial {
-                                s.partial = Some(sl);
-                            }
-                            if let Some(ref bl) = input.blade {
-                                s.blade = match bl.as_str() {
-                                    "square" => Some(timeline::Blade::Square),
-                                    "partial-feather" => Some(timeline::Blade::PartialFeather),
-                                    "none" => None,
-                                    _ => Some(timeline::Blade::Feather),
-                                };
-                            }
-                            s.pause = std::mem::take(&mut input.pause_points.0);
-                            s.pause_every = input.pause_every.filter(|&n| n > 0);
-                            s.drills = std::mem::take(&mut input.drills.0);
                             if let Some(st) = input.seg_type {
                                 s.seg_type = st;
                             }
@@ -1028,6 +1011,7 @@ tl_mutation_handler!(
                 segments,
                 repeat: tmpl.repeat,
                 rotation: tmpl.rotation.clone(),
+                modifiers: tmpl.modifiers.clone(),
                 note: String::new(),
             };
             let select_id = g.id.clone();
@@ -1080,6 +1064,236 @@ tl_mutation_handler!(
             }
         }
         Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
+    }
+);
+
+// ── Split group ──
+
+use super::timeline::GroupSplitForm;
+
+tl_mutation_handler!(
+    tl_group_split,
+    GroupSplitForm,
+    |input: GroupSplitForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        for item in &mut tl.items {
+            if let TimelineItem::Group(g) = item {
+                if g.id == input.group_id {
+                    let reps = g.repeat.unwrap_or(1).max(1) as usize;
+                    if reps > 1 {
+                        let original_segs = g.segments.clone();
+                        for _ in 1..reps {
+                            for s in &original_segs {
+                                let mut copy = s.clone();
+                                copy.id = make_id();
+                                g.segments.push(copy);
+                            }
+                        }
+                        g.repeat = None;
+                    }
+                    break;
+                }
+            }
+        }
+        Html(
+            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
+        )
+    }
+);
+
+// ── Modifier mutation handlers ──
+
+use lineup_db::timeline::{Blade, HandDrill, Modifier, PausePoint, Slide};
+
+tl_mutation_handler!(
+    tl_modifier_add,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        if let Some(m) = Modifier::default_for_kind(&input.kind) {
+            if let Some(mods) = find_modifier_target(
+                &mut tl,
+                &input.group_id,
+                input.segment_id.as_deref(),
+                input.scope.as_deref(),
+            ) {
+                if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
+                    mods.push(m);
+                }
+            }
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+    }
+);
+
+tl_mutation_handler!(
+    tl_modifier_remove,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        if let Some(mods) = find_modifier_target(
+            &mut tl,
+            &input.group_id,
+            input.segment_id.as_deref(),
+            input.scope.as_deref(),
+        ) {
+            mods.retain(|m| m.kind_id() != input.kind);
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+    }
+);
+
+tl_mutation_handler!(
+    tl_modifier_update,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        if let Some(mods) = find_modifier_target(
+            &mut tl,
+            &input.group_id,
+            input.segment_id.as_deref(),
+            input.scope.as_deref(),
+        ) {
+            if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+                let val = input.value.as_deref().unwrap_or("");
+                match m {
+                    Modifier::Blade { value } => {
+                        *value = match val {
+                            "square" => Blade::Square,
+                            "partial-feather" => Blade::PartialFeather,
+                            _ => Blade::Feather,
+                        };
+                    }
+                    Modifier::Partial { value } => {
+                        if let Ok(v) = val.parse::<Slide>() {
+                            *value = v;
+                        }
+                    }
+                    Modifier::PauseAt { every, .. } => {
+                        if input.subfield.as_deref() == Some("every") {
+                            *every = val.parse::<u32>().ok().filter(|&n| n > 0);
+                        }
+                    }
+                    Modifier::Emphasis { text } => {
+                        *text = val.to_string();
+                    }
+                    Modifier::RepeatingEmphasis {
+                        every,
+                        every_unit,
+                        count,
+                        label,
+                    } => {
+                        if let Some(v) = input.re_every {
+                            *every = v.max(1);
+                        }
+                        if let Some(u) = input.re_every_unit {
+                            *every_unit = u;
+                        }
+                        if let Some(c) = input.re_count {
+                            *count = c.max(1);
+                        }
+                        if let Some(ref l) = input.re_label {
+                            *label = l.clone();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+    }
+);
+
+tl_mutation_handler!(
+    tl_modifier_toggle,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        if let Some(mods) = find_modifier_target(
+            &mut tl,
+            &input.group_id,
+            input.segment_id.as_deref(),
+            input.scope.as_deref(),
+        ) {
+            if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+                let val = input.value.as_deref().unwrap_or("");
+                match m {
+                    Modifier::PauseAt { points, .. } => {
+                        if let Ok(pp) = val.parse::<PausePoint>() {
+                            if let Some(pos) = points.iter().position(|p| *p == pp) {
+                                points.remove(pos);
+                            } else {
+                                points.push(pp);
+                            }
+                        }
+                    }
+                    Modifier::Drills { values } => {
+                        if let Ok(hd) = val.parse::<HandDrill>() {
+                            if let Some(pos) = values.iter().position(|d| *d == hd) {
+                                values.remove(pos);
+                            } else {
+                                values.push(hd);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+    }
+);
+
+tl_mutation_handler!(
+    tl_modifier_override,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        for item in &mut tl.items {
+            if let TimelineItem::Group(g) = item {
+                if g.id == input.group_id {
+                    if let Some(gm) = g.modifiers.iter().find(|m| m.kind_id() == input.kind) {
+                        let cloned = gm.clone();
+                        if let Some(sid) = &input.segment_id {
+                            if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
+                                if !s.modifiers.iter().any(|m| m.kind_id() == input.kind) {
+                                    s.modifiers.push(cloned);
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
+    }
+);
+
+tl_mutation_handler!(
+    tl_modifier_revert,
+    ModifierForm,
+    |input: ModifierForm, base_url: &str| {
+        let mut tl = input.base.parse();
+        for item in &mut tl.items {
+            if let TimelineItem::Group(g) = item {
+                if g.id == input.group_id {
+                    if let Some(sid) = &input.segment_id {
+                        if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
+                            s.modifiers.retain(|m| m.kind_id() != input.kind);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
+        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
     }
 );
 

@@ -83,7 +83,7 @@ pub(super) fn timeline_strip(
                                      hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                     input type="hidden" name="timeline" value=(tl_json);
                                     input type="hidden" name="group_id" value=(id);
-                                    input type="hidden" name="selected" value=(g.segments.first().map(|s| s.id.as_str()).unwrap_or(id));
+                                    input type="hidden" name="selected" value=(id);
                                     button type="submit" class="w-full cursor-pointer truncate"
                                            style="font-size: 8px; font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); line-height: 1.4; background: none; border: none; padding: 4px 2px 0"
                                            title=(group_tooltip(g)) {

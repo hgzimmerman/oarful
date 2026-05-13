@@ -111,6 +111,13 @@ pub(crate) fn summary_content(
                                             }
                                         }
                                     }
+                                    @if !line.modifier_labels.is_empty() {
+                                        div class="pl-5 mt-0.5" {
+                                            @for ml in &line.modifier_labels {
+                                                span class="font-mono-stat text-[9px] italic mr-2" style="color: var(--accent)" { (ml) }
+                                            }
+                                        }
+                                    }
                                     ul class="list-none m-0 pl-5 mt-0.5 space-y-0.5" {
                                         @for seg in &line.children {
                                             li class="flex items-center gap-1.5 text-xs" {
@@ -186,6 +193,13 @@ pub(crate) fn preview(tl: &Timeline) -> Markup {
                                         @if let Some(ref rot) = line.rotation_label {
                                             span class="font-mono-stat text-[9px] italic" style="color: var(--muted)" {
                                                 " · " (rot)
+                                            }
+                                        }
+                                    }
+                                    @if !line.modifier_labels.is_empty() {
+                                        div class="pl-5 mt-0.5" {
+                                            @for ml in &line.modifier_labels {
+                                                span class="font-mono-stat text-[9px] italic mr-2" style="color: var(--accent)" { (ml) }
                                             }
                                         }
                                     }

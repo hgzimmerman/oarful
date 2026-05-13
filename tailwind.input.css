@@ -937,6 +937,15 @@ html.dark {
   .input-warm::placeholder {
     color: var(--muted);
   }
+  /* Hide number input spinners */
+  .input-no-spin::-webkit-outer-spin-button,
+  .input-no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .input-no-spin {
+    -moz-appearance: textfield;
+  }
 }
 
 /* Checkbox/radio accent — use warm accent instead of browser default blue */
