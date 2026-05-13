@@ -416,7 +416,6 @@ pub(crate) fn editor_content(
                     button type="submit" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80" style=(block_type_css(*bt)) { (bt.label()) }
                 }
             }
-            span style="width: 1px; height: 16px; background: var(--rule); margin: 0 2px" {}
             // "From template" dropdown
             div class="relative inline-block" x-data="{ open: false, search: '' }" {
                 button type="button" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80"
@@ -427,19 +426,21 @@ pub(crate) fn editor_content(
                 div x-show="open" x-cloak=""
                     "@click.outside"="open = false"
                     "@keydown.escape.window"="open = false"
-                    class="absolute left-0 top-full mt-1 z-50 rounded-lg shadow-lg overflow-hidden"
-                    style="background: var(--paper); border: 1px solid var(--rule); min-width: 260px" {
-                    div class="p-2" style="border-bottom: 1px solid var(--rule-2)" {
+                    class="absolute left-0 top-full mt-1 z-50 rounded-lg overflow-hidden"
+                    style="background: var(--paper); border: 1px solid var(--rule); min-width: 320px; box-shadow: var(--shadow-card)" {
+                    div class="p-2" {
                         input type="text" x-model="search" x-ref="tmplSearch" placeholder="Search templates…"
-                              class="input-warm text-xs w-full py-1 px-2";
+                              class="input-warm text-sm w-full py-1.5 px-2";
                     }
-                    div class="max-h-64 overflow-y-auto p-1" {
+                    div class="max-h-96 overflow-y-auto" style="border-top: 1px solid var(--rule-2)" {
                         @let templates = timeline::built_in_templates();
                         @for gt in &[GroupType::Warmup, GroupType::Piece] {
                             @let group_tmpls: Vec<_> = templates.iter().filter(|t| t.group_type == *gt).collect();
                             @if !group_tmpls.is_empty() {
-                                div x-show={ "!search || " (group_tmpls.iter().map(|t| format!("'{}'.toLowerCase().includes(search.toLowerCase())", t.name.replace('\'', "\\'"))).collect::<Vec<_>>().join(" || ")) }  {
-                                    div class="font-mono-stat text-[8px] tracking-wider uppercase px-2 pt-2 pb-1" style="color: var(--muted)" { (gt.label()) }
+                                div x-show={ "!search || " (group_tmpls.iter().map(|t| format!("'{}'.toLowerCase().includes(search.toLowerCase()) || '{}'.toLowerCase().includes(search.toLowerCase())", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))).collect::<Vec<_>>().join(" || ")) }  {
+                                    div class="font-mono-stat text-[8px] tracking-[0.12em] uppercase px-3 pt-3 pb-1" style="color: var(--muted)" {
+                                        (gt.label())
+                                    }
                                     @for tmpl in &group_tmpls {
                                         form class="block" hx-post={(base_url) "/template"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                             input type="hidden" name="timeline" value=(tl_json);
@@ -448,11 +449,11 @@ pub(crate) fn editor_content(
                                             input type="hidden" name="template_id" value=(tmpl.id);
                                             button type="submit"
                                                    x-show={"!search || '" (tmpl.name.replace('\'', "\\'")) "'.toLowerCase().includes(search.toLowerCase()) || '" (tmpl.description.replace('\'', "\\'")) "'.toLowerCase().includes(search.toLowerCase())"}
-                                                   class="w-full text-left px-2 py-1.5 rounded cursor-pointer"
+                                                   class="w-full text-left px-3 py-2 cursor-pointer"
                                                    style="background: transparent; border: none; color: var(--ink)"
                                                    onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='transparent'" {
-                                                div class="font-mono-stat text-[10px] font-medium" { (tmpl.name) }
-                                                div class="font-mono-stat text-[8px] mt-0.5 truncate" style="color: var(--muted)" { (tmpl.description) }
+                                                div class="text-sm font-semibold" { (tmpl.name) }
+                                                div class="text-xs mt-0.5" style="color: var(--muted)" { (tmpl.description) }
                                             }
                                         }
                                     }
