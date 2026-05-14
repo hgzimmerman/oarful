@@ -1405,6 +1405,88 @@ pub fn built_in_templates() -> Vec<Template> {
                 ]
             },
         },
+        Template {
+            id: "start-seq-half",
+            name: "Start sequence (1/2 lead)",
+            description: "Progressive start: 1/2 1/2 3/4 lengthen full + power 5",
+            group_type: GroupType::Warmup,
+            group_name: "Start sequence",
+            repeat: None,
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                let r = Some([36, 38]);
+                let p = |s| vec![Modifier::Partial { value: s }];
+                vec![
+                    // Attempt 1: just stroke 1
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 2: strokes 1-2
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 3: strokes 1-3
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 4: strokes 1-4
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 5: full start + power 5
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(Work, 5.0, Strokes, r, Some(Tr), vec![], "power 5"),
+                ]
+            },
+        },
+        Template {
+            id: "start-seq-three-quarter",
+            name: "Start sequence (3/4 lead)",
+            description: "Progressive start: 3/4 1/2 1/2 lengthen full + power 5",
+            group_type: GroupType::Warmup,
+            group_name: "Start sequence",
+            repeat: None,
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                let r = Some([36, 38]);
+                let p = |s| vec![Modifier::Partial { value: s }];
+                vec![
+                    // Attempt 1: just stroke 1
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 2: strokes 1-2
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 3: strokes 1-3
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 4: strokes 1-4
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Rest, 0.25, Min, None, None, vec![], ""),
+                    // Attempt 5: full start + power 5
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(Work, 5.0, Strokes, r, Some(Tr), vec![], "power 5"),
+                ]
+            },
+        },
     ]
 }
 
