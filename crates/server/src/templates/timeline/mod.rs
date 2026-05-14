@@ -438,8 +438,8 @@ pub(crate) fn editor_content(
                         input type="text" x-model="search" x-ref="tmplSearch" placeholder="Search templates…"
                               class="input-warm text-sm flex-1 py-1.5 px-2"
                               "@input"="sel = -1"
-                              "@keydown.arrow-down.prevent"="sel = Math.min(sel + 1, matchCount - 1)"
-                              "@keydown.arrow-up.prevent"="sel = Math.max(sel - 1, -1)"
+                              "@keydown.arrow-down.prevent"="sel = Math.min(sel + 1, matchCount - 1); $nextTick(() => { var el = $root.querySelector('.tmpl-sel'); if (el) el.scrollIntoView({ block: 'nearest' }); })"
+                              "@keydown.arrow-up.prevent"="sel = Math.max(sel - 1, -1); $nextTick(() => { var el = $root.querySelector('.tmpl-sel'); if (el) el.scrollIntoView({ block: 'nearest' }); })"
                               "@keydown.enter.prevent"="if (sel >= 0 && sel < matchCount) { var id = visible[sel].id; var btn = $root.querySelector('[data-tmpl-id=\"' + id + '\"]'); if (btn) btn.click(); }";
                         span class="font-mono-stat text-[9px] flex-shrink-0" style="color: var(--muted)"
                              x-text="matchCount + ' result' + (matchCount === 1 ? '' : 's')" {}
