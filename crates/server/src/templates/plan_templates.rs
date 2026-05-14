@@ -35,8 +35,8 @@ pub(crate) fn list_content(templates: &[PlanTemplate]) -> Markup {
                     @for tmpl in templates {
                         @let tl = tmpl.timeline();
                         @let planned = tl.as_ref().map(|t| t.planned_minutes()).unwrap_or(0.0);
-                        a href=(format!("/admin/plan-templates/{}", tmpl.id))
-                          hx-get=(format!("/admin/plan-templates/{}", tmpl.id))
+                        a href=(format!("/admin/plan-templates/{}/detail?plan_editor=open_preview", tmpl.id))
+                          hx-get=(format!("/admin/plan-templates/{}/detail?plan_editor=open_preview", tmpl.id))
                           hx-target="#admin-tab-content"
                           hx-push-url="true"
                           class="block rounded-lg px-4 py-3 hover:opacity-80 transition-opacity cursor-pointer"
