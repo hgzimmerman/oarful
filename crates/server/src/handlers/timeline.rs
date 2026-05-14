@@ -1109,6 +1109,11 @@ pub(crate) async fn modifier_update(
                         *label = l.clone();
                     }
                 }
+                Modifier::RowBy { value } => {
+                    if let Ok(v) = val.parse::<u8>() {
+                        *value = v.clamp(2, 8);
+                    }
+                }
                 _ => {}
             }
         }

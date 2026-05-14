@@ -277,6 +277,9 @@ pub(super) fn modifier_value_display(m: &Modifier) -> Markup {
                     (count) " strokes every " (every) " " (every_unit.label())
                 }
             }
+            Modifier::RowBy { value } => {
+                "by " (value) "s"
+            }
         }
     }
 }
@@ -354,6 +357,25 @@ fn modifier_value_editor(
             }
             Modifier::RepeatingEmphasis { every, every_unit, count, label } => {
                 (repeating_emphasis_editor(pe, *every, *every_unit, *count, label, seg, group, base_url, tl_json))
+            }
+            Modifier::RowBy { value } => {
+                div class="flex gap-1 flex-wrap" {
+                    @for v in &[2u8, 4, 6, 8] {
+                        @let is_active = value == v;
+                        form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
+                            input type="hidden" name="timeline" value=(tl_json);
+                            input type="hidden" name="plan_editor" value=(pe);
+                            input type="hidden" name="group_id" value=(group.id);
+                            input type="hidden" name="segment_id" value=(seg.id);
+                            input type="hidden" name="selected" value=(seg.id);
+                            input type="hidden" name="kind" value="row_by";
+                            input type="hidden" name="scope" value="segment";
+                            input type="hidden" name="value" value=(v);
+                            button type="submit" class={"font-mono-stat text-[10px] px-1.5 py-0.5 rounded border cursor-pointer " @if is_active { "font-bold" }}
+                                   style=(chip_style(is_active)) { "by " (v) }
+                        }
+                    }
+                }
             }
         }
     }

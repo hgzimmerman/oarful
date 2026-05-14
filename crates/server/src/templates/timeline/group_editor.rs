@@ -444,6 +444,19 @@ fn group_modifier_value_editor(
                           style="font-style: italic";
                 }
             }
+            Modifier::RowBy { value } => {
+                div class="flex gap-1 flex-wrap" {
+                    @for v in &[2u8, 4, 6, 8] {
+                        @let is_active = value == v;
+                        form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
+                            (hidden_fields!("row_by"))
+                            input type="hidden" name="value" value=(v);
+                            button type="submit" class={"font-mono-stat text-[10px] px-1.5 py-0.5 rounded border cursor-pointer " @if is_active { "font-bold" }}
+                                   style=(chip_style(is_active)) { "by " (v) }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -400,13 +400,19 @@ pub enum Modifier {
         /// Short name shown on the plan (e.g. "power 10").
         label: String,
     },
+    /// Row by N rowers at a time (e.g. by 2s, by 4s). Segment-only.
+    #[serde(rename = "row_by")]
+    RowBy { value: u8 },
 }
 
 impl Modifier {
     /// Whether this modifier cascades from group to segments.
     /// Emphasis and RepeatingEmphasis are group-level notes that don't inherit.
     pub fn cascades(&self) -> bool {
-        !matches!(self, Self::Emphasis { .. } | Self::RepeatingEmphasis { .. })
+        !matches!(
+            self,
+            Self::Emphasis { .. } | Self::RepeatingEmphasis { .. } | Self::RowBy { .. }
+        )
     }
 
     /// String key used to match modifiers across group↔segment for inheritance.
@@ -418,6 +424,7 @@ impl Modifier {
             Self::Drills { .. } => "drills",
             Self::Emphasis { .. } => "emphasis",
             Self::RepeatingEmphasis { .. } => "repeating_emphasis",
+            Self::RowBy { .. } => "row_by",
         }
     }
 
@@ -430,6 +437,7 @@ impl Modifier {
             Self::Drills { .. } => "Drills",
             Self::Emphasis { .. } => "Notes",
             Self::RepeatingEmphasis { .. } => "Repeating",
+            Self::RowBy { .. } => "Row by",
         }
     }
 
@@ -454,6 +462,7 @@ impl Modifier {
                 count: 10,
                 label: "power".to_string(),
             }),
+            "row_by" => Some(Self::RowBy { value: 4 }),
             _ => None,
         }
     }
@@ -492,6 +501,7 @@ impl Modifier {
                 let name = if label.is_empty() { "emphasis" } else { label };
                 format!("{name} {count} every {every}{unit}")
             }
+            Self::RowBy { value } => format!("by {value}s"),
         }
     }
 }
@@ -549,6 +559,13 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Pacing",
             description: "power 10s, focus 5s \u{2014} every N min or strokes",
             value_shape: "compound",
+        },
+        ModifierCatalogueEntry {
+            kind_id: "row_by",
+            name: "Row by",
+            group: "Pacing",
+            description: "row by 2s, 4s, 6s, or 8s",
+            value_shape: "picks one",
         },
     ]
 }
@@ -1326,6 +1343,57 @@ pub fn built_in_templates() -> Vec<Template> {
                 vec![
                     seg(Work, 500.0, Meters, Some([30, 34]), Some(Tr), vec![], ""),
                     seg(Rest, 4.0, Min, None, None, vec![], ""),
+                ]
+            },
+        },
+        Template {
+            id: "build-drill",
+            name: "Build drill",
+            description: "By 2s → 4s → 6s → 8s, 10 strokes each, 4 reps",
+            group_type: GroupType::Warmup,
+            group_name: "Build drill",
+            repeat: Some(4),
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                vec![
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 2 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 4 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 6 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 8 }],
+                        "",
+                    ),
+                    seg(Rest, 0.5, Min, None, None, vec![], ""),
                 ]
             },
         },

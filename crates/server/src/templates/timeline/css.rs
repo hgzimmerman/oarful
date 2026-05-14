@@ -58,6 +58,7 @@ pub(super) fn modifier_kind_label(kind: &str) -> &'static str {
         "drills" => "Drills",
         "emphasis" => "Notes",
         "repeating_emphasis" => "Repeating",
+        "row_by" => "Row by",
         _ => "Modifier",
     }
 }
@@ -70,6 +71,7 @@ pub(super) fn modifier_kind_color(kind_id: &str) -> &'static str {
         "repeating_emphasis" => "var(--mod-repeating)",
         "blade" => "var(--mod-blade)",
         "partial" => "var(--mod-partial)",
+        "row_by" => "var(--mod-row-by)",
         _ => "var(--accent)",
     }
 }
