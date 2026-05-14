@@ -346,7 +346,7 @@ fn modifier_value_editor(
                     input type="hidden" name="selected" value=(seg.id);
                     input type="hidden" name="kind" value="emphasis";
                     input type="hidden" name="scope" value="segment";
-                    input type="text" name="value" value=(text)
+                    input type="text" autocomplete="off" name="value" value=(text)
                           class="input-warm text-sm w-full py-0.5"
                           placeholder="e.g. connection at the catch"
                           style="font-family: var(--font-serif-heading); font-style: italic";
@@ -487,7 +487,7 @@ fn repeating_emphasis_editor(
             span style="color: var(--muted)" { "strokes" }
             span style="color: var(--rule)" { "\u{00b7}" }
             // label
-            input type="text" name="re_label" value=(label)
+            input type="text" autocomplete="off" name="re_label" value=(label)
                   class="input-warm text-xs py-0.5 flex-1 min-w-[80px]"
                   placeholder="e.g. power"
                   style="font-style: italic";

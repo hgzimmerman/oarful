@@ -66,7 +66,7 @@ pub(super) fn group_editor(
                 div class="flex flex-wrap gap-4 items-start mb-3" {
                     div class="flex-1 min-w-[150px]" {
                         (field_label("Name"))
-                        input type="text" name="group_name" value=(group.name) placeholder="e.g. Pick drill" class="input-warm text-sm w-full py-1";
+                        input type="text" autocomplete="off" name="group_name" value=(group.name) placeholder="e.g. Pick drill" class="input-warm text-sm w-full py-1";
                     }
                     div {
                         (field_label("Repeat"))
@@ -218,7 +218,7 @@ pub(super) fn group_editor(
                                 @if !is_work {
                                     // Note for rest/turn segments inline
                                     div class="flex-1 min-w-[120px]" {
-                                        input type="text" name="note" value=(seg.note)
+                                        input type="text" autocomplete="off" name="note" value=(seg.note)
                                               placeholder="note" class="input-warm text-xs w-full py-0.5"
                                               style="color: var(--muted); font-style: italic";
                                     }
@@ -415,7 +415,7 @@ fn group_modifier_value_editor(
             Modifier::Emphasis { text } => {
                 form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                     (hidden_fields!("emphasis"))
-                    input type="text" name="value" value=(text)
+                    input type="text" autocomplete="off" name="value" value=(text)
                           class="input-warm text-sm w-full py-0.5"
                           placeholder="e.g. connection at the catch"
                           style="font-style: italic";
@@ -438,7 +438,7 @@ fn group_modifier_value_editor(
                           class="input-warm input-no-spin text-xs w-10 py-0.5 text-center font-medium";
                     span style="color: var(--muted)" { "strokes" }
                     span style="color: var(--rule)" { "\u{00b7}" }
-                    input type="text" name="re_label" value=(label)
+                    input type="text" autocomplete="off" name="re_label" value=(label)
                           class="input-warm text-xs py-0.5 flex-1 min-w-[80px]"
                           placeholder="e.g. power"
                           style="font-style: italic";
