@@ -419,10 +419,10 @@ pub(crate) fn editor_content(
             // "From template" dropdown
             @let templates = timeline::built_in_templates();
             @let tmpl_js_arr = templates.iter().map(|t|
-                format!("{{n:'{}',d:'{}',id:'{}'}}", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"), t.id)
+                format!("{{n:'{}',d:'{}',id:'{}',g:'{}'}}", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"), t.id, t.group_type.label().to_lowercase())
             ).collect::<Vec<_>>().join(",");
             div class="relative inline-block"
-                 x-data=(maud::PreEscaped(format!("{{ open: false, search: '', sel: -1, tmpls: [{}], get visible() {{ if (!this.search) return this.tmpls; var s = this.search.toLowerCase(); return this.tmpls.filter(t => t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s)); }}, get matchCount() {{ return this.visible.length; }}, matches(t) {{ if (!this.search) return true; var s = this.search.toLowerCase(); return t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s); }} }}", tmpl_js_arr))) {
+                 x-data=(maud::PreEscaped(format!("{{ open: false, search: '', sel: -1, tmpls: [{}], get visible() {{ if (!this.search) return this.tmpls; var s = this.search.toLowerCase(); return this.tmpls.filter(t => t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s)); }}, get matchCount() {{ return this.visible.length; }}, matches(t) {{ if (!this.search) return true; var s = this.search.toLowerCase(); return t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s); }}, groupCount(g) {{ return this.visible.filter(t => t.g === g).length; }}, hl(text) {{ if (!this.search) return text; var s = this.search, re = new RegExp('(' + s.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi'); return text.replace(re, '<b>$1</b>'); }} }}", tmpl_js_arr))) {
                 button type="button" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80"
                        style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)"
                        "@click"="open = !open; sel = -1; if (open) $nextTick(() => $refs.tmplSearch.focus())" {
@@ -453,9 +453,10 @@ pub(crate) fn editor_content(
                                         t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))
                                 ).collect::<Vec<_>>().join(" || ");
                                 div x-show={ "!search || " (group_match_expr) }  {
-                                    // Group header with count
+                                    // Group header with dynamic count
                                     div class="font-mono-stat text-[8px] tracking-[0.12em] uppercase px-3 pt-3 pb-1" style="color: var(--muted)" {
-                                        (gt.label()) " · " (group_tmpls.len())
+                                        (gt.label()) " · "
+                                        span x-text=(format!("groupCount('{}')", gt.label().to_lowercase())) { (group_tmpls.len()) }
                                     }
                                     @for tmpl in &group_tmpls {
                                         @let match_expr = format!("matches({{ n: '{}', d: '{}' }})",
@@ -481,8 +482,10 @@ pub(crate) fn editor_content(
                                                     }
                                                 }
                                                 div class="flex-1 min-w-0" {
-                                                    div class="text-sm font-semibold" { (tmpl.name) }
-                                                    div class="text-xs mt-0.5 truncate" style="color: var(--muted)" { (tmpl.description) }
+                                                    div class="text-sm font-semibold"
+                                                         x-html=(format!("hl('{}')", tmpl.name.replace('\'', "\\'"))) { (tmpl.name) }
+                                                    div class="text-xs mt-0.5 truncate" style="color: var(--muted)"
+                                                         x-html=(format!("hl('{}')", tmpl.description.replace('\'', "\\'"))) { (tmpl.description) }
                                                 }
                                             }
                                         }
