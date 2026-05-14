@@ -417,7 +417,12 @@ pub(crate) fn editor_content(
                 }
             }
             // "From template" dropdown
-            div class="relative inline-block" x-data="{ open: false, search: '' }" {
+            @let templates = timeline::built_in_templates();
+            @let tmpl_js_arr = templates.iter().map(|t|
+                format!("{{n:'{}',d:'{}'}}", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))
+            ).collect::<Vec<_>>().join(",");
+            div class="relative inline-block"
+                 x-data=(maud::PreEscaped(format!("{{ open: false, search: '', tmpls: [{}], get matchCount() {{ if (!this.search) return this.tmpls.length; var s = this.search.toLowerCase(); return this.tmpls.filter(t => t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s)).length; }} }}", tmpl_js_arr))) {
                 button type="button" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80"
                        style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)"
                        "@click"="open = !open; if (open) $nextTick(() => $refs.tmplSearch.focus())" {
@@ -428,38 +433,67 @@ pub(crate) fn editor_content(
                     "@keydown.escape.window"="open = false"
                     class="absolute left-0 top-full mt-1 z-50 rounded-lg overflow-hidden"
                     style="background: var(--paper); border: 1px solid var(--rule); min-width: 320px; box-shadow: var(--shadow-card)" {
-                    div class="p-2" {
+                    // Search with result count
+                    div class="flex items-center gap-2 p-2" {
                         input type="text" x-model="search" x-ref="tmplSearch" placeholder="Search templates…"
-                              class="input-warm text-sm w-full py-1.5 px-2";
+                              class="input-warm text-sm flex-1 py-1.5 px-2";
+                        span class="font-mono-stat text-[9px] flex-shrink-0" style="color: var(--muted)"
+                             x-text="matchCount + ' result' + (matchCount === 1 ? '' : 's')" {}
                     }
                     div class="max-h-96 overflow-y-auto" style="border-top: 1px solid var(--rule-2)" {
-                        @let templates = timeline::built_in_templates();
                         @for gt in &[GroupType::Warmup, GroupType::Piece] {
                             @let group_tmpls: Vec<_> = templates.iter().filter(|t| t.group_type == *gt).collect();
                             @if !group_tmpls.is_empty() {
-                                div x-show={ "!search || " (group_tmpls.iter().map(|t| format!("'{}'.toLowerCase().includes(search.toLowerCase()) || '{}'.toLowerCase().includes(search.toLowerCase())", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))).collect::<Vec<_>>().join(" || ")) }  {
+                                @let group_match_expr = group_tmpls.iter().map(|t|
+                                    format!("'{}'.toLowerCase().includes(search.toLowerCase()) || '{}'.toLowerCase().includes(search.toLowerCase())",
+                                        t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))
+                                ).collect::<Vec<_>>().join(" || ");
+                                div x-show={ "!search || " (group_match_expr) }  {
+                                    // Group header with count
                                     div class="font-mono-stat text-[8px] tracking-[0.12em] uppercase px-3 pt-3 pb-1" style="color: var(--muted)" {
-                                        (gt.label())
+                                        (gt.label()) " · " (group_tmpls.len())
                                     }
                                     @for tmpl in &group_tmpls {
+                                        @let match_expr = format!("!search || '{}'.toLowerCase().includes(search.toLowerCase()) || '{}'.toLowerCase().includes(search.toLowerCase())",
+                                            tmpl.name.replace('\'', "\\'"), tmpl.description.replace('\'', "\\'"));
                                         form class="block" hx-post={(base_url) "/template"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                             input type="hidden" name="timeline" value=(tl_json);
                                             input type="hidden" name="selected" value=(selected_id.unwrap_or(""));
                                             input type="hidden" name="plan_editor" value=(pe);
                                             input type="hidden" name="template_id" value=(tmpl.id);
                                             button type="submit"
-                                                   x-show={"!search || '" (tmpl.name.replace('\'', "\\'")) "'.toLowerCase().includes(search.toLowerCase()) || '" (tmpl.description.replace('\'', "\\'")) "'.toLowerCase().includes(search.toLowerCase())"}
-                                                   class="w-full text-left px-3 py-2 cursor-pointer"
+                                                   x-show=(match_expr)
+                                                   class="w-full text-left px-3 py-2 cursor-pointer flex items-start gap-2"
                                                    style="background: transparent; border: none; color: var(--ink)"
                                                    onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='transparent'" {
-                                                div class="text-sm font-semibold" { (tmpl.name) }
-                                                div class="text-xs mt-0.5" style="color: var(--muted)" { (tmpl.description) }
+                                                // Group type badge
+                                                span class="font-mono-stat text-[9px] font-bold px-1 py-px rounded mt-0.5 flex-shrink-0"
+                                                     style=(group_type_css(tmpl.group_type)) {
+                                                    @match tmpl.group_type {
+                                                        GroupType::Warmup => { "W" }
+                                                        GroupType::Piece => { "P" }
+                                                    }
+                                                }
+                                                div class="flex-1 min-w-0" {
+                                                    div class="text-sm font-semibold" { (tmpl.name) }
+                                                    div class="text-xs mt-0.5 truncate" style="color: var(--muted)" { (tmpl.description) }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+                    // Footer with keyboard hints
+                    div class="flex items-center gap-2 px-3 py-1.5 font-mono-stat text-[9px]"
+                         style="border-top: 1px solid var(--rule-2); color: var(--muted)" {
+                        span class="px-1 py-px rounded" style="background: var(--paper-2); border: 1px solid var(--rule)" { "↑" }
+                        span class="px-1 py-px rounded" style="background: var(--paper-2); border: 1px solid var(--rule)" { "↓" }
+                        span { "navigate" }
+                        span { "·" }
+                        span class="px-1 py-px rounded" style="background: var(--paper-2); border: 1px solid var(--rule)" { "↵" }
+                        span { "add" }
                     }
                 }
             }
