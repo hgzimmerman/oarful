@@ -92,6 +92,9 @@ html.dark {
 .mod-span[data-kind="blade"]              { --mod-kind: var(--mod-blade); }
 .mod-span[data-kind="partial"]            { --mod-kind: var(--mod-partial); }
 
+/* ── Template dropdown items ─────────────────────────────────────── */
+.tmpl-item:hover, .tmpl-sel { background: var(--paper-2); }
+
 /* ── Font stacks ──────────────────────────────────────────────────── */
 .font-serif-heading {
   font-family: Charter, 'Bitstream Charter', Georgia, serif;

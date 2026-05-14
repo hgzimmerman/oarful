@@ -419,13 +419,13 @@ pub(crate) fn editor_content(
             // "From template" dropdown
             @let templates = timeline::built_in_templates();
             @let tmpl_js_arr = templates.iter().map(|t|
-                format!("{{n:'{}',d:'{}'}}", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"))
+                format!("{{n:'{}',d:'{}',id:'{}'}}", t.name.replace('\'', "\\'"), t.description.replace('\'', "\\'"), t.id)
             ).collect::<Vec<_>>().join(",");
             div class="relative inline-block"
-                 x-data=(maud::PreEscaped(format!("{{ open: false, search: '', tmpls: [{}], get matchCount() {{ if (!this.search) return this.tmpls.length; var s = this.search.toLowerCase(); return this.tmpls.filter(t => t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s)).length; }} }}", tmpl_js_arr))) {
+                 x-data=(maud::PreEscaped(format!("{{ open: false, search: '', sel: -1, tmpls: [{}], get visible() {{ if (!this.search) return this.tmpls; var s = this.search.toLowerCase(); return this.tmpls.filter(t => t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s)); }}, get matchCount() {{ return this.visible.length; }}, matches(t) {{ if (!this.search) return true; var s = this.search.toLowerCase(); return t.n.toLowerCase().includes(s) || t.d.toLowerCase().includes(s); }} }}", tmpl_js_arr))) {
                 button type="button" class="font-mono-stat text-[10px] px-2 py-1 rounded border cursor-pointer hover:opacity-80"
                        style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)"
-                       "@click"="open = !open; if (open) $nextTick(() => $refs.tmplSearch.focus())" {
+                       "@click"="open = !open; sel = -1; if (open) $nextTick(() => $refs.tmplSearch.focus())" {
                     "From template"
                 }
                 div x-show="open" x-cloak=""
@@ -436,11 +436,15 @@ pub(crate) fn editor_content(
                     // Search with result count
                     div class="flex items-center gap-2 p-2" {
                         input type="text" x-model="search" x-ref="tmplSearch" placeholder="Search templates…"
-                              class="input-warm text-sm flex-1 py-1.5 px-2";
+                              class="input-warm text-sm flex-1 py-1.5 px-2"
+                              "@input"="sel = -1"
+                              "@keydown.arrow-down.prevent"="sel = Math.min(sel + 1, matchCount - 1)"
+                              "@keydown.arrow-up.prevent"="sel = Math.max(sel - 1, -1)"
+                              "@keydown.enter.prevent"="if (sel >= 0 && sel < matchCount) { var id = visible[sel].id; var btn = $root.querySelector('[data-tmpl-id=\"' + id + '\"]'); if (btn) btn.click(); }";
                         span class="font-mono-stat text-[9px] flex-shrink-0" style="color: var(--muted)"
                              x-text="matchCount + ' result' + (matchCount === 1 ? '' : 's')" {}
                     }
-                    div class="max-h-96 overflow-y-auto" style="border-top: 1px solid var(--rule-2)" {
+                    div class="max-h-96 overflow-y-auto" x-ref="tmplList" style="border-top: 1px solid var(--rule-2)" {
                         @for gt in &[GroupType::Warmup, GroupType::Piece] {
                             @let group_tmpls: Vec<_> = templates.iter().filter(|t| t.group_type == *gt).collect();
                             @if !group_tmpls.is_empty() {
@@ -454,7 +458,7 @@ pub(crate) fn editor_content(
                                         (gt.label()) " · " (group_tmpls.len())
                                     }
                                     @for tmpl in &group_tmpls {
-                                        @let match_expr = format!("!search || '{}'.toLowerCase().includes(search.toLowerCase()) || '{}'.toLowerCase().includes(search.toLowerCase())",
+                                        @let match_expr = format!("matches({{ n: '{}', d: '{}' }})",
                                             tmpl.name.replace('\'', "\\'"), tmpl.description.replace('\'', "\\'"));
                                         form class="block" hx-post={(base_url) "/template"} hx-target="#timeline-section" hx-swap="innerHTML" {
                                             input type="hidden" name="timeline" value=(tl_json);
@@ -463,11 +467,13 @@ pub(crate) fn editor_content(
                                             input type="hidden" name="template_id" value=(tmpl.id);
                                             button type="submit"
                                                    x-show=(match_expr)
-                                                   class="w-full text-left px-3 py-2 cursor-pointer flex items-start gap-2"
-                                                   style="background: transparent; border: none; color: var(--ink)"
-                                                   onmouseover="this.style.background='var(--paper-2)'" onmouseout="this.style.background='transparent'" {
+                                                   data-tmpl-id=(tmpl.id)
+                                                   class="tmpl-item w-full text-left px-3 py-2 cursor-pointer flex items-start gap-2.5"
+                                                   ":class"=(maud::PreEscaped(format!("{{ 'tmpl-sel': sel >= 0 && visible[sel] && visible[sel].id === '{}' }}", tmpl.id)))
+                                                   style="border: none; color: var(--ink)"
+                                                   "@mouseenter"="sel = -1" {
                                                 // Group type badge
-                                                span class="font-mono-stat text-[9px] font-bold px-1 py-px rounded mt-0.5 flex-shrink-0"
+                                                span class="font-mono-stat text-[10px] font-bold w-5 h-5 rounded flex items-center justify-center mt-0.5 flex-shrink-0"
                                                      style=(group_type_css(tmpl.group_type)) {
                                                     @match tmpl.group_type {
                                                         GroupType::Warmup => { "W" }
