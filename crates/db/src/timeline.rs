@@ -1503,6 +1503,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         }],
                         "",
                     ),
+                    seg(Rest, 0.25, Min, None, None, vec![], "let it run"),
                 ]
             },
         },
@@ -1604,6 +1605,7 @@ pub fn built_in_templates() -> Vec<Template> {
                         }],
                         "",
                     ),
+                    seg(Rest, 0.25, Min, None, None, vec![], "let it run"),
                 ]
             },
         },
