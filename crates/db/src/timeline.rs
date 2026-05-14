@@ -1415,7 +1415,7 @@ pub fn built_in_templates() -> Vec<Template> {
             rotation: Rotation::default(),
             modifiers: vec![],
             segments: || {
-                let r = Some([36, 38]);
+                let r = Some([28, 38]);
                 let p = |s| vec![Modifier::Partial { value: s }];
                 vec![
                     // Attempt 1: just stroke 1
@@ -1456,7 +1456,7 @@ pub fn built_in_templates() -> Vec<Template> {
             rotation: Rotation::default(),
             modifiers: vec![],
             segments: || {
-                let r = Some([36, 38]);
+                let r = Some([28, 38]);
                 let p = |s| vec![Modifier::Partial { value: s }];
                 vec![
                     // Attempt 1: just stroke 1
