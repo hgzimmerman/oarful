@@ -1393,7 +1393,15 @@ pub fn built_in_templates() -> Vec<Template> {
                         vec![Modifier::RowBy { value: 8 }],
                         "",
                     ),
-                    seg(Rest, 0.5, Min, None, None, vec![], ""),
+                    seg(
+                        Rest,
+                        0.5,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, rotate starting pair",
+                    ),
                 ]
             },
         },
