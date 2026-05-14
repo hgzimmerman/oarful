@@ -149,11 +149,12 @@ fn inherited_row(
     tl_json: &str,
 ) -> Markup {
     html! {
+        @let mc = super::css::modifier_kind_color(m.kind_id());
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
-             style="background: color-mix(in oklch, var(--ink-3) 5%, var(--paper)); border: 1px solid var(--rule); border-left: 2px solid var(--ink-3)" {
+             style=(format!("background: color-mix(in oklch, {mc} 5%, var(--paper)); border: 1px solid var(--rule); border-left: 2px solid {mc}")) {
             span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
-                 style="color: var(--ink-3)" { (m.kind_label()) }
-            span class="font-mono-stat text-[10px] flex-1" style="color: var(--ink-3)" {
+                 style=(format!("color: {mc}")) { (m.kind_label()) }
+            span class="font-mono-stat text-[10px] flex-1" style=(format!("color: {mc}")) {
                 (modifier_value_display(m))
             }
             form class="inline" hx-post={(base_url) "/modifier-override"} hx-target="#timeline-section" hx-swap="innerHTML" {
@@ -180,14 +181,15 @@ fn overridden_row(
     base_url: &str,
     tl_json: &str,
 ) -> Markup {
+    let mc = super::css::modifier_kind_color(local.kind_id());
     html! {
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
-             style="background: color-mix(in oklch, var(--cox) 5%, var(--paper)); border: 1px solid color-mix(in oklch, var(--cox) 28%, var(--rule)); border-left: 2px solid var(--cox)" {
+             style=(format!("background: color-mix(in oklch, {mc} 5%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 28%, var(--rule)); border-left: 2px solid {mc}")) {
             span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
-                 style="color: var(--cox)" { (local.kind_label()) }
+                 style=(format!("color: {mc}")) { (local.kind_label()) }
             span class="flex-1 flex items-center gap-2 flex-wrap" {
                 span class="font-mono-stat text-[7px] tracking-wider uppercase font-bold px-1 py-px rounded"
-                     style="background: var(--cox); color: var(--paper)" { "EDITED HERE" }
+                     style=(format!("background: {mc}; color: var(--paper)")) { "EDITED HERE" }
                 (modifier_value_editor(pe, local, seg, group, base_url, tl_json))
                 span class="font-mono-stat text-[9px] italic" style="color: var(--muted); border-left: 1px solid var(--rule); padding-left: 6px" {
                     "was " (modifier_value_display(inherited))
@@ -216,11 +218,12 @@ fn local_row(
     base_url: &str,
     tl_json: &str,
 ) -> Markup {
+    let mc = super::css::modifier_kind_color(m.kind_id());
     html! {
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
-             style="background: color-mix(in oklch, var(--accent) 4%, var(--paper)); border: 1px solid color-mix(in oklch, var(--accent) 20%, var(--rule)); border-left: 2px solid var(--accent)" {
+             style=(format!("background: color-mix(in oklch, {mc} 4%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 20%, var(--rule)); border-left: 2px solid {mc}")) {
             span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
-                 style="color: var(--ink-2)" { (m.kind_label()) }
+                 style=(format!("color: {mc}")) { (m.kind_label()) }
             span class="flex-1" {
                 (modifier_value_editor(pe, m, seg, group, base_url, tl_json))
             }

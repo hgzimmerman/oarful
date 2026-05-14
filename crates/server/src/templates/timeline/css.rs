@@ -62,6 +62,18 @@ pub(super) fn modifier_kind_label(kind: &str) -> &'static str {
     }
 }
 
+/// CSS custom property name for a modifier kind's color.
+pub(super) fn modifier_kind_color(kind_id: &str) -> &'static str {
+    match kind_id {
+        "drills" => "var(--mod-drills)",
+        "pause_at" => "var(--mod-pause)",
+        "repeating_emphasis" => "var(--mod-repeating)",
+        "blade" => "var(--mod-blade)",
+        "partial" => "var(--mod-partial)",
+        _ => "var(--accent)",
+    }
+}
+
 pub(crate) fn chip_style(active: bool) -> &'static str {
     if active {
         "color: var(--ink); background: var(--paper-2); border-color: var(--ink-3)"

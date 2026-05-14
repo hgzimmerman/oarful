@@ -478,10 +478,11 @@ fn group_modifiers_section(pe: &str, group: &Group, base_url: &str, tl_json: &st
             // Modifier rows (editable)
             div class="space-y-1" {
                 @for m in &group.modifiers {
+                    @let mc = super::css::modifier_kind_color(m.kind_id());
                     div class="flex items-center gap-2 px-2 py-1.5 rounded"
-                         style="background: color-mix(in oklch, var(--accent) 4%, var(--paper)); border: 1px solid color-mix(in oklch, var(--accent) 20%, var(--rule)); border-left: 2px solid var(--accent)" {
+                         style=(format!("background: color-mix(in oklch, {mc} 4%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 20%, var(--rule)); border-left: 2px solid {mc}")) {
                         span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
-                             style="color: var(--ink-2)" { (m.kind_label()) }
+                             style=(format!("color: {mc}")) { (m.kind_label()) }
                         span class="flex-1" {
                             (group_modifier_value_editor(pe, m, group, base_url, tl_json))
                         }
