@@ -388,7 +388,7 @@ fn group_modifier_value_editor(
                             input type="hidden" name="subfield" value="every";
                             input type="number" name="value" min="1" max="20"
                                   value=(every.unwrap_or(1))
-                                  class="input-warm text-xs w-10 py-0.5 text-center";
+                                  class="input-warm text-xs w-14 py-0.5 text-center";
                         }
                         span class="font-mono-stat text-[9px]" style="color: var(--muted)" { "str" }
                     }
