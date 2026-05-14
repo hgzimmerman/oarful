@@ -70,6 +70,7 @@ pub(crate) fn detail_content(
     tmpl: &PlanTemplate,
     tmpl_cats: &[Category],
     all_cats: &[Category],
+    editor_state: super::timeline::PlanEditorState,
 ) -> Markup {
     let tl = tmpl
         .timeline()
@@ -97,7 +98,13 @@ pub(crate) fn detail_content(
 
             // Timeline editor
             div class="mt-6" {
-                (super::timeline::summary(&tl, &base_url))
+                @if editor_state.is_open() {
+                    (super::timeline::section_wrapper(
+                        super::timeline::editor_content(&tl, &base_url, None, editor_state)
+                    ))
+                } @else {
+                    (super::timeline::summary(&tl, &base_url))
+                }
             }
 
             // Actions

@@ -121,8 +121,9 @@ pub(crate) struct EditorQuery {
 impl EditorQuery {
     pub(crate) fn state(&self) -> templates::timeline::PlanEditorState {
         match self.plan_editor.as_deref() {
+            Some("open") => templates::timeline::PlanEditorState::Open,
             Some("open_preview") => templates::timeline::PlanEditorState::OpenPreview,
-            _ => templates::timeline::PlanEditorState::Open,
+            _ => templates::timeline::PlanEditorState::Closed,
         }
     }
 }

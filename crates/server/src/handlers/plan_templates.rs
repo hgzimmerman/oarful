@@ -135,7 +135,12 @@ pub(crate) async fn create_handler(
         .with_conn(plan_template::all_categories)
         .await
         .map_err(internal_error)?;
-    let tab_content = templates::plan_templates::detail_content(&tmpl, &[], &all_cats);
+    let tab_content = templates::plan_templates::detail_content(
+        &tmpl,
+        &[],
+        &all_cats,
+        templates::timeline::PlanEditorState::Closed,
+    );
     Ok(Html(
         tab_swap(
             super::admin::TABS,
@@ -154,9 +159,17 @@ pub(crate) async fn detail_handler(
     Path(template_id): Path<PlanTemplateId>,
     hx: HxRequest,
     headers: HeaderMap,
+    axum::extract::Query(query): axum::extract::Query<super::timeline::EditorQuery>,
 ) -> Result<Html<String>, ErrorResponse> {
     require_at_least_role(&tenant.claims, Role::Coach)?;
-    let tab_content = detail_tab_content(&tenant, template_id).await?;
+    // Template editor defaults to open with preview when no param is specified.
+    let editor_state = match query.state() {
+        templates::timeline::PlanEditorState::Closed => {
+            templates::timeline::PlanEditorState::OpenPreview
+        }
+        s => s,
+    };
+    let tab_content = detail_tab_content(&tenant, template_id, editor_state).await?;
 
     if super::admin::is_tab_swap(&headers) {
         return Ok(Html(
@@ -183,6 +196,7 @@ pub(crate) async fn detail_handler(
 async fn detail_tab_content(
     tenant: &TenantContext,
     template_id: PlanTemplateId,
+    editor_state: templates::timeline::PlanEditorState,
 ) -> Result<maud::Markup, ErrorResponse> {
     let tmpl = tenant
         .db
@@ -201,7 +215,10 @@ async fn detail_tab_content(
         .await
         .map_err(internal_error)?;
     Ok(templates::plan_templates::detail_content(
-        &tmpl, &tmpl_cats, &all_cats,
+        &tmpl,
+        &tmpl_cats,
+        &all_cats,
+        editor_state,
     ))
 }
 
@@ -301,7 +318,12 @@ pub(crate) async fn duplicate_handler(
         .with_conn(move |conn| PlanTemplate::duplicate(conn, template_id, new_name))
         .await
         .map_err(internal_error)?;
-    let tab_content = detail_tab_content(&tenant, tmpl.id).await?;
+    let tab_content = detail_tab_content(
+        &tenant,
+        tmpl.id,
+        templates::timeline::PlanEditorState::Closed,
+    )
+    .await?;
     Ok(Html(
         tab_swap(
             super::admin::TABS,

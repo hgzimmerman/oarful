@@ -297,6 +297,10 @@ pub(crate) fn create_router(state: AppState) -> Router {
             get(plan_templates::detail_handler),
         )
         .route(
+            "/admin/plan-templates/{id}/detail",
+            get(plan_templates::detail_handler),
+        )
+        .route(
             "/admin/plan-templates/{id}/meta",
             post(plan_templates::update_meta_handler),
         )
