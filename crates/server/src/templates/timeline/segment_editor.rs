@@ -338,7 +338,7 @@ fn modifier_value_editor(
                 (drills_editor(pe, values, seg, group, base_url, tl_json))
             }
             Modifier::Emphasis { text } => {
-                form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                     input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
@@ -393,7 +393,7 @@ fn pause_at_editor(
             }
             @if !points.is_empty() {
                 span class="font-mono-stat text-[9px] ml-1" style="color: var(--muted)" { "every" }
-                form class="inline" hx-post={(base_url) "/modifier-update"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                form class="inline" hx-post={(base_url) "/modifier-update"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                     input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
                     input type="hidden" name="group_id" value=(group.id);
@@ -462,7 +462,7 @@ fn repeating_emphasis_editor(
     let update_url = format!("{}/modifier-update", base_url);
     html! {
         form class="flex flex-wrap items-center gap-1.5 font-mono-stat text-[10px]"
-             hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+             hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
             input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
             input type="hidden" name="group_id" value=(group.id);

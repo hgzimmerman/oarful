@@ -58,7 +58,7 @@ pub(super) fn group_editor(
             }
 
             // Group fields
-            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+            form hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                 input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
                 input type="hidden" name="group_id" value=(group.id);
@@ -192,7 +192,7 @@ pub(super) fn group_editor(
                         }
 
                         // Inline editable fields: duration, intensity, rate
-                        form hx-post={(base_url) "/patch-segment"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                        form hx-post={(base_url) "/patch-segment"} hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                             input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
@@ -383,7 +383,7 @@ fn group_modifier_value_editor(
                     }
                     @if !points.is_empty() {
                         span class="font-mono-stat text-[9px] ml-1" style="color: var(--muted)" { "every" }
-                        form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                        form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                             (hidden_fields!("pause_at"))
                             input type="hidden" name="subfield" value="every";
                             input type="number" name="value" min="1" max="20"
@@ -413,7 +413,7 @@ fn group_modifier_value_editor(
                 }
             }
             Modifier::Emphasis { text } => {
-                form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                form class="inline flex-1" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                     (hidden_fields!("emphasis"))
                     input type="text" name="value" value=(text)
                           class="input-warm text-sm w-full py-0.5"
@@ -423,7 +423,7 @@ fn group_modifier_value_editor(
             }
             Modifier::RepeatingEmphasis { every, every_unit, count, label } => {
                 form class="flex flex-wrap items-center gap-1.5 font-mono-stat text-[10px]"
-                     hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" {
+                     hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" hx-trigger="change" hx-sync="this:replace" onsubmit="return false" {
                     (hidden_fields!("repeating_emphasis"))
                     span style="color: var(--muted)" { "every" }
                     input type="number" name="re_every" min="1" max="99" value=(every)
