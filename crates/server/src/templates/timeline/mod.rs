@@ -563,7 +563,7 @@ fn segment_parts_markup(parts: &[SegmentSummaryPart]) -> Markup {
                 @if let Some(kind) = part.modifier_kind {
                     span class="mod-dot" { " \u{00b7} " }
                     span class="mod-span" data-kind=(kind)
-                         title=(format!("{} modifier", css::modifier_kind_label(kind))) {
+                         title=(css::modifier_kind_label(kind)) {
                         (part.text)
                     }
                 } @else {
