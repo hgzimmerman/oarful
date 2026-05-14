@@ -541,7 +541,7 @@ pub(crate) fn editor_content(
 
         // Summary preview panel (sibling to editor)
         @if editor_state.has_preview() {
-            div class="mt-4 pt-3 pl-4 py-3" style="border-left: 3px solid var(--accent); border-top: 1px solid var(--rule-2)" {
+            div class="mt-6 pt-4" style="border-top: 1px solid var(--rule-2)" {
                 div class="flex items-baseline gap-2 mb-2" {
                     span class="font-mono-stat text-[9px] tracking-[0.12em] uppercase font-semibold" style="color: var(--accent)" { "Summary preview" }
                 }
