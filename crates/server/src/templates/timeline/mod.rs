@@ -9,8 +9,8 @@ mod strip;
 mod tooltips;
 
 use lineup_db::timeline::{
-    self, Block, BlockType, Group, GroupType, ItemDisplayType, SegmentSummaryPart, Timeline,
-    TimelineItem,
+    self, Block, BlockType, Group, GroupType, ItemDisplayType, SegmentSummaryPart, SummaryLine,
+    Timeline, TimelineItem,
 };
 use maud::{html, Markup};
 
@@ -122,78 +122,7 @@ pub(crate) fn summary_content(
                     }
                 }
             }
-            @if lines.is_empty() {
-                p class="text-sm italic m-0" style="color: var(--muted)" { "No plan yet." }
-            } @else {
-                ol class="list-none m-0 p-0 space-y-1" {
-                    @for line in &lines {
-                        li {
-                            @match &line.item_type {
-                                ItemDisplayType::Group(gt) => {
-                                    div class="flex items-center gap-2" {
-                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                             style=(group_type_css(*gt)) {
-                                            (gt.label())
-                                        }
-                                        span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" {
-                                            (line.label)
-                                        }
-                                        span class="font-mono-stat text-[9px]" style="color: var(--muted)" {
-                                            (line.duration_label)
-                                        }
-                                        @if let Some(ref rot) = line.rotation_label {
-                                            span class="font-mono-stat text-[9px] italic" style="color: var(--muted)" {
-                                                " · " (rot)
-                                            }
-                                        }
-                                    }
-                                    @if !line.modifier_labels.is_empty() {
-                                        div class="pl-5 mt-0.5" {
-                                            @for ml in &line.modifier_labels {
-                                                span class="font-mono-stat text-[9px] italic mr-2" style="color: var(--accent)" { (ml) }
-                                            }
-                                        }
-                                    }
-                                    ul class="list-none m-0 pl-5 mt-0.5 space-y-0.5" {
-                                        @for seg in &line.children {
-                                            li class="flex items-center gap-1.5 text-xs" {
-                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                                     style=(seg_type_css(seg.seg_type)) {
-                                                    (seg.seg_type.label())
-                                                }
-                                                (segment_parts_markup(&seg.parts))
-                                                @if !seg.note.is_empty() {
-                                                    span class="italic" style="color: var(--muted)" { "— " (seg.note) }
-                                                }
-                                            }
-                                        }
-                                        @if let Some(ref instr) = line.repeat_instruction {
-                                            li class="flex items-center gap-1.5 text-xs mt-0.5" {
-                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                                     style="color: var(--bad); background: color-mix(in oklch, var(--bad) 10%, var(--paper)); border-color: color-mix(in oklch, var(--bad) 25%, var(--rule))" {
-                                                    "Repeat"
-                                                }
-                                                span class="font-mono-stat" style="color: var(--ink-2)" { (instr) }
-                                            }
-                                        }
-                                    }
-                                }
-                                ItemDisplayType::Block(bt) => {
-                                    div class="flex items-center gap-1.5 text-xs" {
-                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(block_type_css(*bt)) {
-                                            (bt.label())
-                                        }
-                                        span class="font-mono-stat" style="color: var(--ink-2)" { (line.duration_label) }
-                                        @if !line.note.is_empty() {
-                                            span class="italic" style="color: var(--muted)" { "— " (line.note) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            (plan_lines_list(&lines, "No plan yet."))
         }
     }
 }
@@ -207,71 +136,77 @@ pub(crate) fn preview(tl: &Timeline) -> Markup {
             span class="font-mono-stat text-[10px]" style="color: var(--muted)" {
                 (format!("{:.0}", planned)) " min planned"
             }
-            @if lines.is_empty() {
-                p class="text-sm italic" style="color: var(--muted)" { "Empty plan." }
-            } @else {
-                ol class="list-none m-0 p-0 space-y-1" {
-                    @for line in &lines {
-                        li {
-                            @match &line.item_type {
-                                ItemDisplayType::Group(gt) => {
-                                    div class="flex items-center gap-2" {
-                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                             style=(group_type_css(*gt)) {
-                                            (gt.label())
-                                        }
-                                        span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" {
-                                            (line.label)
-                                        }
-                                        span class="font-mono-stat text-[9px]" style="color: var(--muted)" {
-                                            (line.duration_label)
-                                        }
-                                        @if let Some(ref rot) = line.rotation_label {
-                                            span class="font-mono-stat text-[9px] italic" style="color: var(--muted)" {
-                                                " · " (rot)
-                                            }
-                                        }
+            (plan_lines_list(&lines, "Empty plan."))
+        }
+    }
+}
+
+fn plan_lines_list(lines: &[SummaryLine], empty_msg: &str) -> Markup {
+    html! {
+        @if lines.is_empty() {
+            p class="text-sm italic m-0" style="color: var(--muted)" { (empty_msg) }
+        } @else {
+            ol class="list-none m-0 p-0 space-y-1" {
+                @for line in lines {
+                    li {
+                        @match &line.item_type {
+                            ItemDisplayType::Group(gt) => {
+                                div class="flex items-center gap-2" {
+                                    span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                         style=(group_type_css(*gt)) {
+                                        (gt.label())
                                     }
-                                    @if !line.modifier_labels.is_empty() {
-                                        div class="pl-5 mt-0.5" {
-                                            @for ml in &line.modifier_labels {
-                                                span class="font-mono-stat text-[9px] italic mr-2" style="color: var(--accent)" { (ml) }
-                                            }
-                                        }
+                                    span class="font-serif-heading font-medium text-sm" style="color: var(--ink)" {
+                                        (line.label)
                                     }
-                                    ul class="list-none m-0 pl-5 mt-0.5 space-y-0.5" {
-                                        @for seg in &line.children {
-                                            li class="flex items-center gap-1.5 text-xs" {
-                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                                     style=(seg_type_css(seg.seg_type)) {
-                                                    (seg.seg_type.label())
-                                                }
-                                                (segment_parts_markup(&seg.parts))
-                                                @if !seg.note.is_empty() {
-                                                    span class="italic" style="color: var(--muted)" { "— " (seg.note) }
-                                                }
-                                            }
-                                        }
-                                        @if let Some(ref instr) = line.repeat_instruction {
-                                            li class="flex items-center gap-1.5 text-xs mt-0.5" {
-                                                span class="font-mono-stat text-[9px] px-1 py-px rounded border"
-                                                     style="color: var(--bad); background: color-mix(in oklch, var(--bad) 10%, var(--paper)); border-color: color-mix(in oklch, var(--bad) 25%, var(--rule))" {
-                                                    "Repeat"
-                                                }
-                                                span class="font-mono-stat" style="color: var(--ink-2)" { (instr) }
-                                            }
+                                    span class="font-mono-stat text-[9px]" style="color: var(--muted)" {
+                                        (line.duration_label)
+                                    }
+                                    @if let Some(ref rot) = line.rotation_label {
+                                        span class="font-mono-stat text-[9px] italic" style="color: var(--muted)" {
+                                            " · " (rot)
                                         }
                                     }
                                 }
-                                ItemDisplayType::Block(bt) => {
-                                    div class="flex items-center gap-1.5 text-xs" {
-                                        span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(block_type_css(*bt)) {
-                                            (bt.label())
+                                @if !line.modifier_labels.is_empty() {
+                                    div class="pl-5 mt-0.5" {
+                                        @for ml in &line.modifier_labels {
+                                            span class="font-mono-stat text-[9px] italic mr-2" style="color: var(--accent)" { (ml) }
                                         }
-                                        span class="font-mono-stat" style="color: var(--ink-2)" { (line.duration_label) }
-                                        @if !line.note.is_empty() {
-                                            span class="italic" style="color: var(--muted)" { "— " (line.note) }
+                                    }
+                                }
+                                ul class="list-none m-0 pl-5 mt-0.5 space-y-0.5" {
+                                    @for seg in &line.children {
+                                        li class="flex items-center gap-1.5 text-xs" {
+                                            span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                                 style=(seg_type_css(seg.seg_type)) {
+                                                (seg.seg_type.label())
+                                            }
+                                            (segment_parts_markup(&seg.parts))
+                                            @if !seg.note.is_empty() {
+                                                span class="italic" style="color: var(--muted)" { "— " (seg.note) }
+                                            }
                                         }
+                                    }
+                                    @if let Some(ref instr) = line.repeat_instruction {
+                                        li class="flex items-center gap-1.5 text-xs mt-0.5" {
+                                            span class="font-mono-stat text-[9px] px-1 py-px rounded border"
+                                                 style="color: var(--bad); background: color-mix(in oklch, var(--bad) 10%, var(--paper)); border-color: color-mix(in oklch, var(--bad) 25%, var(--rule))" {
+                                                "Repeat"
+                                            }
+                                            span class="font-mono-stat" style="color: var(--ink-2)" { (instr) }
+                                        }
+                                    }
+                                }
+                            }
+                            ItemDisplayType::Block(bt) => {
+                                div class="flex items-center gap-1.5 text-xs" {
+                                    span class="font-mono-stat text-[9px] px-1 py-px rounded border" style=(block_type_css(*bt)) {
+                                        (bt.label())
+                                    }
+                                    span class="font-mono-stat" style="color: var(--ink-2)" { (line.duration_label) }
+                                    @if !line.note.is_empty() {
+                                        span class="italic" style="color: var(--muted)" { "— " (line.note) }
                                     }
                                 }
                             }
@@ -586,6 +521,8 @@ pub(crate) fn section_wrapper(content: Markup) -> Markup {
 
 const HEIGHT_TRANSITION_JS: &str = r#"<script>
 (function(){
+  if (window.__tlHeightInit) return;
+  window.__tlHeightInit = true;
   var prevHeight = null;
   document.addEventListener('htmx:beforeSwap', function(e) {
     if (e.detail.target && e.detail.target.id === 'timeline-section') {
@@ -727,6 +664,8 @@ const DRAG_REORDER_JS: &str = r#"<script>
 
 const STRIP_FLIP_JS: &str = r#"<script>
 (function(){
+  if (window.__tlFlipInit) return;
+  window.__tlFlipInit = true;
   var oldRects = null;
 
   document.addEventListener('htmx:beforeSwap', function(e) {
