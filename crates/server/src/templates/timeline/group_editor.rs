@@ -553,7 +553,7 @@ fn group_picker_items(
     tl_json: &str,
 ) -> Markup {
     let mut groups: Vec<(&str, Vec<&lineup_db::timeline::ModifierCatalogueEntry>)> = Vec::new();
-    for entry in catalogue {
+    for entry in catalogue.iter().filter(|e| !e.segment_only) {
         if let Some(g) = groups.last_mut().filter(|(name, _)| *name == entry.group) {
             g.1.push(entry);
         } else {

@@ -516,6 +516,8 @@ pub struct ModifierCatalogueEntry {
     pub group: &'static str,
     pub description: &'static str,
     pub value_shape: &'static str,
+    /// When true, this modifier only makes sense on individual segments.
+    pub segment_only: bool,
 }
 
 /// All known modifier kinds, in picker display order.
@@ -527,6 +529,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Stroke shape",
             description: "feather · partial feather · on square",
             value_shape: "picks one",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "partial",
@@ -534,6 +537,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Stroke shape",
             description: "full · arms only · arms + body · \u{00bc} · \u{00bd} · \u{00be} slide",
             value_shape: "picks one",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "pause_at",
@@ -541,6 +545,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Stroke shape",
             description: "release · arms away · bodies over · \u{00bd} slide · catch",
             value_shape: "multi",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "drills",
@@ -548,6 +553,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Skill focus",
             description: "feet out, inside arm, cut the cake, eyes closed\u{2026}",
             value_shape: "multi",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "emphasis",
@@ -555,6 +561,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Skill focus",
             description: "a coaching cue, e.g. \u{201c}connection at the catch\u{201d}",
             value_shape: "free text",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "repeating_emphasis",
@@ -562,6 +569,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Pacing",
             description: "power 10s, focus 5s \u{2014} every N min or strokes",
             value_shape: "compound",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
             kind_id: "row_by",
@@ -569,6 +577,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             group: "Pacing",
             description: "row by 2s, 4s, 6s, or 8s",
             value_shape: "picks one",
+            segment_only: true,
         },
     ]
 }
