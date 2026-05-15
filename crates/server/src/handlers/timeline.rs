@@ -163,11 +163,7 @@ pub(crate) struct AddForm {
     add_type: String,
 }
 
-pub(crate) async fn add_block(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<AddForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_add_block(input: AddForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
 
     let (new_item, select_id) = match input.add_type.as_str() {
@@ -235,7 +231,7 @@ pub(crate) async fn add_block(
             return Html(
                 templates::timeline::editor_content(
                     &tl,
-                    &base_url,
+                    base_url,
                     input.base.selected.as_deref(),
                     input.base.editor_state(),
                 )
@@ -251,12 +247,19 @@ pub(crate) async fn add_block(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&select_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn add_block(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<AddForm>,
+) -> Html<String> {
+    apply_add_block(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/delete` — remove a block or group.
@@ -267,18 +270,21 @@ pub(crate) struct DeleteForm {
     delete_id: String,
 }
 
-pub(crate) async fn delete_block(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<DeleteForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_delete_block(input: DeleteForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     tl.items
         .retain(|it| it.is_structural() || it.id() != input.delete_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, None, input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, None, input.base.editor_state())
             .into_string(),
     )
+}
+
+pub(crate) async fn delete_block(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<DeleteForm>,
+) -> Html<String> {
+    apply_delete_block(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/patch-block` — update fields on a bare block.
@@ -295,11 +301,7 @@ pub(crate) struct PatchBlockForm {
     note: Option<String>,
 }
 
-pub(crate) async fn patch_block(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<PatchBlockForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_patch_block(input: PatchBlockForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
 
     for item in &mut tl.items {
@@ -322,12 +324,19 @@ pub(crate) async fn patch_block(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.patch_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn patch_block(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<PatchBlockForm>,
+) -> Html<String> {
+    apply_patch_block(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/patch-segment` — update base fields on a segment inside a group.
@@ -355,11 +364,7 @@ pub(crate) struct PatchSegmentForm {
     seg_type: Option<SegmentType>,
 }
 
-pub(crate) async fn patch_segment(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<PatchSegmentForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_patch_segment(input: PatchSegmentForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
 
     for item in &mut tl.items {
@@ -380,7 +385,6 @@ pub(crate) async fn patch_segment(
                             if input._range_toggle.is_none() {
                                 hi = lo;
                             } else if lo == hi {
-                                // Toggling range on: bump hi so two inputs appear
                                 hi = (lo + 2).clamp(lo, 50);
                             }
                             s.rate = Some([lo, hi]);
@@ -402,16 +406,22 @@ pub(crate) async fn patch_segment(
         }
     }
 
-    // Keep the segment selected so its editor stays open.
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.segment_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn patch_segment(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<PatchSegmentForm>,
+) -> Html<String> {
+    apply_patch_segment(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/target` — update target minutes.
@@ -422,22 +432,25 @@ pub(crate) struct TargetForm {
     new_target: u32,
 }
 
-pub(crate) async fn update_target(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<TargetForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_update_target(input: TargetForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     tl.target_minutes = input.new_target.clamp(20, 240);
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             input.base.selected.as_deref(),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn update_target(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<TargetForm>,
+) -> Html<String> {
+    apply_update_target(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/save` — persist to DB.
@@ -494,11 +507,7 @@ pub(crate) struct ReorderForm {
     drop_before_id: String,
 }
 
-pub(crate) async fn reorder_block(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<ReorderForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_reorder_block(input: ReorderForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     let drag_idx = tl
         .items
@@ -507,7 +516,6 @@ pub(crate) async fn reorder_block(
     if let Some(idx) = drag_idx {
         let item = tl.items.remove(idx);
         let drop_idx = if input.drop_before_id == "__end__" {
-            // Insert before the dock (last structural item).
             tl.items
                 .iter()
                 .position(
@@ -520,14 +528,12 @@ pub(crate) async fn reorder_block(
                 .position(|it| it.id() == input.drop_before_id)
                 .unwrap_or(tl.items.len())
         };
-        // Never insert past the dock.
         let dock_idx = tl
             .items
             .iter()
             .position(|it| matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Dock))
             .unwrap_or(tl.items.len());
         let drop_idx = drop_idx.min(dock_idx);
-        // Never insert before launch.
         let launch_end = tl
             .items
             .iter()
@@ -541,12 +547,19 @@ pub(crate) async fn reorder_block(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.drag_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn reorder_block(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ReorderForm>,
+) -> Html<String> {
+    apply_reorder_block(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/duplicate` — duplicate an item.
@@ -557,11 +570,7 @@ pub(crate) struct DuplicateForm {
     dup_id: String,
 }
 
-pub(crate) async fn duplicate_block(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<DuplicateForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_duplicate_block(input: DuplicateForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     if let Some(idx) = tl.items.iter().position(|it| it.id() == input.dup_id) {
         let item = &tl.items[idx];
@@ -581,7 +590,7 @@ pub(crate) async fn duplicate_block(
             return Html(
                 templates::timeline::editor_content(
                     &tl,
-                    &base_url,
+                    base_url,
                     Some(&new_id),
                     input.base.editor_state(),
                 )
@@ -592,12 +601,19 @@ pub(crate) async fn duplicate_block(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             input.base.selected.as_deref(),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn duplicate_block(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<DuplicateForm>,
+) -> Html<String> {
+    apply_duplicate_block(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/group-patch` — update group name/rotation/type.
@@ -628,11 +644,7 @@ pub(crate) struct GroupPatchForm {
     group_type: Option<GroupType>,
 }
 
-pub(crate) async fn group_patch(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<GroupPatchForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_group_patch(input: GroupPatchForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
@@ -645,9 +657,6 @@ pub(crate) async fn group_patch(
                 }
                 if let Some(ref rb) = input.row_by {
                     if rb == "all" {
-                        // Reset entire rotation — ignore any stale
-                        // rotate_by/rotate_per/rotations fields that
-                        // were in the form before the swap.
                         g.rotation = Rotation::default();
                     } else {
                         g.rotation.row_by = rb.parse::<u8>().ok().filter(|&n| n > 0);
@@ -655,13 +664,9 @@ pub(crate) async fn group_patch(
                         if let Some(ref rb2) = input.rotate_by {
                             g.rotation.rotate_by = rb2.parse::<u8>().ok().filter(|&n| n > 0);
                         }
-                        // Default rotate_by to 2 when first activating rotation.
                         if g.rotation.rotate_by.is_none() {
                             g.rotation.rotate_by = Some(2);
                         }
-                        // Recompute rotations when rotate_by changes, but only
-                        // when per-group isn't already showing (avoid overwriting
-                        // the coach's manual value while the input is visible).
                         if g.rotation.rotate_by != old_rotate_by
                             && g.rotation.rotate_per != RotatePer::Group
                         {
@@ -693,7 +698,6 @@ pub(crate) async fn group_patch(
                         if let Some(ref r) = input.rotations {
                             g.rotation.rotations = r.parse::<u8>().ok().filter(|&n| n > 0);
                         }
-                        // Default rotations to 8 / rotate_by when not explicitly set.
                         if g.rotation.rotations.is_none() {
                             if let Some(rb) = g.rotation.rotate_by {
                                 g.rotation.rotations = Some((8 / rb).max(1));
@@ -711,13 +715,18 @@ pub(crate) async fn group_patch(
             }
         }
     }
-    // Use selected from form (may be a segment ID) or fall back to group.
     let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
-
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
+}
+
+pub(crate) async fn group_patch(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupPatchForm>,
+) -> Html<String> {
+    apply_group_patch(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/group-add` — add a segment to a group.
@@ -729,11 +738,7 @@ pub(crate) struct GroupAddForm {
     seg_type: SegmentType,
 }
 
-pub(crate) async fn group_add_segment(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<GroupAddForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_group_add_segment(input: GroupAddForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     let st = input.seg_type;
     let mut seg = default_segment();
@@ -744,7 +749,6 @@ pub(crate) async fn group_add_segment(
         seg.duration.value = 3.0;
     }
     let new_id = seg.id.clone();
-
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
             if g.id == input.group_id {
@@ -756,12 +760,19 @@ pub(crate) async fn group_add_segment(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&new_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn group_add_segment(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupAddForm>,
+) -> Html<String> {
+    apply_group_add_segment(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/group-delete` — remove a segment from a group.
@@ -773,11 +784,7 @@ pub(crate) struct GroupDeleteForm {
     segment_id: String,
 }
 
-pub(crate) async fn group_delete_segment(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<GroupDeleteForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_group_delete_segment(input: GroupDeleteForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
@@ -787,18 +794,24 @@ pub(crate) async fn group_delete_segment(
             }
         }
     }
-    // If group has no segments, remove it.
     tl.items
         .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.group_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn group_delete_segment(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupDeleteForm>,
+) -> Html<String> {
+    apply_group_delete_segment(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/template` — insert a built-in template.
@@ -809,11 +822,7 @@ pub(crate) struct TemplateForm {
     template_id: String,
 }
 
-pub(crate) async fn insert_template(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<TemplateForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_insert_template(input: TemplateForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     let templates = timeline::built_in_templates();
     if let Some(tmpl) = templates.iter().find(|t| t.id == input.template_id) {
@@ -842,7 +851,7 @@ pub(crate) async fn insert_template(
         return Html(
             templates::timeline::editor_content(
                 &tl,
-                &base_url,
+                base_url,
                 Some(&select_id),
                 input.base.editor_state(),
             )
@@ -852,12 +861,19 @@ pub(crate) async fn insert_template(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             input.base.selected.as_deref(),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn insert_template(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<TemplateForm>,
+) -> Html<String> {
+    apply_insert_template(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST /history/{id}/timeline/group-reorder` — reorder segments within a group.
@@ -870,11 +886,7 @@ pub(crate) struct GroupReorderForm {
     drop_before_id: String,
 }
 
-pub(crate) async fn group_reorder_segment(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<GroupReorderForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_group_reorder_segment(input: GroupReorderForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
@@ -896,12 +908,19 @@ pub(crate) async fn group_reorder_segment(
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.drag_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn group_reorder_segment(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupReorderForm>,
+) -> Html<String> {
+    apply_group_reorder_segment(input, &practice_timeline_url(practice_id))
 }
 
 /// `POST .../group-split` — expand a repeated group into N independent copies.
@@ -912,19 +931,13 @@ pub(crate) struct GroupSplitForm {
     pub(crate) group_id: String,
 }
 
-pub(crate) async fn group_split(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<GroupSplitForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_group_split(input: GroupSplitForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
-
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
             if g.id == input.group_id {
                 let reps = g.repeat.unwrap_or(1).max(1) as usize;
                 if reps > 1 {
-                    // Duplicate the segment sequence N times with fresh IDs
                     let original_segs = g.segments.clone();
                     for _ in 1..reps {
                         for s in &original_segs {
@@ -939,16 +952,22 @@ pub(crate) async fn group_split(
             }
         }
     }
-
     Html(
         templates::timeline::editor_content(
             &tl,
-            &base_url,
+            base_url,
             Some(&input.group_id),
             input.base.editor_state(),
         )
         .into_string(),
     )
+}
+
+pub(crate) async fn group_split(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<GroupSplitForm>,
+) -> Html<String> {
+    apply_group_split(input, &practice_timeline_url(practice_id))
 }
 
 // ── Modifier mutation handlers ──────────────────────────────────────────
@@ -1005,12 +1024,7 @@ pub(crate) fn find_modifier_target<'a>(
     None
 }
 
-/// `POST .../modifier-add` — add a modifier with default value.
-pub(crate) async fn modifier_add(
-    Path(practice_id): Path<PracticeId>,
-    Form(input): Form<ModifierForm>,
-) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+pub(crate) fn apply_modifier_add(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     if let Some(m) = Modifier::default_for_kind(&input.kind) {
         if let Some(mods) = find_modifier_target(
@@ -1019,7 +1033,6 @@ pub(crate) async fn modifier_add(
             input.segment_id.as_deref(),
             input.scope.as_deref(),
         ) {
-            // Don't add duplicate kinds
             if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
                 mods.push(m);
             }
@@ -1027,17 +1040,19 @@ pub(crate) async fn modifier_add(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
 }
 
-/// `POST .../modifier-remove` — remove a modifier by kind.
-pub(crate) async fn modifier_remove(
+pub(crate) async fn modifier_add(
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<ModifierForm>,
 ) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+    apply_modifier_add(input, &practice_timeline_url(practice_id))
+}
+
+pub(crate) fn apply_modifier_remove(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     if let Some(mods) = find_modifier_target(
         &mut tl,
@@ -1049,17 +1064,19 @@ pub(crate) async fn modifier_remove(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
 }
 
-/// `POST .../modifier-update` — update a modifier's value (picks-one, free text, pause every).
-pub(crate) async fn modifier_update(
+pub(crate) async fn modifier_remove(
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<ModifierForm>,
 ) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+    apply_modifier_remove(input, &practice_timeline_url(practice_id))
+}
+
+pub(crate) fn apply_modifier_update(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     if let Some(mods) = find_modifier_target(
         &mut tl,
@@ -1120,17 +1137,19 @@ pub(crate) async fn modifier_update(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
 }
 
-/// `POST .../modifier-toggle` — toggle a value in a multi-select modifier (pause, drills).
-pub(crate) async fn modifier_toggle(
+pub(crate) async fn modifier_update(
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<ModifierForm>,
 ) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+    apply_modifier_update(input, &practice_timeline_url(practice_id))
+}
+
+pub(crate) fn apply_modifier_toggle(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     if let Some(mods) = find_modifier_target(
         &mut tl,
@@ -1165,19 +1184,20 @@ pub(crate) async fn modifier_toggle(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
 }
 
-/// `POST .../modifier-override` — copy an inherited modifier to the segment for local editing.
-pub(crate) async fn modifier_override(
+pub(crate) async fn modifier_toggle(
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<ModifierForm>,
 ) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+    apply_modifier_toggle(input, &practice_timeline_url(practice_id))
+}
+
+pub(crate) fn apply_modifier_override(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
-    // Find the group modifier and clone it to the segment
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
             if g.id == input.group_id {
@@ -1185,7 +1205,6 @@ pub(crate) async fn modifier_override(
                     let cloned = gm.clone();
                     if let Some(sid) = &input.segment_id {
                         if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
-                            // Only add if not already overridden
                             if !s.modifiers.iter().any(|m| m.kind_id() == input.kind) {
                                 s.modifiers.push(cloned);
                             }
@@ -1198,17 +1217,19 @@ pub(crate) async fn modifier_override(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
 }
 
-/// `POST .../modifier-revert` — remove a segment-level override, restoring inheritance.
-pub(crate) async fn modifier_revert(
+pub(crate) async fn modifier_override(
     Path(practice_id): Path<PracticeId>,
     Form(input): Form<ModifierForm>,
 ) -> Html<String> {
-    let base_url = practice_timeline_url(practice_id);
+    apply_modifier_override(input, &practice_timeline_url(practice_id))
+}
+
+pub(crate) fn apply_modifier_revert(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
@@ -1224,9 +1245,16 @@ pub(crate) async fn modifier_revert(
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
-        templates::timeline::editor_content(&tl, &base_url, Some(sel), input.base.editor_state())
+        templates::timeline::editor_content(&tl, base_url, Some(sel), input.base.editor_state())
             .into_string(),
     )
+}
+
+pub(crate) async fn modifier_revert(
+    Path(practice_id): Path<PracticeId>,
+    Form(input): Form<ModifierForm>,
+) -> Html<String> {
+    apply_modifier_revert(input, &practice_timeline_url(practice_id))
 }
 
 #[cfg(test)]
