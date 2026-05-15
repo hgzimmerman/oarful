@@ -8,9 +8,9 @@ use axum::{extract::Path, response::Html, Extension, Form};
 use lineup_db::{
     practice::{Practice, PracticeId},
     timeline::{
-        self, Blade, Block, BlockType, Duration, DurationUnit, Group, GroupType, HandDrill,
-        Intensity, Modifier, PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide,
-        Timeline, TimelineItem,
+        self, Blade, Block, BlockType, Drill, Duration, DurationUnit, Group, GroupType, Intensity,
+        Modifier, PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide, Timeline,
+        TimelineItem,
     },
 };
 use serde::Deserialize;
@@ -1151,7 +1151,7 @@ pub(crate) async fn modifier_toggle(
                     }
                 }
                 Modifier::Drills { values } => {
-                    if let Ok(hd) = val.parse::<HandDrill>() {
+                    if let Ok(hd) = val.parse::<Drill>() {
                         if let Some(pos) = values.iter().position(|d| *d == hd) {
                             values.remove(pos);
                         } else {

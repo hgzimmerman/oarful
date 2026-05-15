@@ -1229,7 +1229,7 @@ tl_mutation_handler!(
 
 // ── Modifier mutation handlers ──
 
-use lineup_db::timeline::{Blade, HandDrill, Modifier, PausePoint, Slide};
+use lineup_db::timeline::{Blade, Drill, Modifier, PausePoint, Slide};
 
 tl_mutation_handler!(
     tl_modifier_add,
@@ -1381,7 +1381,7 @@ tl_mutation_handler!(
                         }
                     }
                     Modifier::Drills { values } => {
-                        if let Ok(hd) = val.parse::<HandDrill>() {
+                        if let Ok(hd) = val.parse::<Drill>() {
                             if let Some(pos) = values.iter().position(|d| *d == hd) {
                                 values.remove(pos);
                             } else {

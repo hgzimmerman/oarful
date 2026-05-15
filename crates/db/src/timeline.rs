@@ -325,7 +325,7 @@ impl Blade {
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
-pub enum HandDrill {
+pub enum Drill {
     FeetOut,
     InsideArm,
     OutsideArm,
@@ -335,9 +335,10 @@ pub enum HandDrill {
     GunnelTaps,
     WideGrip,
     SlapCatches,
+    EyesClosed,
 }
 
-impl HandDrill {
+impl Drill {
     pub fn label(self) -> &'static str {
         match self {
             Self::FeetOut => "feet out",
@@ -349,6 +350,7 @@ impl HandDrill {
             Self::GunnelTaps => "gunnel taps",
             Self::WideGrip => "wide grip",
             Self::SlapCatches => "slap catches",
+            Self::EyesClosed => "eyes closed",
         }
     }
 
@@ -362,6 +364,7 @@ impl HandDrill {
         Self::GunnelTaps,
         Self::WideGrip,
         Self::SlapCatches,
+        Self::EyesClosed,
     ];
 }
 
@@ -386,7 +389,7 @@ pub enum Modifier {
         every: Option<u32>,
     },
     #[serde(rename = "drills")]
-    Drills { values: Vec<HandDrill> },
+    Drills { values: Vec<Drill> },
     #[serde(rename = "emphasis")]
     Emphasis { text: String },
     #[serde(rename = "repeating_emphasis")]
@@ -543,7 +546,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             kind_id: "drills",
             name: "Drills",
             group: "Skill focus",
-            description: "feet out, inside arm, cut the cake, gunnel taps\u{2026}",
+            description: "feet out, inside arm, cut the cake, eyes closed\u{2026}",
             value_shape: "multi",
         },
         ModifierCatalogueEntry {
@@ -1754,7 +1757,7 @@ mod tests {
 
     #[test]
     fn hand_drill_display_matches_serde() {
-        assert_display_serde_round_trip(HandDrill::ALL);
+        assert_display_serde_round_trip(Drill::ALL);
     }
 
     #[test]

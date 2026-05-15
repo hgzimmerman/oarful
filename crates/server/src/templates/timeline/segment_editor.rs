@@ -1,8 +1,7 @@
 //! Segment detail editor — base fields + modifier rows with inheritance.
 
 use lineup_db::timeline::{
-    Blade, DurationUnit, Group, HandDrill, Modifier, ModifierCatalogueEntry, PausePoint, Segment,
-    Slide,
+    Blade, Drill, DurationUnit, Group, Modifier, ModifierCatalogueEntry, PausePoint, Segment, Slide,
 };
 use maud::{html, Markup};
 
@@ -437,7 +436,7 @@ fn pause_at_editor(
 /// Drills multi-select editor.
 fn drills_editor(
     pe: &str,
-    values: &[HandDrill],
+    values: &[Drill],
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -446,7 +445,7 @@ fn drills_editor(
     let update_url = format!("{}/modifier-toggle", base_url);
     html! {
         div class="flex flex-wrap gap-1" {
-            @for hd in HandDrill::ALL {
+            @for hd in Drill::ALL {
                 @let is_active = values.contains(hd);
                 form class="inline" hx-post=(&update_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                     input type="hidden" name="timeline" value=(tl_json);

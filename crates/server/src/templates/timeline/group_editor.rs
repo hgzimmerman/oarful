@@ -1,8 +1,7 @@
 //! Editor for group items (Warmup/Piece) — group fields, segment list, and segment detail.
 
 use lineup_db::timeline::{
-    Blade, DurationUnit, Group, GroupType, HandDrill, Intensity, Modifier, PausePoint, RotatePer,
-    Slide,
+    Blade, Drill, DurationUnit, Group, GroupType, Intensity, Modifier, PausePoint, RotatePer, Slide,
 };
 use maud::{html, Markup};
 
@@ -397,7 +396,7 @@ fn group_modifier_value_editor(
             Modifier::Drills { values } => {
                 div class="flex flex-wrap gap-1" {
                     @let toggle_url = format!("{}/modifier-toggle", base_url);
-                    @for hd in HandDrill::ALL {
+                    @for hd in Drill::ALL {
                         @let is_active = values.contains(hd);
                         form class="inline" hx-post=(&toggle_url) hx-target="#timeline-section" hx-swap="innerHTML" {
                             (hidden_fields!("drills"))
