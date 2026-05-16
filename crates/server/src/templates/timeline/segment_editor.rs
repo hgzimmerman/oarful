@@ -54,7 +54,7 @@ pub(super) fn segment_editor(
     group: &Group,
     base_url: &str,
     tl_json: &str,
-    pe: &str,
+    pe: super::PlanEditorState,
 ) -> Markup {
     let is_work = seg.seg_type.is_work();
     let rows = effective_modifiers(seg, group);
@@ -69,7 +69,7 @@ pub(super) fn segment_editor(
 
 /// Render the modifiers section: inherited rows, local rows, and the add button.
 fn modifier_section(
-    pe: &str,
+    pe: super::PlanEditorState,
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -140,7 +140,7 @@ fn modifier_section(
 
 /// An inherited modifier row — read-only with "override here" action.
 fn inherited_row(
-    pe: &str,
+    pe: super::PlanEditorState,
     m: &Modifier,
     seg: &Segment,
     group: &Group,
@@ -172,7 +172,7 @@ fn inherited_row(
 
 /// An overridden modifier — shows edited value with "was..." note and revert.
 fn overridden_row(
-    pe: &str,
+    pe: super::PlanEditorState,
     local: &Modifier,
     inherited: &Modifier,
     seg: &Segment,
@@ -210,7 +210,7 @@ fn overridden_row(
 
 /// A locally-added modifier — editable with remove button.
 fn local_row(
-    pe: &str,
+    pe: super::PlanEditorState,
     m: &Modifier,
     seg: &Segment,
     group: &Group,
@@ -285,7 +285,7 @@ pub(super) fn modifier_value_display(m: &Modifier) -> Markup {
 
 /// Interactive editor for a modifier's value — chips, toggles, text input.
 fn modifier_value_editor(
-    pe: &str,
+    pe: super::PlanEditorState,
     m: &Modifier,
     seg: &Segment,
     group: &Group,
@@ -382,7 +382,7 @@ fn modifier_value_editor(
 
 /// Pause-at multi-select editor with frequency input.
 fn pause_at_editor(
-    pe: &str,
+    pe: super::PlanEditorState,
     points: &[PausePoint],
     every: Option<u32>,
     seg: &Segment,
@@ -435,7 +435,7 @@ fn pause_at_editor(
 
 /// Drills multi-select editor.
 fn drills_editor(
-    pe: &str,
+    pe: super::PlanEditorState,
     values: &[Drill],
     seg: &Segment,
     group: &Group,
@@ -470,7 +470,7 @@ fn drills_editor(
 
 /// Repeating emphasis compound editor — sentence-shaped inline form.
 fn repeating_emphasis_editor(
-    pe: &str,
+    pe: super::PlanEditorState,
     every: u32,
     every_unit: DurationUnit,
     count: u32,
@@ -518,7 +518,7 @@ fn repeating_emphasis_editor(
 
 /// The "+ Add modifier" button and picker popover.
 fn modifier_picker(
-    pe: &str,
+    pe: super::PlanEditorState,
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -552,7 +552,7 @@ fn modifier_picker(
 
 /// Render picker items grouped by category.
 fn picker_items(
-    pe: &str,
+    pe: super::PlanEditorState,
     catalogue: &[ModifierCatalogueEntry],
     present_kinds: &[&str],
     seg: &Segment,

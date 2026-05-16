@@ -51,16 +51,9 @@ pub(crate) fn strip_bg_seg(st: SegmentType, gt: GroupType) -> &'static str {
 
 /// Human label for a modifier kind_id, used in tooltips.
 pub(super) fn modifier_kind_label(kind: &str) -> &'static str {
-    match kind {
-        "blade" => "Blade",
-        "partial" => "Partial strokes",
-        "pause_at" => "Pause pattern",
-        "drills" => "Drills",
-        "emphasis" => "Notes",
-        "repeating_emphasis" => "Repeating",
-        "row_by" => "Row by",
-        _ => "Modifier",
-    }
+    lineup_db::timeline::Modifier::default_for_kind(kind)
+        .map(|m| m.kind_label())
+        .unwrap_or("Modifier")
 }
 
 /// CSS custom property name for a modifier kind's color.

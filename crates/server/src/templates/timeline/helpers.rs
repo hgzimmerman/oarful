@@ -64,7 +64,12 @@ pub(super) fn rate_field_compact(rate: [u8; 2], is_range: bool) -> Markup {
     }
 }
 
-pub(super) fn action_buttons(base_url: &str, tl_json: &str, item_id: &str, pe: &str) -> Markup {
+pub(super) fn action_buttons(
+    base_url: &str,
+    tl_json: &str,
+    item_id: &str,
+    pe: super::PlanEditorState,
+) -> Markup {
     html! {
         div class="flex items-center gap-1" {
             form class="inline" hx-post={(base_url) "/duplicate"} hx-target="#timeline-section" hx-swap="innerHTML" {

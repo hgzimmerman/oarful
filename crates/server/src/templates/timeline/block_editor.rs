@@ -6,7 +6,12 @@ use maud::{html, Markup};
 use super::css;
 use super::helpers::{action_buttons, duration_field};
 
-pub(super) fn bare_block_editor(block: &Block, base_url: &str, tl_json: &str, pe: &str) -> Markup {
+pub(super) fn bare_block_editor(
+    block: &Block,
+    base_url: &str,
+    tl_json: &str,
+    pe: super::PlanEditorState,
+) -> Markup {
     let is_structural = block.block_type.is_structural();
     html! {
         div class="mt-3 pt-3" style="border-top: 1px solid var(--rule-2)" {

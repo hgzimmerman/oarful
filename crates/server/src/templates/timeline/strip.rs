@@ -11,7 +11,7 @@ pub(super) fn timeline_strip(
     base_url: &str,
     tl_json: &str,
     selected_id: Option<&str>,
-    pe: &str,
+    pe: super::PlanEditorState,
 ) -> Markup {
     let slack = tl.slack_minutes();
     let total_min: f64 = tl

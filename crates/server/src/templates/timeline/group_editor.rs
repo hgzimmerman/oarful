@@ -14,7 +14,7 @@ pub(super) fn group_editor(
     base_url: &str,
     tl_json: &str,
     selected_id: Option<&str>,
-    pe: &str,
+    pe: super::PlanEditorState,
 ) -> Markup {
     let selected_seg = selected_id.and_then(|sid| group.segments.iter().find(|s| s.id == sid));
 
@@ -316,7 +316,7 @@ fn modifier_indicator(
 
 /// Inline value editor for a group-level modifier.
 fn group_modifier_value_editor(
-    pe: &str,
+    pe: super::PlanEditorState,
     m: &Modifier,
     group: &Group,
     base_url: &str,
@@ -461,7 +461,12 @@ fn group_modifier_value_editor(
 }
 
 /// Group-level modifiers section with add/remove.
-fn group_modifiers_section(pe: &str, group: &Group, base_url: &str, tl_json: &str) -> Markup {
+fn group_modifiers_section(
+    pe: super::PlanEditorState,
+    group: &Group,
+    base_url: &str,
+    tl_json: &str,
+) -> Markup {
     let catalogue = lineup_db::timeline::modifier_catalogue();
     let present_kinds: Vec<&str> = group.modifiers.iter().map(|m| m.kind_id()).collect();
 
@@ -545,7 +550,7 @@ fn group_modifiers_section(pe: &str, group: &Group, base_url: &str, tl_json: &st
 }
 
 fn group_picker_items(
-    pe: &str,
+    pe: super::PlanEditorState,
     catalogue: &[lineup_db::timeline::ModifierCatalogueEntry],
     present_kinds: &[&str],
     group: &Group,

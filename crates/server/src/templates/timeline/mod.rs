@@ -32,6 +32,12 @@ pub enum PlanEditorState {
     OpenPreview,
 }
 
+impl std::fmt::Display for PlanEditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_param())
+    }
+}
+
 impl PlanEditorState {
     pub fn is_open(self) -> bool {
         !matches!(self, Self::Closed)
@@ -41,7 +47,7 @@ impl PlanEditorState {
         matches!(self, Self::OpenPreview)
     }
 
-    /// Value for the hidden form field.
+    /// Value for the hidden form field / query param.
     pub fn as_param(self) -> &'static str {
         match self {
             Self::Closed => "",
@@ -227,7 +233,7 @@ pub(crate) fn editor_content(
     editor_state: PlanEditorState,
 ) -> Markup {
     let tl_json = serde_json::to_string(tl).unwrap_or_else(|_| "{}".to_string());
-    let pe = editor_state.as_param();
+    let pe = editor_state;
     let planned = tl.planned_minutes();
     let slack = tl.slack_minutes();
     let slack_state = if slack > 5.0 {

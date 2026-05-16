@@ -1124,7 +1124,13 @@ fn seg(
     }
 }
 
-pub fn built_in_templates() -> Vec<Template> {
+pub fn built_in_templates() -> &'static [Template] {
+    use std::sync::LazyLock;
+    static TEMPLATES: LazyLock<Vec<Template>> = LazyLock::new(|| built_in_templates_vec());
+    &TEMPLATES
+}
+
+fn built_in_templates_vec() -> Vec<Template> {
     use DurationUnit::*;
     use Intensity::*;
     use SegmentType::*;
