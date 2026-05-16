@@ -333,6 +333,184 @@ pub async fn set_input_value(client: &Client, css_selector: &str, value: &str) {
     client.execute(&js, vec![]).await.unwrap();
 }
 
+// ── Plan editor helpers ──────────────────────────────────────────────
+
+pub mod plan {
+    use fantoccini::{Client, Locator};
+    use std::time::Duration;
+
+    /// Navigate to the plan templates list page.
+    pub async fn goto_templates(client: &Client, base_url: &str) {
+        client
+            .goto(&format!("{base_url}/admin/plan-templates"))
+            .await
+            .unwrap();
+        client
+            .wait()
+            .at_most(Duration::from_secs(5))
+            .for_element(Locator::XPath("//*[contains(text(), 'Plan templates')]"))
+            .await
+            .expect("expected plan templates page");
+    }
+
+    /// Click "New template" and wait for the detail page to load.
+    /// Returns the full URL of the template detail page.
+    pub async fn create_template(client: &Client) -> String {
+        click_button(client, "New template").await;
+        client
+            .wait()
+            .at_most(Duration::from_secs(5))
+            .for_element(Locator::Id("template-name"))
+            .await
+            .expect("expected template detail page");
+        // Extract the template detail URL from the page (meta form action or back link)
+        let url: serde_json::Value = client
+            .execute(
+                r#"
+                var link = document.querySelector('button[hx-get*="/admin/plan-templates/"][hx-get*="/detail"]');
+                if (link) return link.getAttribute('hx-get').replace('/detail', '');
+                // Fallback: extract from any form action or hx-post
+                var form = document.querySelector('form[hx-post*="/admin/plan-templates/"]');
+                if (form) {
+                    var m = form.getAttribute('hx-post').match(/\/admin\/plan-templates\/(\d+)/);
+                    if (m) return '/admin/plan-templates/' + m[1];
+                }
+                return '';
+                "#,
+                vec![],
+            )
+            .await
+            .unwrap();
+        let path = url.as_str().unwrap_or("").to_string();
+        let base = client.current_url().await.unwrap();
+        format!(
+            "{}://{}{}/detail?plan_editor=open_preview",
+            base.scheme(),
+            base.host_str().unwrap_or("localhost"),
+            path
+        )
+    }
+
+    /// Click "edit plan" to open the timeline editor.
+    /// Waits for palette buttons to appear.
+    pub async fn open_editor(client: &Client) {
+        // Check if the editor is already open (palette has submit buttons)
+        let palette_count: u64 = client
+            .execute(
+                r#"return document.querySelectorAll('#timeline-section button[type="submit"]').length"#,
+                vec![],
+            )
+            .await
+            .map(|v| v.as_u64().unwrap_or(0))
+            .unwrap_or(0);
+        if palette_count == 0 {
+            click_button(client, "edit plan").await;
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+    }
+
+    /// Click a palette button to add a block/group by its label text.
+    pub async fn add_item(client: &Client, label: &str) {
+        // Find the button in the palette and click it via JS + HTMX
+        let js = format!(
+            r#"
+            var btns = document.querySelectorAll('#timeline-section button[type="submit"]');
+            for (var b of btns) {{
+                if (b.textContent.trim() === '{}') {{ b.click(); return true; }}
+            }}
+            return false;
+            "#,
+            label
+        );
+        let clicked = client.execute(&js, vec![]).await.unwrap();
+        assert_eq!(
+            clicked.as_bool(),
+            Some(true),
+            "palette button '{label}' not found"
+        );
+        wait_for_htmx(client).await;
+    }
+
+    /// Click a button by its visible text. Tries exact match first,
+    /// then falls back to starts-with match for longer button labels.
+    pub async fn click_button(client: &Client, text: &str) {
+        let js = format!(
+            r#"
+            var btns = document.querySelectorAll('button, [type="submit"]');
+            var needle = '{}';
+            // Exact match first
+            for (var b of btns) {{
+                if (b.textContent.trim() === needle) {{ b.scrollIntoView(); b.click(); return true; }}
+            }}
+            // Starts-with fallback
+            for (var b of btns) {{
+                if (b.textContent.trim().startsWith(needle)) {{ b.scrollIntoView(); b.click(); return true; }}
+            }}
+            return false;
+            "#,
+            text.replace('\'', "\\'")
+        );
+        let clicked = client.execute(&js, vec![]).await.unwrap();
+        assert_eq!(clicked.as_bool(), Some(true), "button '{text}' not found");
+        wait_for_htmx(client).await;
+    }
+
+    /// Wait for any in-flight HTMX requests to settle.
+    pub async fn wait_for_htmx(client: &Client) {
+        // Brief sleep to let HTMX fire, then poll for completion
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        for _ in 0..50 {
+            let pending: serde_json::Value = client
+                .execute(
+                    "return document.querySelectorAll('.htmx-request').length",
+                    vec![],
+                )
+                .await
+                .unwrap();
+            if pending.as_u64().unwrap_or(0) == 0 {
+                // Extra settle time for DOM updates
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        panic!("HTMX requests did not settle within 5s");
+    }
+
+    /// Count elements matching a CSS selector.
+    pub async fn count(client: &Client, css: &str) -> u64 {
+        let js = format!(
+            r#"return document.querySelectorAll("{}").length"#,
+            css.replace('"', r#"\""#)
+        );
+        let val = client.execute(&js, vec![]).await.unwrap();
+        val.as_u64().unwrap_or(0)
+    }
+
+    /// Get the page source text content (for simple assertions).
+    pub async fn page_text(client: &Client) -> String {
+        client.source().await.unwrap()
+    }
+
+    /// Click an element in the strip by its data-tl-id.
+    pub async fn click_strip_item(client: &Client, index: usize) {
+        let js = format!(
+            r#"
+            var items = document.querySelectorAll('#tl-strip [data-tl-id]');
+            if (items.length > {index}) {{ items[{index}].click(); return true; }}
+            return false;
+            "#
+        );
+        let clicked = client.execute(&js, vec![]).await.unwrap();
+        assert_eq!(
+            clicked.as_bool(),
+            Some(true),
+            "strip item at index {index} not found"
+        );
+        wait_for_htmx(client).await;
+    }
+}
+
 impl Drop for TestInstance {
     fn drop(&mut self) {
         // Send SIGTERM to the WebKitWebDriver process group first so it

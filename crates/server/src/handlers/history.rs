@@ -21,6 +21,7 @@ pub(crate) async fn detail_handler(
     Extension(tenant): Extension<TenantContext>,
     Path(practice_id): Path<PracticeId>,
     hx: HxRequest,
+    axum::extract::Query(query): axum::extract::Query<super::timeline::EditorQuery>,
 ) -> Result<Html<String>, ErrorResponse> {
     let _team_id = super::active_team(&tenant.db, &jar, Some(&tenant.claims)).await?;
     let (snapshot, practice, committed, oar_assignments) = tenant
@@ -54,6 +55,7 @@ pub(crate) async fn detail_handler(
         tenant.config.force_cox_stern,
         is_coach,
         &oar_assignments,
+        query.plan_editor,
     );
     Ok(super::maybe_page_authed(
         &format!("Lineups · {date}"),

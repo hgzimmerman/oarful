@@ -29,6 +29,14 @@
   --shadow-card: 0 1px 0 rgba(21,33,45,0.06), 0 18px 40px -28px rgba(21,33,45,0.30);
   --nav-bg:   #15212d;
   --nav-text: #f3eee3;
+  /* Modifier kind colors (used in summary dotted underlines + editor modifier rows) */
+  --mod-drills:    var(--accent);
+  --mod-pause:     #9b6aad;
+  --mod-repeating: var(--warn);
+  --mod-rate:      var(--good);
+  --mod-blade:     var(--ink-3);
+  --mod-partial:   var(--ink-3);
+  --mod-row-by:    var(--link);
 }
 
 /* ── Dark palette ──────────────────────────────────────────────────
@@ -62,7 +70,33 @@ html.dark {
   --shadow-card: inset 0 0 0 1px var(--rule), 0 18px 40px -28px rgba(0,0,0,0.60);
   --nav-bg:   #172432;
   --nav-text: #e2ddd0;
+  --mod-drills:    var(--accent);
+  --mod-pause:     #c89bd9;
+  --mod-repeating: var(--warn);
+  --mod-rate:      var(--good);
+  --mod-blade:     var(--ink-3);
+  --mod-partial:   var(--ink-3);
+  --mod-row-by:    var(--link);
 }
+
+/* ── Modifier summary spans ──────────────────────────────────────── */
+.mod-dot {
+  color: var(--muted);
+}
+.mod-span {
+  text-decoration: underline dotted var(--mod-kind, var(--accent));
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+.mod-span[data-kind="drills"]             { --mod-kind: var(--mod-drills); }
+.mod-span[data-kind="pause_at"]           { --mod-kind: var(--mod-pause); }
+.mod-span[data-kind="repeating_emphasis"] { --mod-kind: var(--mod-repeating); }
+.mod-span[data-kind="blade"]              { --mod-kind: var(--mod-blade); }
+.mod-span[data-kind="partial"]            { --mod-kind: var(--mod-partial); }
+.mod-span[data-kind="row_by"]             { --mod-kind: var(--mod-row-by); }
+
+/* ── Template dropdown items ─────────────────────────────────────── */
+.tmpl-item:hover, .tmpl-sel { background: var(--paper-2); }
 
 /* ── Font stacks ──────────────────────────────────────────────────── */
 .font-serif-heading {

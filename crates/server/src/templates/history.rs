@@ -38,6 +38,7 @@ pub(crate) fn detail_content(
     force_cox_stern: bool,
     is_coach: bool,
     oar_assignments: &HashMap<BoatId, (OarSetId, String)>,
+    editor_state: super::timeline::PlanEditorState,
 ) -> Markup {
     // Detect stale rowers: committed but availability is no longer "Yes".
     let stale_rowers: HashSet<RowerId> = committed
@@ -219,7 +220,7 @@ pub(crate) fn detail_content(
                     }
                 }
 
-                // Practice timeline summary
+                // Practice timeline summary or editor
                 @if is_coach {
                     @let timeline = practice.and_then(|p| p.timeline());
                     @let has_plan = timeline.is_some();
@@ -228,13 +229,16 @@ pub(crate) fn detail_content(
                     div class="mb-5 no-print" {
                         @let base_url = format!("/practices/{practice_id}/timeline");
                         @let import_url = format!("/practices/{practice_id}/import-template");
-                        @if let Some(ref tl) = timeline {
-                            (super::timeline::practice_summary(tl, &base_url, &import_url, skip_url.as_deref()))
+                        @let default_tl = lineup_db::timeline::Timeline::default_empty(
+                            practice.and_then(|p| p.duration_minutes.map(|d| d.as_int() as u32)).unwrap_or(90)
+                        );
+                        @let tl = timeline.as_ref().unwrap_or(&default_tl);
+                        @if editor_state.is_open() {
+                            (super::timeline::section_wrapper(
+                                super::timeline::editor_content(tl, &base_url, None, editor_state)
+                            ))
                         } @else {
-                            @let default_tl = lineup_db::timeline::Timeline::default_empty(
-                                practice.and_then(|p| p.duration_minutes.map(|d| d.as_int() as u32)).unwrap_or(90)
-                            );
-                            (super::timeline::practice_summary(&default_tl, &base_url, &import_url, skip_url.as_deref()))
+                            (super::timeline::practice_summary(tl, &base_url, &import_url, skip_url.as_deref()))
                         }
                     }
                 }

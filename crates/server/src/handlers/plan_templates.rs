@@ -10,10 +10,7 @@ use axum_htmx::HxRequest;
 use lineup_db::{
     app_user::Role,
     plan_template::{self, NewPlanTemplate, PlanTemplate, PlanTemplateId},
-    timeline::{
-        self, Block, BlockType, Duration, DurationUnit, Group, GroupType, Intensity, RotatePer,
-        Rotation, Segment, SegmentType, Timeline, TimelineItem,
-    },
+    timeline::Timeline,
 };
 use serde::Deserialize;
 
@@ -25,10 +22,7 @@ use crate::{
     templates,
 };
 
-use super::timeline::{
-    default_segment, find_modifier_target, make_id, practice_timeline_url, ModifierForm,
-    TimelineForm,
-};
+use super::timeline::{practice_timeline_url, ModifierForm, TimelineForm};
 
 fn next_template_name(existing: &[PlanTemplate]) -> String {
     let names: Vec<&str> = existing.iter().map(|t| t.name.as_str()).collect();
@@ -135,7 +129,12 @@ pub(crate) async fn create_handler(
         .with_conn(plan_template::all_categories)
         .await
         .map_err(internal_error)?;
-    let tab_content = templates::plan_templates::detail_content(&tmpl, &[], &all_cats);
+    let tab_content = templates::plan_templates::detail_content(
+        &tmpl,
+        &[],
+        &all_cats,
+        templates::timeline::PlanEditorState::Closed,
+    );
     Ok(Html(
         tab_swap(
             super::admin::TABS,
@@ -154,9 +153,17 @@ pub(crate) async fn detail_handler(
     Path(template_id): Path<PlanTemplateId>,
     hx: HxRequest,
     headers: HeaderMap,
+    axum::extract::Query(query): axum::extract::Query<super::timeline::EditorQuery>,
 ) -> Result<Html<String>, ErrorResponse> {
     require_at_least_role(&tenant.claims, Role::Coach)?;
-    let tab_content = detail_tab_content(&tenant, template_id).await?;
+    // Template editor defaults to open with preview when no param is specified.
+    let editor_state = match query.plan_editor {
+        templates::timeline::PlanEditorState::Closed => {
+            templates::timeline::PlanEditorState::OpenPreview
+        }
+        s => s,
+    };
+    let tab_content = detail_tab_content(&tenant, template_id, editor_state).await?;
 
     if super::admin::is_tab_swap(&headers) {
         return Ok(Html(
@@ -183,6 +190,7 @@ pub(crate) async fn detail_handler(
 async fn detail_tab_content(
     tenant: &TenantContext,
     template_id: PlanTemplateId,
+    editor_state: templates::timeline::PlanEditorState,
 ) -> Result<maud::Markup, ErrorResponse> {
     let tmpl = tenant
         .db
@@ -201,7 +209,10 @@ async fn detail_tab_content(
         .await
         .map_err(internal_error)?;
     Ok(templates::plan_templates::detail_content(
-        &tmpl, &tmpl_cats, &all_cats,
+        &tmpl,
+        &tmpl_cats,
+        &all_cats,
+        editor_state,
     ))
 }
 
@@ -301,7 +312,12 @@ pub(crate) async fn duplicate_handler(
         .with_conn(move |conn| PlanTemplate::duplicate(conn, template_id, new_name))
         .await
         .map_err(internal_error)?;
-    let tab_content = detail_tab_content(&tenant, tmpl.id).await?;
+    let tab_content = detail_tab_content(
+        &tenant,
+        tmpl.id,
+        templates::timeline::PlanEditorState::Closed,
+    )
+    .await?;
     Ok(Html(
         tab_swap(
             super::admin::TABS,
@@ -407,7 +423,13 @@ pub(crate) async fn tl_open_editor(
         .unwrap_or_else(|| Timeline::default_empty(90));
     let base_url = template_timeline_url(template_id);
     Ok(Html(
-        templates::timeline::editor_content(&timeline, &base_url, None).into_string(),
+        templates::timeline::editor_content(
+            &timeline,
+            &base_url,
+            None,
+            templates::timeline::PlanEditorState::OpenPreview,
+        )
+        .into_string(),
     ))
 }
 
@@ -452,850 +474,56 @@ pub(crate) async fn tl_close(
     ))
 }
 
-// ── Pure mutation handlers (same logic as timeline.rs, different base_url) ──
+// ── Pure mutation handlers (delegate to shared apply_* functions in timeline.rs) ──
 
 macro_rules! tl_mutation_handler {
-    ($name:ident, $form_ty:ty, $body:expr) => {
+    ($name:ident, $form_ty:ty, $apply:path) => {
         pub(crate) async fn $name(
             Path(template_id): Path<PlanTemplateId>,
             Form(input): Form<$form_ty>,
         ) -> Html<String> {
-            let base_url = template_timeline_url(template_id);
-            #[allow(clippy::redundant_closure_call)]
-            ($body)(input, &base_url)
+            $apply(input, &template_timeline_url(template_id))
         }
     };
 }
 
-// ── Add block ──
+use super::timeline::{
+    apply_add_block, apply_delete_block, apply_duplicate_block, apply_group_add_segment,
+    apply_group_delete_segment, apply_group_patch, apply_group_reorder_segment, apply_group_split,
+    apply_insert_template, apply_modifier_add, apply_modifier_override, apply_modifier_remove,
+    apply_modifier_revert, apply_modifier_toggle, apply_modifier_update, apply_patch_block,
+    apply_patch_segment, apply_reorder_block, apply_update_target, AddForm, DeleteForm,
+    DuplicateForm, GroupAddForm, GroupDeleteForm, GroupPatchForm, GroupReorderForm, GroupSplitForm,
+    PatchBlockForm, PatchSegmentForm, ReorderForm, TargetForm, TemplateForm,
+};
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct AddForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    add_type: String,
-}
-
-tl_mutation_handler!(tl_add_block, AddForm, |input: AddForm, base_url: &str| {
-    let mut tl = input.base.parse();
-    let (new_item, select_id) = match input.add_type.as_str() {
-        "rest" => {
-            let id = make_id();
-            let sid = id.clone();
-            (
-                TimelineItem::Block(Block {
-                    id,
-                    block_type: BlockType::Rest,
-                    duration: Duration {
-                        value: 3.0,
-                        unit: DurationUnit::Min,
-                    },
-                    note: String::new(),
-                }),
-                sid,
-            )
-        }
-        "turn" => {
-            let id = make_id();
-            let sid = id.clone();
-            (
-                TimelineItem::Block(Block {
-                    id,
-                    block_type: BlockType::Turn,
-                    duration: Duration {
-                        value: 5.0,
-                        unit: DurationUnit::Min,
-                    },
-                    note: String::new(),
-                }),
-                sid,
-            )
-        }
-        "warmup" => {
-            let g = Group {
-                id: make_id(),
-                group_type: GroupType::Warmup,
-                name: String::new(),
-                segments: vec![default_segment()],
-                repeat: None,
-                rotation: Rotation::default(),
-                modifiers: vec![],
-                note: String::new(),
-            };
-            let sid = g.id.clone();
-            (TimelineItem::Group(g), sid)
-        }
-        "piece" => {
-            let g = Group {
-                id: make_id(),
-                group_type: GroupType::Piece,
-                name: String::new(),
-                segments: vec![default_segment()],
-                repeat: None,
-                rotation: Rotation::default(),
-                modifiers: vec![],
-                note: String::new(),
-            };
-            let sid = g.id.clone();
-            (TimelineItem::Group(g), sid)
-        }
-        _ => {
-            return Html(
-                templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                    .into_string(),
-            )
-        }
-    };
-    match input.base.selected.as_deref().filter(|s| !s.is_empty()) {
-        Some(sel) => tl.insert_after_item(sel, vec![new_item]),
-        None => tl.insert_before_dock(vec![new_item]),
-    }
-    Html(templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string())
-});
-
-// ── Delete block ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct DeleteForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    delete_id: String,
-}
-
-tl_mutation_handler!(
-    tl_delete_block,
-    DeleteForm,
-    |input: DeleteForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        tl.items
-            .retain(|it| it.is_structural() || it.id() != input.delete_id);
-        Html(templates::timeline::editor_content(&tl, base_url, None).into_string())
-    }
-);
-
-// ── Patch block ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct PatchBlockForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    patch_id: String,
-    #[serde(default)]
-    duration_value: Option<f64>,
-    #[serde(default)]
-    duration_unit: Option<DurationUnit>,
-    #[serde(default)]
-    note: Option<String>,
-}
-
-tl_mutation_handler!(
-    tl_patch_block,
-    PatchBlockForm,
-    |input: PatchBlockForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Block(b) = item {
-                if b.id == input.patch_id {
-                    if let Some(v) = input.duration_value {
-                        b.duration.value = v.max(0.0);
-                    }
-                    if let Some(u) = input.duration_unit {
-                        b.duration.unit = u;
-                    }
-                    if let Some(ref n) = input.note {
-                        b.note = n.clone();
-                    }
-                    break;
-                }
-            }
-        }
-        Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.patch_id)).into_string(),
-        )
-    }
-);
-
-// ── Patch segment ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct PatchSegmentForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    group_id: String,
-    segment_id: String,
-    #[serde(default)]
-    duration_value: Option<f64>,
-    #[serde(default)]
-    duration_unit: Option<DurationUnit>,
-    #[serde(default)]
-    rate_low: Option<u8>,
-    #[serde(default)]
-    rate_high: Option<u8>,
-    #[serde(default)]
-    intensity: Option<Intensity>,
-    #[serde(default)]
-    note: Option<String>,
-    #[serde(default)]
-    _range_toggle: Option<String>,
-    #[serde(default)]
-    seg_type: Option<SegmentType>,
-}
-
-tl_mutation_handler!(
-    tl_patch_segment,
-    PatchSegmentForm,
-    |input: PatchSegmentForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    for s in &mut g.segments {
-                        if s.id == input.segment_id {
-                            if let Some(v) = input.duration_value {
-                                s.duration.value = v.max(0.0);
-                            }
-                            if let Some(u) = input.duration_unit {
-                                s.duration.unit = u;
-                            }
-                            if input.rate_low.is_some() || input.rate_high.is_some() {
-                                let cur = s.rate.unwrap_or([20, 20]);
-                                let lo = input.rate_low.unwrap_or(cur[0]).clamp(10, 50);
-                                let mut hi = input.rate_high.unwrap_or(cur[1]).clamp(lo, 50);
-                                if input._range_toggle.is_none() {
-                                    hi = lo;
-                                } else if lo == hi {
-                                    hi = (lo + 2).clamp(lo, 50);
-                                }
-                                s.rate = Some([lo, hi]);
-                            }
-                            if let Some(int) = input.intensity {
-                                s.intensity = Some(int);
-                            }
-                            if let Some(ref n) = input.note {
-                                s.note = n.clone();
-                            }
-                            if let Some(st) = input.seg_type {
-                                s.seg_type = st;
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.segment_id))
-                .into_string(),
-        )
-    }
-);
-
-// ── Update target ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct TargetForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    new_target: u32,
-}
-
-tl_mutation_handler!(
-    tl_update_target,
-    TargetForm,
-    |input: TargetForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        tl.target_minutes = input.new_target.clamp(20, 240);
-        Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
-        )
-    }
-);
-
-// ── Reorder block ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct ReorderForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    drag_id: String,
-    drop_before_id: String,
-}
-
-tl_mutation_handler!(
-    tl_reorder_block,
-    ReorderForm,
-    |input: ReorderForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        let drag_idx = tl
-            .items
-            .iter()
-            .position(|it| it.id() == input.drag_id && !it.is_structural());
-        if let Some(idx) = drag_idx {
-            let item = tl.items.remove(idx);
-            let drop_idx = if input.drop_before_id == "__end__" {
-                tl.items.iter().position(|it| matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Dock)).unwrap_or(tl.items.len())
-            } else {
-                tl.items
-                    .iter()
-                    .position(|it| it.id() == input.drop_before_id)
-                    .unwrap_or(tl.items.len())
-            };
-            let dock_idx = tl
-                .items
-                .iter()
-                .position(
-                    |it| matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Dock),
-                )
-                .unwrap_or(tl.items.len());
-            let drop_idx = drop_idx.min(dock_idx);
-            let launch_end = tl
-                .items
-                .iter()
-                .position(
-                    |it| !matches!(it, TimelineItem::Block(b) if b.block_type == BlockType::Launch),
-                )
-                .unwrap_or(0);
-            let drop_idx = drop_idx.max(launch_end);
-            tl.items.insert(drop_idx, item);
-        }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
-    }
-);
-
-// ── Duplicate block ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct DuplicateForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    dup_id: String,
-}
-
-tl_mutation_handler!(
-    tl_duplicate_block,
-    DuplicateForm,
-    |input: DuplicateForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        if let Some(idx) = tl.items.iter().position(|it| it.id() == input.dup_id) {
-            let item = &tl.items[idx];
-            if !item.is_structural() {
-                let mut dup = item.clone();
-                let new_id = make_id();
-                match &mut dup {
-                    TimelineItem::Block(b) => b.id = new_id.clone(),
-                    TimelineItem::Group(g) => {
-                        g.id = new_id.clone();
-                        for s in &mut g.segments {
-                            s.id = make_id();
-                        }
-                    }
-                }
-                tl.items.insert(idx + 1, dup);
-                return Html(
-                    templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string(),
-                );
-            }
-        }
-        Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
-        )
-    }
-);
-
-// ── Group patch ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GroupPatchForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    group_id: String,
-    #[serde(default)]
-    group_name: Option<String>,
-    #[serde(default)]
-    repeat: Option<String>,
-    #[serde(default)]
-    row_by: Option<String>,
-    #[serde(default)]
-    rotate_by: Option<String>,
-    #[serde(default)]
-    rotate_per: Option<String>,
-    #[serde(default)]
-    rotate_per_value: Option<String>,
-    #[serde(default)]
-    rotate_per_unit: Option<String>,
-    #[serde(default)]
-    rotations: Option<String>,
-    #[serde(default)]
-    group_note: Option<String>,
-    #[serde(default)]
-    group_type: Option<GroupType>,
-}
-
-tl_mutation_handler!(
-    tl_group_patch,
-    GroupPatchForm,
-    |input: GroupPatchForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    if let Some(ref name) = input.group_name {
-                        g.name = name.clone();
-                    }
-                    if let Some(ref r) = input.repeat {
-                        g.repeat = r.parse::<u8>().ok().filter(|&n| n > 1);
-                    }
-                    if let Some(ref rb) = input.row_by {
-                        if rb == "all" {
-                            g.rotation = Rotation::default();
-                        } else {
-                            g.rotation.row_by = rb.parse::<u8>().ok().filter(|&n| n > 0);
-                            let old_rotate_by = g.rotation.rotate_by;
-                            if let Some(ref rb2) = input.rotate_by {
-                                g.rotation.rotate_by = rb2.parse::<u8>().ok().filter(|&n| n > 0);
-                            }
-                            if g.rotation.rotate_by.is_none() {
-                                g.rotation.rotate_by = Some(2);
-                            }
-                            if g.rotation.rotate_by != old_rotate_by
-                                && g.rotation.rotate_per != RotatePer::Group
-                            {
-                                g.rotation.rotations =
-                                    g.rotation.rotate_by.map(|rb| (8 / rb).max(1));
-                            }
-                            if let Some(ref rp) = input.rotate_per {
-                                g.rotation.rotate_per = match rp.as_str() {
-                                    "segment" => RotatePer::Segment,
-                                    "group" => RotatePer::Group,
-                                    "every" => {
-                                        let v = input
-                                            .rotate_per_value
-                                            .as_deref()
-                                            .and_then(|s| s.parse::<f64>().ok())
-                                            .unwrap_or(10.0);
-                                        let u = input
-                                            .rotate_per_unit
-                                            .as_deref()
-                                            .map(|s| {
-                                                s.parse::<DurationUnit>()
-                                                    .unwrap_or(DurationUnit::Strokes)
-                                            })
-                                            .unwrap_or(DurationUnit::Strokes);
-                                        RotatePer::Every { value: v, unit: u }
-                                    }
-                                    _ => RotatePer::None,
-                                };
-                            }
-                            if let Some(ref r) = input.rotations {
-                                g.rotation.rotations = r.parse::<u8>().ok().filter(|&n| n > 0);
-                            }
-                            if g.rotation.rotations.is_none() {
-                                if let Some(rb) = g.rotation.rotate_by {
-                                    g.rotation.rotations = Some((8 / rb).max(1));
-                                }
-                            }
-                        }
-                    }
-                    if let Some(ref note) = input.group_note {
-                        g.note = note.clone();
-                    }
-                    if let Some(gt) = input.group_type {
-                        g.group_type = gt;
-                    }
-                    break;
-                }
-            }
-        }
-        let sel = input.base.selected.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-// ── Group add segment ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GroupAddForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    group_id: String,
-    seg_type: SegmentType,
-}
-
-tl_mutation_handler!(
-    tl_group_add_segment,
-    GroupAddForm,
-    |input: GroupAddForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        let st = input.seg_type;
-        let mut seg = default_segment();
-        seg.seg_type = st;
-        if !st.is_work() {
-            seg.rate = None;
-            seg.intensity = None;
-            seg.duration.value = 3.0;
-        }
-        let new_id = seg.id.clone();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    g.segments.push(seg);
-                    break;
-                }
-            }
-        }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&new_id)).into_string())
-    }
-);
-
-// ── Group delete segment ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GroupDeleteForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    group_id: String,
-    segment_id: String,
-}
-
+tl_mutation_handler!(tl_add_block, AddForm, apply_add_block);
+tl_mutation_handler!(tl_delete_block, DeleteForm, apply_delete_block);
+tl_mutation_handler!(tl_patch_block, PatchBlockForm, apply_patch_block);
+tl_mutation_handler!(tl_patch_segment, PatchSegmentForm, apply_patch_segment);
+tl_mutation_handler!(tl_update_target, TargetForm, apply_update_target);
+tl_mutation_handler!(tl_reorder_block, ReorderForm, apply_reorder_block);
+tl_mutation_handler!(tl_duplicate_block, DuplicateForm, apply_duplicate_block);
+tl_mutation_handler!(tl_group_patch, GroupPatchForm, apply_group_patch);
+tl_mutation_handler!(tl_group_add_segment, GroupAddForm, apply_group_add_segment);
 tl_mutation_handler!(
     tl_group_delete_segment,
     GroupDeleteForm,
-    |input: GroupDeleteForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    g.segments.retain(|s| s.id != input.segment_id);
-                    break;
-                }
-            }
-        }
-        tl.items
-            .retain(|it| !matches!(it, TimelineItem::Group(g) if g.segments.is_empty()));
-        Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
-        )
-    }
+    apply_group_delete_segment
 );
-
-// ── Insert built-in template ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct InsertTemplateForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    template_id: String,
-}
-
-tl_mutation_handler!(
-    tl_insert_template,
-    InsertTemplateForm,
-    |input: InsertTemplateForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        let templates = timeline::built_in_templates();
-        if let Some(tmpl) = templates.iter().find(|t| t.id == input.template_id) {
-            let segments: Vec<Segment> = (tmpl.segments)()
-                .into_iter()
-                .map(|mut s| {
-                    s.id = make_id();
-                    s
-                })
-                .collect();
-            let g = Group {
-                id: make_id(),
-                group_type: tmpl.group_type,
-                name: tmpl.group_name.to_string(),
-                segments,
-                repeat: tmpl.repeat,
-                rotation: tmpl.rotation.clone(),
-                modifiers: tmpl.modifiers.clone(),
-                note: String::new(),
-            };
-            let select_id = g.id.clone();
-            match input.base.selected.as_deref().filter(|s| !s.is_empty()) {
-                Some(sel) => tl.insert_after_item(sel, vec![TimelineItem::Group(g)]),
-                None => tl.insert_before_dock(vec![TimelineItem::Group(g)]),
-            }
-            return Html(
-                templates::timeline::editor_content(&tl, base_url, Some(&select_id)).into_string(),
-            );
-        }
-        Html(
-            templates::timeline::editor_content(&tl, base_url, input.base.selected.as_deref())
-                .into_string(),
-        )
-    }
-);
-
-// ── Group reorder segment ──
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct GroupReorderForm {
-    #[serde(flatten)]
-    base: TimelineForm,
-    group_id: String,
-    drag_id: String,
-    drop_before_id: String,
-}
-
+tl_mutation_handler!(tl_insert_template, TemplateForm, apply_insert_template);
 tl_mutation_handler!(
     tl_group_reorder_segment,
     GroupReorderForm,
-    |input: GroupReorderForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    let drag_idx = g.segments.iter().position(|s| s.id == input.drag_id);
-                    if let Some(idx) = drag_idx {
-                        let seg = g.segments.remove(idx);
-                        let drop_idx = g
-                            .segments
-                            .iter()
-                            .position(|s| s.id == input.drop_before_id)
-                            .unwrap_or(g.segments.len());
-                        g.segments.insert(drop_idx, seg);
-                    }
-                    break;
-                }
-            }
-        }
-        Html(templates::timeline::editor_content(&tl, base_url, Some(&input.drag_id)).into_string())
-    }
+    apply_group_reorder_segment
 );
-
-// ── Split group ──
-
-use super::timeline::GroupSplitForm;
-
-tl_mutation_handler!(
-    tl_group_split,
-    GroupSplitForm,
-    |input: GroupSplitForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    let reps = g.repeat.unwrap_or(1).max(1) as usize;
-                    if reps > 1 {
-                        let original_segs = g.segments.clone();
-                        for _ in 1..reps {
-                            for s in &original_segs {
-                                let mut copy = s.clone();
-                                copy.id = make_id();
-                                g.segments.push(copy);
-                            }
-                        }
-                        g.repeat = None;
-                    }
-                    break;
-                }
-            }
-        }
-        Html(
-            templates::timeline::editor_content(&tl, base_url, Some(&input.group_id)).into_string(),
-        )
-    }
-);
-
-// ── Modifier mutation handlers ──
-
-use lineup_db::timeline::{Blade, HandDrill, Modifier, PausePoint, Slide};
-
-tl_mutation_handler!(
-    tl_modifier_add,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        if let Some(m) = Modifier::default_for_kind(&input.kind) {
-            if let Some(mods) = find_modifier_target(
-                &mut tl,
-                &input.group_id,
-                input.segment_id.as_deref(),
-                input.scope.as_deref(),
-            ) {
-                if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
-                    mods.push(m);
-                }
-            }
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-tl_mutation_handler!(
-    tl_modifier_remove,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        if let Some(mods) = find_modifier_target(
-            &mut tl,
-            &input.group_id,
-            input.segment_id.as_deref(),
-            input.scope.as_deref(),
-        ) {
-            mods.retain(|m| m.kind_id() != input.kind);
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-tl_mutation_handler!(
-    tl_modifier_update,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        if let Some(mods) = find_modifier_target(
-            &mut tl,
-            &input.group_id,
-            input.segment_id.as_deref(),
-            input.scope.as_deref(),
-        ) {
-            if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
-                let val = input.value.as_deref().unwrap_or("");
-                match m {
-                    Modifier::Blade { value } => {
-                        *value = match val {
-                            "square" => Blade::Square,
-                            "partial-feather" => Blade::PartialFeather,
-                            _ => Blade::Feather,
-                        };
-                    }
-                    Modifier::Partial { value } => {
-                        if let Ok(v) = val.parse::<Slide>() {
-                            *value = v;
-                        }
-                    }
-                    Modifier::PauseAt { every, .. } => {
-                        if input.subfield.as_deref() == Some("every") {
-                            *every = val.parse::<u32>().ok().filter(|&n| n > 0);
-                        }
-                    }
-                    Modifier::Emphasis { text } => {
-                        *text = val.to_string();
-                    }
-                    Modifier::RepeatingEmphasis {
-                        every,
-                        every_unit,
-                        count,
-                        label,
-                    } => {
-                        if let Some(v) = input.re_every {
-                            *every = v.max(1);
-                        }
-                        if let Some(u) = input.re_every_unit {
-                            *every_unit = u;
-                        }
-                        if let Some(c) = input.re_count {
-                            *count = c.max(1);
-                        }
-                        if let Some(ref l) = input.re_label {
-                            *label = l.clone();
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-tl_mutation_handler!(
-    tl_modifier_toggle,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        if let Some(mods) = find_modifier_target(
-            &mut tl,
-            &input.group_id,
-            input.segment_id.as_deref(),
-            input.scope.as_deref(),
-        ) {
-            if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
-                let val = input.value.as_deref().unwrap_or("");
-                match m {
-                    Modifier::PauseAt { points, .. } => {
-                        if let Ok(pp) = val.parse::<PausePoint>() {
-                            if let Some(pos) = points.iter().position(|p| *p == pp) {
-                                points.remove(pos);
-                            } else {
-                                points.push(pp);
-                            }
-                        }
-                    }
-                    Modifier::Drills { values } => {
-                        if let Ok(hd) = val.parse::<HandDrill>() {
-                            if let Some(pos) = values.iter().position(|d| *d == hd) {
-                                values.remove(pos);
-                            } else {
-                                values.push(hd);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-tl_mutation_handler!(
-    tl_modifier_override,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    if let Some(gm) = g.modifiers.iter().find(|m| m.kind_id() == input.kind) {
-                        let cloned = gm.clone();
-                        if let Some(sid) = &input.segment_id {
-                            if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
-                                if !s.modifiers.iter().any(|m| m.kind_id() == input.kind) {
-                                    s.modifiers.push(cloned);
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
-
-tl_mutation_handler!(
-    tl_modifier_revert,
-    ModifierForm,
-    |input: ModifierForm, base_url: &str| {
-        let mut tl = input.base.parse();
-        for item in &mut tl.items {
-            if let TimelineItem::Group(g) = item {
-                if g.id == input.group_id {
-                    if let Some(sid) = &input.segment_id {
-                        if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
-                            s.modifiers.retain(|m| m.kind_id() != input.kind);
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
-        Html(templates::timeline::editor_content(&tl, base_url, Some(sel)).into_string())
-    }
-);
+tl_mutation_handler!(tl_group_split, GroupSplitForm, apply_group_split);
+tl_mutation_handler!(tl_modifier_add, ModifierForm, apply_modifier_add);
+tl_mutation_handler!(tl_modifier_remove, ModifierForm, apply_modifier_remove);
+tl_mutation_handler!(tl_modifier_update, ModifierForm, apply_modifier_update);
+tl_mutation_handler!(tl_modifier_toggle, ModifierForm, apply_modifier_toggle);
+tl_mutation_handler!(tl_modifier_override, ModifierForm, apply_modifier_override);
+tl_mutation_handler!(tl_modifier_revert, ModifierForm, apply_modifier_revert);
 
 #[cfg(test)]
 mod tests {

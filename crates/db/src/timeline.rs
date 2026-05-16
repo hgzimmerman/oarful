@@ -95,8 +95,9 @@ pub struct Group {
 }
 
 /// Whether a group represents a warmup or a piece.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::EnumString)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum GroupType {
     Warmup,
     Piece,
@@ -107,6 +108,21 @@ impl GroupType {
         match self {
             Self::Warmup => "Warmup",
             Self::Piece => "Piece",
+        }
+    }
+
+    pub fn other(self) -> Self {
+        match self {
+            Self::Warmup => Self::Piece,
+            Self::Piece => Self::Warmup,
+        }
+    }
+
+    /// Lowercase form matching the serde wire format.
+    pub fn as_wire(self) -> &'static str {
+        match self {
+            Self::Warmup => "warmup",
+            Self::Piece => "piece",
         }
     }
 }
@@ -301,12 +317,16 @@ impl PausePoint {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum Blade {
     Feather,
     Square,
     #[serde(rename = "partial-feather")]
+    #[strum(serialize = "partial-feather")]
     PartialFeather,
 }
 
@@ -325,7 +345,7 @@ impl Blade {
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
-pub enum HandDrill {
+pub enum Drill {
     FeetOut,
     InsideArm,
     OutsideArm,
@@ -335,9 +355,10 @@ pub enum HandDrill {
     GunnelTaps,
     WideGrip,
     SlapCatches,
+    EyesClosed,
 }
 
-impl HandDrill {
+impl Drill {
     pub fn label(self) -> &'static str {
         match self {
             Self::FeetOut => "feet out",
@@ -349,6 +370,7 @@ impl HandDrill {
             Self::GunnelTaps => "gunnel taps",
             Self::WideGrip => "wide grip",
             Self::SlapCatches => "slap catches",
+            Self::EyesClosed => "eyes closed",
         }
     }
 
@@ -362,10 +384,37 @@ impl HandDrill {
         Self::GunnelTaps,
         Self::WideGrip,
         Self::SlapCatches,
+        Self::EyesClosed,
     ];
 }
 
 // ── Unified modifier ─────────────────────────────────────────────────
+
+/// Discriminant for `Modifier` variants, usable in forms and comparisons
+/// without carrying the variant's payload.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ModifierKind {
+    Blade,
+    Partial,
+    PauseAt,
+    Drills,
+    Emphasis,
+    RepeatingEmphasis,
+    RowBy,
+}
 
 /// A modifier attached to a Group or Segment.
 ///
@@ -386,7 +435,7 @@ pub enum Modifier {
         every: Option<u32>,
     },
     #[serde(rename = "drills")]
-    Drills { values: Vec<HandDrill> },
+    Drills { values: Vec<Drill> },
     #[serde(rename = "emphasis")]
     Emphasis { text: String },
     #[serde(rename = "repeating_emphasis")]
@@ -400,24 +449,31 @@ pub enum Modifier {
         /// Short name shown on the plan (e.g. "power 10").
         label: String,
     },
+    /// Row by N rowers at a time (e.g. by 2s, by 4s). Segment-only.
+    #[serde(rename = "row_by")]
+    RowBy { value: u8 },
 }
 
 impl Modifier {
     /// Whether this modifier cascades from group to segments.
     /// Emphasis and RepeatingEmphasis are group-level notes that don't inherit.
     pub fn cascades(&self) -> bool {
-        !matches!(self, Self::Emphasis { .. } | Self::RepeatingEmphasis { .. })
+        !matches!(
+            self,
+            Self::Emphasis { .. } | Self::RepeatingEmphasis { .. } | Self::RowBy { .. }
+        )
     }
 
-    /// String key used to match modifiers across group↔segment for inheritance.
-    pub fn kind_id(&self) -> &'static str {
+    /// Discriminant for matching modifiers across group↔segment for inheritance.
+    pub fn kind(&self) -> ModifierKind {
         match self {
-            Self::Blade { .. } => "blade",
-            Self::Partial { .. } => "partial",
-            Self::PauseAt { .. } => "pause_at",
-            Self::Drills { .. } => "drills",
-            Self::Emphasis { .. } => "emphasis",
-            Self::RepeatingEmphasis { .. } => "repeating_emphasis",
+            Self::Blade { .. } => ModifierKind::Blade,
+            Self::Partial { .. } => ModifierKind::Partial,
+            Self::PauseAt { .. } => ModifierKind::PauseAt,
+            Self::Drills { .. } => ModifierKind::Drills,
+            Self::Emphasis { .. } => ModifierKind::Emphasis,
+            Self::RepeatingEmphasis { .. } => ModifierKind::RepeatingEmphasis,
+            Self::RowBy { .. } => ModifierKind::RowBy,
         }
     }
 
@@ -430,31 +486,32 @@ impl Modifier {
             Self::Drills { .. } => "Drills",
             Self::Emphasis { .. } => "Notes",
             Self::RepeatingEmphasis { .. } => "Repeating",
+            Self::RowBy { .. } => "Row by",
         }
     }
 
     /// Default value for a freshly-added modifier.
-    pub fn default_for_kind(kind_id: &str) -> Option<Self> {
-        match kind_id {
-            "blade" => Some(Self::Blade {
+    pub fn default_for_kind(kind: ModifierKind) -> Self {
+        match kind {
+            ModifierKind::Blade => Self::Blade {
                 value: Blade::Feather,
-            }),
-            "partial" => Some(Self::Partial { value: Slide::Full }),
-            "pause_at" => Some(Self::PauseAt {
+            },
+            ModifierKind::Partial => Self::Partial { value: Slide::Full },
+            ModifierKind::PauseAt => Self::PauseAt {
                 points: vec![],
                 every: None,
-            }),
-            "drills" => Some(Self::Drills { values: vec![] }),
-            "emphasis" => Some(Self::Emphasis {
+            },
+            ModifierKind::Drills => Self::Drills { values: vec![] },
+            ModifierKind::Emphasis => Self::Emphasis {
                 text: String::new(),
-            }),
-            "repeating_emphasis" => Some(Self::RepeatingEmphasis {
+            },
+            ModifierKind::RepeatingEmphasis => Self::RepeatingEmphasis {
                 every: 2,
                 every_unit: DurationUnit::Min,
                 count: 10,
                 label: "power".to_string(),
-            }),
-            _ => None,
+            },
+            ModifierKind::RowBy => Self::RowBy { value: 4 },
         }
     }
 
@@ -492,63 +549,80 @@ impl Modifier {
                 let name = if label.is_empty() { "emphasis" } else { label };
                 format!("{name} {count} every {every}{unit}")
             }
+            Self::RowBy { value } => format!("by {value}s"),
         }
     }
 }
 
 /// Catalogue entry for the modifier picker UI.
 pub struct ModifierCatalogueEntry {
-    pub kind_id: &'static str,
+    pub kind: ModifierKind,
     pub name: &'static str,
     pub group: &'static str,
     pub description: &'static str,
     pub value_shape: &'static str,
+    /// When true, this modifier only makes sense on individual segments.
+    pub segment_only: bool,
 }
 
 /// All known modifier kinds, in picker display order.
 pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
     vec![
         ModifierCatalogueEntry {
-            kind_id: "blade",
+            kind: ModifierKind::Blade,
             name: "Blade",
             group: "Stroke shape",
             description: "feather · partial feather · on square",
             value_shape: "picks one",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "partial",
+            kind: ModifierKind::Partial,
             name: "Partial strokes",
             group: "Stroke shape",
             description: "full · arms only · arms + body · \u{00bc} · \u{00bd} · \u{00be} slide",
             value_shape: "picks one",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "pause_at",
+            kind: ModifierKind::PauseAt,
             name: "Pause at",
             group: "Stroke shape",
             description: "release · arms away · bodies over · \u{00bd} slide · catch",
             value_shape: "multi",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "drills",
+            kind: ModifierKind::Drills,
             name: "Drills",
             group: "Skill focus",
-            description: "feet out, inside arm, cut the cake, gunnel taps\u{2026}",
+            description: "feet out, inside arm, cut the cake, eyes closed\u{2026}",
             value_shape: "multi",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "emphasis",
+            kind: ModifierKind::Emphasis,
             name: "Notes",
             group: "Skill focus",
             description: "a coaching cue, e.g. \u{201c}connection at the catch\u{201d}",
             value_shape: "free text",
+            segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "repeating_emphasis",
+            kind: ModifierKind::RepeatingEmphasis,
             name: "Repeating emphasis",
             group: "Pacing",
             description: "power 10s, focus 5s \u{2014} every N min or strokes",
             value_shape: "compound",
+            segment_only: false,
+        },
+        ModifierCatalogueEntry {
+            kind: ModifierKind::RowBy,
+            name: "Row by",
+            group: "Pacing",
+            description: "row by 2s, 4s, 6s, or 8s",
+            value_shape: "picks one",
+            segment_only: true,
         },
     ]
 }
@@ -868,7 +942,7 @@ impl Timeline {
                             .iter()
                             .map(|s| SegmentSummary {
                                 seg_type: s.seg_type,
-                                label: summarize_segment_with_modifiers(s, &g.modifiers),
+                                parts: summarize_segment_with_modifiers(s, &g.modifiers),
                                 note: s.note.clone(),
                             })
                             .collect(),
@@ -984,20 +1058,32 @@ pub struct SummaryLine {
 
 pub struct SegmentSummary {
     pub seg_type: SegmentType,
-    pub label: String,
+    /// Structured parts: core label followed by modifier spans.
+    pub parts: Vec<SegmentSummaryPart>,
     pub note: String,
+}
+
+/// One piece of a segment summary line — either plain text or modifier-tagged.
+#[derive(Debug, PartialEq)]
+pub struct SegmentSummaryPart {
+    pub text: String,
+    /// `None` for core text (duration/rate/intensity), `Some(kind)` for modifier spans.
+    pub modifier_kind: Option<ModifierKind>,
 }
 
 /// Summarize a segment with no group modifiers.
 #[allow(dead_code)]
-pub fn summarize_segment(s: &Segment) -> String {
+pub fn summarize_segment(s: &Segment) -> Vec<SegmentSummaryPart> {
     summarize_segment_with_modifiers(s, &[])
 }
 
 /// Summarize a segment, merging its own modifiers with any inherited
 /// group-level modifiers. Group modifiers are shown unless the segment
 /// has an override of the same kind.
-fn summarize_segment_with_modifiers(s: &Segment, group_modifiers: &[Modifier]) -> String {
+fn summarize_segment_with_modifiers(
+    s: &Segment,
+    group_modifiers: &[Modifier],
+) -> Vec<SegmentSummaryPart> {
     // Core: duration + rate + intensity
     let mut core = vec![s.duration.display()];
     if s.seg_type.is_work() {
@@ -1013,34 +1099,38 @@ fn summarize_segment_with_modifiers(s: &Segment, group_modifiers: &[Modifier]) -
         }
     }
 
+    let mut parts = vec![SegmentSummaryPart {
+        text: core.join(" "),
+        modifier_kind: None,
+    }];
+
     // Collect effective modifiers: group-level (cascading, unless overridden) + segment-level
-    let mut mods = Vec::new();
     for gm in group_modifiers {
-        // Skip non-cascading modifiers (emphasis stays at group level)
         if !gm.cascades() {
             continue;
         }
-        // Skip if the segment overrides this kind
-        if s.modifiers.iter().any(|m| m.kind_id() == gm.kind_id()) {
+        if s.modifiers.iter().any(|m| m.kind() == gm.kind()) {
             continue;
         }
         let label = gm.summary_label();
         if !label.is_empty() {
-            mods.push(label);
+            parts.push(SegmentSummaryPart {
+                text: label,
+                modifier_kind: Some(gm.kind()),
+            });
         }
     }
     for m in &s.modifiers {
         let label = m.summary_label();
         if !label.is_empty() {
-            mods.push(label);
+            parts.push(SegmentSummaryPart {
+                text: label,
+                modifier_kind: Some(m.kind()),
+            });
         }
     }
 
-    if mods.is_empty() {
-        core.join(" ")
-    } else {
-        format!("{} \u{00b7} {}", core.join(" "), mods.join(" \u{00b7} "))
-    }
+    parts
 }
 
 // ── Built-in templates ───────────────────────────────────────────────
@@ -1079,7 +1169,13 @@ fn seg(
     }
 }
 
-pub fn built_in_templates() -> Vec<Template> {
+pub fn built_in_templates() -> &'static [Template] {
+    use std::sync::LazyLock;
+    static TEMPLATES: LazyLock<Vec<Template>> = LazyLock::new(built_in_templates_vec);
+    &TEMPLATES
+}
+
+fn built_in_templates_vec() -> Vec<Template> {
     use DurationUnit::*;
     use Intensity::*;
     use SegmentType::*;
@@ -1313,6 +1409,269 @@ pub fn built_in_templates() -> Vec<Template> {
                 ]
             },
         },
+        Template {
+            id: "build-drill",
+            name: "Build drill",
+            description: "By 2s → 4s → 6s → 8s, 10 strokes each, 4 reps",
+            group_type: GroupType::Warmup,
+            group_name: "Build drill",
+            repeat: Some(4),
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                vec![
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 2 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 4 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 6 }],
+                        "",
+                    ),
+                    seg(
+                        Work,
+                        10.0,
+                        Strokes,
+                        Some([20, 22]),
+                        Some(Paddle),
+                        vec![Modifier::RowBy { value: 8 }],
+                        "",
+                    ),
+                    seg(
+                        Rest,
+                        0.5,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, rotate starting pair",
+                    ),
+                ]
+            },
+        },
+        Template {
+            id: "start-seq-half",
+            name: "Start sequence (1/2 lead)",
+            description: "Progressive start: 1/2 1/2 3/4 lengthen full + power 5",
+            group_type: GroupType::Warmup,
+            group_name: "Start sequence progression",
+            repeat: None,
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                let r = Some([28, 38]);
+                let p = |s| vec![Modifier::Partial { value: s }];
+                vec![
+                    // Attempt 1: just stroke 1
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 1/2 slide",
+                    ),
+                    // Attempt 2: strokes 1-2
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 1/2 slide",
+                    ),
+                    // Attempt 3: strokes 1-3
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 1/2 slide",
+                    ),
+                    // Attempt 4: strokes 1-4
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 1/2 slide",
+                    ),
+                    // Attempt 5: full start sequence
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 1/2 slide",
+                    ),
+                    // Attempt 6: full start + power 5
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(
+                        Work,
+                        5.0,
+                        Strokes,
+                        r,
+                        Some(Tr),
+                        vec![Modifier::RepeatingEmphasis {
+                            every: 1,
+                            every_unit: Strokes,
+                            count: 5,
+                            label: "power".to_string(),
+                        }],
+                        "",
+                    ),
+                    seg(Rest, 0.25, Min, None, None, vec![], "let it run"),
+                ]
+            },
+        },
+        Template {
+            id: "start-seq-three-quarter",
+            name: "Start sequence (3/4 lead)",
+            description: "Progressive start: 3/4 1/2 1/2 lengthen full + power 5",
+            group_type: GroupType::Warmup,
+            group_name: "Start sequence progression",
+            repeat: None,
+            rotation: Rotation::default(),
+            modifiers: vec![],
+            segments: || {
+                let r = Some([28, 38]);
+                let p = |s| vec![Modifier::Partial { value: s }];
+                vec![
+                    // Attempt 1: just stroke 1
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 3/4 slide",
+                    ),
+                    // Attempt 2: strokes 1-2
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 3/4 slide",
+                    ),
+                    // Attempt 3: strokes 1-3
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 3/4 slide",
+                    ),
+                    // Attempt 4: strokes 1-4
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 3/4 slide",
+                    ),
+                    // Attempt 5: full start sequence
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(
+                        Rest,
+                        0.25,
+                        Min,
+                        None,
+                        None,
+                        vec![],
+                        "check it down, sit ready at 3/4 slide",
+                    ),
+                    // Attempt 6: full start + power 5
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "Pry!"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Half), ""),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(ThreeQuarter), "lengthen"),
+                    seg(Work, 1.0, Strokes, r, Some(Tr), p(Full), "full"),
+                    seg(
+                        Work,
+                        5.0,
+                        Strokes,
+                        r,
+                        Some(Tr),
+                        vec![Modifier::RepeatingEmphasis {
+                            every: 1,
+                            every_unit: Strokes,
+                            count: 5,
+                            label: "power".to_string(),
+                        }],
+                        "",
+                    ),
+                    seg(Rest, 0.25, Min, None, None, vec![], "let it run"),
+                ]
+            },
+        },
     ]
 }
 
@@ -1410,7 +1769,10 @@ mod tests {
             vec![],
             "",
         );
-        assert_eq!(summarize_segment(&s), "15' r20-22 @UT2");
+        let parts = summarize_segment(&s);
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].text, "15' r20-22 @UT2");
+        assert_eq!(parts[0].modifier_kind, None);
     }
 
     // ── strum Display ↔ serde Deserialize round-trip ──
@@ -1455,7 +1817,7 @@ mod tests {
 
     #[test]
     fn hand_drill_display_matches_serde() {
-        assert_display_serde_round_trip(HandDrill::ALL);
+        assert_display_serde_round_trip(Drill::ALL);
     }
 
     #[test]

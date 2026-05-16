@@ -49,6 +49,26 @@ pub(crate) fn strip_bg_seg(st: SegmentType, gt: GroupType) -> &'static str {
     }
 }
 
+use lineup_db::timeline::ModifierKind;
+
+/// Human label for a modifier kind, used in tooltips.
+pub(super) fn modifier_kind_label(kind: ModifierKind) -> &'static str {
+    lineup_db::timeline::Modifier::default_for_kind(kind).kind_label()
+}
+
+/// CSS custom property name for a modifier kind's color.
+pub(super) fn modifier_kind_color(kind: ModifierKind) -> &'static str {
+    match kind {
+        ModifierKind::Drills => "var(--mod-drills)",
+        ModifierKind::PauseAt => "var(--mod-pause)",
+        ModifierKind::RepeatingEmphasis => "var(--mod-repeating)",
+        ModifierKind::Blade => "var(--mod-blade)",
+        ModifierKind::Partial => "var(--mod-partial)",
+        ModifierKind::RowBy => "var(--mod-row-by)",
+        ModifierKind::Emphasis => "var(--accent)",
+    }
+}
+
 pub(crate) fn chip_style(active: bool) -> &'static str {
     if active {
         "color: var(--ink); background: var(--paper-2); border-color: var(--ink-3)"

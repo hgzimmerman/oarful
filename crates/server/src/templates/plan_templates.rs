@@ -35,8 +35,8 @@ pub(crate) fn list_content(templates: &[PlanTemplate]) -> Markup {
                     @for tmpl in templates {
                         @let tl = tmpl.timeline();
                         @let planned = tl.as_ref().map(|t| t.planned_minutes()).unwrap_or(0.0);
-                        a href=(format!("/admin/plan-templates/{}", tmpl.id))
-                          hx-get=(format!("/admin/plan-templates/{}", tmpl.id))
+                        a href=(format!("/admin/plan-templates/{}/detail?plan_editor=open_preview", tmpl.id))
+                          hx-get=(format!("/admin/plan-templates/{}/detail?plan_editor=open_preview", tmpl.id))
                           hx-target="#admin-tab-content"
                           hx-push-url="true"
                           class="block rounded-lg px-4 py-3 hover:opacity-80 transition-opacity cursor-pointer"
@@ -70,6 +70,7 @@ pub(crate) fn detail_content(
     tmpl: &PlanTemplate,
     tmpl_cats: &[Category],
     all_cats: &[Category],
+    editor_state: super::timeline::PlanEditorState,
 ) -> Markup {
     let tl = tmpl
         .timeline()
@@ -97,7 +98,13 @@ pub(crate) fn detail_content(
 
             // Timeline editor
             div class="mt-6" {
-                (super::timeline::summary(&tl, &base_url))
+                @if editor_state.is_open() {
+                    (super::timeline::section_wrapper(
+                        super::timeline::editor_content(&tl, &base_url, None, editor_state)
+                    ))
+                } @else {
+                    (super::timeline::summary(&tl, &base_url))
+                }
             }
 
             // Actions
