@@ -95,8 +95,9 @@ pub struct Group {
 }
 
 /// Whether a group represents a warmup or a piece.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::EnumString)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum GroupType {
     Warmup,
     Piece,
@@ -107,6 +108,21 @@ impl GroupType {
         match self {
             Self::Warmup => "Warmup",
             Self::Piece => "Piece",
+        }
+    }
+
+    pub fn other(self) -> Self {
+        match self {
+            Self::Warmup => Self::Piece,
+            Self::Piece => Self::Warmup,
+        }
+    }
+
+    /// Lowercase form matching the serde wire format.
+    pub fn as_wire(self) -> &'static str {
+        match self {
+            Self::Warmup => "warmup",
+            Self::Piece => "piece",
         }
     }
 }
@@ -374,6 +390,32 @@ impl Drill {
 
 // ── Unified modifier ─────────────────────────────────────────────────
 
+/// Discriminant for `Modifier` variants, usable in forms and comparisons
+/// without carrying the variant's payload.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ModifierKind {
+    Blade,
+    Partial,
+    PauseAt,
+    Drills,
+    Emphasis,
+    RepeatingEmphasis,
+    RowBy,
+}
+
 /// A modifier attached to a Group or Segment.
 ///
 /// Group-level modifiers inherit to all child segments.  A segment can
@@ -422,16 +464,16 @@ impl Modifier {
         )
     }
 
-    /// String key used to match modifiers across group↔segment for inheritance.
-    pub fn kind_id(&self) -> &'static str {
+    /// Discriminant for matching modifiers across group↔segment for inheritance.
+    pub fn kind(&self) -> ModifierKind {
         match self {
-            Self::Blade { .. } => "blade",
-            Self::Partial { .. } => "partial",
-            Self::PauseAt { .. } => "pause_at",
-            Self::Drills { .. } => "drills",
-            Self::Emphasis { .. } => "emphasis",
-            Self::RepeatingEmphasis { .. } => "repeating_emphasis",
-            Self::RowBy { .. } => "row_by",
+            Self::Blade { .. } => ModifierKind::Blade,
+            Self::Partial { .. } => ModifierKind::Partial,
+            Self::PauseAt { .. } => ModifierKind::PauseAt,
+            Self::Drills { .. } => ModifierKind::Drills,
+            Self::Emphasis { .. } => ModifierKind::Emphasis,
+            Self::RepeatingEmphasis { .. } => ModifierKind::RepeatingEmphasis,
+            Self::RowBy { .. } => ModifierKind::RowBy,
         }
     }
 
@@ -449,28 +491,27 @@ impl Modifier {
     }
 
     /// Default value for a freshly-added modifier.
-    pub fn default_for_kind(kind_id: &str) -> Option<Self> {
-        match kind_id {
-            "blade" => Some(Self::Blade {
+    pub fn default_for_kind(kind: ModifierKind) -> Self {
+        match kind {
+            ModifierKind::Blade => Self::Blade {
                 value: Blade::Feather,
-            }),
-            "partial" => Some(Self::Partial { value: Slide::Full }),
-            "pause_at" => Some(Self::PauseAt {
+            },
+            ModifierKind::Partial => Self::Partial { value: Slide::Full },
+            ModifierKind::PauseAt => Self::PauseAt {
                 points: vec![],
                 every: None,
-            }),
-            "drills" => Some(Self::Drills { values: vec![] }),
-            "emphasis" => Some(Self::Emphasis {
+            },
+            ModifierKind::Drills => Self::Drills { values: vec![] },
+            ModifierKind::Emphasis => Self::Emphasis {
                 text: String::new(),
-            }),
-            "repeating_emphasis" => Some(Self::RepeatingEmphasis {
+            },
+            ModifierKind::RepeatingEmphasis => Self::RepeatingEmphasis {
                 every: 2,
                 every_unit: DurationUnit::Min,
                 count: 10,
                 label: "power".to_string(),
-            }),
-            "row_by" => Some(Self::RowBy { value: 4 }),
-            _ => None,
+            },
+            ModifierKind::RowBy => Self::RowBy { value: 4 },
         }
     }
 
@@ -515,7 +556,7 @@ impl Modifier {
 
 /// Catalogue entry for the modifier picker UI.
 pub struct ModifierCatalogueEntry {
-    pub kind_id: &'static str,
+    pub kind: ModifierKind,
     pub name: &'static str,
     pub group: &'static str,
     pub description: &'static str,
@@ -528,7 +569,7 @@ pub struct ModifierCatalogueEntry {
 pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
     vec![
         ModifierCatalogueEntry {
-            kind_id: "blade",
+            kind: ModifierKind::Blade,
             name: "Blade",
             group: "Stroke shape",
             description: "feather · partial feather · on square",
@@ -536,7 +577,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "partial",
+            kind: ModifierKind::Partial,
             name: "Partial strokes",
             group: "Stroke shape",
             description: "full · arms only · arms + body · \u{00bc} · \u{00bd} · \u{00be} slide",
@@ -544,7 +585,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "pause_at",
+            kind: ModifierKind::PauseAt,
             name: "Pause at",
             group: "Stroke shape",
             description: "release · arms away · bodies over · \u{00bd} slide · catch",
@@ -552,7 +593,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "drills",
+            kind: ModifierKind::Drills,
             name: "Drills",
             group: "Skill focus",
             description: "feet out, inside arm, cut the cake, eyes closed\u{2026}",
@@ -560,7 +601,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "emphasis",
+            kind: ModifierKind::Emphasis,
             name: "Notes",
             group: "Skill focus",
             description: "a coaching cue, e.g. \u{201c}connection at the catch\u{201d}",
@@ -568,7 +609,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "repeating_emphasis",
+            kind: ModifierKind::RepeatingEmphasis,
             name: "Repeating emphasis",
             group: "Pacing",
             description: "power 10s, focus 5s \u{2014} every N min or strokes",
@@ -576,7 +617,7 @@ pub fn modifier_catalogue() -> Vec<ModifierCatalogueEntry> {
             segment_only: false,
         },
         ModifierCatalogueEntry {
-            kind_id: "row_by",
+            kind: ModifierKind::RowBy,
             name: "Row by",
             group: "Pacing",
             description: "row by 2s, 4s, 6s, or 8s",
@@ -1026,8 +1067,8 @@ pub struct SegmentSummary {
 #[derive(Debug, PartialEq)]
 pub struct SegmentSummaryPart {
     pub text: String,
-    /// `None` for core text (duration/rate/intensity), `Some(kind_id)` for modifier spans.
-    pub modifier_kind: Option<&'static str>,
+    /// `None` for core text (duration/rate/intensity), `Some(kind)` for modifier spans.
+    pub modifier_kind: Option<ModifierKind>,
 }
 
 /// Summarize a segment with no group modifiers.
@@ -1068,14 +1109,14 @@ fn summarize_segment_with_modifiers(
         if !gm.cascades() {
             continue;
         }
-        if s.modifiers.iter().any(|m| m.kind_id() == gm.kind_id()) {
+        if s.modifiers.iter().any(|m| m.kind() == gm.kind()) {
             continue;
         }
         let label = gm.summary_label();
         if !label.is_empty() {
             parts.push(SegmentSummaryPart {
                 text: label,
-                modifier_kind: Some(gm.kind_id()),
+                modifier_kind: Some(gm.kind()),
             });
         }
     }
@@ -1084,7 +1125,7 @@ fn summarize_segment_with_modifiers(
         if !label.is_empty() {
             parts.push(SegmentSummaryPart {
                 text: label,
-                modifier_kind: Some(m.kind_id()),
+                modifier_kind: Some(m.kind()),
             });
         }
     }

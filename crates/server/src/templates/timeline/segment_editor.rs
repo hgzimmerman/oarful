@@ -1,7 +1,8 @@
 //! Segment detail editor — base fields + modifier rows with inheritance.
 
 use lineup_db::timeline::{
-    Blade, Drill, DurationUnit, Group, Modifier, ModifierCatalogueEntry, PausePoint, Segment, Slide,
+    Blade, Drill, DurationUnit, Group, Modifier, ModifierCatalogueEntry, ModifierKind, PausePoint,
+    Segment, Slide,
 };
 use maud::{html, Markup};
 
@@ -25,7 +26,7 @@ fn effective_modifiers<'a>(seg: &'a Segment, group: &'a Group) -> Vec<ModRow<'a>
     let mut rows = Vec::new();
     // Group-level modifiers first (inherited or overridden), skip non-cascading
     for gm in group.modifiers.iter().filter(|m| m.cascades()) {
-        if let Some(sm) = seg.modifiers.iter().find(|m| m.kind_id() == gm.kind_id()) {
+        if let Some(sm) = seg.modifiers.iter().find(|m| m.kind() == gm.kind()) {
             rows.push(ModRow::Overridden {
                 local: sm,
                 inherited: gm,
@@ -39,7 +40,7 @@ fn effective_modifiers<'a>(seg: &'a Segment, group: &'a Group) -> Vec<ModRow<'a>
         if !group
             .modifiers
             .iter()
-            .any(|gm| gm.cascades() && gm.kind_id() == sm.kind_id())
+            .any(|gm| gm.cascades() && gm.kind() == sm.kind())
         {
             rows.push(ModRow::Local(sm));
         }
@@ -90,11 +91,11 @@ fn modifier_section(
         .count();
 
     // Which kinds are already present on this segment?
-    let present_kinds: Vec<&str> = rows
+    let present_kinds: Vec<ModifierKind> = rows
         .iter()
         .map(|r| match r {
-            ModRow::Inherited(m) | ModRow::Local(m) => m.kind_id(),
-            ModRow::Overridden { local, .. } => local.kind_id(),
+            ModRow::Inherited(m) | ModRow::Local(m) => m.kind(),
+            ModRow::Overridden { local, .. } => local.kind(),
         })
         .collect();
 
@@ -148,7 +149,7 @@ fn inherited_row(
     tl_json: &str,
 ) -> Markup {
     html! {
-        @let mc = super::css::modifier_kind_color(m.kind_id());
+        @let mc = super::css::modifier_kind_color(m.kind());
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
              style=(format!("background: color-mix(in oklch, {mc} 5%, var(--paper)); border: 1px solid var(--rule); border-left: 2px solid {mc}")) {
             span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
@@ -162,7 +163,7 @@ fn inherited_row(
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
-                input type="hidden" name="kind" value=(m.kind_id());
+                input type="hidden" name="kind" value=(m.kind());
                 button type="submit" class="font-mono-stat text-[8px] tracking-wider uppercase px-1.5 py-0.5 rounded cursor-pointer"
                        style="color: var(--muted); background: var(--paper); border: 1px solid var(--rule)" { "override here" }
             }
@@ -180,7 +181,7 @@ fn overridden_row(
     base_url: &str,
     tl_json: &str,
 ) -> Markup {
-    let mc = super::css::modifier_kind_color(local.kind_id());
+    let mc = super::css::modifier_kind_color(local.kind());
     html! {
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
              style=(format!("background: color-mix(in oklch, {mc} 5%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 28%, var(--rule)); border-left: 2px solid {mc}")) {
@@ -200,7 +201,7 @@ fn overridden_row(
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
-                input type="hidden" name="kind" value=(local.kind_id());
+                input type="hidden" name="kind" value=(local.kind());
                 button type="submit" class="font-mono-stat text-[8px] tracking-wider uppercase px-1.5 py-0.5 rounded cursor-pointer"
                        style="color: var(--muted); background: var(--paper); border: 1px solid var(--rule)" title="Revert to inherited value" { "revert" }
             }
@@ -217,7 +218,7 @@ fn local_row(
     base_url: &str,
     tl_json: &str,
 ) -> Markup {
-    let mc = super::css::modifier_kind_color(m.kind_id());
+    let mc = super::css::modifier_kind_color(m.kind());
     html! {
         div class="flex items-center gap-2 px-2 py-1.5 rounded"
              style=(format!("background: color-mix(in oklch, {mc} 4%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 20%, var(--rule)); border-left: 2px solid {mc}")) {
@@ -232,7 +233,7 @@ fn local_row(
                 input type="hidden" name="group_id" value=(group.id);
                 input type="hidden" name="segment_id" value=(seg.id);
                 input type="hidden" name="selected" value=(seg.id);
-                input type="hidden" name="kind" value=(m.kind_id());
+                input type="hidden" name="kind" value=(m.kind());
                 input type="hidden" name="scope" value="segment";
                 button type="submit" class="font-mono-stat text-sm px-1 cursor-pointer"
                        style="color: var(--muted); background: none; border: none" title="Remove" { "\u{00d7}" }
@@ -523,7 +524,7 @@ fn modifier_picker(
     group: &Group,
     base_url: &str,
     tl_json: &str,
-    present_kinds: &[&str],
+    present_kinds: &[ModifierKind],
 ) -> Markup {
     let catalogue = lineup_db::timeline::modifier_catalogue();
     html! {
@@ -554,7 +555,7 @@ fn modifier_picker(
 fn picker_items(
     pe: super::PlanEditorState,
     catalogue: &[ModifierCatalogueEntry],
-    present_kinds: &[&str],
+    present_kinds: &[ModifierKind],
     seg: &Segment,
     group: &Group,
     base_url: &str,
@@ -574,7 +575,7 @@ fn picker_items(
             div class="font-mono-stat text-[8px] tracking-widest uppercase px-3 pt-2 pb-1"
                  style="color: var(--muted)" { (group_name) }
             @for entry in entries {
-                @let is_used = present_kinds.contains(&entry.kind_id);
+                @let is_used = present_kinds.contains(&entry.kind);
                 @if is_used {
                     div class="px-3 py-1.5 opacity-40 cursor-not-allowed" {
                         div class="flex items-center justify-between" {
@@ -591,7 +592,7 @@ fn picker_items(
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="segment_id" value=(seg.id);
                         input type="hidden" name="selected" value=(seg.id);
-                        input type="hidden" name="kind" value=(entry.kind_id);
+                        input type="hidden" name="kind" value=(entry.kind);
                         input type="hidden" name="scope" value="segment";
                         button type="submit" class="w-full text-left px-3 py-1.5 cursor-pointer"
                                style="background: none; border: none; border-left: 2px solid transparent"

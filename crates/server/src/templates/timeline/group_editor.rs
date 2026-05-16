@@ -1,7 +1,8 @@
 //! Editor for group items (Warmup/Piece) — group fields, segment list, and segment detail.
 
 use lineup_db::timeline::{
-    Blade, Drill, DurationUnit, Group, GroupType, Intensity, Modifier, PausePoint, RotatePer, Slide,
+    Blade, Drill, DurationUnit, Group, Intensity, Modifier, ModifierKind, PausePoint, RotatePer,
+    SegmentType, Slide,
 };
 use maud::{html, Markup};
 
@@ -31,8 +32,9 @@ pub(super) fn group_editor(
                 }
                 div class="flex items-center gap-1" {
                     // Type toggle
-                    @let other_type = if group.group_type == GroupType::Warmup { "piece" } else { "warmup" };
-                    @let other_label = if group.group_type == GroupType::Warmup { "→ Piece" } else { "→ Warmup" };
+                    @let other = group.group_type.other();
+                    @let other_type = other.as_wire();
+                    @let other_label = format!("→ {}", other.label());
                     form class="inline" hx-post={(base_url) "/group-patch"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
@@ -229,14 +231,14 @@ pub(super) fn group_editor(
             }
             // Add segment buttons
             div class="flex gap-1 mt-1" {
-                @for (st, label) in &[("work", "+ Segment"), ("rest", "+ Rest"), ("turn", "+ Turn")] {
+                @for (st, btn_label) in &[(SegmentType::Work, "+ Segment"), (SegmentType::Rest, "+ Rest"), (SegmentType::Turn, "+ Turn")] {
                     form class="inline" hx-post={(base_url) "/group-add"} hx-target="#timeline-section" hx-swap="innerHTML" {
                         input type="hidden" name="timeline" value=(tl_json);
                     input type="hidden" name="plan_editor" value=(pe);
                         input type="hidden" name="group_id" value=(group.id);
                         input type="hidden" name="seg_type" value=(st);
                         button type="submit" class="font-mono-stat text-[9px] px-1.5 py-0.5 rounded border cursor-pointer hover:opacity-80"
-                               style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)" { (label) }
+                               style="color: var(--ink-2); border-color: var(--rule); background: var(--paper)" { (btn_label) }
                     }
                 }
             }
@@ -263,7 +265,7 @@ fn modifier_indicator(
     // Compute effective modifiers (only cascading ones)
     let mut lines: Vec<String> = Vec::new();
     for gm in group.modifiers.iter().filter(|m| m.cascades()) {
-        if let Some(sm) = seg.modifiers.iter().find(|m| m.kind_id() == gm.kind_id()) {
+        if let Some(sm) = seg.modifiers.iter().find(|m| m.kind() == gm.kind()) {
             // Overridden
             let summary = sm.summary_label();
             let was = gm.summary_label();
@@ -287,7 +289,7 @@ fn modifier_indicator(
         if !group
             .modifiers
             .iter()
-            .any(|gm| gm.cascades() && gm.kind_id() == sm.kind_id())
+            .any(|gm| gm.cascades() && gm.kind() == sm.kind())
         {
             let summary = sm.summary_label();
             if summary.is_empty() {
@@ -468,7 +470,7 @@ fn group_modifiers_section(
     tl_json: &str,
 ) -> Markup {
     let catalogue = lineup_db::timeline::modifier_catalogue();
-    let present_kinds: Vec<&str> = group.modifiers.iter().map(|m| m.kind_id()).collect();
+    let present_kinds: Vec<ModifierKind> = group.modifiers.iter().map(|m| m.kind()).collect();
 
     html! {
         div class="mt-3 pt-3" style="border-top: 1px dashed var(--rule-2)" {
@@ -483,7 +485,7 @@ fn group_modifiers_section(
                         (group.modifiers.len())
                         // Count how many segments have overrides
                         @let override_count = group.segments.iter()
-                            .filter(|s| s.modifiers.iter().any(|sm| group.modifiers.iter().any(|gm| gm.kind_id() == sm.kind_id())))
+                            .filter(|s| s.modifiers.iter().any(|sm| group.modifiers.iter().any(|gm| gm.kind() == sm.kind())))
                             .count();
                         @if override_count > 0 {
                             " · " (override_count) " edited below"
@@ -495,7 +497,7 @@ fn group_modifiers_section(
             // Modifier rows (editable)
             div class="space-y-1" {
                 @for m in &group.modifiers {
-                    @let mc = super::css::modifier_kind_color(m.kind_id());
+                    @let mc = super::css::modifier_kind_color(m.kind());
                     div class="flex items-center gap-2 px-2 py-1.5 rounded"
                          style=(format!("background: color-mix(in oklch, {mc} 4%, var(--paper)); border: 1px solid color-mix(in oklch, {mc} 20%, var(--rule)); border-left: 2px solid {mc}")) {
                         span class="font-mono-stat text-[9px] tracking-wider uppercase font-semibold w-20 flex-shrink-0"
@@ -505,7 +507,7 @@ fn group_modifiers_section(
                         }
                         // Show which segments have overrides
                         @let overridden_segs: Vec<&str> = group.segments.iter()
-                            .filter(|s| s.modifiers.iter().any(|sm| sm.kind_id() == m.kind_id()))
+                            .filter(|s| s.modifiers.iter().any(|sm| sm.kind() == m.kind()))
                             .map(|s| s.seg_type.label())
                             .collect();
                         @if !overridden_segs.is_empty() {
@@ -518,7 +520,7 @@ fn group_modifiers_section(
                     input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(group.id);
-                            input type="hidden" name="kind" value=(m.kind_id());
+                            input type="hidden" name="kind" value=(m.kind());
                             input type="hidden" name="scope" value="group";
                             button type="submit" class="font-mono-stat text-sm px-1 cursor-pointer"
                                    style="color: var(--muted); background: none; border: none" title="Remove" { "\u{00d7}" }
@@ -552,7 +554,7 @@ fn group_modifiers_section(
 fn group_picker_items(
     pe: super::PlanEditorState,
     catalogue: &[lineup_db::timeline::ModifierCatalogueEntry],
-    present_kinds: &[&str],
+    present_kinds: &[ModifierKind],
     group: &Group,
     base_url: &str,
     tl_json: &str,
@@ -571,7 +573,7 @@ fn group_picker_items(
                 div class="font-mono-stat text-[8px] tracking-widest uppercase px-3 pt-2 pb-1"
                      style="color: var(--muted)" { (group_name) }
                 @for entry in entries {
-                    @let is_used = present_kinds.contains(&entry.kind_id);
+                    @let is_used = present_kinds.contains(&entry.kind);
                     @if is_used {
                         div class="px-3 py-1.5 opacity-40 cursor-not-allowed" {
                             div class="flex items-center justify-between" {
@@ -586,7 +588,7 @@ fn group_picker_items(
                     input type="hidden" name="plan_editor" value=(pe);
                             input type="hidden" name="group_id" value=(group.id);
                             input type="hidden" name="selected" value=(group.id);
-                            input type="hidden" name="kind" value=(entry.kind_id);
+                            input type="hidden" name="kind" value=(entry.kind);
                             input type="hidden" name="scope" value="group";
                             button type="submit" class="w-full text-left px-3 py-1.5 cursor-pointer"
                                    style="background: none; border: none; border-left: 2px solid transparent"

@@ -9,8 +9,8 @@ use lineup_db::{
     practice::{Practice, PracticeId},
     timeline::{
         self, Blade, Block, BlockType, Drill, Duration, DurationUnit, Group, GroupType, Intensity,
-        Modifier, PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide, Timeline,
-        TimelineItem,
+        Modifier, ModifierKind, PausePoint, RotatePer, Rotation, Segment, SegmentType, Slide,
+        Timeline, TimelineItem,
     },
 };
 use serde::Deserialize;
@@ -980,7 +980,7 @@ pub(crate) struct ModifierForm {
     pub(crate) group_id: String,
     #[serde(default)]
     pub(crate) segment_id: Option<String>,
-    pub(crate) kind: String,
+    pub(crate) kind: ModifierKind,
     #[serde(default)]
     pub(crate) scope: Option<ModifierScope>,
     #[serde(default)]
@@ -1026,16 +1026,14 @@ pub(crate) fn find_modifier_target<'a>(
 
 pub(crate) fn apply_modifier_add(input: ModifierForm, base_url: &str) -> Html<String> {
     let mut tl = input.base.parse();
-    if let Some(m) = Modifier::default_for_kind(&input.kind) {
-        if let Some(mods) = find_modifier_target(
-            &mut tl,
-            &input.group_id,
-            input.segment_id.as_deref(),
-            input.scope,
-        ) {
-            if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
-                mods.push(m);
-            }
+    if let Some(mods) = find_modifier_target(
+        &mut tl,
+        &input.group_id,
+        input.segment_id.as_deref(),
+        input.scope,
+    ) {
+        if !mods.iter().any(|existing| existing.kind() == input.kind) {
+            mods.push(Modifier::default_for_kind(input.kind));
         }
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
@@ -1060,7 +1058,7 @@ pub(crate) fn apply_modifier_remove(input: ModifierForm, base_url: &str) -> Html
         input.segment_id.as_deref(),
         input.scope,
     ) {
-        mods.retain(|m| m.kind_id() != input.kind);
+        mods.retain(|m| m.kind() != input.kind);
     }
     let sel = input.segment_id.as_deref().unwrap_or(&input.group_id);
     Html(
@@ -1084,7 +1082,7 @@ pub(crate) fn apply_modifier_update(input: ModifierForm, base_url: &str) -> Html
         input.segment_id.as_deref(),
         input.scope,
     ) {
-        if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+        if let Some(m) = mods.iter_mut().find(|m| m.kind() == input.kind) {
             let val = input.value.as_deref().unwrap_or("");
             match m {
                 Modifier::Blade { value } => {
@@ -1155,7 +1153,7 @@ pub(crate) fn apply_modifier_toggle(input: ModifierForm, base_url: &str) -> Html
         input.segment_id.as_deref(),
         input.scope,
     ) {
-        if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
+        if let Some(m) = mods.iter_mut().find(|m| m.kind() == input.kind) {
             let val = input.value.as_deref().unwrap_or("");
             match m {
                 Modifier::PauseAt { points, .. } => {
@@ -1199,11 +1197,11 @@ pub(crate) fn apply_modifier_override(input: ModifierForm, base_url: &str) -> Ht
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
             if g.id == input.group_id {
-                if let Some(gm) = g.modifiers.iter().find(|m| m.kind_id() == input.kind) {
+                if let Some(gm) = g.modifiers.iter().find(|m| m.kind() == input.kind) {
                     let cloned = gm.clone();
                     if let Some(sid) = &input.segment_id {
                         if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
-                            if !s.modifiers.iter().any(|m| m.kind_id() == input.kind) {
+                            if !s.modifiers.iter().any(|m| m.kind() == input.kind) {
                                 s.modifiers.push(cloned);
                             }
                         }
@@ -1234,7 +1232,7 @@ pub(crate) fn apply_modifier_revert(input: ModifierForm, base_url: &str) -> Html
             if g.id == input.group_id {
                 if let Some(sid) = &input.segment_id {
                     if let Some(s) = g.segments.iter_mut().find(|s| s.id == *sid) {
-                        s.modifiers.retain(|m| m.kind_id() != input.kind);
+                        s.modifiers.retain(|m| m.kind() != input.kind);
                     }
                 }
                 break;
