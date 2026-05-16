@@ -28,15 +28,17 @@ pub(crate) struct TimelineForm {
     pub target_minutes: Option<u32>,
     /// Editor visibility state carried through HTMX round-trips.
     #[serde(default)]
-    pub plan_editor: Option<String>,
+    pub plan_editor: templates::timeline::PlanEditorState,
 }
 
 impl TimelineForm {
     pub(crate) fn editor_state(&self) -> templates::timeline::PlanEditorState {
-        match self.plan_editor.as_deref() {
-            Some("open") => templates::timeline::PlanEditorState::Open,
-            Some("open_preview") => templates::timeline::PlanEditorState::OpenPreview,
-            _ => templates::timeline::PlanEditorState::Open, // default to Open when in editor forms
+        // Forms inside the editor always send "open" or "open_preview";
+        // if somehow missing (Closed default), treat as Open since we're in editor context.
+        if self.plan_editor.is_open() {
+            self.plan_editor
+        } else {
+            templates::timeline::PlanEditorState::Open
         }
     }
 }
@@ -115,17 +117,7 @@ pub(crate) fn default_segment() -> Segment {
 #[derive(Debug, Deserialize)]
 pub(crate) struct EditorQuery {
     #[serde(default)]
-    pub plan_editor: Option<String>,
-}
-
-impl EditorQuery {
-    pub(crate) fn state(&self) -> templates::timeline::PlanEditorState {
-        match self.plan_editor.as_deref() {
-            Some("open") => templates::timeline::PlanEditorState::Open,
-            Some("open_preview") => templates::timeline::PlanEditorState::OpenPreview,
-            _ => templates::timeline::PlanEditorState::Closed,
-        }
-    }
+    pub plan_editor: templates::timeline::PlanEditorState,
 }
 
 /// `GET /history/{id}/timeline/edit` — open the timeline editor.
@@ -151,7 +143,7 @@ pub(crate) async fn open_editor(
     });
 
     let base_url = practice_timeline_url(practice_id);
-    let html = templates::timeline::editor_content(&timeline, &base_url, None, query.state());
+    let html = templates::timeline::editor_content(&timeline, &base_url, None, query.plan_editor);
     Ok(Html(html.into_string()))
 }
 
@@ -972,6 +964,14 @@ pub(crate) async fn group_split(
 
 // ── Modifier mutation handlers ──────────────────────────────────────────
 
+/// Whether a modifier mutation targets the group or a segment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ModifierScope {
+    Group,
+    Segment,
+}
+
 /// Shared form for modifier mutations.
 #[derive(Debug, Deserialize)]
 pub(crate) struct ModifierForm {
@@ -982,7 +982,7 @@ pub(crate) struct ModifierForm {
     pub(crate) segment_id: Option<String>,
     pub(crate) kind: String,
     #[serde(default)]
-    pub(crate) scope: Option<String>,
+    pub(crate) scope: Option<ModifierScope>,
     #[serde(default)]
     pub(crate) value: Option<String>,
     #[serde(default)]
@@ -1003,12 +1003,12 @@ pub(crate) fn find_modifier_target<'a>(
     tl: &'a mut Timeline,
     group_id: &str,
     segment_id: Option<&str>,
-    scope: Option<&str>,
+    scope: Option<ModifierScope>,
 ) -> Option<&'a mut Vec<Modifier>> {
     for item in &mut tl.items {
         if let TimelineItem::Group(g) = item {
             if g.id == group_id {
-                if scope == Some("group") {
+                if scope == Some(ModifierScope::Group) {
                     return Some(&mut g.modifiers);
                 }
                 if let Some(sid) = segment_id {
@@ -1031,7 +1031,7 @@ pub(crate) fn apply_modifier_add(input: ModifierForm, base_url: &str) -> Html<St
             &mut tl,
             &input.group_id,
             input.segment_id.as_deref(),
-            input.scope.as_deref(),
+            input.scope,
         ) {
             if !mods.iter().any(|existing| existing.kind_id() == input.kind) {
                 mods.push(m);
@@ -1058,7 +1058,7 @@ pub(crate) fn apply_modifier_remove(input: ModifierForm, base_url: &str) -> Html
         &mut tl,
         &input.group_id,
         input.segment_id.as_deref(),
-        input.scope.as_deref(),
+        input.scope,
     ) {
         mods.retain(|m| m.kind_id() != input.kind);
     }
@@ -1082,17 +1082,15 @@ pub(crate) fn apply_modifier_update(input: ModifierForm, base_url: &str) -> Html
         &mut tl,
         &input.group_id,
         input.segment_id.as_deref(),
-        input.scope.as_deref(),
+        input.scope,
     ) {
         if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
             let val = input.value.as_deref().unwrap_or("");
             match m {
                 Modifier::Blade { value } => {
-                    *value = match val {
-                        "square" => Blade::Square,
-                        "partial-feather" => Blade::PartialFeather,
-                        _ => Blade::Feather,
-                    };
+                    if let Ok(v) = val.parse::<Blade>() {
+                        *value = v;
+                    }
                 }
                 Modifier::Partial { value } => {
                     if let Ok(v) = val.parse::<Slide>() {
@@ -1155,7 +1153,7 @@ pub(crate) fn apply_modifier_toggle(input: ModifierForm, base_url: &str) -> Html
         &mut tl,
         &input.group_id,
         input.segment_id.as_deref(),
-        input.scope.as_deref(),
+        input.scope,
     ) {
         if let Some(m) = mods.iter_mut().find(|m| m.kind_id() == input.kind) {
             let val = input.value.as_deref().unwrap_or("");

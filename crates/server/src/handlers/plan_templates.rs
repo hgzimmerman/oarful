@@ -157,7 +157,7 @@ pub(crate) async fn detail_handler(
 ) -> Result<Html<String>, ErrorResponse> {
     require_at_least_role(&tenant.claims, Role::Coach)?;
     // Template editor defaults to open with preview when no param is specified.
-    let editor_state = match query.state() {
+    let editor_state = match query.plan_editor {
         templates::timeline::PlanEditorState::Closed => {
             templates::timeline::PlanEditorState::OpenPreview
         }

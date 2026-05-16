@@ -55,7 +55,7 @@ pub(crate) async fn detail_handler(
         tenant.config.force_cox_stern,
         is_coach,
         &oar_assignments,
-        query.state(),
+        query.plan_editor,
     );
     Ok(super::maybe_page_authed(
         &format!("Lineups · {date}"),

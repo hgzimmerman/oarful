@@ -301,12 +301,16 @@ impl PausePoint {
     ];
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum Blade {
     Feather,
     Square,
     #[serde(rename = "partial-feather")]
+    #[strum(serialize = "partial-feather")]
     PartialFeather,
 }
 
